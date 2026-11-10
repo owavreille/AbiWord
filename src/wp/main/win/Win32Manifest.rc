@@ -1,0 +1,5 @@
+// Manifeste de l'exécutable seulement. Le même manifeste dans
+// libabiword fait échouer le chargement : « configuration côte-à-côte
+// incorrecte ».
+#include <windows.h>
+#include "ap_Win32Res_Manifest.rc2"

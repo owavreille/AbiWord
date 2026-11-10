@@ -1,0 +1,116 @@
+include:
+  - project: "GNOME/citemplates"
+    file: "templates/default-rules.yml"
+
+.flatpak:
+  image: "quay.io/gnome_infrastructure/gnome-runtime-images:gnome-master"
+  stage: "test"
+  interruptible: true
+  variables:
+    LANG: "C.UTF-8"
+    # Force Software rendering for GL and Vulkan so the tests run locally
+    LIBGL_ALWAYS_SOFTWARE: true
+    # This the hardcoded value for llvmpipe
+    MESA_VK_DEVICE_SELECT: "10005:0"
+    # Set to anything else to skip tests
+    RUN_TESTS: "1"
+    # vala is still using autotools, otherwise there is no reason
+    # to skip dist
+    MESON_DIST: "0"
+    # Pass "--runtime" in order to build a runtime or extension
+    EXPORT_RUNTIME: ""
+    NIGHTLY_REPO: "https://nightly.gnome.org/gnome-nightly.flatpakrepo"
+  # Till now this was the template job used for everything,
+  # so assume its default tags are x86 to avoid breaking backwards
+  # compatibility.
+  tags:
+    - flatpak
+  script:
+    - cat /etc/os-release
+
+    - whoami && id -u && id -g
+
+    - flatpak --version
+    # Report the installed versions of the runtime
+    - flatpak info org.gnome.Platform
+    - flatpak info org.gnome.Sdk
+
+    # Print the date, since appstream depends on local timezone
+    - date && date -u
+
+    - export REWRITE_RUN_TESTS="--run-tests"
+    - |-
+      if [[ "${RUN_TESTS}" != "1" ]]; then
+        export REWRITE_RUN_TESTS="--no-run-tests"
+      fi
+    - echo "${REWRITE_RUN_TESTS}"
+    - rewrite-flatpak-manifest "${REWRITE_RUN_TESTS}" "${MANIFEST_PATH}" "${FLATPAK_MODULE}" -- ${CONFIG_OPTS}
+
+    - >-
+      xvfb-run -a -s "-screen 0 1024x768x24" --
+      dbus-run-session
+      flatpak-builder ${CI_FB_ARGS} --keep-build-dirs --user --disable-rofiles-fuse --build-only flatpak_app --repo=repo ${BRANCH:+--default-branch=$BRANCH} "${MANIFEST_PATH}"
+
+    # rewrite-flatpak-manifest will make our checkout dirty and meson will complain
+    # FIXME: we need to copy the manifest rather than modify it in place to avoid making the checkout dirty
+    # Meson dist is still fine for now however, as meson will use the last commit rather than the current state of the repository
+    # FIXME: We end up creating 2 "build" sandboxes and its this one that ends up with the dist apparently
+    # our release service will be relying on the hardcoded path of
+    # build/${FLATPAK_MODULE}-2/_flatpak_build/meson-dist/${CI_PROJECT_NAME}-${CI_COMMIT_TAG}.tar.xz"
+    # to contain the tarball. This needs to never change.
+    # build/${FLATPAK_MODULE}/ is a symlink to -2 atm thankfully as well.
+    - |-
+      cat > dist.sh <<'EOF'
+      #! /bin/bash
+      set -ex
+      if [[ "${MESON_DIST}" == "1" ]]; then
+          flatpak-builder ${CI_FB_ARGS} --keep-build-dirs --user --disable-rofiles-fuse --build-shell="${FLATPAK_MODULE}" --disable-download --disable-updates flatpak_app ${BRANCH:+--default-branch=$BRANCH} "${MANIFEST_PATH}" <<'END'
+            LANG=C.UTF-8 meson dist --no-tests --include-subprojects --allow-dirty
+      END
+
+          # The path doesn't always exit, and won't work in some cases
+          # This is a partial workaround for:
+          # https://gitlab.gnome.org/GNOME/citemplates/-/issues/32
+          dist_path=".flatpak-builder/build/${FLATPAK_MODULE}-2/_flatpak_build/meson-dist/"
+          if [[ -d "$dist_path" ]]; then
+              cp --recursive --preserve=all "$dist_path" "$CI_PROJECT_DIR/public-dist/"
+          fi
+      fi
+      EOF
+    - bash ./dist.sh
+    - flatpak-builder ${CI_FB_ARGS} --user --disable-rofiles-fuse --finish-only --disable-download --disable-updates flatpak_app --repo=repo ${BRANCH:+--default-branch=$BRANCH} "${MANIFEST_PATH}"
+
+    # Generate a Flatpak bundle
+    - flatpak build-bundle repo "${BUNDLE}" ${EXPORT_RUNTIME} --runtime-repo="${RUNTIME_REPO:-$NIGHTLY_REPO}" "${APP_ID}" ${BRANCH}
+
+  artifacts:
+    name: "Flatpak artifacts"
+    when: "always"
+    paths:
+      - $BUNDLE
+    expire_in: 90 days
+
+.flatpak@x86_64:
+  extends: ".flatpak"
+  tags:
+    - flatpak
+
+.flatpak@aarch64:
+  extends: ".flatpak"
+  tags:
+    - flatpak-aarch64
+
+.vars-devel:
+  variables:
+    MANIFEST_PATH: "flatpak/com.abisource.AbiWord.json"
+    FLATPAK_MODULE: "abiword"
+    APP_ID: "com.abisource.AbiWord"
+    RUNTIME_REPO: "https://nightly.gnome.org/gnome-nightly.flatpakrepo"
+    BUNDLE: "abiword.flatpak"
+
+# Build Flatpak for x86_64
+flatpak@x86_64:
+  extends: [".flatpak@x86_64", ".vars-devel"]
+# Build Flatpak for aarch64
+#flatpak@aarch64:
+#  extends: [".flatpak@aarch64", ".vars-devel"]
