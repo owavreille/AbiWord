@@ -11098,7 +11098,7 @@ FV_DocCount FV_View::countWords(bool bActuallyCountWords) const
 	}
 	// Selection may start inside first block
 	fp_Line* pLine = static_cast<fp_Line *>(pBL->getFirstContainer());
-	if(!pLine->getContainer())
+	if(!pLine || !pLine->getContainer())
 	{
 		return (wCount);
 	}
@@ -11140,6 +11140,9 @@ FV_DocCount FV_View::countWords(bool bActuallyCountWords) const
 			}
 		}
 	}
+
+	if (!pLine)
+		return wCount;
 
 	fp_Page* pPage = pLine->getPage();
 	fp_Page* pOldPage = pPage;

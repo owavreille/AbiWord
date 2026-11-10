@@ -485,7 +485,7 @@ bool Stylist_tree::findStyle(const std::string & sStyleName,UT_sint32 & row, UT_
  */
 bool  Stylist_tree::getStyleAtRowCol(std::string & sStyle,UT_sint32 row, UT_sint32 col)
 {
-	if(row > getNumRows() || (row < 0))
+	if(row >= getNumRows() || (row < 0))
 	{
 		return false;
 	}
@@ -500,7 +500,7 @@ bool  Stylist_tree::getStyleAtRowCol(std::string & sStyle,UT_sint32 row, UT_sint
  */
 UT_sint32 Stylist_tree::getNumCols(UT_sint32 row) const
 {
-	if(row > getNumRows() || (row < 0))
+	if(row >= getNumRows() || (row < 0))
 	{
 		return 0;
 	}
@@ -521,7 +521,7 @@ UT_sint32 Stylist_tree::getNumStyles(void) const
  */
 bool Stylist_tree::getNameOfRow(std::string &sName, UT_sint32 row) const
 {
-	if(row > getNumRows() || (row<0) )
+	if(row >= getNumRows() || (row<0) )
 	{
 		return false;
 	}

@@ -7689,32 +7689,27 @@ static bool s_doLangDlg(FV_View * pView)
 
 	if (bOK)
 	{
-		//UT_DEBUGMSG(("pressed OK\n"));
-		UT_uint32 k = 0;
-		PP_PropertyVector props_out;
 		const gchar * s = nullptr;
 
 		bool bChange = pDialog->getChangedLangProperty(&s);
-		if (s)
+		if (bChange && s)
 		{
-			props_out.push_back("lang");
-			props_out.push_back(s);
-		}
-
-		if(k > 0 && bChange)								// if something changed
+			PP_PropertyVector props_out = {
+				"lang", s
+			};
 			pView->setCharFormat(props_out);
 
-		if(k > 0 && pDialog->isMakeDocumentDefault() && strcmp(pLang, s))
-		{
+			if (pDialog->isMakeDocumentDefault() && (!pLang || strcmp(pLang, s)))
+			{
 #ifdef ENABLE_SPELL
-			FL_DocLayout* pLayout = pView->getLayout();
-			
-			if(pLayout)
-				pLayout->queueAll(FL_DocLayout::bgcrSpelling | FL_DocLayout::bgcrGrammar);
+				FL_DocLayout* pLayout = pView->getLayout();
+
+				if(pLayout)
+					pLayout->queueAll(FL_DocLayout::bgcrSpelling | FL_DocLayout::bgcrGrammar);
 #endif
-			pDoc->setProperties(props_out);
+				pDoc->setProperties(props_out);
+			}
 		}
-		
 	}
 
 	pDialogFactory->releaseDialog(pDialog);

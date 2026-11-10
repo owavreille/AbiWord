@@ -179,25 +179,25 @@ void AP_Win32Dialog_WordCount::_setDlgItemInt(UINT nCtrl, int nValue)
 	{
 		wchar_t szBuffer[16];
 		
-		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, gszDecSep, sizeof(gszDecSep));
-		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, gszThSep, sizeof(gszThSep));
+		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, gszDecSep, G_N_ELEMENTS(gszDecSep));
+		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, gszThSep, G_N_ELEMENTS(gszThSep));
 				
 		numberfmt.NumDigits = 0;		
-		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_ILZERO, szBuffer, sizeof(szBuffer));
+		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_ILZERO, szBuffer, G_N_ELEMENTS(szBuffer));
 		numberfmt.LeadingZero = _wtoi(szBuffer);
 
-		GetLocaleInfoW( LOCALE_USER_DEFAULT, LOCALE_SGROUPING, szBuffer, sizeof(szBuffer));
+		GetLocaleInfoW( LOCALE_USER_DEFAULT, LOCALE_SGROUPING, szBuffer, G_N_ELEMENTS(szBuffer));
 		numberfmt.Grouping = _wtoi(szBuffer);
 		numberfmt.lpDecimalSep = gszDecSep;
 		numberfmt.lpThousandSep = gszThSep;
 
-		GetLocaleInfoW( LOCALE_USER_DEFAULT, LOCALE_INEGNUMBER, szBuffer, sizeof(szBuffer));
+		GetLocaleInfoW( LOCALE_USER_DEFAULT, LOCALE_INEGNUMBER, szBuffer, G_N_ELEMENTS(szBuffer));
 		numberfmt.NegativeOrder = _wtoi(szBuffer);
 	}
 	
 	/* Convert the number string into the proper locale defn */
 	GetNumberFormatW(LOCALE_USER_DEFAULT, 0, szUnFormatted,
-		&numberfmt, szFormatted, sizeof(szFormatted));
+		&numberfmt, szFormatted, G_N_ELEMENTS(szFormatted));
 
 	SetDlgItemTextW(m_hDlg, nCtrl, szFormatted);		
 }						

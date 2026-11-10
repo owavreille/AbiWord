@@ -38,13 +38,7 @@
 #include "ap_Win32Resources.rc2"
 #include "pt_PieceTable.h"
 
-#if defined(STRICT)
-#define WHICHPROC	WNDPROC
-#else
-#define WHICHPROC	FARPROC
-#endif
-
-WHICHPROC hTreeProc;
+static WNDPROC hTreeProc = nullptr;
 
 /*****************************************************************/
 
@@ -188,7 +182,7 @@ BOOL AP_Win32Dialog_Stylist::_onInitDialog(HWND /*hWnd*/, WPARAM /*wParam*/, LPA
 	_populateWindowData();
 
 	HWND hTree = GetDlgItem(m_hDlg, AP_RID_DIALOG_STYLIST_TREE_STYLIST);
-	hTreeProc = (WHICHPROC) GetWindowLongPtrW(hTree, GWLP_WNDPROC); // save off our prior callback
+	hTreeProc = (WNDPROC) GetWindowLongPtrW(hTree, GWLP_WNDPROC); // save off our prior callback
 	SetWindowLongPtrW(hTree, GWLP_WNDPROC, (LONG_PTR)s_treeProc); // tie the treeview to the new callback
 	SetWindowLongPtrW(hTree, GWLP_USERDATA, (LONG_PTR)this);
 	centerDialog();
@@ -325,15 +319,16 @@ void AP_Win32Dialog_Stylist::_fillTree(void)
 	setStyleTreeChanged(false);
 }
 
-BOOL CALLBACK AP_Win32Dialog_Stylist::s_treeProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
-{		
+LRESULT CALLBACK AP_Win32Dialog_Stylist::s_treeProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	// The tree view returns HTREEITEM pointers through this procedure.
+	// BOOL keeps only 32 bits and the next click crashes.
 	if (msg == WM_LBUTTONDBLCLK)
 	{
-		// The user has double clicked on a tree item
 		AP_Win32Dialog_Stylist * pThis = (AP_Win32Dialog_Stylist *)GetWindowLongPtrW(hWnd,GWLP_USERDATA);
-		if (pThis->_styleClicked())
+		if (pThis && pThis->_styleClicked())
 			pThis->Apply();
-		return 1;
+		return 0;
 	}
 
 	return CallWindowProcW(hTreeProc, hWnd, msg, wParam, lParam);

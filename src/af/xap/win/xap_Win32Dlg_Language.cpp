@@ -38,13 +38,7 @@
 #include "xap_Win32Toolbar_Icons.h"
 #include "ap_Win32App.h"
 
-#ifdef STRICT   
-#define WHICHPROC	WNDPROC
-#else   
-#define WHICHPROC	FARPROC
-#endif
- 
-WHICHPROC gTreeProc;
+static WNDPROC gTreeProc = nullptr;
 #define _DS(c,s)	setDlgItemText(XAP_RID_DIALOG_##c,pSS->getValue(XAP_STRING_ID_##s))
 
 
@@ -122,7 +116,7 @@ void  XAP_Win32Dialog_Language::_fillTreeview(HWND hTV)
 		tvins.item = tvi;
 		hItem = (HTREEITEM)SendMessageW(hTV, TVM_INSERTITEMW, 0, (LPARAM)&tvins);
 		
-		if (strcmp(m_pLanguage, sLang)==0)
+		if (m_pLanguage && strcmp(m_pLanguage, sLang)==0)
 			hSel = hItem;	
 	}
 	
@@ -133,30 +127,29 @@ void  XAP_Win32Dialog_Language::_fillTreeview(HWND hTV)
 /*
 
 */
-BOOL CALLBACK XAP_Win32Dialog_Language::s_treeProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
-{		
-	XAP_Win32Dialog_Language *pThis;
-	
-	// The user has double clicked on a tree item (a language name)
+LRESULT CALLBACK XAP_Win32Dialog_Language::s_treeProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	// A window procedure returns a pointer-sized LRESULT. BOOL would drop
+	// the top half of HTREEITEM values that the tree view sends to itself.
 	if (msg==WM_LBUTTONDBLCLK)
 	{
-		pThis = (XAP_Win32Dialog_Language *)GetWindowLongPtrW(hWnd,GWLP_USERDATA);
-		TVITEM tvi;		
-		
-		// Selected item
-		tvi.hItem =  (HTREEITEM)::SendMessageW(hWnd, TVM_GETNEXTITEM, TVGN_CARET, 0);
-				
-		if (tvi.hItem)
+		XAP_Win32Dialog_Language *pThis = (XAP_Win32Dialog_Language *)GetWindowLongPtrW(hWnd,GWLP_USERDATA);
+		TVITEMW tvi;
+		memset(&tvi, 0, sizeof(tvi));
+
+		tvi.hItem = (HTREEITEM)::SendMessageW(hWnd, TVM_GETNEXTITEM, TVGN_CARET, 0);
+
+		if (pThis && tvi.hItem)
 		{
-			// Associated data		 
 			tvi.mask = TVIF_PARAM;
 			SendMessageW(hWnd, TVM_GETITEMW, 0, (LPARAM)&tvi);
-			pThis->_setLanguageAndExit(tvi.lParam);			
+			if ((UT_uint32)tvi.lParam < pThis->m_iLangCount)
+				pThis->_setLanguageAndExit((UINT)tvi.lParam);
 		}
-		return 1;						
-	}	
-		
-	return CallWindowProcW(gTreeProc,  hWnd, msg, wParam, lParam);
+		return 0;
+	}
+
+	return CallWindowProcW(gTreeProc, hWnd, msg, wParam, lParam);
 }
 
 /*
@@ -202,7 +195,7 @@ BOOL XAP_Win32Dialog_Language::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARA
 	
 	_fillTreeview(hTree);
 	
-	gTreeProc = (WHICHPROC) GetWindowLongPtrW(hTree, GWLP_WNDPROC);
+	gTreeProc = (WNDPROC) GetWindowLongPtrW(hTree, GWLP_WNDPROC);
 	SetWindowLongPtrW(hTree, GWLP_WNDPROC, (LONG_PTR)s_treeProc);
 	SetWindowLongPtrW(hTree, GWLP_USERDATA, (LONG_PTR)this);
 	
@@ -241,13 +234,21 @@ BOOL XAP_Win32Dialog_Language::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lPa
 				tvi.hItem =  (HTREEITEM)::SendMessageW(hWndTree, TVM_GETNEXTITEM, TVGN_CARET, 0);
 		
 				if (tvi.hItem)
-				{				
-					// Associated data		 
+				{
+					memset(&tvi, 0, sizeof(tvi));
+					tvi.hItem = (HTREEITEM)::SendMessageW(hWndTree, TVM_GETNEXTITEM, TVGN_CARET, 0);
 					tvi.mask = TVIF_PARAM;
-					SendMessageW(hWndTree, TVM_GETITEMW, 0, (LPARAM)&tvi);		
-					_setLanguage( m_ppLanguages[tvi.lParam]);
-					m_bChangedLanguage = true;
-					m_answer = a_OK;
+					SendMessageW(hWndTree, TVM_GETITEMW, 0, (LPARAM)&tvi);
+					if ((UT_uint32)tvi.lParam < m_iLangCount)
+					{
+						_setLanguage(m_ppLanguages[tvi.lParam]);
+						m_bChangedLanguage = true;
+						m_answer = a_OK;
+					}
+					else
+					{
+						m_answer = a_CANCEL;
+					}
 				}
 				else
 				{

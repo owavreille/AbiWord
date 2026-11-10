@@ -40,7 +40,7 @@ public:
 	virtual void            destroy(void);
 	virtual void            notifyActiveFrame(XAP_Frame * pFrame);
 	static BOOL CALLBACK	s_dlgProc(HWND,UINT,WPARAM,LPARAM);
-	static BOOL CALLBACK 	s_treeProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam);
+	static LRESULT CALLBACK	s_treeProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	virtual void            setStyleInGUI(void);
 	virtual void *  		pGetWindowHandle(void) {  return (void *) m_hDlg; }
 

@@ -92,12 +92,14 @@ BOOL CALLBACK XAP_Win32DialogBase::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam,
 	if (msg == WM_INITDIALOG)
 	{
 		pThis = (XAP_Win32DialogBase*)lParam;
-        SetWindowLongW(hWnd, DWLP_USER, lParam);
+		// GetWindowLongW stores a 32-bit LONG. The dialog object lives above
+		// 4 GiB, so the next notification reads a truncated pointer and crashes.
+		SetWindowLongPtrW(hWnd, DWLP_USER, lParam);
 		pThis->m_hDlg = hWnd;
 		return pThis->_onInitDialog(hWnd, wParam, lParam);
 	}
 
-    pThis = (XAP_Win32DialogBase *) GetWindowLongW(hWnd,DWLP_USER);
+    pThis = (XAP_Win32DialogBase *) GetWindowLongPtrW(hWnd, DWLP_USER);
 	
 	if (pThis == nullptr)
 		return FALSE;
