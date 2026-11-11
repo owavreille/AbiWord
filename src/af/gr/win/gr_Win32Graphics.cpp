@@ -1078,6 +1078,8 @@ void GR_Win32Graphics::scroll(UT_sint32 dx, UT_sint32 dy)
 	}
 	GR_Painter caretDisablerPainter(this); // not an elegant way to disable all carets, but it works beautifully - MARCM
 
+	// A clip left on the CS_OWNDC window would scroll only that rectangle.
+	clearScreenClip();
 	ScrollWindowEx(m_hwnd, ddx, ddy, nullptr, nullptr, nullptr, nullptr, SW_INVALIDATE);
 }
 
@@ -1098,7 +1100,8 @@ void GR_Win32Graphics::scroll(UT_sint32 x_dest, UT_sint32 y_dest,
 	r.bottom = r.top + height;
 	
 	GR_Painter caretDisablerPainter(this); // not an elegant way to disable all carets, but it works beautifully - MARCM
-	
+
+	clearScreenClip();
 	ScrollWindowEx(m_hwnd, (x_dest - x_src), (y_dest - y_src),
 				   &r, nullptr, nullptr, nullptr, SW_ERASE);
 }
@@ -1224,6 +1227,21 @@ void GR_Win32Graphics::setClipRect(const UT_Rect* pRect)
 	}
 
 	UT_ASSERT_HARMLESS(res != ERROR);
+}
+
+void GR_Win32Graphics::clearScreenClip(void)
+{
+	// The document window is CS_OWNDC, so BeginPaint and setClipRect leave
+	// their region on the window DC. ScrollWindowEx then moves only that
+	// rectangle: a strip of text slides and the caret no longer matches it.
+	// GetDC returns that same owned DC even while drawing goes to the buffer.
+	if (!m_hwnd || m_bPrint)
+		return;
+	HDC screen = GetDC(m_hwnd);
+	if (!screen)
+		return;
+	SelectClipRgn(screen, nullptr);
+	ReleaseDC(m_hwnd, screen);
 }
 
 GR_Image* GR_Win32Graphics::createNewImage(const char* pszName, const UT_ConstByteBufPtr & pBB, const std::string& mimetype,
@@ -2145,7 +2163,25 @@ void GR_Win32Graphics::saveRectangle(UT_Rect & r, UT_uint32 iIndx)
 	UT_uint32 iWidth = (UT_sint32)((double)_tduR(r.width) * m_fXYRatio);
 	UT_uint32 iHeight = _tduR(r.height);
 	UT_sint32 x = (UT_sint32)((double)_tduX(r.left) * m_fXYRatio);
-	UT_sint32 y = _tduY(r.top);	 
+	UT_sint32 y = _tduY(r.top);
+
+	// A caret rectangle with a wrapped coordinate is larger than the window.
+	// Saving it and blitting it back copies a block of text to another place.
+	int clientW = 0;
+	int clientH = 0;
+	if (m_hwnd)
+		getWidthAndHeightFromHWND(m_hwnd, clientW, clientH);
+	bool reject = (r.width <= 0 || r.height <= 0 || iWidth == 0 || iHeight == 0);
+	if (!reject && clientW > 0 && (iWidth > static_cast<UT_uint32>(clientW) || iHeight > static_cast<UT_uint32>(clientH)))
+		reject = true;
+	if (reject)
+	{
+		HBITMAP hOld = nullptr;
+		m_vSaveRectBuf.setNthItem(iIndx, nullptr, (const void**)&hOld);
+		if (hOld)
+			DeleteObject(hOld);
+		return;
+	}
 
 	#ifdef GR_GRAPHICS_DEBUG	
 	UT_DEBUGMSG(("GR_Win32Graphics::saveRectangle %u, %u %u %u %u\n", iIndx,
@@ -2187,10 +2223,20 @@ void GR_Win32Graphics::restoreRectangle(UT_uint32 iIndx)
 	HBITMAP hBit = (HBITMAP)m_vSaveRectBuf.getNthItem(iIndx);
 	
 	UT_return_if_fail(r);
-	UT_ASSERT(hBit);
-	
+	UT_return_if_fail(hBit);
+
 	UT_uint32 iWidth = (UT_sint32)((double)_tduR(r->width) * m_fXYRatio);
 	UT_uint32 iHeight = _tduR(r->height);
+	if (iWidth == 0 || iHeight == 0)
+		return;
+	if (m_hwnd)
+	{
+		int clientW = 0;
+		int clientH = 0;
+		getWidthAndHeightFromHWND(m_hwnd, clientW, clientH);
+		if (clientW > 0 && (iWidth > static_cast<UT_uint32>(clientW) || iHeight > static_cast<UT_uint32>(clientH)))
+			return;
+	}
 	UT_sint32 x = (UT_sint32)((double)_tduX(r->left) * m_fXYRatio);
 	UT_sint32 y = _tduY(r->top);			
 
@@ -2707,8 +2753,9 @@ void GR_Win32Graphics::_DeviceContext_SwitchToScreen()
 		// the buffer. Present the whole buffer, then put the logical clip back.
 		SelectClipRgn(m_hdc, nullptr);
 		BOOL blt = BitBlt(m_hdc, 0, 0, width, height, m_bufferHdc, 0, 0, SRCCOPY);
-		if (getClipRect())
-			setClipRect(getClipRect());
+		// Leave the screen DC unclipped. The logical clip stays in m_pRect
+		// and is applied to the next memory DC. Putting it back here makes
+		// the following scroll move only the selection rectangle.
 		UT_Win32TraceF("screen-blt %d", blt ? 1 : 0);
 		UT_Win32TraceHeap("screen-blt");
 	}

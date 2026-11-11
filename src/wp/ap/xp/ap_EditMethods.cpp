@@ -5111,6 +5111,19 @@ static void sActualDragToXY(AV_View *  pAV_View, EV_EditMethodCallData * pCallDa
 
 Defun(dragToXY)
 {
+	// A drag timer used to keep the first point of each interval and drop
+	// the rest. The caret then jumped to that stale point, and an off-screen
+	// test there scrolled the page. Keep the newest point instead.
+	if (s_pFrequentRepeat)
+	{
+		_Freq * pFreq = static_cast<_Freq *>(s_pFrequentRepeat->getInstanceData());
+		if (pFreq && pFreq->m_pExe == sActualDragToXY && pFreq->m_pData)
+		{
+			pFreq->m_pData->m_xPos = pCallData->m_xPos;
+			pFreq->m_pData->m_yPos = pCallData->m_yPos;
+			return true;
+		}
+	}
 	CHECK_FRAME;
 	ABIWORD_VIEW;
 //
@@ -5153,6 +5166,21 @@ Defun(dragToXYword)
 
 Defun(endDrag)
 {
+	// Mouse-up was dropped while the drag timer was still armed, so the
+	// selection never reached the release point and autoscroll kept running.
+	if (s_pFrequentRepeat)
+	{
+		_Freq * pFreq = static_cast<_Freq *>(s_pFrequentRepeat->getInstanceData());
+		if (pFreq && pFreq->m_pExe == sActualDragToXY)
+		{
+			if (pFreq->m_pData)
+			{
+				pFreq->m_pData->m_xPos = pCallData->m_xPos;
+				pFreq->m_pData->m_yPos = pCallData->m_yPos;
+			}
+			_sFrequentRepeat(s_pFrequentRepeat);
+		}
+	}
 	CHECK_FRAME;
 	ABIWORD_VIEW;
 	UT_return_val_if_fail (pView, false);

@@ -19,11 +19,65 @@
  * 02110-1301 USA.
  */
 
+#include <string.h>
+
 #include "xap_Dialog.h"
 #include "xap_Strings.h"
 #include "xap_Win32DialogBase.h"
 #include "xap_Win32FrameImpl.h"
 #include "ut_Win32LocaleString.h"
+
+/* Copy whole UTF-8 characters that fit, and always write a NUL inside
+   the destination. Buffer_length is the byte capacity. */
+static void s_copyUtf8Bounded(char * dest, UT_sint32 capacity, const char * utf8)
+{
+	if (!dest || capacity <= 0)
+		return;
+	if (!utf8)
+	{
+		dest[0] = 0;
+		return;
+	}
+
+	UT_sint32 n = 0;
+	UT_sint32 max = capacity - 1;
+	while (utf8[n] && n < max)
+	{
+		unsigned char c = static_cast<unsigned char>(utf8[n]);
+		UT_sint32 clen = 1;
+		if ((c & 0x80) == 0)
+			clen = 1;
+		else if ((c & 0xe0) == 0xc0)
+			clen = 2;
+		else if ((c & 0xf0) == 0xe0)
+			clen = 3;
+		else if ((c & 0xf8) == 0xf0)
+			clen = 4;
+		else
+			break;
+
+		if (n + clen > max)
+			break;
+
+		bool complete = true;
+		for (UT_sint32 i = 1; i < clen; ++i)
+		{
+			if (utf8[n + i] == 0)
+			{
+				complete = false;
+				break;
+			}
+		}
+		if (!complete)
+			break;
+
+		n += clen;
+	}
+
+	if (n > 0)
+		memcpy(dest, utf8, n);
+	dest[n] = 0;
+}
 
 void XAP_Win32DialogBase::createModal(XAP_Frame* pFrame, LPCWSTR dlgTemplate)
 {
@@ -374,12 +428,28 @@ void XAP_Win32DialogBase::getControlText(UT_sint32 controlId,
 											UT_sint32 Buffer_length) const
 {
 	UT_return_if_fail(IsWindow(m_hDlg));
+	UT_return_if_fail(p_buffer && Buffer_length > 0);
+	p_buffer[0] = 0;
+
+	HWND hCtrl = GetDlgItem(m_hDlg, controlId);
+	if (!hCtrl)
+		return;
+
+	int len = GetWindowTextLengthW(hCtrl);
+	if (len < 0)
+		len = 0;
+
+	LPWSTR wbuf = static_cast<LPWSTR>(UT_calloc(len + 1, sizeof(WCHAR)));
+	if (!wbuf)
+		return;
+
+	GetWindowTextW(hCtrl, wbuf, len + 1);
 	UT_Win32LocaleString str;
-	LPWSTR wbuf = (LPWSTR) UT_calloc(Buffer_length+1,2);
-	GetDlgItemTextW(m_hDlg, controlId, wbuf, Buffer_length);
 	str.fromLocale(wbuf);
-	strncpy(p_buffer,str.utf8_str().utf8_str(),Buffer_length);
 	FREEP(wbuf);
+
+	const char * utf8 = str.utf8_str().utf8_str();
+	s_copyUtf8Bounded(p_buffer, Buffer_length, utf8);
 }
 
 bool XAP_Win32DialogBase::isControlVisible(UT_sint32 controlId) const

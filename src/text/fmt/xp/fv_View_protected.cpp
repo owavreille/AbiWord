@@ -93,7 +93,7 @@
 
 // NB -- irrespective of this size, the piecetable will store
 // at max BOOKMARK_NAME_LIMIT of chars as defined in pf_Frag_Bookmark.h
-#define BOOKMARK_NAME_SIZE 30
+#define BOOKMARK_NAME_SIZE 256
 #define CHECK_WINDOW_SIZE if(getWindowHeight() < 20) return;
 // returns true iff the character BEFORE pos is a space.
 // Special cases:

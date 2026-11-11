@@ -25,7 +25,11 @@
 #include "ut_string.h"
 #include "ut_string_class.h"
 
-#define BOOKMARK_SIZE_LIMIT 30
+/* Letters, not bytes. An accented name is several UTF-8 bytes per
+   letter and used to be copied out of a 30-byte buffer with no
+   terminating NUL. */
+#define BOOKMARK_CHAR_LIMIT 64
+#define BOOKMARK_SIZE_LIMIT (BOOKMARK_CHAR_LIMIT * 4)
 class XAP_Frame;
 
 class ABI_EXPORT AP_Dialog_InsertBookmark : public AP_Dialog_Modal

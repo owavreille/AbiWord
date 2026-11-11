@@ -1,9 +1,9 @@
 ; Installateur Windows x64 d'AbiWord.
 ; L'arbre dist/windows-x86_64 doit déjà contenir bin\, lib\ et share\.
 ;
-;   makensis -DVERSION=3.1.90 \
+;   makensis -DVERSION=3.1 \
 ;            -DDIST=/chemin/dist/windows-x86_64 \
-;            -DOUTFILE=/chemin/dist/AbiWord-3.1.90-windows-x64-setup.exe \
+;            -DOUTFILE=/chemin/dist/AbiWord-3.1-windows-x64-setup.exe \
 ;            -DLICENSE=/chemin/COPYING \
 ;            -DICON=/chemin/src/wp/ap/win/abiword_app_32.ico \
 ;            packaging/windows/abiword.nsi
@@ -18,7 +18,7 @@ ManifestDPIAware true
 !include "StrFunc.nsh"
 
 !ifndef VERSION
-  !define VERSION "3.1.90"
+  !define VERSION "3.1"
 !endif
 !ifndef DIST
   !error "Definir DIST, le dossier windows-x86_64"

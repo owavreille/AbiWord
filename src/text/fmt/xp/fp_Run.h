@@ -728,7 +728,7 @@ private:
 	virtual bool _deleteFollowingIfAtInsPoint() const override;
 
 	bool m_bIsStart;
-	#define BOOKMARK_NAME_SIZE 30
+	#define BOOKMARK_NAME_SIZE 256
 	gchar	  	m_pName[BOOKMARK_NAME_SIZE + 1];
 	po_Bookmark		* m_pBookmark;
 };

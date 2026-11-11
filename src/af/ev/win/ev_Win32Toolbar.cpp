@@ -55,7 +55,10 @@
 #include "ap_Win32Toolbar_FontCombo.h"
 #include "ap_Win32Toolbar_StyleCombo.h"
 #include "ap_Win32App.h"
+#include "ap_Strings.h"
 #include "ut_Win32LocaleString.h"
+#include <stdio.h>
+#include <string.h>
 
 
 #ifndef TBSTYLE_EX_DRAWDDARROWS
@@ -219,16 +222,21 @@ bool EV_Win32Toolbar::toolbarEvent(XAP_Toolbar_Id id,
 
 		if (id==AP_TOOLBAR_ID_COLOR_BACK)
 		{
+			if (fimpl->m_sColorBack.empty())
+				fimpl->m_sColorBack = "transparent";
 			ucs4color = fimpl->m_sColorBack.ucs4_str();
 			dataLength =  fimpl->m_sColorBack.size();
 		}
 		else
 		{
+			if (fimpl->m_sColorFore.empty())
+				fimpl->m_sColorFore = "000000";
 			ucs4color = fimpl->m_sColorFore.ucs4_str();
 			dataLength =  fimpl->m_sColorFore.size();
 		}	
 
 		invokeToolbarMethod(pView,pEM, ucs4color.ucs4_str(),dataLength);
+		return true;
 	}
 
 	const char * szMethodName = pAction->getMethodName();
@@ -728,14 +736,11 @@ bool EV_Win32Toolbar::synthesize(void)
 
 				switch (pAction->getItemType())
 				{
-					//TODO: For now these are buttons which bring up a dialog, as some point,
-           		 	//make them be able to bring up some sort of additional selector.
+					/* The button applies the current colour. The arrow
+					   opens the swatch popup from TBN_DROPDOWN. */
 				case EV_TBIT_ColorFore:
 				case EV_TBIT_ColorBack:
-					UT_DEBUGMSG(("TODO: Hey Windows needs some tender love and care and a colour selector! \n"));
-					// UT_ASSERT(UT_NOT_IMPLEMENTED);
-					UT_DEBUGMSG(("TODO: Handle the colour selector case \n"));
-					/* Fall through and make a push button */	
+					/* fall through */
 
 				case EV_TBIT_PushButton:
 					bButton = true;
@@ -1546,68 +1551,435 @@ bool EV_Win32Toolbar::repopulateStyles(void)
 	return true;
 }
 
-/*
-	This method is called when the user clicks on the arrow next to the
-	foreground and background colour seletion buttons on the toolbar
-*/
-void	EV_Win32Toolbar::onDropArrow(UINT cmd)
+/* Office-style 8 by 5 swatches. The last row is the light set. */
+static const COLORREF s_swatches[40] =
 {
-	AV_View * pView = m_pWin32Frame->getCurrentView();
-	XAP_Frame * pFrame = (XAP_Frame *) pView->getParentData();
-	UT_return_if_fail(pFrame);
+	RGB(0x00,0x00,0x00), RGB(0x99,0x33,0x00), RGB(0x33,0x33,0x00), RGB(0x00,0x33,0x00),
+	RGB(0x00,0x33,0x66), RGB(0x00,0x00,0x80), RGB(0x33,0x33,0x99), RGB(0x33,0x33,0x33),
+	RGB(0x80,0x00,0x00), RGB(0xFF,0x66,0x00), RGB(0x80,0x80,0x00), RGB(0x00,0x80,0x00),
+	RGB(0x00,0x80,0x80), RGB(0x00,0x00,0xFF), RGB(0x66,0x66,0x99), RGB(0x80,0x80,0x80),
+	RGB(0xFF,0x00,0x00), RGB(0xFF,0x99,0x00), RGB(0x99,0xCC,0x00), RGB(0x33,0x99,0x66),
+	RGB(0x33,0xCC,0xCC), RGB(0x33,0x66,0xFF), RGB(0x80,0x00,0x80), RGB(0x99,0x99,0x99),
+	RGB(0xFF,0x00,0xFF), RGB(0xFF,0xCC,0x00), RGB(0xFF,0xFF,0x00), RGB(0x00,0xFF,0x00),
+	RGB(0x00,0xFF,0xFF), RGB(0x00,0xCC,0xFF), RGB(0x99,0x33,0x66), RGB(0xC0,0xC0,0xC0),
+	RGB(0xFF,0x99,0xCC), RGB(0xFF,0xCC,0x99), RGB(0xFF,0xFF,0x99), RGB(0xCC,0xFF,0xCC),
+	RGB(0xCC,0xFF,0xFF), RGB(0x99,0xCC,0xFF), RGB(0xCC,0x99,0xFF), RGB(0xFF,0xFF,0xFF)
+};
 
-	UT_UCS4String ucs4color;
-	XAP_Toolbar_Id id = ItemIdFromWmCommand(cmd);
+enum
+{
+	COLOR_COLS = 8,
+	COLOR_ROWS = 5,
+	COLOR_COUNT = 40,
+	COLOR_CELL = 18,
+	COLOR_PAD = 6,
+	COLOR_FOOTER = 24,
+	HOT_CLEAR = 40,
+	HOT_MORE = 41
+};
+
+struct AbiColorPopup
+{
+	EV_Win32Toolbar * toolbar;
+	XAP_Toolbar_Id id;
+	bool background;
+	bool ready;
+	int hot;
+	wchar_t clearText[160];
+	wchar_t moreText[160];
+};
+
+static int s_colorClientWidth()
+{
+	int w = COLOR_PAD * 2 + COLOR_COLS * COLOR_CELL;
+	return (w < 220) ? 220 : w;
+}
+
+static int s_colorClientHeight()
+{
+	return COLOR_PAD + COLOR_ROWS * COLOR_CELL + 4 + COLOR_FOOTER * 2 + COLOR_PAD;
+}
+
+static int s_colorGridX(int width)
+{
+	return (width - COLOR_COLS * COLOR_CELL) / 2;
+}
+
+static void s_copyWide(wchar_t * dest, size_t destChars, const wchar_t * src)
+{
+	size_t i = 0;
+	if (!src)
+		src = L"";
+	for (; i + 1 < destChars && src[i]; ++i)
+		dest[i] = src[i];
+	dest[i] = 0;
+}
+
+static void s_loadLabel(wchar_t * dest, size_t destChars, XAP_String_Id id, const wchar_t * fallback)
+{
+	const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
+	const char * utf8 = pSS ? pSS->getValue(id) : nullptr;
+	if (utf8 && utf8[0])
+	{
+		UT_Win32LocaleString localised;
+		localised.fromUTF8(utf8);
+		s_copyWide(dest, destChars, localised.c_str());
+	}
+	else
+		s_copyWide(dest, destChars, fallback);
+}
+
+static void s_applyToolbarColor(EV_Win32Toolbar * toolbar, XAP_Toolbar_Id id, const char * hex)
+{
+	if (!toolbar || !hex || !hex[0])
+		return;
+
+	XAP_Frame * frame = toolbar->getFrame();
+	if (!frame)
+		return;
+
+	XAP_Win32FrameImpl * fimpl = static_cast<XAP_Win32FrameImpl *>(frame->getFrameImpl());
+	if (!fimpl)
+		return;
+
+	if (id == AP_TOOLBAR_ID_COLOR_BACK)
+		fimpl->m_sColorBack = hex;
+	else
+		fimpl->m_sColorFore = hex;
+
+	toolbar->toolbarEvent(id, nullptr, 0);
+}
+
+static void s_chooseCustomColor(EV_Win32Toolbar * toolbar, XAP_Toolbar_Id id)
+{
+	if (!toolbar)
+		return;
+
+	XAP_Frame * pFrame = toolbar->getFrame();
+	if (!pFrame)
+		return;
 
 	pFrame->raise();
 
-	XAP_DialogFactory * pDialogFactory
-		= (XAP_DialogFactory *)(pFrame->getDialogFactory());
+	XAP_DialogFactory * pDialogFactory = static_cast<XAP_DialogFactory *>(pFrame->getDialogFactory());
+	AP_Dialog_Background * pDialog = static_cast<AP_Dialog_Background *>(
+		pDialogFactory->requestDialog(static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_BACKGROUND)));
+	if (!pDialog)
+		return;
 
-	AP_Dialog_Background * pDialog
-		= (AP_Dialog_Background *)(pDialogFactory->requestDialog((XAP_Dialog_Id)AP_DIALOG_ID_BACKGROUND));
-	UT_ASSERT_HARMLESS(pDialog);
-	if (pDialog)
+	XAP_Win32FrameImpl * fimpl = static_cast<XAP_Win32FrameImpl *>(pFrame->getFrameImpl());
+	if (id == AP_TOOLBAR_ID_COLOR_BACK && !fimpl->m_sColorBack.empty())
+		pDialog->setColor(fimpl->m_sColorBack.utf8_str());
+	if (id == AP_TOOLBAR_ID_COLOR_FORE && !fimpl->m_sColorFore.empty())
+		pDialog->setColor(fimpl->m_sColorFore.utf8_str());
+
+	pDialog->runModal(pFrame);
+	if (pDialog->getAnswer() == AP_Dialog_Background::a_OK)
+		s_applyToolbarColor(toolbar, id, reinterpret_cast<const char *>(pDialog->getColor()));
+
+	pDialogFactory->releaseDialog(pDialog);
+}
+
+static int s_hitColor(HWND hwnd, int x, int y)
+{
+	RECT rc;
+	GetClientRect(hwnd, &rc);
+	int gx = s_colorGridX(rc.right - rc.left);
+	int gy = COLOR_PAD;
+
+	if (x >= gx && y >= gy)
 	{
-		//
-		// Get Current color
-		//
+		int col = (x - gx) / COLOR_CELL;
+		int row = (y - gy) / COLOR_CELL;
+		if (col >= 0 && col < COLOR_COLS && row >= 0 && row < COLOR_ROWS)
+			return row * COLOR_COLS + col;
+	}
 
-		const EV_Toolbar_ActionSet * pToolbarActionSet = m_pWin32App->getToolbarActionSet();
-		UT_return_if_fail(pToolbarActionSet);
+	int footerTop = COLOR_PAD + COLOR_ROWS * COLOR_CELL + 4;
+	if (y >= footerTop && y < footerTop + COLOR_FOOTER)
+		return HOT_CLEAR;
+	if (y >= footerTop + COLOR_FOOTER && y < footerTop + COLOR_FOOTER * 2)
+		return HOT_MORE;
+	return -1;
+}
 
-		const EV_Toolbar_Action * pAction = pToolbarActionSet->getAction(id);
-		if (!pAction)	return;
+static void s_fillSwatch(HDC hdc, const RECT & cell, COLORREF color, bool hot)
+{
+	HBRUSH brush = CreateSolidBrush(color);
+	FillRect(hdc, &cell, brush);
+	DeleteObject(brush);
 
+	RECT edge = cell;
+	if (hot)
+		InflateRect(&edge, 1, 1);
+	HBRUSH border = CreateSolidBrush(hot ? RGB(0, 0, 0) : RGB(90, 90, 90));
+	FrameRect(hdc, &edge, border);
+	DeleteObject(border);
+}
 
-		XAP_Win32FrameImpl* fimpl = static_cast<XAP_Win32FrameImpl*>(m_pWin32Frame->getFrameImpl());
+static void s_paintFooter(HDC hdc, const RECT & cell, const wchar_t * text, bool hot)
+{
+	HBRUSH brush = CreateSolidBrush(hot ? GetSysColor(COLOR_HIGHLIGHT) : GetSysColor(COLOR_BTNFACE));
+	FillRect(hdc, &cell, brush);
+	DeleteObject(brush);
 
-		if (!fimpl->m_sColorBack.empty() && pAction->getItemType() == EV_TBIT_ColorBack)
-			pDialog->setColor(fimpl->m_sColorBack.utf8_str());
+	SetBkMode(hdc, TRANSPARENT);
+	SetTextColor(hdc, hot ? GetSysColor(COLOR_HIGHLIGHTTEXT) : GetSysColor(COLOR_BTNTEXT));
+	RECT textRc = cell;
+	DrawTextW(hdc, text, -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+}
 
-		if (!fimpl->m_sColorFore.empty() && pAction->getItemType() == EV_TBIT_ColorFore)
-			pDialog->setColor(fimpl->m_sColorFore.utf8_str());
+static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	AbiColorPopup * popup = reinterpret_cast<AbiColorPopup *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 
-		pDialog->runModal (pFrame);
-
-		AP_Dialog_Background::tAnswer ans = pDialog->getAnswer();
-		bool bOK = (ans == AP_Dialog_Background::a_OK);			
-
-		if (bOK)
+	switch (msg)
+	{
+	case WM_CREATE:
 		{
-			UT_UTF8String strColor;
-			strColor = (reinterpret_cast<const char *>(pDialog->getColor()));								
-			
-			if (pAction->getItemType() == EV_TBIT_ColorBack)
-				fimpl->m_sColorBack = strColor;
-
-			if (pAction->getItemType() == EV_TBIT_ColorFore)
-				fimpl->m_sColorFore = strColor;
-
-			toolbarEvent(id, nullptr, 0);
+			CREATESTRUCTW * cs = reinterpret_cast<CREATESTRUCTW *>(lParam);
+			SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(cs->lpCreateParams));
+			return 0;
 		}
 
-		pDialogFactory->releaseDialog(pDialog);
+	case WM_MOUSEMOVE:
+		if (popup)
+		{
+			int hit = s_hitColor(hwnd, static_cast<short>(LOWORD(lParam)), static_cast<short>(HIWORD(lParam)));
+			if (hit != popup->hot)
+			{
+				popup->hot = hit;
+				InvalidateRect(hwnd, nullptr, FALSE);
+			}
+			TRACKMOUSEEVENT track;
+			track.cbSize = sizeof(track);
+			track.dwFlags = TME_LEAVE;
+			track.hwndTrack = hwnd;
+			track.dwHoverTime = 0;
+			TrackMouseEvent(&track);
+		}
+		return 0;
+
+	case WM_MOUSELEAVE:
+		if (popup && popup->hot != -1)
+		{
+			popup->hot = -1;
+			InvalidateRect(hwnd, nullptr, FALSE);
+		}
+		return 0;
+
+	case WM_LBUTTONDOWN:
+	case WM_LBUTTONUP:
+		if (popup)
+		{
+			/* The click that opened the arrow is released on the toolbar,
+			   above this window. Ignore that button-up. */
+			if (msg == WM_LBUTTONUP && !popup->ready)
+			{
+				popup->ready = true;
+				return 0;
+			}
+			popup->ready = true;
+
+			int x = static_cast<short>(LOWORD(lParam));
+			int y = static_cast<short>(HIWORD(lParam));
+			RECT rc;
+			GetClientRect(hwnd, &rc);
+			bool inside = (x >= 0 && y >= 0 && x < rc.right && y < rc.bottom);
+			if (!inside)
+			{
+				DestroyWindow(hwnd);
+				return 0;
+			}
+			if (msg == WM_LBUTTONDOWN)
+				return 0;
+
+			int hit = s_hitColor(hwnd, x, y);
+			EV_Win32Toolbar * toolbar = popup->toolbar;
+			XAP_Toolbar_Id id = popup->id;
+			bool background = popup->background;
+			char hex[16];
+			hex[0] = 0;
+
+			if (hit >= 0 && hit < COLOR_COUNT)
+			{
+				COLORREF color = s_swatches[hit];
+				snprintf(hex, sizeof(hex), "%02x%02x%02x",
+					GetRValue(color), GetGValue(color), GetBValue(color));
+			}
+			else if (hit == HOT_CLEAR)
+				snprintf(hex, sizeof(hex), "%s", background ? "transparent" : "000000");
+
+			bool more = (hit == HOT_MORE);
+			DestroyWindow(hwnd);
+			if (more)
+				s_chooseCustomColor(toolbar, id);
+			else if (hex[0])
+				s_applyToolbarColor(toolbar, id, hex);
+		}
+		return 0;
+
+	case WM_KEYDOWN:
+		if (wParam == VK_ESCAPE)
+			DestroyWindow(hwnd);
+		return 0;
+
+	case WM_PAINT:
+		{
+			PAINTSTRUCT ps;
+			HDC hdc = BeginPaint(hwnd, &ps);
+			RECT rc;
+			GetClientRect(hwnd, &rc);
+			FillRect(hdc, &rc, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
+
+			int gx = s_colorGridX(rc.right - rc.left);
+			int gy = COLOR_PAD;
+			for (int i = 0; i < COLOR_COUNT; ++i)
+			{
+				RECT cell;
+				cell.left = gx + (i % COLOR_COLS) * COLOR_CELL + 2;
+				cell.top = gy + (i / COLOR_COLS) * COLOR_CELL + 2;
+				cell.right = cell.left + COLOR_CELL - 4;
+				cell.bottom = cell.top + COLOR_CELL - 4;
+				s_fillSwatch(hdc, cell, s_swatches[i], popup && popup->hot == i);
+			}
+
+			int footerTop = COLOR_PAD + COLOR_ROWS * COLOR_CELL + 4;
+			RECT clearRc;
+			clearRc.left = 4;
+			clearRc.right = rc.right - 4;
+			clearRc.top = footerTop;
+			clearRc.bottom = footerTop + COLOR_FOOTER - 2;
+			RECT moreRc = clearRc;
+			moreRc.top = footerTop + COLOR_FOOTER;
+			moreRc.bottom = footerTop + COLOR_FOOTER * 2 - 2;
+
+			if (popup)
+			{
+				HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+				HFONT old = static_cast<HFONT>(SelectObject(hdc, font));
+				s_paintFooter(hdc, clearRc, popup->clearText, popup->hot == HOT_CLEAR);
+				s_paintFooter(hdc, moreRc, popup->moreText, popup->hot == HOT_MORE);
+				SelectObject(hdc, old);
+			}
+
+			EndPaint(hwnd, &ps);
+			return 0;
+		}
+
+	case WM_CAPTURECHANGED:
+		if (popup && reinterpret_cast<HWND>(lParam) != hwnd)
+			DestroyWindow(hwnd);
+		return 0;
+
+	case WM_DESTROY:
+		if (!popup)
+			return 0;
+		SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
+		if (GetCapture() == hwnd)
+			ReleaseCapture();
+		delete popup;
+		return 0;
 	}
+
+	return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id id)
+{
+	HWND existing = FindWindowW(L"AbiWordColorPopup", nullptr);
+	if (existing)
+		DestroyWindow(existing);
+
+	static bool registered = false;
+	if (!registered)
+	{
+		WNDCLASSW wc;
+		memset(&wc, 0, sizeof(wc));
+		wc.lpfnWndProc = s_colorPopupProc;
+		wc.hInstance = GetModuleHandleW(nullptr);
+		wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
+		wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+		wc.lpszClassName = L"AbiWordColorPopup";
+		registered = (RegisterClassW(&wc) != 0) || (GetLastError() == ERROR_CLASS_ALREADY_EXISTS);
+	}
+	if (!registered)
+		return;
+
+	AbiColorPopup * popup = new AbiColorPopup;
+	popup->toolbar = toolbar;
+	popup->id = id;
+	popup->background = (id == AP_TOOLBAR_ID_COLOR_BACK);
+	popup->ready = false;
+	popup->hot = -1;
+	s_loadLabel(popup->clearText, sizeof(popup->clearText) / sizeof(popup->clearText[0]),
+		popup->background ? XAP_STRING_ID_TB_ClearBackground : XAP_STRING_ID_TB_ClearForeground,
+		popup->background ? L"Clear Background" : L"Clear Foreground");
+	s_loadLabel(popup->moreText, sizeof(popup->moreText) / sizeof(popup->moreText[0]),
+		popup->background ? AP_STRING_ID_DLG_Background_TitleHighlight : AP_STRING_ID_DLG_Background_TitleFore,
+		popup->background ? L"Change Highlight Color" : L"Change Text Color");
+
+	RECT button;
+	POINT origin;
+	origin.x = 0;
+	origin.y = 0;
+	HWND toolbarHwnd = toolbar->getWindow();
+	if (toolbarHwnd && SendMessageW(toolbarHwnd, TB_GETRECT, cmd, reinterpret_cast<LPARAM>(&button)))
+	{
+		origin.x = button.left;
+		origin.y = button.bottom;
+		ClientToScreen(toolbarHwnd, &origin);
+	}
+	else
+		GetCursorPos(&origin);
+
+	RECT windowRc = { 0, 0, s_colorClientWidth(), s_colorClientHeight() };
+	AdjustWindowRectEx(&windowRc, WS_POPUP | WS_BORDER, FALSE, WS_EX_TOOLWINDOW | WS_EX_TOPMOST);
+	int width = windowRc.right - windowRc.left;
+	int height = windowRc.bottom - windowRc.top;
+
+	RECT work;
+	SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+	int x = origin.x;
+	int y = origin.y;
+	if (x + width > work.right)
+		x = work.right - width;
+	if (y + height > work.bottom)
+		y = origin.y - height;
+	if (x < work.left)
+		x = work.left;
+	if (y < work.top)
+		y = work.top;
+
+	HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
+		L"AbiWordColorPopup", L"",
+		WS_POPUP | WS_BORDER,
+		x, y, width, height,
+		toolbarHwnd, nullptr, GetModuleHandleW(nullptr), popup);
+	if (!hwnd)
+	{
+		delete popup;
+		s_chooseCustomColor(toolbar, id);
+		return;
+	}
+
+	ShowWindow(hwnd, SW_SHOWNA);
+	SetCapture(hwnd);
+}
+
+/*
+	The arrow next to the text and highlight colour buttons opens this
+	swatch menu. The button itself still applies the current colour.
+*/
+void	EV_Win32Toolbar::onDropArrow(UINT cmd)
+{
+	if (!m_pWin32Frame)
+		return;
+
+	XAP_Toolbar_Id id = ItemIdFromWmCommand(cmd);
+	if (id != AP_TOOLBAR_ID_COLOR_FORE && id != AP_TOOLBAR_ID_COLOR_BACK)
+		return;
+
+	s_showColorPopup(this, cmd, id);
 }
 

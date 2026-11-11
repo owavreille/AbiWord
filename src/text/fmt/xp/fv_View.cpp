@@ -102,7 +102,7 @@
 
 // NB -- irrespective of this size, the piecetable will store
 // at max BOOKMARK_NAME_LIMIT of chars as defined in pf_Frag_Bookmark.h
-#define BOOKMARK_NAME_SIZE 30
+#define BOOKMARK_NAME_SIZE 256
 #define CHECK_WINDOW_SIZE if(getWindowHeight() < m_pG->tlu(20)) return;
 
 // add 0.1 inch for a left border to click in for showBorder

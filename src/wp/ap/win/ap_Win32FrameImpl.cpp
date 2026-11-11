@@ -1347,6 +1347,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 			pWinG->swapDC(previous);
 
 			EndPaint(hwnd, &ps);
+			// BeginPaint's clip survives EndPaint on a CS_OWNDC window.
+			pWinG->clearScreenClip();
 			UT_Win32Trace("paint-done");
 			UT_Win32TraceHeap("paint-done");
 

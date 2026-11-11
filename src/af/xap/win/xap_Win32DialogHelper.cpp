@@ -21,6 +21,7 @@
 
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
+#include <string.h>
 
 #include "ut_string.h"
 #include "ut_assert.h"
@@ -31,6 +32,58 @@
 #include "xap_Win32DialogHelper.h"
 #include "xap_Win32Toolbar_Icons.h"
 #include "ut_Win32LocaleString.h"
+
+/* Copy whole UTF-8 characters that fit, and always write a NUL inside
+   the destination. Buffer_length is the byte capacity. */
+static void s_copyUtf8Bounded(char * dest, UT_sint32 capacity, const char * utf8)
+{
+	if (!dest || capacity <= 0)
+		return;
+	if (!utf8)
+	{
+		dest[0] = 0;
+		return;
+	}
+
+	UT_sint32 n = 0;
+	UT_sint32 max = capacity - 1;
+	while (utf8[n] && n < max)
+	{
+		unsigned char c = static_cast<unsigned char>(utf8[n]);
+		UT_sint32 clen = 1;
+		if ((c & 0x80) == 0)
+			clen = 1;
+		else if ((c & 0xe0) == 0xc0)
+			clen = 2;
+		else if ((c & 0xf0) == 0xe0)
+			clen = 3;
+		else if ((c & 0xf8) == 0xf0)
+			clen = 4;
+		else
+			break;
+
+		if (n + clen > max)
+			break;
+
+		bool complete = true;
+		for (UT_sint32 i = 1; i < clen; ++i)
+		{
+			if (utf8[n + i] == 0)
+			{
+				complete = false;
+				break;
+			}
+		}
+		if (!complete)
+			break;
+
+		n += clen;
+	}
+
+	if (n > 0)
+		memcpy(dest, utf8, n);
+	dest[n] = 0;
+}
 
 
 static void _assertValidDlgHandle(HWND hDlg)
@@ -301,13 +354,16 @@ void XAP_Win32DialogHelper::getControlText(	UT_sint32 controlId,
 	UT_Win32LocaleString str;
 
 	_assertValidDlgHandle(m_hDlg);
+	if (!p_buffer || Buffer_length <= 0)
+		return;
+	p_buffer[0] = 0;
+
 	len=GetWindowTextLengthW(GetDlgItem(m_hDlg, controlId));
 	buf=g_new(WCHAR,len+1);
 	GetDlgItemTextW(m_hDlg, controlId, buf, len+1);
 	str.fromLocale(buf);
 	FREEP(buf);
-	// FIXME: validation
-	strncpy(p_buffer,str.utf8_str().utf8_str(),Buffer_length);
+	s_copyUtf8Bounded(p_buffer, Buffer_length, str.utf8_str().utf8_str());
 }
 
 bool XAP_Win32DialogHelper::isControlVisible(UT_sint32 controlId) const

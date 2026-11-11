@@ -1,9 +1,9 @@
 
 m4_define([abi_version_major], [3])
 m4_define([abi_version_minor], [1])
-m4_define([abi_version_micro], [90])
+m4_define([abi_version_micro], [0])
 m4_define([abi_series], [abi_version_major.abi_version_minor])
-m4_define([abi_version], [abi_version_major.abi_version_minor.abi_version_micro])
+m4_define([abi_version], [abi_series])
 
 AC_INIT([abiword],[abi_version],[http://www.abisource.com/])
 AC_CANONICAL_HOST

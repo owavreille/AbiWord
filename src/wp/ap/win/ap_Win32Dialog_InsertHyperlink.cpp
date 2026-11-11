@@ -34,6 +34,7 @@
 #include "ap_Win32Dialog_InsertHyperlink.h"
 #include "xap_Win32DialogHelper.h"
 #include "ap_Win32Resources.rc2"
+#include "ut_Win32LocaleString.h"
 
 /*****************************************************************/
 
@@ -121,11 +122,22 @@ BOOL AP_Win32Dialog_InsertHyperlink::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
 
 	case IDOK:
 		{
-			char buf[PATH_MAX];
-			getControlText( AP_RID_DIALOG_INSERTHYPERLINK_EBX_LINK,
-                			buf,
-                            PATH_MAX );
-			setHyperlink(buf);
+			HWND hEdit = GetDlgItem(hWnd, AP_RID_DIALOG_INSERTHYPERLINK_EBX_LINK);
+			int len = hEdit ? GetWindowTextLengthW(hEdit) : 0;
+			if (len < 0)
+				len = 0;
+
+			wchar_t * wbuf = new wchar_t[len + 1];
+			wbuf[0] = 0;
+			if (hEdit)
+				GetWindowTextW(hEdit, wbuf, len + 1);
+
+			UT_Win32LocaleString str;
+			str.fromLocale(wbuf);
+			delete [] wbuf;
+
+			const char * utf8 = str.utf8_str().utf8_str();
+			setHyperlink(utf8 ? utf8 : "");
 		}
 		setAnswer( a_OK );
 		EndDialog(hWnd, 0);

@@ -485,17 +485,23 @@ void GR_Caret::_blink(bool bExplicit)
 				
 				// have to save the rectangle for the joining line
 				// before we draw the carets
-				UT_uint32 xmin = UT_MIN(m_xPoint, m_xPoint2);
-				UT_uint32 xmax = UT_MAX(m_xPoint, m_xPoint2);
-				UT_uint32 ymin = UT_MIN(m_yPoint, m_yPoint2);
-				UT_uint32 ymax = UT_MAX(m_yPoint, m_yPoint2);
-			
-				UT_Rect r2(xmin-m_pG->tlu(1),
-						   ymin + m_iPointHeight,
-						   xmax - xmin + m_pG->tlu(2),
-						   ymax - ymin + m_pG->tlu(1));
-				
-				m_pG->saveRectangle(r2,m_iCaretNumber*3+2);
+				// Keep the span signed. A negative caret coordinate cast to
+				// UT_uint32 becomes a huge width, and the restore pastes a
+				// block of text somewhere else on the page.
+				UT_sint32 xmin = UT_MIN(m_xPoint, m_xPoint2);
+				UT_sint32 xmax = UT_MAX(m_xPoint, m_xPoint2);
+				UT_sint32 ymin = UT_MIN(m_yPoint, m_yPoint2);
+				UT_sint32 ymax = UT_MAX(m_yPoint, m_yPoint2);
+				UT_sint32 joinWidth = xmax - xmin + m_pG->tlu(2);
+				UT_sint32 joinHeight = ymax - ymin + m_pG->tlu(1);
+				if (joinWidth > 0 && joinHeight > 0)
+				{
+					UT_Rect r2(xmin-m_pG->tlu(1),
+							   ymin + m_iPointHeight,
+							   joinWidth,
+							   joinHeight);
+					m_pG->saveRectangle(r2,m_iCaretNumber*3+2);
+				}
 			}
 			else
 				m_bSplitCaret = false;

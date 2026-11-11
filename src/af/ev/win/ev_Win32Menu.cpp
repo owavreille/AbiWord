@@ -70,7 +70,8 @@ static const EV_Menu_Bitmap s_bitmaps[] =
 	{AP_MENU_ID_FILE_IMPORT, "Menu_AbiWord_Import"},
 	{AP_MENU_ID_FILE_NEW,	 "Menu_AbiWord_New"},
 	{AP_MENU_ID_FILE_OPEN,	 "Menu_AbiWord_Open"},
-	{AP_MENU_ID_FILE_PRINT,		"Menu_AbiWord_Print"}, 
+	{AP_MENU_ID_FILE_PRINT,		"Menu_AbiWord_Print"},
+	{AP_MENU_ID_FILE_PRINT_PREVIEW, "Menu_AbiWord_Print_Preview"},
 	{AP_MENU_ID_FILE_SAVE,		"Menu_AbiWord_Save"}, 
 	{AP_MENU_ID_FILE_SAVEAS,	"Menu_AbiWord_SaveAs"}, 
 	{AP_MENU_ID_FILE_REVERT, "Menu_AbiWord_Revert"},
@@ -92,10 +93,22 @@ static const EV_Menu_Bitmap s_bitmaps[] =
 	// Insert
 	{AP_MENU_ID_INSERT_SYMBOL,	"Menu_AbiWord_Insert_Symbol"},
 	{AP_MENU_ID_INSERT_GRAPHIC, "Menu_AbiWord_Img"},
-	{AP_MENU_ID_INSERT_HYPERLINK,	"Menu_AbiWord_Hyperlink"},	
+	{AP_MENU_ID_INSERT_HYPERLINK,	"Menu_AbiWord_Hyperlink"},
+	{AP_MENU_ID_INSERT_BOOKMARK, "Menu_AbiWord_Bookmark"},
 
 	// Format
 	{AP_MENU_ID_FMT_FONT, "Menu_AbiWord_Font"},
+	{AP_MENU_ID_FMT_BOLD, "Menu_AbiWord_Bold"},
+	{AP_MENU_ID_FMT_ITALIC, "Menu_AbiWord_Italic"},
+	{AP_MENU_ID_FMT_UNDERLINE, "Menu_AbiWord_Underline"},
+	{AP_MENU_ID_FMT_OVERLINE, "Menu_AbiWord_Overline"},
+	{AP_MENU_ID_FMT_STRIKE, "Menu_AbiWord_Strike"},
+	{AP_MENU_ID_FMT_SUPERSCRIPT, "Menu_AbiWord_Superscript"},
+	{AP_MENU_ID_FMT_SUBSCRIPT, "Menu_AbiWord_Subscript"},
+	{AP_MENU_ID_ALIGN_LEFT, "Menu_AbiWord_Align_Left"},
+	{AP_MENU_ID_ALIGN_CENTER, "Menu_AbiWord_Align_Center"},
+	{AP_MENU_ID_ALIGN_RIGHT, "Menu_AbiWord_Align_Right"},
+	{AP_MENU_ID_ALIGN_JUSTIFY, "Menu_AbiWord_Align_Justify"},
 	{AP_MENU_ID_TABLE_INSERT_TABLE, "Menu_AbiWord_Insert_Table"},
 	{AP_MENU_ID_TOOLS_SPELL, "Menu_AbiWord_Spellcheck"},			
 	{AP_MENU_ID_TOOLS_OPTIONS, "Menu_AbiWord_Preferences"},
@@ -120,6 +133,7 @@ static const EV_Menu_Bitmap s_bitmaps[] =
 	
 
 	// Help
+	{AP_MENU_ID_HELP_CONTENTS, "Menu_AbiWord_Help"},
 	{AP_MENU_ID_HELP_SEARCH, "Menu_AbiWord_Search"},
 	{AP_MENU_ID_HELP_ABOUT, "Menu_AbiWord_About"},
 	{AP_MENU_ID_HELP_CREDITS, "Menu_AbiWord_Credits"},

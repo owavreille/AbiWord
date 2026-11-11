@@ -291,24 +291,15 @@ bool isTrue( const char* s )
 
 UT_sint32 signedLoWord(UT_uint32 dw)
 {
-	// return low word as a signed quantity
-
-	unsigned short u16 = static_cast<unsigned short>(dw & 0xffff);
-	signed short   s16 = *reinterpret_cast<signed short *>(&u16);
-	UT_sint32      s32 = s16;
-
-	return s32;
+	// GET_X_LPARAM: the low word is a signed client coordinate. A pointer
+	// cast between the two short types is undefined at -O2 and can hand the
+	// mouse a garbage position, so the caret jumps.
+	return static_cast<UT_sint32>(static_cast<signed short>(dw & 0xffff));
 }
 
 UT_sint32 signedHiWord(UT_uint32 dw)
 {
-	// return high word as a signed quantity
-
-	unsigned short u16 = static_cast<unsigned short>((dw >> 16) & 0xffff);
-	signed short   s16 = *reinterpret_cast<signed short *>(&u16);
-	UT_sint32      s32 = s16;
-
-	return s32;
+	return static_cast<UT_sint32>(static_cast<signed short>((dw >> 16) & 0xffff));
 }
 
 //////////////////////////////////////////////////////////////////

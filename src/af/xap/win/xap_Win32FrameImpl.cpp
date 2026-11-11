@@ -896,8 +896,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		{
 			HWND hWnd = ((LPNMHDR) lParam)->hwndFrom;
 			EV_Win32Toolbar * t = (EV_Win32Toolbar *)GetWindowLongPtrW(hWnd, GWLP_USERDATA);						
-			t->onDropArrow(((LPNMTOOLBARW) lParam)->iItem);			
-			Sleep(500); /* At least, half second where the arrow is shown as pressed*/			
+			t->onDropArrow(((LPNMTOOLBARW) lParam)->iItem);
 			return TBDDRET_DEFAULT;			/* Windows restores the pushed button*/
 		}
 

@@ -230,6 +230,7 @@ public:
 	virtual void			invertRect(const UT_Rect* pRect) override;
 	virtual void			queueDraw(const UT_Rect* pRect) override;
 	virtual void			setClipRect(const UT_Rect* pRect) override;
+	void					clearScreenClip(void);
 	virtual void			scroll(UT_sint32 dx, UT_sint32 dy) override;
 	virtual void			scroll(UT_sint32 x_dest, UT_sint32 y_dest,
                                                UT_sint32 x_src, UT_sint32 y_src,

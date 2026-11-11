@@ -122,7 +122,7 @@ BOOL AP_Win32Dialog_InsertBookmark::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 			gchar buf[BOOKMARK_SIZE_LIMIT+1];
 			getControlText( AP_RID_DIALOG_INSERTBOOKMARK_CBX_BOOKMARK,
 							 buf,
-							 BOOKMARK_SIZE_LIMIT );
+							 static_cast<UT_sint32>(sizeof(buf)) );
 			setBookmark(buf);
 		}
 		setAnswer( a_OK );
@@ -134,7 +134,7 @@ BOOL AP_Win32Dialog_InsertBookmark::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 			gchar buf[BOOKMARK_SIZE_LIMIT+1];
 			getControlText( AP_RID_DIALOG_INSERTBOOKMARK_CBX_BOOKMARK,
 							 buf,
-							 BOOKMARK_SIZE_LIMIT );
+							 static_cast<UT_sint32>(sizeof(buf)) );
 			setBookmark(buf);
 		}
 		setAnswer( a_DELETE );
@@ -157,7 +157,7 @@ BOOL AP_Win32Dialog_InsertBookmark::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 				gchar buf[BOOKMARK_SIZE_LIMIT+1];
 				getControlText( AP_RID_DIALOG_INSERTBOOKMARK_CBX_BOOKMARK,
 								buf,
-								BOOKMARK_SIZE_LIMIT );
+								static_cast<UT_sint32>(sizeof(buf)) );
 
 				enableControl(AP_RID_DIALOG_INSERTBOOKMARK_BTN_OK, *buf ? true : false);
 				enableControl(AP_RID_DIALOG_INSERTBOOKMARK_BTN_DELETE, (getComboItemIndex(AP_RID_DIALOG_INSERTBOOKMARK_CBX_BOOKMARK, buf)!=CB_ERR) ? true : false);

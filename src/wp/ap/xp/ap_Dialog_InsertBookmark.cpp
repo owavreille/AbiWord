@@ -17,6 +17,8 @@
  * 02110-1301 USA.
  */
 
+#include <string.h>
+
 #include "xap_Dialog_Id.h"
 #include "xap_DialogFactory.h"
 #include "ap_Dialog_InsertBookmark.h"
@@ -62,7 +64,51 @@ const gchar * AP_Dialog_InsertBookmark::getBookmark() const
 
 void AP_Dialog_InsertBookmark::setBookmark(const gchar * mark)
 {
-	strncpy(m_pBookmark, mark, BOOKMARK_SIZE_LIMIT);
+	if (!mark)
+	{
+		m_pBookmark[0] = 0;
+		return;
+	}
+
+	UT_uint32 n = 0;
+	UT_uint32 chars = 0;
+	while (mark[n] && chars < BOOKMARK_CHAR_LIMIT && n < BOOKMARK_SIZE_LIMIT)
+	{
+		unsigned char c = static_cast<unsigned char>(mark[n]);
+		UT_uint32 clen = 1;
+		if ((c & 0x80) == 0)
+			clen = 1;
+		else if ((c & 0xe0) == 0xc0)
+			clen = 2;
+		else if ((c & 0xf0) == 0xe0)
+			clen = 3;
+		else if ((c & 0xf8) == 0xf0)
+			clen = 4;
+		else
+			break;
+
+		if (n + clen > BOOKMARK_SIZE_LIMIT)
+			break;
+
+		bool complete = true;
+		for (UT_uint32 i = 1; i < clen; ++i)
+		{
+			if (mark[n + i] == 0)
+			{
+				complete = false;
+				break;
+			}
+		}
+		if (!complete)
+			break;
+
+		n += clen;
+		++chars;
+	}
+
+	if (n > 0)
+		memcpy(m_pBookmark, mark, n);
+	m_pBookmark[n] = 0;
 }
 
 void AP_Dialog_InsertBookmark::setDoc(FV_View * pView)
