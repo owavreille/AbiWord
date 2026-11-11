@@ -203,10 +203,10 @@ UT_uint32 XAP_Win32App::_getExeDir(LPWSTR pDirBuf, UT_uint32 iBufLen)
 	if (iResult > 0)
 	{
 		LPWSTR p = pDirBuf + wcslen(pDirBuf);
-		while (*p != '\\')
-		{
+		while (p > pDirBuf && *p != '\\')
 			p--;
-		}
+		if (*p != '\\')
+			return 0;
 		UT_ASSERT(p > pDirBuf);
 		p++;
 		*p = 0;
@@ -385,7 +385,7 @@ void XAP_Win32App::_setAbiSuiteLibDir(void)
 	WCHAR buf[PATH_MAX];
 
 	// see if ABIWORD_DATADIR was set in the environment
-	if (GetEnvironmentVariableW(L"ABIWORD_DATADIR",buf,sizeof(buf)) > 0)
+	if (GetEnvironmentVariableW(L"ABIWORD_DATADIR", buf, PATH_MAX) > 0)
 	{
 		utf8 = (char*) getUTF8String(buf);
 		char * p = utf8;
@@ -403,7 +403,7 @@ void XAP_Win32App::_setAbiSuiteLibDir(void)
 		return;
 	}
 
-	if (_getExeDir(buf,sizeof(buf)) > 0)
+	if (_getExeDir(buf, PATH_MAX) > 0)
 	{
 		char *base;
 		size_t len, baselen;

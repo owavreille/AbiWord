@@ -314,10 +314,8 @@ bool XAP_Win32DialogHelper::isControlVisible(UT_sint32 controlId) const
 {
 	_assertValidDlgHandle(m_hDlg);
 	HWND hControl = GetDlgItem(m_hDlg, controlId);
-	if (hControl) {
-		return (GetWindowLongPtrW(m_hDlg, GWL_STYLE) & WS_VISIBLE) ?
-				true : false;
-	}
+	if (hControl)
+		return (GetWindowLongPtrW(hControl, GWL_STYLE) & WS_VISIBLE) != 0;
 	return false;
 }
 

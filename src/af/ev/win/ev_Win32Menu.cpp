@@ -1056,7 +1056,7 @@ bool EV_Win32MenuBar::synthesizeMenuBar(XAP_Frame * pFrame)
 	mii.cbSize = sizeof(mii);
 	mii.dwTypeData = buff;
 	mii.fType = MF_STRING;
-    mii.cch = 80* sizeof (wchar_t);
+	mii.cch = 80;
 	mii.fState = MFS_DEFAULT;
 	mii.fMask = MIIM_ID | MIIM_DATA | MIIM_TYPE | MIIM_SUBMENU;
 	
@@ -1098,13 +1098,13 @@ bool EV_Win32MenuPopup::synthesizeMenuPopup(XAP_Frame * pFrame)
 	// see http://www.microsoft.com/middleeast/msdn/faq.aspx
 	MENUITEMINFOW mii;
 	wchar_t buff[81];
-	memset(buff, 80 * sizeof (wchar_t), L' ');
+	memset(buff, 0, 80 * sizeof(wchar_t));
 	buff[80] = 0;
-	
+
 	mii.cbSize = sizeof(mii);
 	mii.dwTypeData = buff;
 	mii.fType = MF_STRING;
-	mii.cch = 80* sizeof (wchar_t);
+	mii.cch = 80;
 	mii.fState = MFS_DEFAULT;
 	mii.fMask = MIIM_ID | MIIM_DATA | MIIM_TYPE | MIIM_SUBMENU;
 	
