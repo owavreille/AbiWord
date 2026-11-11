@@ -102,7 +102,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 
 	const wchar_t * pClassName = L"AbiSource_About";
 	
-	ATOM a = UT_RegisterClassEx(CS_HREDRAW | CS_VREDRAW, (WNDPROC) s_dlgProc, pWin32App->getInstance(),
+	ATOM a = UT_RegisterClassEx(CS_HREDRAW | CS_VREDRAW, s_dlgProc, pWin32App->getInstance(),
 								nullptr, LoadCursorW(nullptr, (LPCWSTR)IDC_ARROW), GetSysColorBrush(COLOR_BTNFACE), nullptr,
 								nullptr, pClassName);
 	if (!a)
@@ -147,7 +147,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 
 	HWND hwndAbout = UT_CreateWindowEx(	0L, pClassName,
 										buf,
-										WS_OVERLAPPED | WS_VISIBLE,
+										WS_OVERLAPPED | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
 										rcScreen.left + (iScreenWidth - ABOUT_WIDTH) / 2,
 										rcScreen.top + (iScreenHeight - ABOUT_HEIGHT) /2,
 										ABOUT_WIDTH,
@@ -308,6 +308,9 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	if(hwndStatic_USP_Version)
 		SendMessageW(hwndStatic_USP_Version, WM_SETFONT, (WPARAM) hfontSmall, 0);
 	
+	ShowWindow(hwndAbout, SW_SHOW);
+	UpdateWindow(hwndAbout);
+
 	// the event loop
 	{
 		MSG msg;
@@ -348,9 +351,11 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	}
 }
 
-BOOL CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
+LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 {
-	// This is a static function.
+	// A window procedure must return LRESULT. BOOL leaves the top half
+	// of RAX undefined, so WM_NCCALCSIZE comes back nonzero and Windows
+	// recalculates the frame on every paint. That is the flicker.
 
 	XAP_Win32Dialog_About * pThis = (XAP_Win32Dialog_About *)GetWindowLongPtrW(hWnd,GWLP_USERDATA);
 
@@ -361,27 +366,36 @@ BOOL CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,
 	
 	switch (msg)
 	{
+	case WM_ERASEBKGND:
+		return 1;
+
 	case WM_PAINT:
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
-			
-		RECT	r;
+
+		RECT r;
 		GetClientRect(hWnd, &r);
-		r.right = pThis->m_pGrImageSidebar->getDisplayWidth();
-		FillRect(hdc, &r, GetSysColorBrush(COLOR_BTNFACE));
+		GR_Win32Image * pImage = pThis->m_pGrImageSidebar;
+		BITMAPINFO * pDIB = pImage ? pImage->getDIB() : nullptr;
+		if (pImage && pDIB)
+		{
+			int imageWidth = pImage->getDisplayWidth();
+			int imageHeight = pImage->getDisplayHeight();
+			RECT side = r;
+			side.right = imageWidth;
+			FillRect(hdc, &side, GetSysColorBrush(COLOR_BTNFACE));
 
+			UT_Byte * pBits = ((unsigned char *) pDIB) + pDIB->bmiHeader.biSize
+				+ pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
+			int y = (r.bottom - imageHeight) / 2;
+			SetStretchBltMode(hdc, COLORONCOLOR);
+			StretchDIBits(hdc,
+						  0, y, imageWidth, imageHeight,
+						  0, 0, pDIB->bmiHeader.biWidth, pDIB->bmiHeader.biHeight,
+						  pBits, pDIB, DIB_RGB_COLORS, SRCCOPY);
+		}
 
-		GR_Win32AllocInfo ai(hdc,hWnd);
-		GR_Win32Graphics *pGR = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
-		UT_return_val_if_fail(pGR, 0);
-		
-		pGR->drawImage(pThis->m_pGrImageSidebar,
-					   0,
-					   (r.bottom - pThis->m_pGrImageSidebar->getDisplayHeight())/2);
-
-		delete pGR;
-		
 		EndPaint(hWnd,&ps);
 		return 0;
 	}

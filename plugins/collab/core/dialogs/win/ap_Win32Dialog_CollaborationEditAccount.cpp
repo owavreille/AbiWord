@@ -62,7 +62,7 @@ BOOL CALLBACK AP_Win32Dialog_CollaborationEditAccount::s_dlgProc(HWND hWnd, UINT
 	}
 }
 
-BOOL CALLBACK AP_Win32Dialog_CollaborationEditAccount::s_detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT CALLBACK AP_Win32Dialog_CollaborationEditAccount::s_detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	AP_Win32Dialog_CollaborationEditAccount* pThis = (AP_Win32Dialog_CollaborationEditAccount *)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
 	UT_return_val_if_fail(pThis, false);
@@ -203,7 +203,7 @@ BOOL AP_Win32Dialog_CollaborationEditAccount::_onDetailsCommand(HWND hWnd, UINT 
 	return pAccountHandler->_onCommand(hWnd, wParam, lParam);
 }
 
-BOOL AP_Win32Dialog_CollaborationEditAccount::detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+LRESULT AP_Win32Dialog_CollaborationEditAccount::detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	return CallWindowProc((WNDPROC)m_pOldDetailsProc, hWnd, msg, wParam, lParam);
 }

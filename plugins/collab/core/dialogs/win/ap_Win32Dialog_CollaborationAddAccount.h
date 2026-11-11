@@ -39,11 +39,11 @@ public:
 
 	void						runModal(XAP_Frame * pFrame);
 	static BOOL CALLBACK		s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-	static BOOL CALLBACK		s_detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	static LRESULT CALLBACK		s_detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onDetailsCommand(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-	BOOL						detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	LRESULT						detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	static LRESULT				s_detailsGetMsgProc(int nCode, WPARAM wParam, LPARAM lParam);
 	LRESULT						detailsGetMsgProc(int nCode, WPARAM wParam, LPARAM lParam);
 	void						setBackendValidity(bool valid);

@@ -238,19 +238,24 @@ GR_Image* FG_GraphicRaster::generateImage(GR_Graphics* pG,
 	  We need to know the display size of the new image.
 	*/
 
-	const gchar *pszWidth;
-	const gchar *pszHeight;
+	const gchar *pszWidth = nullptr;
+	const gchar *pszHeight = nullptr;
 	if(pSpanAP != nullptr)
 	{
 		m_pSpanAP = pSpanAP;
 	}
-	bool bFoundWidthProperty = m_pSpanAP->getProperty("width", pszWidth);
-	bool bFoundHeightProperty = m_pSpanAP->getProperty("height", pszHeight);
+	bool bFoundWidthProperty = false;
+	bool bFoundHeightProperty = false;
+	if (m_pSpanAP)
+	{
+		bFoundWidthProperty = m_pSpanAP->getProperty("width", pszWidth);
+		bFoundHeightProperty = m_pSpanAP->getProperty("height", pszHeight);
+	}
 
 	UT_sint32 iDisplayWidth = 0;
 	UT_sint32 iDisplayHeight = 0;
 	// try frame-width, frame-height
-	if(!bFoundWidthProperty || !bFoundHeightProperty)
+	if(m_pSpanAP && (!bFoundWidthProperty || !bFoundHeightProperty))
 	{
 	     bFoundWidthProperty = m_pSpanAP->getProperty("frame-width", pszWidth);
 	     bFoundHeightProperty = m_pSpanAP->getProperty("frame-height", pszHeight);
@@ -263,21 +268,24 @@ GR_Image* FG_GraphicRaster::generateImage(GR_Graphics* pG,
 
 	if((iDisplayWidth==0) || (iDisplayHeight == 0)) 
 	{
-		UT_sint32 iImageWidth;
-		UT_sint32 iImageHeight;
+		UT_sint32 iImageWidth = 0;
+		UT_sint32 iImageHeight = 0;
+		bool gotSize = false;
 
         switch(m_format) 
         {
         case PNG_FORMAT:
-            UT_PNG_getDimensions(m_pbb, iImageWidth, iImageHeight);
+            gotSize = UT_PNG_getDimensions(m_pbb, iImageWidth, iImageHeight);
             break;
         case JPEG_FORMAT:
-            UT_JPEG_getDimensions(m_pbb, iImageWidth, iImageHeight);
+            gotSize = UT_JPEG_getDimensions(m_pbb, iImageWidth, iImageHeight);
             break;
         default:
             UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
             break;
         }
+		if (!gotSize || iImageWidth <= 0 || iImageHeight <= 0)
+			return nullptr;
 
 		iDisplayWidth = pG->tlu(iImageWidth);
 		iDisplayHeight = pG->tlu(iImageHeight);

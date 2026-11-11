@@ -266,7 +266,9 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 	ofn.lStructSize = sizeof(OPENFILENAMEW);		// Old size
 	ofn.hwndOwner = hFrame;
 	ofn.lpstrFile = szFile;
-	ofn.nMaxFile = sizeof(szFile);
+	// nMaxFile is a character count. sizeof() is the byte count and
+	// GetOpenFileNameW then writes past szFile.
+	ofn.nMaxFile = MAX_DLG_INS_PICT_STRING;
 	ofn.lpstrFilter = filter.c_str();
 	ofn.nFilterIndex = 1;
 	ofn.lpstrFileTitle = nullptr;
@@ -274,7 +276,9 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 	ofn.lpstrInitialDir = nullptr;
 	ofn.Flags = OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR | OFN_HIDEREADONLY;
 	ofn.lpstrDefExt = _getDefaultExtension(0);
-	ofn.lCustData = (DWORD)(size_t)this;
+	// DWORD keeps 32 bits. The dialog lives above 4 GiB, so the hook
+	// would call methods on a truncated pointer and the process dies.
+	ofn.lCustData = reinterpret_cast<LPARAM>(this);
 	// use the persistence info and/or the suggested filename
 	// to properly seed the dialog.
 
@@ -605,7 +609,7 @@ UINT CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg, UIN
 	{
 
 	case WM_PAINT:
-		if (bPreviewImage)
+		if (pThis && bPreviewImage)
 			pThis->_previewPicture(hDlg);
 		return false;
 
@@ -660,6 +664,8 @@ UINT CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg, UIN
 
 	case WM_INITDIALOG:
 		pThis = (XAP_Win32Dialog_FileOpenSaveAs *)reinterpret_cast<OPENFILENAMEW*>(lParam)->lCustData;
+		if (!pThis)
+			return false;
 		SetWindowLongPtrW(hDlg, GWLP_USERDATA, (LONG_PTR) pThis);
 		return pThis->_initPreviewDlg(hDlg);
 
@@ -682,7 +688,7 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 
 	// Check if File Name is for a file
 	wchar_t buf[MAX_DLG_INS_PICT_STRING];
-	SendMessageW( hFOSADlg, CDM_GETFILEPATH, sizeof(buf), (LPARAM) buf );
+	SendMessageW( hFOSADlg, CDM_GETFILEPATH, MAX_DLG_INS_PICT_STRING, (LPARAM) buf );
 	// If a Directory stop
 	if ( GetFileAttributesW( buf ) == FILE_ATTRIBUTE_DIRECTORY )
 	{

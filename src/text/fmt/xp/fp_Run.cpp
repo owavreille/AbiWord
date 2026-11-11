@@ -3775,6 +3775,9 @@ void fp_ImageRun::_draw(dg_DrawArgs* pDA)
 		regenerateImage(pG);
 		m_iGraphicTick = getBlock()->getDocLayout()->getGraphicTick()+999;
 	}
+	if (!getLine() || !getLine()->getContainer())
+		return;
+
 	UT_sint32 xoff = 0, yoff = 0;
 
 	if(pG->queryProperties(GR_Graphics::DGP_SCREEN))
