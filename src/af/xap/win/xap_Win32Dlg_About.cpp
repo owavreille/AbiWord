@@ -82,6 +82,26 @@ const int GPL_HEIGHT		= 180;
 
 const int ID_BUTTON_URL		= 3000;
 
+// Windows 11 draws themed static controls with their own fill. A blank
+// theme makes them use the brush we return from WM_CTLCOLORSTATIC.
+static void turnOffVisualTheme(HWND hwnd)
+{
+	using SetWindowThemeFn = HRESULT (WINAPI *)(HWND, LPCWSTR, LPCWSTR);
+	static SetWindowThemeFn setTheme = nullptr;
+	static bool lookedUp = false;
+	if (!lookedUp)
+	{
+		HMODULE themeDll = GetModuleHandleW(L"uxtheme.dll");
+		if (!themeDll)
+			themeDll = LoadLibraryW(L"uxtheme.dll");
+		if (themeDll)
+			setTheme = reinterpret_cast<SetWindowThemeFn>(GetProcAddress(themeDll, "SetWindowTheme"));
+		lookedUp = true;
+	}
+	if (setTheme && hwnd)
+		setTheme(hwnd, L"", L"");
+}
+
 void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 {
 	// raise the dialog
@@ -147,7 +167,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 
 	HWND hwndAbout = UT_CreateWindowEx(	0L, pClassName,
 										buf,
-										WS_OVERLAPPED | WS_CLIPCHILDREN | WS_CLIPSIBLINGS,
+										WS_OVERLAPPED,
 										rcScreen.left + (iScreenWidth - ABOUT_WIDTH) / 2,
 										rcScreen.top + (iScreenHeight - ABOUT_HEIGHT) /2,
 										ABOUT_WIDTH,
@@ -207,6 +227,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 										   (HMENU) 3001,
 										   pWin32App->getInstance(),
 										   nullptr);
+	turnOffVisualTheme(hwndStatic_Heading);
 
 	const char *versiontext=pSS->getValue(XAP_STRING_ID_DLG_ABOUT_Version);
 	UT_UTF8String version = UT_UTF8String_sprintf(versiontext,XAP_App::s_szBuild_Version);
@@ -223,6 +244,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 										   (HMENU) 3002,
 										   pWin32App->getInstance(),
 										   nullptr);
+	turnOffVisualTheme(hwndStatic_Version);
 
     str.fromASCII (XAP_ABOUT_COPYRIGHT);
 	HWND hwndStatic_Copyright = CreateWindowW(L"STATIC",
@@ -236,6 +258,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 											 (HMENU) 3003,
 											 pWin32App->getInstance(),
 											 nullptr);
+	turnOffVisualTheme(hwndStatic_Copyright);
 
     str.fromASCII (XAP_App::getApp()->getApplicationName());
 	strbis.fromASCII (XAP_ABOUT_GPL_LONG);
@@ -251,6 +274,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 									   (HMENU) 3004,
 									   pWin32App->getInstance(),
 									   nullptr);
+	turnOffVisualTheme(hwndStatic_GPL);
 
 	HWND hwndStatic_USP_Version = nullptr;
 
@@ -271,6 +295,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 												   (HMENU) 3005,
 												   pWin32App->getInstance(),
 												   nullptr);
+		turnOffVisualTheme(hwndStatic_USP_Version);
 	
 		
 	}
@@ -367,7 +392,33 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 	switch (msg)
 	{
 	case WM_ERASEBKGND:
+	{
+		RECT r;
+		GetClientRect(hWnd, &r);
+		FillRect((HDC)wParam, &r, GetSysColorBrush(COLOR_BTNFACE));
 		return 1;
+	}
+
+	case WM_CTLCOLORSTATIC:
+	{
+		HDC hdcCtrl = (HDC)wParam;
+		HWND hwndCtrl = (HWND)lParam;
+		RECT rcCtrl;
+		GetWindowRect(hwndCtrl, &rcCtrl);
+		MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT *>(&rcCtrl), 2);
+		int imageWidth = pThis->m_pGrImageSidebar ? pThis->m_pGrImageSidebar->getDisplayWidth() : 0;
+		SetTextColor(hdcCtrl, GetSysColor(COLOR_BTNTEXT));
+		// The version string sits on the sidebar picture. The other
+		// labels use the same face color as the rest of the window.
+		if (rcCtrl.left < imageWidth)
+		{
+			SetBkMode(hdcCtrl, TRANSPARENT);
+			return (LRESULT)GetStockObject(HOLLOW_BRUSH);
+		}
+		SetBkColor(hdcCtrl, GetSysColor(COLOR_BTNFACE));
+		SetBkMode(hdcCtrl, OPAQUE);
+		return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+	}
 
 	case WM_PAINT:
 	{
@@ -376,16 +427,13 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 
 		RECT r;
 		GetClientRect(hWnd, &r);
+		FillRect(hdc, &r, GetSysColorBrush(COLOR_BTNFACE));
 		GR_Win32Image * pImage = pThis->m_pGrImageSidebar;
 		BITMAPINFO * pDIB = pImage ? pImage->getDIB() : nullptr;
 		if (pImage && pDIB)
 		{
 			int imageWidth = pImage->getDisplayWidth();
 			int imageHeight = pImage->getDisplayHeight();
-			RECT side = r;
-			side.right = imageWidth;
-			FillRect(hdc, &side, GetSysColorBrush(COLOR_BTNFACE));
-
 			UT_Byte * pBits = ((unsigned char *) pDIB) + pDIB->bmiHeader.biSize
 				+ pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
 			int y = (r.bottom - imageHeight) / 2;
