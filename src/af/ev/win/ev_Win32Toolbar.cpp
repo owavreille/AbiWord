@@ -1170,7 +1170,14 @@ bool EV_Win32Toolbar::_refreshItem(AV_View * pView, const EV_Toolbar_Action * pA
 				UT_return_val_if_fail(hwndCombo, true);
 				std::string utf8;
 				UT_String str;
-				
+
+				// A new paragraph stores no style attribute. getStyle reports
+				// that as "None", which is not in the list, so the field stayed
+				// empty. The paragraph still uses the default style, Normal.
+				if (id == AP_TOOLBAR_ID_FMT_STYLE &&
+					(!szState || !szState[0] || strcmp(szState, "None") == 0))
+					szState = "Normal";
+
 				// NOTE: no string means a mixed or empty selection. Clear the
 				// control; do not pass a null pointer to CB_SELECTSTRING.
 				if (!szState)
@@ -1519,9 +1526,12 @@ bool EV_Win32Toolbar::repopulateStyles(void)
 	SendMessageW(hwndCombo, WM_SETREDRAW, TRUE, 0);
 	InvalidateRect (hwndCombo, nullptr, true);
 	delete pStyleC;
-//
-// I think we've finished!
-//
+
+	// CB_RESETCONTENT clears the edit. Put the current style back; a new
+	// document then shows Normal instead of an empty field.
+	if (m_pWin32Frame && m_pWin32Frame->getCurrentView())
+		_refreshID(id);
+
 	return true;
 }
 

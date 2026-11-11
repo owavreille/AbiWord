@@ -246,41 +246,13 @@ void AP_Win32FrameImpl::_toggleBar(UT_uint32 iBarNb, bool bBarOn)
 		pToolbar->hide();
 	}
 
-	int iToolbarCount = 0;
-	for (UT_sint32 i = 0; i < m_vecToolbarLayoutNames.getItemCount(); i++)
-	{
-		EV_Win32Toolbar *pThisToolbar = (EV_Win32Toolbar *)m_vecToolbars.getNthItem(i);
+	// Showing or hiding Tableau / Extra changes the band height. Fit the
+	// rebar to the bands that remain, then let the frame redraw the rulers
+	// against the new document rectangle.
+	RECT frameRect;
+	GetClientRect(_getTopLevelWindow(), &frameRect);
+	_layoutRebar(frameRect.right - frameRect.left, frameRect.bottom - frameRect.top);
 
-		UT_ASSERT_HARMLESS(pThisToolbar);
-
-		if (pThisToolbar)	// release build paranoia
-			if ( pThisToolbar->bVisible() )
-				iToolbarCount++;
-	}
-
-	if( !iToolbarCount || ((iToolbarCount == 1) && bBarOn) )
-	{
-		RECT r;
-
-		ShowWindow( _getHwndRebar(), (iToolbarCount ? SW_SHOW : SW_HIDE) );
-
-		MoveWindow( _getHwndRebar(), 0, 0, (iToolbarCount ? _getSizeWidth() : 1),
-									  (iToolbarCount ? _getSizeHeight() : 1), TRUE);
-
-		if( iToolbarCount )
-		{
-			GetClientRect(_getHwndRebar(), &r);
-			_setBarHeight(r.bottom - r.top + 6);
-		}
-		else
-			_setBarHeight(1);
-
-		GetClientRect(_getHwndContainer(), &r);
-		_onSize(static_cast<AP_FrameData *>(getFrame()->getFrameData()), r.right - r.left + 1, r.bottom - r.top + 1);
-	}
-
-	// Tell frame to recalculate layout (screen refresh)
-	// Defer the screen repaint if we're in fullscreen mode
 	if (!static_cast<AP_FrameData *>(getFrame()->getFrameData())->m_bIsFullScreen)
 		getFrame()->queue_resize();
 }
@@ -711,16 +683,20 @@ void AP_Win32FrameImpl::_onSize(AP_FrameData* pData, int nWidth, int nHeight)
 	if (m_hwndTopRuler)
 	{
 		MoveWindow(m_hwndTopRuler, 0, 0, nWidth - cxVScroll, yTopRulerHeight, FALSE);
-		InvalidateRect(m_hwndTopRuler, nullptr, FALSE);
+		InvalidateRect(m_hwndTopRuler, nullptr, TRUE);
 	}
 
 	if (m_hwndLeftRuler)
+	{
 		MoveWindow(m_hwndLeftRuler, 0, yTopRulerHeight,
 				   xLeftRulerWidth, nHeight - yTopRulerHeight - cyHScroll, FALSE);
+		InvalidateRect(m_hwndLeftRuler, nullptr, TRUE);
+	}
 
 	MoveWindow(m_hwndDocument, xLeftRulerWidth, yTopRulerHeight,
 			   nWidth - xLeftRulerWidth - cxVScroll,
-			   nHeight - yTopRulerHeight - cyHScroll, FALSE);	
+			   nHeight - yTopRulerHeight - cyHScroll, FALSE);
+	InvalidateRect(m_hwndDocument, nullptr, TRUE);
 }
 
 

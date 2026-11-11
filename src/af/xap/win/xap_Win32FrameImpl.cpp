@@ -83,6 +83,7 @@ WHICHPROC s_oldRedBar;
 extern XAP_Dialog_MessageBox::tAnswer s_CouldNotLoadFileMessage(XAP_Frame * pFrame, const char * pNewFile, UT_Error errorCode);
 
 static bool s_FrameSizing = false;
+static bool s_LayingOutBars = false;
 
 /*
 	Owner drawn for child font combo box
@@ -335,15 +336,22 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 	m_iSizeWidth = iWidth;
 	m_iSizeHeight = iHeight;
 	
-	// force rebar to resize itself
-	// TODO for some reason, we give REBAR the height of the FRAME
-	// TODO and let it decide how much it actually needs....
+	// Give the rebar a width, then shrink it to the height of its bands.
+	// RB_GETBARHEIGHT is that height. The window client rectangle stays
+	// at whatever size we last set, so it cannot be used here.
 	if( m_hwndRebar != nullptr )
 	{
-		MoveWindow(m_hwndRebar, 0, 0, iWidth, iHeight, TRUE);
-
-		GetClientRect(m_hwndRebar, &r);
-		m_iBarHeight = r.bottom - r.top + 6;
+		MoveWindow(m_hwndRebar, 0, 0, iWidth, iHeight, FALSE);
+		int barHeight = (int)SendMessageW(m_hwndRebar, RB_GETBARHEIGHT, 0, 0);
+		if (barHeight <= 0)
+		{
+			GetClientRect(m_hwndRebar, &r);
+			barHeight = r.bottom - r.top;
+		}
+		if (barHeight > iHeight)
+			barHeight = iHeight;
+		MoveWindow(m_hwndRebar, 0, 0, iWidth, barHeight, TRUE);
+		m_iBarHeight = (UT_uint32)barHeight;
 
 		UT_ASSERT(iHeight > m_iBarHeight);
 		iHeight -= m_iBarHeight;
@@ -463,6 +471,52 @@ void XAP_Win32FrameImpl::_queue_resize(void)
 	if (s_FrameSizing || m_iRealSizeWidth <= 0 || m_iRealSizeHeight <= 0)
 		return;
 	::SendMessageW(m_hwndFrame, WM_SIZE, 0, MAKELONG(m_iRealSizeWidth, m_iRealSizeHeight));
+}
+
+void XAP_Win32FrameImpl::_layoutRebar(int frameWidth, int frameHeight)
+{
+	if (s_LayingOutBars || frameWidth <= 0 || frameHeight <= 0)
+		return;
+	s_LayingOutBars = true;
+
+	UINT bandCount = 0;
+	if (m_hwndRebar)
+		bandCount = (UINT)SendMessageW(m_hwndRebar, RB_GETBANDCOUNT, 0, 0);
+
+	int barHeight = 0;
+	if (m_hwndRebar && bandCount > 0)
+	{
+		ShowWindow(m_hwndRebar, SW_SHOW);
+		barHeight = (int)SendMessageW(m_hwndRebar, RB_GETBARHEIGHT, 0, 0);
+		if (barHeight < 0)
+			barHeight = 0;
+		if (barHeight > frameHeight)
+			barHeight = frameHeight;
+		MoveWindow(m_hwndRebar, 0, 0, frameWidth, barHeight, TRUE);
+	}
+	else if (m_hwndRebar)
+	{
+		ShowWindow(m_hwndRebar, SW_HIDE);
+		barHeight = 0;
+	}
+
+	m_iBarHeight = (UT_uint32)barHeight;
+
+	int docHeight = frameHeight - barHeight;
+	if (m_hwndStatusBar && ::IsWindowVisible(m_hwndStatusBar))
+		docHeight -= (int)m_iStatusBarHeight;
+	if (docHeight < 0)
+		docHeight = 0;
+
+	if (m_hwndStatusBar)
+		MoveWindow(m_hwndStatusBar, 0, barHeight + docHeight, frameWidth, (int)m_iStatusBarHeight, TRUE);
+	if (m_hwndContainer)
+		MoveWindow(m_hwndContainer, 0, barHeight, frameWidth, docHeight, TRUE);
+
+	m_iSizeWidth = (UT_uint32)frameWidth;
+	m_iSizeHeight = (UT_uint32)docHeight;
+
+	s_LayingOutBars = false;
 }
 
 
@@ -863,32 +917,17 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 
 		case RBN_HEIGHTCHANGE:
 			{
-				// GTK only schedules a resize. Sending WM_SIZE from this
-				// notification re-enters the rebar and overflows the stack
-				// on Windows 11.
-				if (s_FrameSizing)
+				// The rebar asks its parent to adopt the band height.
+				// Resizing it from here with WM_SIZE re-enters the control.
+				// _layoutRebar moves the windows directly; the queued resize
+				// then redraws the rulers at the new document size.
+				if (s_FrameSizing || s_LayingOutBars)
 					break;
 
 				RECT r;
 				GetClientRect(fimpl->m_hwndFrame, &r);
-				int nWidth = r.right - r.left;
-				int nHeight = r.bottom - r.top;
-
-				GetClientRect(fimpl->m_hwndRebar, &r);
-				int newBarHeight = r.bottom - r.top + 6;
-				bool heightChanged = (newBarHeight != fimpl->m_iBarHeight);
-				fimpl->m_iBarHeight = newBarHeight;
-
-				if (fimpl->m_hwndContainer)
-				{
-					// leave room for the toolbars
-					nHeight -= fimpl->m_iBarHeight;
-
-					MoveWindow(fimpl->m_hwndContainer, 0, fimpl->m_iBarHeight, nWidth, nHeight, FALSE);
-				}
-
-				if (heightChanged)
-					f->queue_resize();
+				fimpl->_layoutRebar(r.right - r.left, r.bottom - r.top);
+				f->queue_resize();
 			}
 			break;
 
@@ -969,27 +1008,9 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 			fimpl->_startViewAutoUpdater();
 
 			UT_Win32Trace("size-place");
-			if (nWidth != (int) fimpl->m_iSizeWidth && fimpl->m_hwndRebar != nullptr)
-			{
-				// FALSE: do not paint while still inside WM_SIZE.
-				// Windows otherwise draws the document before the zoom is set.
-				MoveWindow(fimpl->m_hwndRebar, 0, 0, nWidth, fimpl->m_iBarHeight, FALSE);
-			}
-
-			// leave room for the toolbars and the status bar
-			nHeight -= fimpl->m_iBarHeight;
-
-			if (::IsWindowVisible(fimpl->m_hwndStatusBar))
-				nHeight -= fimpl->m_iStatusBarHeight;
-
-			if (fimpl->m_hwndStatusBar)
-				MoveWindow(fimpl->m_hwndStatusBar, 0, fimpl->m_iBarHeight+nHeight, nWidth, fimpl->m_iStatusBarHeight, FALSE);
-
-			if (fimpl->m_hwndContainer)
-				MoveWindow(fimpl->m_hwndContainer, 0, fimpl->m_iBarHeight, nWidth, nHeight, FALSE);
-
-			fimpl->m_iSizeWidth = nWidth;
-			fimpl->m_iSizeHeight = nHeight;
+			// Always fit the rebar to its bands. A width-only check left the
+			// old toolbar height in place, so the rulers stayed under it.
+			fimpl->_layoutRebar(nWidth, nHeight);
 
 			UT_Win32Trace("size-zoom");
 			f->updateZoom();

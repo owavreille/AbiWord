@@ -110,6 +110,9 @@ protected:
 
 	UT_uint32					_getBarHeight(void) { return m_iBarHeight; }
 	void 						_setBarHeight(UT_uint32 iBarHeight) { m_iBarHeight = iBarHeight; }
+	// Size the rebar to its bands and move the document and status bar
+	// so a hidden toolbar does not leave an empty strip over the rulers.
+	void						_layoutRebar(int frameWidth, int frameHeight);
 	UT_uint32					_getSizeWidth(void) { return m_iSizeWidth; }
 	UT_uint32					_getSizeHeight(void) { return m_iSizeHeight; }
 
