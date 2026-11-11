@@ -33,6 +33,7 @@
 #include "ap_Dialog_Field.h"
 #include "ap_Win32Dialog_Field.h"
 #include "xap_Win32DialogHelper.h"
+#include "ut_Win32LocaleString.h"
 #include "ap_Win32Resources.rc2"
 
 /*****************************************************************/
@@ -146,12 +147,25 @@ BOOL AP_Win32Dialog_Field::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam*
 		// fall through
 		
 	case IDOK:				// also AP_RID_DIALOG_FIELD_BTN_OK
-		// set the extra param
-		gchar param[256];
-		GetWindowTextW(m_hwndParam,(LPWSTR) &param[0], 256);
-		setParameter(param);
+	{
+		// The parameter is wide text. A byte buffer would keep only the
+		// first character and overflow once the text passed 127 letters.
+		UT_Win32LocaleString paramText;
+		if (m_hwndParam)
+		{
+			int n = GetWindowTextLengthW(m_hwndParam);
+			if (n < 0)
+				n = 0;
+			wchar_t * text = new wchar_t[static_cast<size_t>(n) + 1];
+			text[0] = 0;
+			GetWindowTextW(m_hwndParam, text, n + 1);
+			paramText.fromLocale(text);
+			delete [] text;
+		}
+		setParameter(paramText.utf8_str().utf8_str());
 		EndDialog(hWnd,0);
 		return 1;
+	}
 	case AP_RID_DIALOG_FIELD_LIST_TYPES:
 		switch (HIWORD(wParam))
 		{

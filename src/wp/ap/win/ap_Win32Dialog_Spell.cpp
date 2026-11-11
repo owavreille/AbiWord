@@ -152,6 +152,22 @@ void AP_Win32Dialog_Spell::_toggleChangeButtons(bool bEnable) const
 	EnableWindow(GetDlgItem(m_hwndDlg,AP_RID_DIALOG_SPELL_BTN_CHANGEALL),bEnable);
 }
 
+// The iterator hands back a span of iLength characters that is not
+// terminated there. fromUCS4() would read until a later zero.
+static void spellSpanToLocale(UT_Win32LocaleString & str, const UT_UCSChar * text, UT_sint32 length)
+{
+	if (!text || length <= 0)
+	{
+		str.fromUTF8("");
+		return;
+	}
+	UT_UCS4Char * copy = new UT_UCS4Char[static_cast<size_t>(length) + 1];
+	memcpy(copy, text, static_cast<size_t>(length) * sizeof(UT_UCS4Char));
+	copy[length] = 0;
+	str.fromUCS4(copy);
+	delete [] copy;
+}
+
 void AP_Win32Dialog_Spell::_showMisspelledWord(void)
 {
 	// clear existing values
@@ -179,14 +195,10 @@ void AP_Win32Dialog_Spell::_showMisspelledWord(void)
     p = m_pWordIterator->getPreWord(iLength);
 	if (0 < iLength)
 	{
-// FIXME: this is broken - should take iLength characters from p
-// and convert them to char. I.e., first substr p, then
-// convert. But output length is not necessarily related to iLength!
-		str.fromUCS4(p);
-		str[iLength]=0L;
+		spellSpanToLocale(str, p, iLength);
 		SendMessageW(m_hwndSentence, WM_SETTEXT, 0, (LPARAM)str.c_str());
+		sum += static_cast<UT_uint32>(str.size());
 	}
-	sum += iLength;
 
 	// insert misspelled word (in highlight color)
 	SendMessageW(m_hwndSentence, EM_SETSEL, (WPARAM) sum, (LPARAM) sum);
@@ -199,19 +211,10 @@ void AP_Win32Dialog_Spell::_showMisspelledWord(void)
     p = m_pWordIterator->getCurrentWord(iLength);
 	if (0 < iLength)
 	{
-// FIXME: this is broken - should take iLength characters from p
-// and convert them to char. I.e., first substr p, then
-// convert. But output length is not necessarily related to iLength!
-		//char * buf;
-		//buf = new char [iLength + 1];
-		str.fromUCS4(p);
-		str[iLength]=L'\0';
-		//UT_UCS4_strncpy_to_char(buf, p, iLength);
-		//buf[iLength] = '\0';
+		spellSpanToLocale(str, p, iLength);
 		SendMessageW(m_hwndSentence, EM_REPLACESEL, FALSE, (LPARAM)str.c_str());
-		//DELETEP(buf);
+		sum += static_cast<UT_uint32>(str.size());
 	}
-	sum += iLength;
 
     // save this offset for centering of selected word later on
     m_iWordOffsetInSentence = sum;
@@ -225,15 +228,8 @@ void AP_Win32Dialog_Spell::_showMisspelledWord(void)
     p = m_pWordIterator->getPostWord(iLength);
 	if (0 < iLength)
 	{
-// FIXME: this is broken - should take iLength characters from p
-// and convert them to char. I.e., first substr p, then
-// convert. But output length is not necessarily related to iLength!
-		//buf = new char [iLength + 1];
-		//UT_UCS4_strncpy_to_char(buf, p, iLength);
-		str.fromUCS4(p);
-		str[iLength] = L'\0';
+		spellSpanToLocale(str, p, iLength);
 		SendMessageW(m_hwndSentence, EM_REPLACESEL, FALSE, (LPARAM)str.c_str());
-		//DELETEP(buf);
 	}
 
 	// insert suggestions

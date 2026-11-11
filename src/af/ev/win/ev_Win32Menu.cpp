@@ -134,13 +134,23 @@ static const EV_Menu_Bitmap s_bitmaps[] =
 /*
 
 */
+static void appendMenuText(wchar_t * buf, size_t cap, const wchar_t * extra)
+{
+	if (!buf || !extra || !*extra)
+		return;
+	size_t used = wcslen(buf);
+	if (used >= cap)
+		return;
+	wcsncpy(buf + used, extra, cap - used);
+	buf[cap] = 0;
+}
+
 static const wchar_t * _ev_GetLabelName(XAP_Win32App * pWin32App,
 									 XAP_Frame * /*pFrame*/, 
 									 const EV_EditEventMapper * pEEM,
 									 const EV_Menu_Action * pAction,
 									 EV_Menu_Label * pLabel) 
 {
-	const wchar_t * szLabelName;
 	const char * szLabelName_utf8;
 	
 	if (pAction->hasDynamicLabel())
@@ -153,13 +163,9 @@ static const wchar_t * _ev_GetLabelName(XAP_Win32App * pWin32App,
 
 	UT_Win32LocaleString str;
 	str.fromUTF8 (szLabelName_utf8);
-	szLabelName = str.c_str();
 
 	const char * szShortcut_ascii = nullptr;
-	const wchar_t * szShortcut = nullptr;
 	UT_Win32LocaleString shortcut;
-	
-    int len = 0;
 
 	if (pEEM)
 	{
@@ -175,41 +181,26 @@ static const wchar_t * _ev_GetLabelName(XAP_Win32App * pWin32App,
 			UT_ASSERT(pEM);					// make sure it's bound to something
 
 			szShortcut_ascii = pEEM->getShortcutFor(pEM);
-			if (szShortcut_ascii && *szShortcut_ascii)
-				len = strlen(szShortcut_ascii) + 1;	// extra char is for the tab
 		}
 	}
 
-    if (szShortcut && *szShortcut) {
-		shortcut.fromASCII (szShortcut_ascii);
-	}
-	
+	// A recent-file path can be longer than this buffer. Copy only what fits.
+	static wchar_t buf[256];
+	const size_t cap = G_N_ELEMENTS(buf) - 1;
+	buf[0] = 0;
+	wcsncpy(buf, str.c_str(), cap);
+	buf[cap] = 0;
+
 	if (pAction->raisesDialog())
-		len += 4;
+		appendMenuText(buf, cap, L"...");
 
-	if (!len)
+	if (szShortcut_ascii && *szShortcut_ascii)
 	{
-		static wchar_t buf[128];
-		wcscpy(buf,szLabelName);
-		return buf;
+		shortcut.fromASCII(szShortcut_ascii);
+		appendMenuText(buf, cap, L"\t");
+		appendMenuText(buf, cap, shortcut.c_str());
 	}
 
-	static wchar_t buf[128];
-    int l = G_N_ELEMENTS(buf);
-	memset(buf,0,l);
-	wcscpy(buf,szLabelName);           //strncpy
-
-	// append "..." to menu item if it raises a dialog
-	if (pAction->raisesDialog())
-		wcscat(buf, L"...");                  //todo
-
-	// append shortcut mnemonic, if any
-	if (shortcut.length())
-	{
-		wcscat(buf, L"\t");              //todo
-		wcscat(buf, shortcut.c_str());
-	}
-										  
 	return buf;
 }
 
@@ -389,7 +380,8 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 						item->id = id;					
 						item->pMenu= this;							
 						
-						wcscpy (item->szText, szLabelName);					
+						wcsncpy(item->szText, szLabelName, G_N_ELEMENTS(item->szText) - 1);
+						item->szText[G_N_ELEMENTS(item->szText) - 1] = 0;					
 						m_vecItems.addItem(item);
 							
 						if (!m_bTrack && stack.getDepth()==2)
@@ -412,7 +404,8 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 						EV_Menu_Item*	item = new EV_Menu_Item;
 						item->id = id;
 						item->pMenu= this;						
-						wcscpy (item->szText, szLabelName);
+						wcsncpy(item->szText, szLabelName, G_N_ELEMENTS(item->szText) - 1);
+						item->szText[G_N_ELEMENTS(item->szText) - 1] = 0;
 						m_vecItems.addItem(item);
 						
 						if (UT_IsWinVista()) {                                      //todo: code for windows vista : investigate this
@@ -571,7 +564,8 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 						item = (EV_Menu_Item*)m_vecItems.getNthItem(i);
 						if (id==item->id)
 						{
-							wcscpy (item->szText, szLabelName);					
+							wcsncpy(item->szText, szLabelName, G_N_ELEMENTS(item->szText) - 1);
+						item->szText[G_N_ELEMENTS(item->szText) - 1] = 0;					
 							//UT_DEBUGMSG(("Menu changing text->%s\n",szLabelName));
 							if (UT_IsWinVista()) 
 							{
@@ -589,7 +583,8 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 					EV_Menu_Item*	item = new EV_Menu_Item;
 					item->id = id;					
 					item->pMenu= this;													
-					wcscpy (item->szText, szLabelName);					
+					wcsncpy(item->szText, szLabelName, G_N_ELEMENTS(item->szText) - 1);
+						item->szText[G_N_ELEMENTS(item->szText) - 1] = 0;					
 					m_vecItems.addItem(item);
 					//UT_DEBUGMSG(("Menu adding menu->%s\n",szLabelName));
 										

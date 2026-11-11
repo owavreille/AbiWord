@@ -529,7 +529,7 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 
 	case X_ExistingKey:	
 		UT_ASSERT(hKeyCommand);
-		len = G_N_ELEMENTS((LPWSTR)buf);
+		len = sizeof(buf);
 		eResult = RegQueryValueExW(hKeyCommand, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
 		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ))
 		{
@@ -630,7 +630,7 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 
 	case X_ExistingKey:	
 		UT_ASSERT(hKeyTopic);
-		len = G_N_ELEMENTS((LPWSTR)buf);
+		len = sizeof(buf);
 		eResult = RegQueryValueExW(hKeyTopic, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
 		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && (wcsicmp((LPWSTR)buf,MY_DDE_TOPICNAME)==0))
 			break;						// already has correct value, no need to overwrite.
@@ -661,7 +661,7 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 
 	case X_ExistingKey:	
 		UT_ASSERT(hKeyDefaultIcon);
-		len = G_N_ELEMENTS((LPWSTR)buf);
+		len = sizeof(buf);
 		eResult = RegQueryValueExW(hKeyDefaultIcon, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
 		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && (lstrcmpiW((LPWSTR)buf,bufDefaultIconValue)==0))
 			break;						// already has correct value, no need to overwrite.
