@@ -41,11 +41,11 @@ public:
 
 	void reset(void);
 
-	void onButtonDown(AV_View * pView, HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, WPARAM xPos, WPARAM yPos);
-	void onButtonUp  (AV_View * pView, HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, WPARAM xPos, WPARAM yPos);
-	void onButtonMove(AV_View * pView, HWND hWnd, WPARAM fwKeys, WPARAM xPos, WPARAM yPos);
-	void onDoubleClick(AV_View * pView, HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, WPARAM xPos, WPARAM yPos);
-	void onButtonWheel(AV_View * pView, HWND hWnd, EV_EditMouseButton emb,  WPARAM fwKeys, WPARAM xPos, WPARAM yPos);
+	void onButtonDown(AV_View * pView, HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos);
+	void onButtonUp  (AV_View * pView, HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos);
+	void onButtonMove(AV_View * pView, HWND hWnd, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos);
+	void onDoubleClick(AV_View * pView, HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos);
+	void onButtonWheel(AV_View * pView, HWND hWnd, EV_EditMouseButton emb,  WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos);
 
 
 protected:

@@ -1266,7 +1266,15 @@ void fp_Run::draw(dg_DrawArgs* pDA)
 		}
 		m_bDirty = true;
 	}
-	const UT_Rect * pPrevClip = pDA->pG->getClipRect();
+	// getClipRect() points at graphics-owned storage. setClipRect() replaces
+	// that storage, so the previous rectangle has to be copied first.
+	UT_Rect prevClipStorage;
+	const UT_Rect * pPrevClip = nullptr;
+	if (const UT_Rect * existingClip = pDA->pG->getClipRect())
+	{
+		prevClipStorage = *existingClip;
+		pPrevClip = &prevClipStorage;
+	}
 	if(isHidden())
 	{
 		// this run is marked as hidden, nothing to do

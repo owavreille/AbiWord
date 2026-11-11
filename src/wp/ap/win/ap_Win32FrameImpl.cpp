@@ -29,6 +29,7 @@
 #include "ap_Win32LeftRuler.h"
 #include "ap_Win32StatusBar.h"
 #include "ut_Win32LocaleString.h"
+#include "ut_misc.h"
 
 #include <winuser.h>
 
@@ -958,9 +959,9 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 				EV_Win32Mouse*	pMouse = (EV_Win32Mouse *) fImpl->m_pMouse;
  		
  				if (iDelta>0)
- 					pMouse->onButtonWheel(pView,hwnd,EV_EMB_BUTTON4,wParam,LOWORD(lParam),HIWORD(lParam));
+ 					pMouse->onButtonWheel(pView,hwnd,EV_EMB_BUTTON4,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
  				else
- 					pMouse->onButtonWheel(pView,hwnd,EV_EMB_BUTTON5,wParam,LOWORD(lParam),HIWORD(lParam));
+ 					pMouse->onButtonWheel(pView,hwnd,EV_EMB_BUTTON5,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 
 				break;
 			} 			
@@ -1078,29 +1079,29 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 				pView = f->getCurrentView();
 				pMouse = (EV_Win32Mouse *) fImpl->m_pMouse;
 			}
-			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON1,wParam,LOWORD(lParam),HIWORD(lParam));
+			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON1,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			fImpl->m_bMouseActivateReceived = false;
 			return 0;
 
 		case WM_MBUTTONDOWN:
-			fImpl->_startTracking(LOWORD(lParam), HIWORD(lParam));
-			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON2,wParam,LOWORD(lParam),HIWORD(lParam));
+			fImpl->_startTracking(signedLoWord(static_cast<UT_uint32>(lParam)), signedHiWord(static_cast<UT_uint32>(lParam)));
+			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON2,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_RBUTTONDOWN:
-			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON3,wParam,LOWORD(lParam),HIWORD(lParam));
+			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON3,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_LBUTTONDBLCLK:
-			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON1,wParam,LOWORD(lParam),HIWORD(lParam));
+			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON1,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_MBUTTONDBLCLK:
-			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON2,wParam,LOWORD(lParam),HIWORD(lParam));
+			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON2,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_RBUTTONDBLCLK:
-			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON3,wParam,LOWORD(lParam),HIWORD(lParam));
+			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON3,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_SYSKEYDOWN:
@@ -1239,11 +1240,11 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 		case WM_MOUSEMOVE:
 			if (fImpl->_isTracking())
 			{
-				fImpl->_track(LOWORD(lParam),HIWORD(lParam));
+				fImpl->_track(signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			}
 			else
 			{
-				pMouse->onButtonMove(pView,hwnd,wParam,LOWORD(lParam),HIWORD(lParam));
+				pMouse->onButtonMove(pView,hwnd,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			}
 			return 0;
 
@@ -1253,18 +1254,18 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 				SetFocus(hwnd);
 				pView = f->getCurrentView();
 				pMouse = (EV_Win32Mouse *) fImpl->m_pMouse;
-				pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON1,wParam,LOWORD(lParam),HIWORD(lParam));
+				pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON1,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			}
-			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON1,wParam,LOWORD(lParam),HIWORD(lParam));
+			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON1,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_MBUTTONUP:
-			fImpl->_endTracking(LOWORD(lParam), HIWORD(lParam));
-			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON2,wParam,LOWORD(lParam),HIWORD(lParam));
+			fImpl->_endTracking(signedLoWord(static_cast<UT_uint32>(lParam)), signedHiWord(static_cast<UT_uint32>(lParam)));
+			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON2,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_RBUTTONUP:
-			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON3,wParam,LOWORD(lParam),HIWORD(lParam));
+			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON3,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_SIZE:

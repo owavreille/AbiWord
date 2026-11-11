@@ -1180,19 +1180,27 @@ void GR_Win32Graphics::setClipRect(const UT_Rect* pRect)
 	// return;
 
 	UT_DebugOnly<int> res;
-	// m_pRect owns its rectangle. The caller passes a stack UT_Rect.
-	// reset(pRect) would delete that stack address on the next call and
-	// Windows 11 raises 0xC0000374. Cairo copies the rectangle instead.
-	if (pRect)
-		m_pRect.reset(new UT_Rect(*pRect));
-	else
-		m_pRect.reset();
+	// m_pRect owns its rectangle. The caller passes a stack UT_Rect, or the
+	// pointer returned by getClipRect(). Copy the values before releasing the
+	// previous rectangle: deleting that pointer first is a use-after-free and
+	// the restored clip no longer matches the selection.
+	UT_Rect copy;
+	bool haveRect = false;
 	if (pRect)
 	{
-		int l = (UT_sint32)((double)_tduX(pRect->left) * m_fXYRatio);
-		int t = _tduY(pRect->top);
-		int r = (UT_sint32)((double)_tduX(pRect->left + pRect->width) * m_fXYRatio);
-		int b = _tduY(pRect->top + pRect->height);
+		copy = *pRect;
+		haveRect = true;
+	}
+	if (haveRect)
+		m_pRect.reset(new UT_Rect(copy));
+	else
+		m_pRect.reset();
+	if (haveRect)
+	{
+		int l = (UT_sint32)((double)_tduX(copy.left) * m_fXYRatio);
+		int t = _tduY(copy.top);
+		int r = (UT_sint32)((double)_tduX(copy.left + copy.width) * m_fXYRatio);
+		int b = _tduY(copy.top + copy.height);
 		UT_Win32TraceF("clip l=%d t=%d r=%d b=%d hdc=%p", l, t, r, b, (void*)m_hdc);
 		// set the clip rectangle
 		HRGN hrgn = CreateRectRgn(l, t, r, b);
@@ -2670,6 +2678,10 @@ void GR_Win32Graphics::_DeviceContext_SwitchToBuffer()
 	// save the current hdc & switch
 	_HDCSwitchStack.push(new _HDCSwitchRecord(m_hdc));
 	m_hdc = m_bufferHdc;
+	// The clip was selected into the screen DC. The memory DC starts unclipped,
+	// so a selection rectangle would not limit drawing into the buffer.
+	if (getClipRect())
+		setClipRect(getClipRect());
 	UT_Win32TraceF("buffer-switched hdc=%p", (void*)m_hdc);
 	UT_Win32TraceHeap("buffer-switched");
 }
@@ -2690,7 +2702,13 @@ void GR_Win32Graphics::_DeviceContext_SwitchToScreen()
 	// copy any modifications back to the screen
 	if (m_bufferHdc)
 	{
+		// The document window is CS_OWNDC, so a clip region stays on its DC.
+		// BitBlt honors that clip and would leave the selection highlight in
+		// the buffer. Present the whole buffer, then put the logical clip back.
+		SelectClipRgn(m_hdc, nullptr);
 		BOOL blt = BitBlt(m_hdc, 0, 0, width, height, m_bufferHdc, 0, 0, SRCCOPY);
+		if (getClipRect())
+			setClipRect(getClipRect());
 		UT_Win32TraceF("screen-blt %d", blt ? 1 : 0);
 		UT_Win32TraceHeap("screen-blt");
 	}

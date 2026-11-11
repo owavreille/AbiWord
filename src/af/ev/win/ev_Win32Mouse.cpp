@@ -30,6 +30,14 @@
 #include "xav_View.h"
 #include "gr_Graphics.h"
 
+// Layout units are about fifteen times the pixel count at 100 %. A signed
+// short overflows past roughly two thousand pixels, so a drag in a large
+// window or while zoomed out jumps to the wrong character.
+static UT_sint32 s_layoutUnit(AV_View * pView, UT_sint32 device)
+{
+	return pView->getGraphics()->tlu(device);
+}
+
 EV_Win32Mouse::EV_Win32Mouse(EV_EditEventMapper * pEEM)
 :	EV_Mouse(pEEM),
 	m_iCaptureCount(0),
@@ -44,7 +52,7 @@ void EV_Win32Mouse::reset(void)
 }
 
 void EV_Win32Mouse::onButtonDown(AV_View * pView,
-								 HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, WPARAM xPos, WPARAM yPos)
+								 HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos)
 {
 	EV_EditMethod * pEM;
 	EV_EditModifierState ems;
@@ -66,8 +74,8 @@ void EV_Win32Mouse::onButtonDown(AV_View * pView,
 	if (GetKeyState(VK_MENU) & 0x8000)
 		ems |= EV_EMS_ALT;
 
-	short x = (unsigned short) pView->getGraphics()->tlu(xPos);
-	short y = (unsigned short) pView->getGraphics()->tlu(yPos);
+	UT_sint32 x = s_layoutUnit(pView, xPos);
+	UT_sint32 y = s_layoutUnit(pView, yPos);
 
 	emc = pView->getMouseContext(x,y);
 
@@ -96,7 +104,7 @@ void EV_Win32Mouse::onButtonDown(AV_View * pView,
 }
 
 void EV_Win32Mouse::onButtonMove(AV_View * pView,
-								 HWND /*hWnd*/, WPARAM fwKeys, WPARAM xPos, WPARAM yPos)
+								 HWND /*hWnd*/, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos)
 {
 	EV_EditMethod * pEM;
 	EV_EditModifierState ems;
@@ -118,8 +126,8 @@ void EV_Win32Mouse::onButtonMove(AV_View * pView,
 	else
 		emb = EV_EMB_BUTTON0;
 
-	short x = (unsigned short) pView->getGraphics()->tlu(xPos);
-	short y = (unsigned short) pView->getGraphics()->tlu(yPos);
+	UT_sint32 x = s_layoutUnit(pView, xPos);
+	UT_sint32 y = s_layoutUnit(pView, yPos);
 
 	if (m_clickState == 0)
 	{
@@ -164,7 +172,7 @@ void EV_Win32Mouse::onButtonMove(AV_View * pView,
 }
 
 void EV_Win32Mouse::onButtonUp(AV_View * pView,
-							   HWND /*hWnd*/, EV_EditMouseButton emb, WPARAM fwKeys, WPARAM xPos, WPARAM yPos)
+							   HWND /*hWnd*/, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos)
 {
 	EV_EditMethod * pEM;
 	EV_EditModifierState ems;
@@ -188,8 +196,8 @@ void EV_Win32Mouse::onButtonUp(AV_View * pView,
 	if (GetKeyState(VK_MENU) & 0x8000)
 		ems |= EV_EMS_ALT;
 
-	short x = (unsigned short) pView->getGraphics()->tlu(xPos);
-	short y = (unsigned short) pView->getGraphics()->tlu(yPos);
+	UT_sint32 x = s_layoutUnit(pView, xPos);
+	UT_sint32 y = s_layoutUnit(pView, yPos);
 
 	mop = EV_EMO_RELEASE;
 	if (m_clickState == EV_EMO_DOUBLECLICK)
@@ -219,7 +227,7 @@ void EV_Win32Mouse::onButtonUp(AV_View * pView,
 }
 
 void EV_Win32Mouse::onDoubleClick(AV_View * pView,
-								 HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, WPARAM xPos, WPARAM yPos)
+								 HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos)
 {
 	EV_EditMethod * pEM;
 	EV_EditModifierState ems;
@@ -240,8 +248,8 @@ void EV_Win32Mouse::onDoubleClick(AV_View * pView,
 	if (GetKeyState(VK_MENU) & 0x8000)
 		ems |= EV_EMS_ALT;
 
-	short x = (unsigned short) pView->getGraphics()->tlu(xPos);
-	short y = (unsigned short) pView->getGraphics()->tlu(yPos);
+	UT_sint32 x = s_layoutUnit(pView, xPos);
+	UT_sint32 y = s_layoutUnit(pView, yPos);
 
 	// the buttonDown event does not always happen prior to double click, so sometimes we do not
 	// have the context set here ...
@@ -274,7 +282,7 @@ void EV_Win32Mouse::onDoubleClick(AV_View * pView,
 }
 
 void EV_Win32Mouse::onButtonWheel(AV_View * pView, HWND /*hWnd*/, EV_EditMouseButton emb, 
-								  WPARAM fwKeys, WPARAM xPos, WPARAM yPos)
+								  WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos)
 {
 	EV_EditMethod * pEM;
 	EV_EditModifierState ems;
@@ -290,8 +298,8 @@ void EV_Win32Mouse::onButtonWheel(AV_View * pView, HWND /*hWnd*/, EV_EditMouseBu
 	if (GetKeyState(VK_MENU) & 0x8000)
 		ems |= EV_EMS_ALT;	 
 
-	short x = (unsigned short) pView->getGraphics()->tlu(xPos);
-	short y = (unsigned short) pView->getGraphics()->tlu(yPos);
+	UT_sint32 x = s_layoutUnit(pView, xPos);
+	UT_sint32 y = s_layoutUnit(pView, yPos);
 
 	mop = EV_EMO_SINGLECLICK;
 	emc = EV_EMC_UNKNOWN;	 	
