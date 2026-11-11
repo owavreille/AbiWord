@@ -39,6 +39,7 @@
 #include "fv_View.h"
 #include "pd_Style.h"
 #include "ut_string_class.h"
+#include "ut_Win32LocaleString.h"
 #include "gr_Win32Graphics.h"
 #include "pt_PieceTable.h"
 #include "ap_Win32App.h"
@@ -527,13 +528,18 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 			WCHAR stylename[MAX_EBX_LENGTH+1];
 			// Verfiy a name value for the style
 			// TODO - Verify unique name value
-			GetDlgItemTextW(hWnd,AP_RID_DIALOG_STYLES_NEWMODIFY_EBX_NAME,stylename,MAX_EBX_LENGTH);
-			/*_win32DialogNewModify.getControlText( AP_RID_DIALOG_STYLES_NEWMODIFY_EBX_NAME,
-                                                  m_newStyleName,
-	                                              MAX_EBX_LENGTH );*/
-			UT_UTF8String str;
-			str.appendUCS2((const UT_UCS2Char*)stylename,0);
-			strcpy(m_newStyleName,str.utf8_str());
+			GetDlgItemTextW(hWnd,AP_RID_DIALOG_STYLES_NEWMODIFY_EBX_NAME,stylename,G_N_ELEMENTS(stylename));
+			UT_Win32LocaleString wideName;
+			wideName.fromLocale(stylename);
+			UT_UTF8String str(wideName.utf8_str());
+			const char * text = str.utf8_str();
+			if (!text)
+				text = "";
+			size_t n = strlen(text);
+			if (n >= sizeof(m_newStyleName))
+				n = sizeof(m_newStyleName) - 1;
+			memcpy(m_newStyleName, text, n);
+			m_newStyleName[n] = 0;
 
 			if( !m_newStyleName || !strlen(m_newStyleName) )
 			{

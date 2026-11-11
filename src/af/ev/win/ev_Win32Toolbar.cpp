@@ -491,53 +491,64 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 					UT_sint32 iSelected = SendMessageW(hWnd, CB_GETCURSEL, 0, 0);
 									
 					if(iSelected != -1)
-					{							
+					{
 						static UT_UCSChar ucs_buf[COMBO_BUF_LEN];
-                        UT_Win32LocaleString str;
-						UT_uint32 bufLength = SendMessageW(hWnd, CB_GETLBTEXTLEN, iSelected, (LPARAM)0) + 1;
-						wchar_t* buf = (wchar_t*)g_try_malloc(bufLength * sizeof (wchar_t));
-						UT_uint32 dataLength = SendMessageW(hWnd, CB_GETLBTEXT, iSelected, (LPARAM)buf);
-                        str.fromLocale (buf);
-
-                        UT_UCS4_strcpy_utf8_char(ucs_buf, str.utf8_str().utf8_str());
-						UT_UCSChar * pData = (UT_UCSChar *) ucs_buf;	// HACK: should be void *
+						UT_Win32LocaleString str;
+						int textChars = static_cast<int>(SendMessageW(hWnd, CB_GETLBTEXTLEN, iSelected, 0));
+						wchar_t * buf = nullptr;
+						if (textChars >= 0)
+							buf = static_cast<wchar_t *>(g_try_malloc((static_cast<size_t>(textChars) + 1) * sizeof(wchar_t)));
+						LRESULT got = CB_ERR;
+						if (buf)
+							got = SendMessageW(hWnd, CB_GETLBTEXT, iSelected, (LPARAM)buf);
 
 						EV_Win32Toolbar * t = (EV_Win32Toolbar *) GetWindowLongPtrW(hWnd, GWLP_USERDATA);
 						UT_ASSERT(t);
 
-						if(dataLength)
-						{	
-							UINT u = GetDlgCtrlID(hWnd);
-							XAP_Toolbar_Id id = t->ItemIdFromWmCommand(u);
+						if (buf && got != CB_ERR && got > 0 && t)
+						{
+							str.fromLocale(buf);
+							if (str.size() < COMBO_BUF_LEN)
+							{
+								UT_UCS4_strcpy_utf8_char(ucs_buf, str.utf8_str().utf8_str());
+								UT_UCSChar * pData = ucs_buf;
+								UT_uint32 dataLength = static_cast<UT_uint32>(got);
 
-							// If is a STYLE_NAME we should pass the internal one, not the localised				
-							if (id==AP_TOOLBAR_ID_FMT_STYLE)
-							{									
-								UT_sint32 iSelected;					
-								int nData;
-								
-								iSelected = SendMessageW(hWnd, CB_GETCURSEL, 0, 0);										
+								UINT u = GetDlgCtrlID(hWnd);
+								XAP_Toolbar_Id id = t->ItemIdFromWmCommand(u);
 
-								// Find the proper non-localised text                                                                             					
-								XAP_Toolbar_ControlFactory * pFactory = t->m_pWin32App->getControlFactory();
-								EV_Toolbar_Control * pControl = pFactory->getControl(t, AP_TOOLBAR_ID_FMT_STYLE);                                                                         
-								AP_Win32Toolbar_StyleCombo * pStyleC = static_cast<AP_Win32Toolbar_StyleCombo *>(pControl);
-								pStyleC->repopulate();                                                                                                
+								// If is a STYLE_NAME we should pass the internal one, not the localised
+								if (id==AP_TOOLBAR_ID_FMT_STYLE)
+								{
+									int nData = static_cast<int>(SendMessageW(hWnd, CB_GETITEMDATA, iSelected, 0));
 
-								nData  = SendMessageW(hWnd, CB_GETITEMDATA, iSelected, 0);								
+									XAP_Toolbar_ControlFactory * pFactory = t->m_pWin32App->getControlFactory();
+									EV_Toolbar_Control * pControl = pFactory->getControl(t, AP_TOOLBAR_ID_FMT_STYLE);
+									AP_Win32Toolbar_StyleCombo * pStyleC = static_cast<AP_Win32Toolbar_StyleCombo *>(pControl);
+									pStyleC->repopulate();
 
-								UT_UTF8String *utf = t->m_vecOrgStylesNames.getNthItem(nData);
-								UT_ASSERT((utf && (utf->length() < (COMBO_BUF_LEN-1))));
-								UT_UCS4_strcpy_utf8_char(ucs_buf, utf->utf8_str());	
-								dataLength = UT_UCS4_strlen (ucs_buf);
+									UT_UTF8String *utf = nullptr;
+									if (nData >= 0 && nData < t->m_vecOrgStylesNames.getItemCount())
+										utf = t->m_vecOrgStylesNames.getNthItem(nData);
+									if (utf && utf->length() < (COMBO_BUF_LEN - 1))
+									{
+										UT_UCS4_strcpy_utf8_char(ucs_buf, utf->utf8_str());
+										dataLength = UT_UCS4_strlen(ucs_buf);
+									}
+									else
+										dataLength = 0;
 
-								DELETEP(pControl);
+									DELETEP(pControl);
+								}
+
+								if (dataLength)
+									t->toolbarEvent(id, pData, dataLength);
 							}
-							
-							t->toolbarEvent(id, pData, dataLength);
 						}
 
-						SetFocus(static_cast<XAP_Win32FrameImpl*>(t->m_pWin32Frame->getFrameImpl())->getTopLevelWindow());
+						g_free(buf);
+						if (t)
+							SetFocus(static_cast<XAP_Win32FrameImpl*>(t->m_pWin32Frame->getFrameImpl())->getTopLevelWindow());
 					}	
 					else
 					{

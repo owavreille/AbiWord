@@ -55,23 +55,51 @@ bool XAP_Win32AppImpl::openURL(const char * szURL)
 			if (sURL[i]=='/')	
                 sURL[i]='\\';
 
-		// Convert from longpath to 8.3 shortpath, in case of spaces in the path
-		char* longpath = nullptr;
-		char* shortpath = nullptr;
-		longpath = new char[PATH_MAX];
-		shortpath = new char[PATH_MAX];
-		strcpy(longpath, sURL.c_str());
-		DWORD retval = GetShortPathName(longpath, shortpath, PATH_MAX);
-		if((retval == 0) || (retval > PATH_MAX))
+		// GetShortPathName is the wide call in this build. A byte buffer
+		// is read as UTF-16, and a path past PATH_MAX used to overflow it.
+		UT_Win32LocaleString widePath;
+		widePath.fromUTF8(sURL.c_str());
+		if (widePath.c_str() && widePath.c_str()[0])
 		{
-			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
-			DELETEP(longpath);
-			DELETEP(shortpath);
-			return false;
+			DWORD need = GetShortPathNameW(widePath.c_str(), nullptr, 0);
+			bool shortened = false;
+			if (need > 0)
+			{
+				wchar_t * shortWide = new wchar_t[need];
+				DWORD got = GetShortPathNameW(widePath.c_str(), shortWide, need);
+				if (got > 0 && got < need)
+				{
+					UT_Win32LocaleString shortPath;
+					shortPath.fromLocale(shortWide);
+					sURL = shortPath.utf8_str().utf8_str();
+					shortened = true;
+				}
+				delete [] shortWide;
+			}
+			if (!shortened)
+			{
+				const char * scan = sURL.c_str();
+				bool spaced = false;
+				if (scan)
+				{
+					for (; *scan; ++scan)
+					{
+						if (*scan == ' ')
+						{
+							spaced = true;
+							break;
+						}
+					}
+				}
+				if (spaced)
+				{
+					UT_String quoted("\"");
+					quoted += sURL;
+					quoted += "\"";
+					sURL = quoted;
+				}
+			}
 		}
-		sURL = shortpath;
-		DELETEP(longpath);
-		DELETEP(shortpath);
 	}
 
 	// Query the registry for the default browser so we can directly invoke it

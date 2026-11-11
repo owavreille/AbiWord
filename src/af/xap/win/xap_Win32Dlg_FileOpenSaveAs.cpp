@@ -547,36 +547,32 @@ UINT CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UINT m
 						{
 							UT_DEBUGMSG(("SaveAs filetype changed to %d\n", pNotify->lpOFN->nFilterIndex));
 							pThis = (XAP_Win32Dialog_FileOpenSaveAs*)pNotify->lpOFN->lCustData;
+							if (!pThis)
+								break;
 							const wchar_t * ext = pThis->_getDefaultExtension(pNotify->lpOFN->nFilterIndex - 1);
-							// for some reason the  lpstrFile member of the struct will not be set properly
-							// so we have to retrieve the text directly from the control (I could swear that
-							// this used to work, and have no idea what changed)
+							// lpstrFile still holds the original name. The control has what was typed.
 							GetDlgItemTextW(GetParent(hDlg), edt1, buff, MAX_DLG_INS_PICT_STRING);
-							wcscpy(buff,pNotify->lpOFN->lpstrFile);                 //was once commented
-							wchar_t * dot = wcschr(buff, L'.');
-							if(dot)
+							buff[MAX_DLG_INS_PICT_STRING - 1] = 0;
+							wchar_t * slash = wcsrchr(buff, L'\\');
+							if (!slash)
+								slash = wcsrchr(buff, L'/');
+							wchar_t * name = slash ? slash + 1 : buff;
+							wchar_t * dot = wcsrchr(name, L'.');
+							if (dot)
+								*dot = 0;
+							if (*buff && ext && *ext)
 							{
-								*(dot+1) = 0;
+								size_t used = wcslen(buff);
+								size_t need = used + 1 + wcslen(ext);
+								if (need < MAX_DLG_INS_PICT_STRING)
+								{
+									buff[used] = L'.';
+									wcscpy(buff + used + 1, ext);
+									CommDlg_OpenSave_SetControlText(GetParent(hDlg), edt1, buff);
+								}
 							}
-							else if(*buff)
-							{
-								UT_ASSERT(wcslen(buff) < MAX_DLG_INS_PICT_STRING);
-								dot = buff + wcslen(buff);
-								*dot = L'.';
-								*(dot+1) = 0;
-							}
-
-							if(dot)
-							{
-								UT_ASSERT(wcslen(buff) + wcslen(pNotify->lpOFN->lpstrDefExt) < MAX_DLG_INS_PICT_STRING);
-
-								if(ext)
-									wcscat(buff,ext);
-								else
-									*dot = 0;
-						
+							else if (dot)
 								CommDlg_OpenSave_SetControlText(GetParent(hDlg), edt1, buff);
-							}
 							CommDlg_OpenSave_SetDefExt(GetParent(hDlg), ext);
 						}
 						break;

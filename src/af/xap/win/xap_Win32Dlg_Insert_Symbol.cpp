@@ -34,13 +34,14 @@
 #include "xap_Win32PreviewWidget.h"
 
 #include "gr_Win32Graphics.h"
+#include "ut_Win32LocaleString.h"
 #include "xap_Win32DialogHelper.h"
 #include "xap_Win32Resources.rc2"
 #include "ap_Win32App.h"
 
 /*****************************************************************/
 
-char Symbol_font_selected[32] = "Symbol";
+char Symbol_font_selected[LF_FACESIZE * 4] = "Symbol";
 
 XAP_Dialog * XAP_Win32Dialog_Insert_Symbol::static_constructor(XAP_DialogFactory * pFactory,
 													 XAP_Dialog_Id id)
@@ -203,9 +204,10 @@ BOOL XAP_Win32Dialog_Insert_Symbol::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, 
 	
 	DeleteDC(hDCScreen);
 
-	// Select the current font.
-
-	UT_sint32 Index = SendDlgItemMessageW(m_hDlg, XAP_RID_DIALOG_INSERTSYMBOL_FONT_LIST, CB_FINDSTRING, -1, (LPARAM)Symbol_font_selected);
+	// The list is wide. A byte string would be read as UTF-16 and miss Symbol.
+	UT_Win32LocaleString wanted;
+	wanted.fromUTF8(Symbol_font_selected);
+	UT_sint32 Index = SendDlgItemMessageW(m_hDlg, XAP_RID_DIALOG_INSERTSYMBOL_FONT_LIST, CB_FINDSTRINGEXACT, -1, (LPARAM)wanted.c_str());
 
 	if(Index != -1)
 	{
@@ -289,25 +291,26 @@ void XAP_Win32Dialog_Insert_Symbol::_setFontFromCombo(UT_sint32 Index)
 
 		int Length = SendDlgItemMessageW(m_hDlg, XAP_RID_DIALOG_INSERTSYMBOL_FONT_LIST, CB_GETLBTEXTLEN, Index, 0);
 
-		if(Length != CB_ERR)
+		if (Length != CB_ERR && Length >= 0)
 		{
-			char *p_buffer = new char[Length + 1];
+			wchar_t * text = new wchar_t[static_cast<size_t>(Length) + 1];
+			text[0] = 0;
+			if (SendDlgItemMessageW(m_hDlg, XAP_RID_DIALOG_INSERTSYMBOL_FONT_LIST, CB_GETLBTEXT, Index, (LPARAM)text) != CB_ERR)
+			{
+				UT_Win32LocaleString face;
+				face.fromLocale(text);
+				UT_UTF8String utf8(face.utf8_str());
+				const char * name = utf8.utf8_str();
+				if (!name)
+					name = "";
+				strncpy(Symbol_font_selected, name, sizeof(Symbol_font_selected) - 1);
+				Symbol_font_selected[sizeof(Symbol_font_selected) - 1] = 0;
 
-			SendDlgItemMessageW(m_hDlg, XAP_RID_DIALOG_INSERTSYMBOL_FONT_LIST, CB_GETLBTEXT, Index, (LPARAM)p_buffer);
-
-			strcpy(Symbol_font_selected, p_buffer);
-
-			UT_UCSChar *p_UC_buffer = new UT_UCSChar[Length + 1];
-
-			UT_UCS4_strcpy_char(p_UC_buffer, p_buffer);
-			
-			m_DrawSymbol->setSelectedFont(p_buffer);
-			m_DrawSymbol->drawImmediate();
-			m_DrawSymbol->drawarea(m_CurrentSymbol, m_PreviousSymbol);
-
-			delete [] p_UC_buffer;
-			delete [] p_buffer;
-
+				m_DrawSymbol->setSelectedFont(Symbol_font_selected);
+				m_DrawSymbol->drawImmediate();
+				m_DrawSymbol->drawarea(m_CurrentSymbol, m_PreviousSymbol);
+			}
+			delete [] text;
 		}
 		else
 		{

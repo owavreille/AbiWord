@@ -77,7 +77,7 @@ private:
 	UT_uint32					m_nSelectedStyleIdx;
 	bool						m_bisNewStyle;
 	UT_sint32					m_selectToggle;
-	gchar    				m_newStyleName[MAX_EBX_LENGTH];
+	gchar    				m_newStyleName[(MAX_EBX_LENGTH * 4) + 1];
 };
 
 
