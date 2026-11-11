@@ -260,6 +260,33 @@ WHICHPROC s_lpfnDefToolBar;
 
 #define COMBO_BUF_LEN 256
 
+// DEFAULT_GUI_FONT is the old bitmap MS Sans Serif. On Windows 11 it sits
+// on the wrong baseline next to the font sample.
+static HFONT toolbarUIFont()
+{
+	static HFONT font = nullptr;
+	if (font)
+		return font;
+
+	NONCLIENTMETRICSW metrics;
+	memset(&metrics, 0, sizeof(metrics));
+	metrics.cbSize = sizeof(metrics);
+	if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
+		font = CreateFontIndirectW(&metrics.lfMessageFont);
+	if (!font)
+		font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+	return font;
+}
+
+static int centeredTextY(HDC hdc, const RECT & rc)
+{
+	TEXTMETRICW tm;
+	if (!GetTextMetricsW(hdc, &tm))
+		return rc.top;
+	int y = rc.top + ((rc.bottom - rc.top) - tm.tmHeight) / 2;
+	return (y < rc.top) ? rc.top : y;
+}
+
 
 
 LRESULT CALLBACK EV_Win32Toolbar::_ToolBarWndProc (HWND hWnd, UINT uMessage, WPARAM wParam, LPARAM lParam)
@@ -350,11 +377,24 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				return TRUE;
 			str.fromUTF8 (fontName);
 
+			hUIFont = toolbarUIFont();
 			if(dis->itemState & ODS_COMBOBOXEDIT)
 			{
-				HFONT hUIFont = (HFONT) GetStockObject(DEFAULT_GUI_FONT);
+				if (dis->itemState & ODS_SELECTED)
+				{
+					SetTextColor(dis->hDC, GetSysColor(COLOR_HIGHLIGHTTEXT));
+					SetBkColor(dis->hDC, GetSysColor(COLOR_HIGHLIGHT));
+					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_HIGHLIGHT));
+				}
+				else
+				{
+					SetTextColor(dis->hDC, GetSysColor(COLOR_WINDOWTEXT));
+					SetBkColor(dis->hDC, GetSysColor(COLOR_WINDOW));
+					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_WINDOW));
+				}
 				hfontSave = (HFONT) SelectObject (dis->hDC, hUIFont);
-				ExtTextOutW(dis->hDC, dis->rcItem.left, dis->rcItem.top, ETO_OPAQUE | ETO_CLIPPED, &dis->rcItem, str.c_str(), str.size(), nullptr);
+				ExtTextOutW(dis->hDC, dis->rcItem.left + 2, centeredTextY(dis->hDC, dis->rcItem),
+							ETO_CLIPPED, &dis->rcItem, str.c_str(), (UINT)str.size(), nullptr);
 				SelectObject (dis->hDC, hfontSave);
 			}
 			else
@@ -362,11 +402,11 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				memset (&logfont, 0, sizeof (logfont));
 
 				/* Create current font */
-				logfont.lfHeight = 18;
+				logfont.lfHeight = 16;
 				logfont.lfWidth = 0;
 				logfont.lfEscapement = 0;
 				logfont.lfOrientation = 0;
-				logfont.lfWeight = FW_BOLD;
+				logfont.lfWeight = FW_NORMAL;
 				logfont.lfItalic = FALSE;
 				logfont.lfUnderline = FALSE;
 				logfont.lfStrikeOut = FALSE;
@@ -376,7 +416,7 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				logfont.lfQuality = DEFAULT_QUALITY;
 				logfont.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
 				lstrcpynW(logfont.lfFaceName, str.c_str(), LF_FACESIZE);
-				hFont = CreateFontIndirectW (&logfont);			
+				hFont = CreateFontIndirectW (&logfont);
 
 				if(dis->itemState & ODS_SELECTED) /* HighLight the selected text*/
 				{
@@ -388,22 +428,34 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				{
 					SetTextColor(dis->hDC, GetSysColor(COLOR_WINDOWTEXT));
 					SetBkColor(dis->hDC, GetSysColor(COLOR_WINDOW));
-					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_WINDOW) );				
+					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_WINDOW) );
 				}
 
-				hUIFont = (HFONT) GetStockObject(DEFAULT_GUI_FONT);
-
-				/*Fontname in regular font*/
+				/* The name stays in the interface font. The sample follows it
+				   and must not repaint the whole row, or the name disappears. */
 				hfontSave = (HFONT) SelectObject (dis->hDC, hUIFont);
-                ExtTextOutW(dis->hDC, dis->rcItem.left, dis->rcItem.top, ETO_OPAQUE | ETO_CLIPPED, &dis->rcItem, str.c_str(), str.size(), nullptr);
+				GetTextExtentPoint32W(dis->hDC, str.c_str(), (int)str.size(), &size);
 
-				/*Font example after the name*/
-				const wchar_t* szSample = L"AbCdEfGhIj";
-                GetTextExtentPoint32W(dis->hDC, str.c_str(), str.size(), &size);
-				SelectObject (dis->hDC, hFont);
-				ExtTextOutW(dis->hDC, dis->rcItem.left+size.cx+5, dis->rcItem.top, ETO_OPAQUE | ETO_CLIPPED, &dis->rcItem, szSample, wcslen(szSample), nullptr);
+				RECT nameRect = dis->rcItem;
+				nameRect.left += 2;
+				nameRect.right = nameRect.left + size.cx + 8;
+				if (nameRect.right > dis->rcItem.right)
+					nameRect.right = dis->rcItem.right;
+				ExtTextOutW(dis->hDC, nameRect.left, centeredTextY(dis->hDC, dis->rcItem),
+							ETO_CLIPPED, &nameRect, str.c_str(), (UINT)str.size(), nullptr);
+
+				RECT sampleRect = dis->rcItem;
+				sampleRect.left = nameRect.right;
+				if (hFont && sampleRect.left + 4 < sampleRect.right)
+				{
+					const wchar_t* szSample = L"AbCdEfGhIj";
+					SelectObject (dis->hDC, hFont);
+					ExtTextOutW(dis->hDC, sampleRect.left, centeredTextY(dis->hDC, dis->rcItem),
+								ETO_CLIPPED, &sampleRect, szSample, (UINT)wcslen(szSample), nullptr);
+				}
 				SelectObject (dis->hDC, hfontSave);
-				DeleteObject(hFont);
+				if (hFont)
+					DeleteObject(hFont);
 			}
 
 			return TRUE;
@@ -741,7 +793,12 @@ bool EV_Win32Toolbar::synthesize(void)
 							UT_DEBUGMSG(("Toolbar: Failed to get handle of combos edit controls. Not setting read-only.\n"));
 						else
 							SendMessageW(hwndEdit, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)0);
-						SendMessageW(hwndCombo, WM_SETFONT, (WPARAM)GetStockObject(DEFAULT_GUI_FONT), MAKELPARAM(TRUE, 0));
+						HFONT hComboFont = (id == AP_TOOLBAR_ID_FMT_FONT)
+							? toolbarUIFont()
+							: (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+						SendMessageW(hwndCombo, WM_SETFONT, (WPARAM)hComboFont, MAKELPARAM(TRUE, 0));
+						if (id == AP_TOOLBAR_ID_FMT_FONT)
+							SendMessageW(hwndCombo, CB_SETITEMHEIGHT, 0, 22);
 
 						// populate it
 						if (pControl)
