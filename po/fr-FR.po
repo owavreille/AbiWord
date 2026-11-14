@@ -1714,7 +1714,7 @@ msgstr "Identificateur de version"
 #. FIELD_Application_Options
 #: po/tmp/ap_String_Id.h
 msgid "Build Options"
-msgstr "Options"
+msgstr "Options de compilation"
 
 #. FIELD_Application_Target
 #: po/tmp/ap_String_Id.h
