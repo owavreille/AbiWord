@@ -147,25 +147,9 @@ BOOL AP_Win32Dialog_Field::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam*
 		// fall through
 		
 	case IDOK:				// also AP_RID_DIALOG_FIELD_BTN_OK
-	{
-		// The parameter is wide text. A byte buffer would keep only the
-		// first character and overflow once the text passed 127 letters.
-		UT_Win32LocaleString paramText;
-		if (m_hwndParam)
-		{
-			int n = GetWindowTextLengthW(m_hwndParam);
-			if (n < 0)
-				n = 0;
-			wchar_t * text = new wchar_t[static_cast<size_t>(n) + 1];
-			text[0] = 0;
-			GetWindowTextW(m_hwndParam, text, n + 1);
-			paramText.fromLocale(text);
-			delete [] text;
-		}
-		setParameter(paramText.utf8_str().utf8_str());
+		_storeParameter();
 		EndDialog(hWnd,0);
 		return 1;
-	}
 	case AP_RID_DIALOG_FIELD_LIST_TYPES:
 		switch (HIWORD(wParam))
 		{
@@ -186,6 +170,11 @@ BOOL AP_Win32Dialog_Field::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam*
 			return 1;
 			
 		case LBN_DBLCLK:
+			// Same path as OK: a double-click must keep the parameter
+			// typed in the edit box, not only the chosen format.
+			_FormatListBoxChange();
+			m_answer = a_OK;
+			_storeParameter();
 			EndDialog(hWnd,0);
 			return 1;
 			
@@ -200,14 +189,39 @@ BOOL AP_Win32Dialog_Field::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam*
 }
 
 
+void AP_Win32Dialog_Field::_storeParameter(void)
+{
+	// The parameter is wide text. A byte buffer would keep only the
+	// first character and overflow once the text passed 127 letters.
+	UT_Win32LocaleString paramText;
+	if (m_hwndParam)
+	{
+		int n = GetWindowTextLengthW(m_hwndParam);
+		if (n < 0)
+			n = 0;
+		wchar_t * text = new wchar_t[static_cast<size_t>(n) + 1];
+		text[0] = 0;
+		GetWindowTextW(m_hwndParam, text, n + 1);
+		paramText.fromLocale(text);
+		delete [] text;
+	}
+	setParameter(paramText.utf8_str().utf8_str());
+}
+
 void AP_Win32Dialog_Field::_FormatListBoxChange(void)
 {
-	m_iTypeIndex = SendMessageW(m_hwndTypes, LB_GETCURSEL, 0, 0);
+	UT_sint32 typeIndex = SendMessageW(m_hwndTypes, LB_GETCURSEL, 0, 0);
+	if (typeIndex >= 0)
+		m_iTypeIndex = typeIndex;
 
 	UT_sint32 index = SendMessageW(m_hwndFormats, LB_GETCURSEL, 0, 0);
-	UT_sint32 tag = SendMessageW(m_hwndFormats, LB_GETITEMDATA, index, 0);
-	UT_ASSERT(tag != LB_ERR);
+	if (index < 0)
+		return;
 
-	m_iFormatIndex = tag;
+	LRESULT tag = SendMessageW(m_hwndFormats, LB_GETITEMDATA, (WPARAM)index, 0);
+	if (tag == LB_ERR || tag < 0)
+		return;
+
+	m_iFormatIndex = static_cast<int>(tag);
 }
 

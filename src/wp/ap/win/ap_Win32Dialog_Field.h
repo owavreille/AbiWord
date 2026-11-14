@@ -43,6 +43,7 @@ private:
 	void SetTypesList(void);
 	void SetFieldsList(void);
 	void _FormatListBoxChange(void);
+	void _storeParameter(void);
 };
 
 #endif /* AP_WIN32DIALOG_FIELD_H */

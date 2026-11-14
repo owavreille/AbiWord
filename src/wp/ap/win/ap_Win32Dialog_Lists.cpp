@@ -374,14 +374,18 @@ BOOL AP_Win32Dialog_Lists::_onDeltaPos(NM_UPDOWN* pnmud)
 	const UT_sint32 len = (UT_sint32)sizeof(szTmp);
 
 	_win32Dialog.getControlText(controlID, szTmp, len);
-	float fVal = (float)UT_convertDimensionless(szTmp) + 0.10f * pnmud->iDelta;
+	// iDelta is negative when the up arrow is clicked. The other spin
+	// buttons subtract it so that up increases the value.
+	float fVal = (float)UT_convertDimensionless(szTmp) - 0.10f * pnmud->iDelta;
 	_win32Dialog.setControlText(controlID,
 								UT_convertToDimensionlessString(fVal, ".2"));
 
 	_getDisplayedData(controlID);
 	_previewExposed();
 
-	return 0;
+	// The text is already updated. Do not let the up-down control
+	// apply its own integer step on top of it.
+	return 1;
 }
 
 void AP_Win32Dialog_Lists::destroy(void)

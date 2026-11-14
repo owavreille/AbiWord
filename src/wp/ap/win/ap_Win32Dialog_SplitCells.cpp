@@ -116,10 +116,10 @@ BOOL AP_Win32Dialog_SplitCells::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPAR
 
 	// Load the bitmaps into the dialog box								
 	m_hBitmapLeft = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_LEFT, "SPLITLEFT",  BITMAP_WITDH, BITMAP_HEIGHT, Color);
-	m_hBitmapRight = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_VERTMID, "SPLITVERTMID", BITMAP_WITDH, BITMAP_HEIGHT, Color);
+	m_hBitmapVertMid = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_VERTMID, "SPLITVERTMID", BITMAP_WITDH, BITMAP_HEIGHT, Color);
 	m_hBitmapRight = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_RIGHT, "SPLITRIGHT", BITMAP_WITDH, BITMAP_HEIGHT, Color);
 	m_hBitmapAbove = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_ABOVE, "SPLITABOVE", BITMAP_WITDH, BITMAP_HEIGHT, Color);
-	m_hBitmapAbove = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_HORIMID, "SPLITHORIMID", BITMAP_WITDH, BITMAP_HEIGHT, Color);
+	m_hBitmapHoriMid = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_HORIMID, "SPLITHORIMID", BITMAP_WITDH, BITMAP_HEIGHT, Color);
 	m_hBitmapBelow = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_BELOW, "SPLITBELOW", BITMAP_WITDH, BITMAP_HEIGHT, Color);
 
 	setAllSensitivities();

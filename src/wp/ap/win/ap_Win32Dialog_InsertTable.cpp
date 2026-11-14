@@ -121,7 +121,10 @@ BOOL AP_Win32Dialog_InsertTable::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 	swprintf(szValue, L"%u", getNumRows());
 	SetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTTABLE_VAL_ROW, szValue);
 				
-	swprintf(szValue, L"%02.2f", getColumnWidth());
+	// m_columnWidth is already in the ruler unit shown beside the field.
+	// getColumnWidth() converts that to inches, so a metric ruler would
+	// display 0.70 next to "cm" and then save those 0.70 as centimetres.
+	swprintf(szValue, L"%02.2f", m_columnWidth);
 	SetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTTABLE_VAL_SIZE, szValue);
 
 	/* Units name*/
@@ -183,7 +186,8 @@ BOOL AP_Win32Dialog_InsertTable::_onDeltaPos(NM_UPDOWN * pnmud)
 	if (GetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTTABLE_VAL_SIZE, szBuff, 255 ))	
 		dValue = (float) atofw(szBuff);				 
 	
-	_doSpin((0 - (UT_sint32) (-1) *pnmud->iDelta), dValue);
+	// iDelta is negative for the up arrow. Negate it so up increases the width.
+	_doSpin(0 - static_cast<UT_sint32>(pnmud->iDelta), dValue);
 	
 	swprintf (szBuff, L"%02.2f", dValue);
 	SetWindowTextW (GetDlgItem(m_hDlg,AP_RID_DIALOG_INSERTTABLE_VAL_SIZE), szBuff);
