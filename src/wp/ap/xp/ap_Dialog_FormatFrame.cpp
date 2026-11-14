@@ -582,6 +582,8 @@ void AP_Dialog_FormatFrame::setCurFrameProps(void)
 	if (!style.empty()) {
 		m_borderColorBottom.setColor(style.c_str());
 	}
+	// The side buttons apply m_borderColor. The swatch shows the left side.
+	m_borderColor = m_borderColorLeft;
 
 	std::string thickness;
 
@@ -605,6 +607,8 @@ void AP_Dialog_FormatFrame::setCurFrameProps(void)
 		thickness = style;
 		setBorderThicknessBottom(thickness);
 	}
+	// The side buttons apply m_sBorderThickness. The combo shows the left side.
+	m_sBorderThickness = m_sBorderThicknessLeft;
 
 	/* update wrap properties
 	 */
@@ -853,6 +857,8 @@ void AP_Dialog_FormatFrame::setBorderThicknessAll(const std::string & sThick)
 	setBorderThicknessLeft(sThick);
 	setBorderThicknessTop(sThick);
 	setBorderThicknessBottom(sThick);
+	// A later side click must keep the width just chosen in the combo.
+	m_sBorderThickness = m_sBorderThicknessLeft;
 
 	m_bSettingsChanged = true;
 }
