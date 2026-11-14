@@ -278,9 +278,16 @@ void AP_Win32Dialog_Spell::_suggestChange(void)
 
 	if (!m_Suggestions->getItemCount()) 
 	{
-		// FIXME: this should insert the original word, surely!
-
-		// no change to suggest, ignore it
+		// No suggestion: show the word itself so the field is not empty.
+		// m_bChangingSelection is set, so this does not enable Change.
+		UT_sint32 iLength = 0;
+		const UT_UCS4Char * word = m_pWordIterator ? m_pWordIterator->getCurrentWord(iLength) : nullptr;
+		if (word && iLength > 0)
+		{
+			UT_Win32LocaleString str;
+			spellSpanToLocale(str, word, iLength);
+			SendMessageW(m_hwndChangeTo, WM_SETTEXT, 0, (LPARAM)str.c_str());
+		}
 		if (m_iSelectedRow != -1)
 			SendMessageW(m_hwndSuggest, LB_SETCURSEL, -1, 0);
 	}
