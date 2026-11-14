@@ -161,7 +161,7 @@ LRESULT CALLBACK AP_Win32TopRuler::_TopRulerWndProc(HWND hwnd, UINT iMsg, WPARAM
 	case WM_LBUTTONDOWN:
 		SetCapture(hwnd);
 		
-		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON1,pG->tlu(LOWORD(lParam)),pG->tlu(HIWORD(lParam)));
+		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON1,pG->tlu(signedLoWord(lParam)),pG->tlu(signedHiWord(lParam)));
 		{				
 			pG->handleSetCursorMessage();
 		}
@@ -169,7 +169,7 @@ LRESULT CALLBACK AP_Win32TopRuler::_TopRulerWndProc(HWND hwnd, UINT iMsg, WPARAM
 		
 	case WM_MBUTTONDOWN:
 		SetCapture(hwnd);		
-		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON2,pG->tlu(LOWORD(lParam)),pG->tlu(HIWORD(lParam)));
+		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON2,pG->tlu(signedLoWord(lParam)),pG->tlu(signedHiWord(lParam)));
 		{				
 			pG->handleSetCursorMessage();
 		}
@@ -178,7 +178,7 @@ LRESULT CALLBACK AP_Win32TopRuler::_TopRulerWndProc(HWND hwnd, UINT iMsg, WPARAM
 	case WM_RBUTTONDOWN:		
 		SetCapture(hwnd);
 		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON3,
-			pG->tlu(LOWORD(lParam)),pG->tlu(HIWORD(lParam)));
+			pG->tlu(signedLoWord(lParam)),pG->tlu(signedHiWord(lParam)));
 		{			
 			pG->handleSetCursorMessage();
 		}

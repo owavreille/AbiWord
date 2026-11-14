@@ -2703,6 +2703,14 @@ void AP_TopRuler::mousePress(EV_EditModifierState /* ems */,
 
 /*****************************************************************/
 
+// The lower markers sit on the last pixels of the ruler. A horizontal
+// drag easily slips one pixel below the window; that used to cancel it.
+// Only a tab pulled clearly off the ruler is discarded.
+static bool s_clearlyOffRulerVertically(UT_sint32 y, UT_sint32 height, UT_sint32 slack)
+{
+	return (y < -slack) || (y > height + slack);
+}
+
 void AP_TopRuler::mouseRelease(EV_EditModifierState ems, EV_EditMouseButton /* emb */, UT_sint32 x, UT_sint32 y)
 {
 	if (m_bValidMouseClick && m_draggingWhat == DW_TABTOGGLE)
@@ -2725,9 +2733,12 @@ void AP_TopRuler::mouseRelease(EV_EditModifierState ems, EV_EditMouseButton /* e
 
 	m_bValidMouseClick = false;
 
-	// if they drag vertically off the ruler, we ignore the whole thing.
-
-	if ((getHeight() > 0) && ((y < 0) || (y > static_cast<UT_sint32>(getHeight ()))))
+	// Dropping a tab clearly off the ruler deletes it. Margins, indents
+	// and column markers keep the position reached while dragging.
+	const UT_sint32 rulerHeight = static_cast<UT_sint32>(getHeight());
+	const UT_sint32 verticalSlack = m_pG ? m_pG->tlu(8) : 0;
+	if ((rulerHeight > 0) && s_clearlyOffRulerVertically(y, rulerHeight, verticalSlack)
+		&& (m_draggingWhat == DW_TABSTOP))
 	{
 		_ignoreEvent(true);
 		m_draggingWhat = DW_NOTHING;
@@ -3596,13 +3607,15 @@ void AP_TopRuler::mouseMotion(EV_EditModifierState /*ems*/, UT_sint32 x, UT_sint
 		return;
 	}
 
-	m_bEventIgnored = false;
-
   	xxx_UT_DEBUGMSG(("mouseMotion: [ems 0x%08lx][x %ld][y %ld]\n",ems,x,y));
 
-	// if they drag vertically off the ruler, we ignore the whole thing.
-
-	if (m_pG && ((y < 0) || (y > static_cast<UT_sint32>(getHeight ()))))
+	// A tab dragged clearly above or below the ruler is removed. Other
+	// markers only care about the horizontal position, so a slight
+	// vertical slip must not cancel the drag.
+	const UT_sint32 rulerHeight = static_cast<UT_sint32>(getHeight());
+	const UT_sint32 verticalSlack = m_pG ? m_pG->tlu(8) : 0;
+	if (m_pG && s_clearlyOffRulerVertically(y, rulerHeight, verticalSlack)
+		&& (m_draggingWhat == DW_TABSTOP))
 	{
 		if(!m_bEventIgnored)
 		{
@@ -3613,6 +3626,11 @@ void AP_TopRuler::mouseMotion(EV_EditModifierState /*ems*/, UT_sint32 x, UT_sint
 			m_pG->setCursor(GR_Graphics::GR_CURSOR_DEFAULT);
 		return;
 	}
+	m_bEventIgnored = false;
+	if (y < 0)
+		y = 0;
+	else if ((rulerHeight > 0) && (y > rulerHeight))
+		y = rulerHeight;
 
 
 	// the following segment of code used to test whether the mouse was on the ruler horizontally
