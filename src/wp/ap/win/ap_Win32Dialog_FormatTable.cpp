@@ -33,9 +33,12 @@
 #include "ap_Win32Resources.rc2"
 #include "xap_Win32DialogHelper.h"
 #include "xap_Win32Toolbar_Icons.h"
+#include "fv_View.h"
 
 #define BITMAP_WITDH	15
 #define BITMAP_HEIGHT	15
+
+static bool s_showCellThickness(AP_Win32Dialog_FormatTable * dlg);
 
 const char * sThicknessTable[FORMAT_TABLE_NUMTHICKNESS] = {"0.25pt","0.5pt",
 													   "0.75pt","1.0pt",
@@ -179,7 +182,8 @@ BOOL AP_Win32Dialog_FormatTable::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 	/* Combo Values for Thickness */	
 	for(i=0; i < FORMAT_TABLE_NUMTHICKNESS ;i++)
 		addItemToCombo (AP_RID_DIALOG_FORMATTABLE_COMBO_THICKNESS, sThicknessTable[i]);
-	selectComboItem (AP_RID_DIALOG_FORMATTABLE_COMBO_THICKNESS, 0);
+	if (!s_showCellThickness(this))
+		selectComboItem(AP_RID_DIALOG_FORMATTABLE_COMBO_THICKNESS, 0);
     centerDialog();
 	return 1; 
 }
@@ -329,16 +333,47 @@ void AP_Win32Dialog_FormatTable::event_previewExposed(void)
 		m_pFormatTablePreview->drawImmediate();
 }
 
+static bool s_showCellThickness(AP_Win32Dialog_FormatTable * dlg)
+{
+	XAP_Frame * frame = XAP_App::getApp()->getLastFocussedFrame();
+	if (!frame)
+		return false;
+	FV_View * pView = static_cast<FV_View *>(frame->getCurrentView());
+	if (!pView)
+		return false;
+
+	static const char * props[] = {
+		"left-thickness", "top-thickness", "right-thickness", "bot-thickness"
+	};
+	for (const char * prop : props)
+	{
+		gchar * thick = nullptr;
+		if (pView->getCellProperty(pView->getPoint(), prop, thick) && thick && *thick)
+		{
+			dlg->setBorderThicknessInGUI(thick);
+			return true;
+		}
+	}
+	return false;
+}
+
 void AP_Win32Dialog_FormatTable::setBackgroundColorInGUI(const UT_RGBColor& clr)
 {
 	m_backgButton.setColour(RGB(clr.m_red,clr.m_grn,clr.m_blu));
 	/* force redraw */
 	InvalidateRect(GetDlgItem(m_hDlg, AP_RID_DIALOG_FORMATTABLE_BTN_BACKCOLOR), nullptr, FALSE);
+	// The cell refresh calls this after the cursor moves and before any
+	// pending edit. Show that cell's border width at the same time.
+	s_showCellThickness(this);
 }
 
-void AP_Win32Dialog_FormatTable::setBorderThicknessInGUI(const std::string & /*sThick*/)
+void AP_Win32Dialog_FormatTable::setBorderThicknessInGUI(const std::string & sThick)
 {
-	UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED);
+	if (!m_hDlg || sThick.empty())
+		return;
+	m_sBorderThickness = sThick;
+	selectComboItem(AP_RID_DIALOG_FORMATTABLE_COMBO_THICKNESS,
+		static_cast<int>(_findClosestThickness(sThick.c_str())));
 }
 
 void AP_Win32Dialog_FormatTable::setSensitivity(bool /*bSens*/)

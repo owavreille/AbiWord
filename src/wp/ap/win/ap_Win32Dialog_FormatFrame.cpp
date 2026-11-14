@@ -205,7 +205,7 @@ BOOL AP_Win32Dialog_FormatFrame::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 	for(i=0; i < FORMAT_FRAME_NUMTHICKNESS ;i++)
 		addItemToCombo (AP_RID_DIALOG_FORMATFRAME_COMBO_THICKNESS, sThickness[i]);
 
-	selectComboItem (AP_RID_DIALOG_FORMATFRAME_COMBO_THICKNESS, 0);
+	setBorderThicknessInGUI(getBorderThicknessLeft());
 
 	centerDialog();
 	return 1; 
@@ -413,9 +413,34 @@ void AP_Win32Dialog_FormatFrame::activate(void)
 	
 }
 
+void AP_Win32Dialog_FormatFrame::setBorderThicknessInGUI(const std::string & sThick)
+{
+	if (!m_hDlg || sThick.empty())
+		return;
+
+	double thickness = UT_convertToInches(sThick.c_str());
+	int closest = 0;
+	double dClose = 100000000.;
+	for (int i = 0; i < FORMAT_FRAME_NUMTHICKNESS; ++i)
+	{
+		double diff = thickness - m_dThickness[i];
+		if (diff < 0)
+			diff = -diff;
+		if (diff < dClose)
+		{
+			closest = i;
+			dClose = diff;
+		}
+	}
+	// CB_SETCURSEL does not notify, so showing the current width
+	// does not apply it again.
+	selectComboItem(AP_RID_DIALOG_FORMATFRAME_COMBO_THICKNESS, closest);
+}
+
 void AP_Win32Dialog_FormatFrame::notifyActiveFrame(XAP_Frame *pFrame)
 { 	
 	setAllSensitivities();
+	setBorderThicknessInGUI(getBorderThicknessLeft());
 	
 	if((HWND)GetWindowLongPtrW(m_hDlg, GWLP_HWNDPARENT) != static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow())
 	{

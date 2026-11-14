@@ -45,7 +45,7 @@ public:
 	virtual void            	destroy(void) override;
 	virtual void            	activate(void) override;
 	virtual void            	notifyActiveFrame(XAP_Frame * pFrame) override;
-	virtual void                setBorderThicknessInGUI(const std::string & /*sThick*/) override { UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED); };
+	virtual void                setBorderThicknessInGUI(const std::string & sThick) override;
 	virtual void *				pGetWindowHandle( void )  override {  return (void *) m_hDlg; }
 
 	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
