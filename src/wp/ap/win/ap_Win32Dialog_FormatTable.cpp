@@ -34,6 +34,7 @@
 #include "xap_Win32DialogHelper.h"
 #include "xap_Win32Toolbar_Icons.h"
 #include "fv_View.h"
+#include "pp_AttrProp.h"
 
 #define BITMAP_WITDH	15
 #define BITMAP_HEIGHT	15
@@ -184,6 +185,10 @@ BOOL AP_Win32Dialog_FormatTable::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 		addItemToCombo (AP_RID_DIALOG_FORMATTABLE_COMBO_THICKNESS, sThicknessTable[i]);
 	if (!s_showCellThickness(this))
 		selectComboItem(AP_RID_DIALOG_FORMATTABLE_COMBO_THICKNESS, 0);
+	// Load the cell before the first paint, so the border swatch is
+	// not the empty button face until the timer fires.
+	setCurCellProps();
+	_showCellBorderColor();
     centerDialog();
 	return 1; 
 }
@@ -236,7 +241,13 @@ BOOL AP_Win32Dialog_FormatTable::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*l
 			cc.lStructSize = sizeof(CHOOSECOLORW);
 			cc.hwndOwner = m_hDlg;
 			cc.lpCustColors = (LPDWORD) acrCustClr;
-			cc.rgbResult = 0;
+			{
+				UT_RGBColor border(0, 0, 0);
+				const std::string color = PP_getAttribute("left-color", getPropVector());
+				if (!color.empty())
+					border.setColor(color.c_str());
+				cc.rgbResult = RGB(border.m_red, border.m_grn, border.m_blu);
+			}
 			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
 			if(ChooseColorW(&cc))			
 			{
@@ -363,8 +374,24 @@ void AP_Win32Dialog_FormatTable::setBackgroundColorInGUI(const UT_RGBColor& clr)
 	/* force redraw */
 	InvalidateRect(GetDlgItem(m_hDlg, AP_RID_DIALOG_FORMATTABLE_BTN_BACKCOLOR), nullptr, FALSE);
 	// The cell refresh calls this after the cursor moves and before any
-	// pending edit. Show that cell's border width at the same time.
+	// pending edit. Show that cell's border width and color at the same time.
 	s_showCellThickness(this);
+	_showCellBorderColor();
+}
+
+void AP_Win32Dialog_FormatTable::_showCellBorderColor(void)
+{
+	if (!m_hDlg)
+		return;
+	// One swatch stands for the border. The left side is the same
+	// side the thickness combo already displays. A missing color is
+	// the default black border.
+	UT_RGBColor clr(0, 0, 0);
+	const std::string color = PP_getAttribute("left-color", getPropVector());
+	if (!color.empty())
+		clr.setColor(color.c_str());
+	m_borderButton.setColour(RGB(clr.m_red, clr.m_grn, clr.m_blu));
+	InvalidateRect(GetDlgItem(m_hDlg, AP_RID_DIALOG_FORMATTABLE_BTN_BORDERCOLOR), nullptr, FALSE);
 }
 
 void AP_Win32Dialog_FormatTable::setBorderThicknessInGUI(const std::string & sThick)

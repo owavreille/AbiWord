@@ -43,6 +43,7 @@ public:
 	void					event_previewExposed(void);
 	virtual void		setBackgroundColorInGUI(const UT_RGBColor& clr) override;
 	virtual void            setBorderThicknessInGUI(const std::string & sThick) override;
+	void                    _showCellBorderColor(void);
 	virtual void            setSensitivity(bool bsens) override;
 	virtual void            destroy(void) override;
 	virtual void            activate(void) override;
