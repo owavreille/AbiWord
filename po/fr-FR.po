@@ -7563,7 +7563,7 @@ msgstr "Albanais"
 #. DLG_FOSA_ALL
 #: po/tmp/xap_String_Id.h
 msgid "All (*.*)"
-msgstr "Tous les fichiers d'image"
+msgstr "Tous les fichiers (*.*)"
 
 #. DLG_FOSA_ALLDOCS
 #: po/tmp/xap_String_Id.h
