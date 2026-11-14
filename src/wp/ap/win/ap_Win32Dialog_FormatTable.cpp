@@ -269,7 +269,14 @@ BOOL AP_Win32Dialog_FormatTable::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*l
 			cc.lStructSize = sizeof(CHOOSECOLORW);
 			cc.hwndOwner = m_hDlg;
 			cc.lpCustColors = (LPDWORD) acrCustClr2;
-			cc.rgbResult = 0;
+			{
+				// No stored color is the white swatch already shown.
+				UT_RGBColor back(255, 255, 255);
+				const std::string color = PP_getAttribute("background-color", getPropVector());
+				if (!color.empty())
+					back.setColor(color.c_str());
+				cc.rgbResult = RGB(back.m_red, back.m_grn, back.m_blu);
+			}
 			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
 			if(ChooseColorW(&cc))			
 			{

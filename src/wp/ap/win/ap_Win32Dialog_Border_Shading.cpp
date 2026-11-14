@@ -34,10 +34,20 @@
 #include "ap_Win32Resources.rc2"
 #include "xap_Win32DialogHelper.h"
 #include "xap_Win32Toolbar_Icons.h"
+#include "pp_AttrProp.h"
 
 
 #define BITMAP_WITDH	15
 #define BITMAP_HEIGHT	15
+
+static COLORREF s_propColor(const PP_PropertyVector & props, const char * name, const UT_RGBColor & fallback)
+{
+	UT_RGBColor clr = fallback;
+	const std::string color = PP_getAttribute(name, props);
+	if (!color.empty())
+		clr.setColor(color.c_str());
+	return RGB(clr.m_red, clr.m_grn, clr.m_blu);
+}
 #define BORDER_STYLE_BITMAP_WIDTH 180
 #define BORDER_STYLE_BITMAP_HEIGHT 30
 #define BORDER_STYLE_COMBO_POSITION_X 60
@@ -326,7 +336,7 @@ BOOL AP_Win32Dialog_Border_Shading::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 			cc.lStructSize = sizeof(CHOOSECOLORW);
 			cc.hwndOwner = m_hDlg;
 			cc.lpCustColors = (LPDWORD) acrCustClr;
-			cc.rgbResult = 0;
+			cc.rgbResult = s_propColor(getPropVector(), "left-color", UT_RGBColor(0, 0, 0));
 			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
 			if(ChooseColorW(&cc))			
 			{
@@ -388,7 +398,7 @@ BOOL AP_Win32Dialog_Border_Shading::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 			cc.lStructSize = sizeof(CHOOSECOLORW);
 			cc.hwndOwner = m_hDlg;
 			cc.lpCustColors = (LPDWORD) acrCustClr2;
-			cc.rgbResult = 0;
+			cc.rgbResult = s_propColor(getPropVector(), "shading-foreground-color", UT_RGBColor(255, 255, 255));
 			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
 			if(ChooseColorW(&cc))			
 			{
