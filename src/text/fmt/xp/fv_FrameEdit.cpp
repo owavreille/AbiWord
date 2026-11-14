@@ -927,7 +927,12 @@ bool FV_FrameEdit::getFrameStrings(UT_sint32 x, UT_sint32 y,
 		}
 		else if(pPage && (finalColx + iColx + m_recCurFrame.width - xp > pPage->getWidth()))
 		{
-		    x = pPage->getWidth() - m_recCurFrame.width;
+		    // x is a screen coordinate. The page width is relative to the
+		    // page origin xp, so dropping xp here jumps the image by the
+		    // distance from the window to the page.
+		    x = xp + pPage->getWidth() - m_recCurFrame.width;
+		    if (x < xp)
+			x = xp;
 		}
 		finalColx = x - iColx;
 
@@ -938,7 +943,9 @@ bool FV_FrameEdit::getFrameStrings(UT_sint32 x, UT_sint32 y,
 		}
 		else if (pPage && (finalColy + iColy - yp+  m_recCurFrame.height  > pPage->getHeight()))
 		{
-		        y = pPage->getHeight() - m_recCurFrame.height;
+		        y = yp + pPage->getHeight() - m_recCurFrame.height;
+		        if (y < yp)
+			    y = yp;
 		}
 		finalColy = y - iColy;
 

@@ -212,6 +212,10 @@ void FV_VisualInlineImage::_mouseDrag(UT_sint32 x, UT_sint32 y)
 	GR_Graphics * pG = getGraphics();
 	if(getDragWhat() == FV_DragWhole)
 	{
+		// A failed drag restores the image and waits for the button release.
+		// Starting another cut here would undo the user's previous edit.
+		if(m_iInlineDragMode == FV_InlineDrag_WAIT_FOR_MOUSE_CLICK)
+			return;
     	if(m_iInlineDragMode  == FV_InlineDrag_NOT_ACTIVE)
 		{
 			m_iFirstEverX = x;
@@ -254,7 +258,12 @@ void FV_VisualInlineImage::_mouseDrag(UT_sint32 x, UT_sint32 y)
 			//
 			_beginGlob();
 			mouseCut(m_iFirstEverX,m_iFirstEverY);
-			m_bTextCut = true;
+			if(!m_bTextCut)
+			{
+				cleanUP();
+				m_iInlineDragMode = FV_InlineDrag_WAIT_FOR_MOUSE_CLICK;
+				return;
+			}
 		}
 		clearCursor();
 		m_iInlineDragMode = FV_InlineDrag_DRAGGING;
@@ -294,65 +303,23 @@ void FV_VisualInlineImage::_mouseDrag(UT_sint32 x, UT_sint32 y)
 		}
 		UT_sint32 dx = 0;
 		UT_sint32 dy = 0;
-		UT_Rect expX(0,m_recCurFrame.top,0,m_recCurFrame.height);
-		UT_Rect expY(m_recCurFrame.left,0,m_recCurFrame.width,0);
 		UT_sint32 iext = pG->tlu(3);
 		dx = x - m_iLastX;
 		dy = y - m_iLastY;
+		// Repaint the whole previous image, not only the sliver it left
+		// behind. A narrow strip left the rest of the picture on the page.
+		UT_Rect prevFrame = m_recCurFrame;
 		m_recCurFrame.left += dx;
 		m_recCurFrame.top += dy;
-		if(dx < 0)
+		UT_Rect dirty = prevFrame;
+		dirty.unionRect(&m_recCurFrame);
+		dirty.left -= iext;
+		dirty.top -= iext;
+		dirty.width += 2 * iext;
+		dirty.height += 2 * iext;
+		if(dirty.width > 0 && dirty.height > 0)
 		{
-			expX.left = m_recCurFrame.left+m_recCurFrame.width -iext;
-			expX.width = -dx + 2*iext;
-			if(dy > 0)
-			{
-				expX.top -=  iext;
-				expX.height += dy + 2*iext;
-			}
-			else
-			{
-				expX.top -=  iext;
-				expX.height += (-dy + 2*iext);
-			}
-		}
-		else
-		{
-			expX.left = m_recCurFrame.left - dx - iext;
-			expX.width = dx + 2*iext;
-			if(dy > 0)
-			{
-				expX.top -=  iext;
-				expX.height += dy + 2*iext;
-			}
-			else
-			{
-				expX.top -= iext;
-				expX.height += (-dy + 2*iext);
-			}
-		}
-		expY.left -= iext;
-		expY.width += 2*iext;
-		if(dy < 0)
-		{
-			expY.top = m_recCurFrame.top + m_recCurFrame.height -iext;
-			expY.height = -dy + 2*iext;
-		}
-		else
-		{
-			expY.top = m_recCurFrame.top - dy - iext;
-			expY.height = dy + 2*iext;
-		}
-
-		if(expX.width > 0)
-		{
-			pG->setClipRect(&expX);
-			m_pView->updateScreen(false);
-			m_bSelectionDrawn = false;
-		}
-		if(expY.height > 0)
-		{
-			pG->setClipRect(&expY);
+			pG->setClipRect(&dirty);
 			m_pView->updateScreen(false);
 			m_bSelectionDrawn = false;
 		}
@@ -360,7 +327,12 @@ void FV_VisualInlineImage::_mouseDrag(UT_sint32 x, UT_sint32 y)
 		bool b = drawImage();
 		if(!b)
 		{
-			cleanUP();
+			if(m_bTextCut)
+				abortDrag();
+			else
+				cleanUP();
+			m_bTextCut = false;
+			m_iInlineDragMode = FV_InlineDrag_WAIT_FOR_MOUSE_CLICK;
 			return;
 		}
 		m_iLastX = x;
@@ -556,13 +528,56 @@ void FV_VisualInlineImage::getImageFromSelection(UT_sint32 x, UT_sint32 y,PP_Att
 	  m_iLastY = y;
 	  m_iInitialOffX = x - m_recCurFrame.left;
 	  m_iInitialOffY = y - m_recCurFrame.top;
-	  GR_Painter painter(getGraphics());
 	  DELETEP(m_pDragImage);
-	  m_pDragImage = painter.genImageFromRectangle(m_recCurFrame);
+	  // Copy the image itself. A screen snapshot is empty when the window
+	  // DC does not hold the pixels just painted into the buffer.
+	  if(pRun->getType() == FPRUN_IMAGE)
+	  {
+		  GR_Image * src = static_cast<fp_ImageRun *>(pRun)->getImage();
+		  if(src)
+		  {
+			  UT_Rect whole(0, 0, m_recCurFrame.width, m_recCurFrame.height);
+			  m_pDragImage = src->createImageSegment(getGraphics(), whole);
+		  }
+	  }
+	  if(!m_pDragImage)
+	  {
+		  GR_Painter painter(getGraphics());
+		  m_pDragImage = painter.genImageFromRectangle(m_recCurFrame);
+	  }
 	//
-	// Record the image attributes/properties
+	// Record the image attributes/properties. The span is deleted as soon
+	// as the drag cuts it, so keep our own copies of the values.
 	//
 	  m_pImageAP = const_cast<PP_AttrProp*>(pRun->getSpanAP());
+	  m_sDataId.clear();
+	  m_sDragTitle.clear();
+	  m_sDragDescription.clear();
+	  m_sDragProps.clear();
+	  m_sDragEmbed.clear();
+	  if(m_pImageAP)
+	  {
+		  const gchar * v = nullptr;
+		  if(m_pImageAP->getAttribute("dataid", v) && v)
+			  m_sDataId = v;
+		  v = nullptr;
+		  if(m_pImageAP->getAttribute("title", v) && v)
+			  m_sDragTitle = v;
+		  v = nullptr;
+		  if(m_pImageAP->getAttribute("alt", v) && v)
+			  m_sDragDescription = v;
+		  v = nullptr;
+		  if(m_pImageAP->getProperty("width", v) && v)
+			  UT_std_string_setProperty(m_sDragProps, "width", v);
+		  v = nullptr;
+		  if(m_pImageAP->getProperty("height", v) && v)
+			  UT_std_string_setProperty(m_sDragProps, "height", v);
+		  v = nullptr;
+		  if(m_pImageAP->getProperty("embed-type", v) && v)
+			  m_sDragEmbed = v;
+	  }
+	  if(m_sDataId.empty() && pRun->getType() == FPRUN_IMAGE)
+		  m_sDataId = static_cast<fp_ImageRun *>(pRun)->getDataId();
 	  m_iInlineDragMode = FV_InlineDrag_WAIT_FOR_MOUSE_DRAG;
 	}
 }
@@ -576,7 +591,10 @@ const char * FV_VisualInlineImage::getPNGImage(UT_ConstByteBufPtr & pBuf) const
 
 void FV_VisualInlineImage::mouseCut(UT_sint32 x, UT_sint32 y)
 {
+	m_bTextCut = false;
 	getImageFromSelection(x,y);
+	if((m_iInlineDragMode == FV_InlineDrag_NOT_ACTIVE) || m_sDataId.empty())
+		return;
 	m_bDoingCopy = false;
 	UT_DEBUGMSG(("Doing Mouse Cut \n"));
 	PT_DocPosition posImage = m_pView->getDocPositionFromXY(x,y);
@@ -628,6 +646,7 @@ void FV_VisualInlineImage::mouseCut(UT_sint32 x, UT_sint32 y)
 	m_pView->cmdCharDelete(true,1);
 	m_pView->updateScreen(false);
 	m_bSelectionDrawn = false;
+	m_bTextCut = true;
 	drawImage();
 }
 
@@ -739,6 +758,11 @@ void FV_VisualInlineImage::cleanUP(void)
   m_iInitialOffY = 0;
   m_bFirstDragDone = false;
   m_pImageAP = nullptr;
+  m_sDataId.clear();
+  m_sDragTitle.clear();
+  m_sDragDescription.clear();
+  m_sDragProps.clear();
+  m_sDragEmbed.clear();
   m_bDoingCopy = false;
   m_pView->updateScreen(false);
   m_bSelectionDrawn = false;
@@ -1021,68 +1045,38 @@ void FV_VisualInlineImage::mouseRelease(UT_sint32 x, UT_sint32 y)
 	//
 	// Fixme Put in code to insert image here.
 	//
+	  // The span was removed when the drag started. Its attribute object
+	  // must not be read again; the copies were taken before the cut.
+	  m_pImageAP = nullptr;
 	  const gchar* szDataID = nullptr;
-	  const gchar* szTitle = nullptr;
-	  const gchar* szDescription = nullptr;
-	  const gchar* szWidth = nullptr;
-	  const gchar* szHeight = nullptr;
-	  const gchar* szEmbed = nullptr;
 	  if(!m_bDoingCopy)
 	  {
-	    bool bFound = m_pImageAP->getAttribute("dataid",szDataID);
-	    if(!bFound)
+	    if(m_sDataId.empty())
 	    {
+	      abortDrag();
 	      return;
 	    }
+	    szDataID = m_sDataId.c_str();
 	  }
 	  else
 	  {
 	    szDataID = m_sCopyName.c_str();
 	  }
-	  if(m_bIsEmbedded)
+	  if(m_bIsEmbedded && m_sDragEmbed.empty())
 	  {
-	    bool bFound = m_pImageAP->getProperty("embed-type",szEmbed);
-	    if(!bFound)
-	    {
+	      abortDrag();
 	      return;
-	    }
 	  }
 	  m_bDoingCopy = false;
-	  std::string sProps;
-	  std::string sProp;
-	  std::string sVal;
-	  bool bFound = m_pImageAP->getProperty("width",szWidth);
-	  if(bFound)
-	  {
-	    sProp = "width";
-	    sVal = szWidth;
-	    UT_std_string_setProperty(sProps,sProp,sVal);
-	  }
-	  bFound = m_pImageAP->getProperty("height",szHeight);
-	  if(bFound)
-	  {
-	    sProp = "height";
-	    sVal = szHeight;
-	    UT_std_string_setProperty(sProps,sProp,sVal);
-	  }
-	  bFound = m_pImageAP->getAttribute("title",szTitle);
-	  if(!bFound)
-	  {
-	    szTitle = "";
-	  }
-	  bFound = m_pImageAP->getAttribute("alt",szDescription);
-	  if(!bFound)
-	  {
-	    szDescription = "";
-	  }
+	  std::string sProps = m_sDragProps;
+	  const gchar* szTitle = m_sDragTitle.c_str();
+	  const gchar* szDescription = m_sDragDescription.c_str();
 	  PP_PropertyVector attributes = {
               "dataid", szDataID
 	  };
 	  if(m_bIsEmbedded)
 	  {
-	      sProp="embed-type";
-	      sVal = szEmbed;
-	      UT_std_string_setProperty(sProps, sProp, sVal);
+	      UT_std_string_setProperty(sProps, "embed-type", m_sDragEmbed);
 	  }
 	  if(!sProps.empty())
 	  {

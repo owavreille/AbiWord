@@ -2524,41 +2524,82 @@ BITMAPINFO * GR_Win32Graphics::ConvertDDBToDIB(HBITMAP bitmap, HPALETTE hPal, DW
 
 GR_Image * GR_Win32Graphics::genImageFromRectangle(const UT_Rect & r) {
 
-	UT_uint32 iWidth = (UT_sint32)((double)tdu(r.width) * m_fXYRatio);
-	UT_uint32 iHeight = tdu(r.height);
-	UT_sint32 x = (UT_sint32)((double)tdu(r.left) * m_fXYRatio);
-	UT_sint32 y = tdu(r.top);
+	// Same conversion as drawImage, so a scrolled page does not shift the
+	// snapshot relative to the image being dragged.
+	UT_sint32 x = (UT_sint32)((double)_tduX(r.left) * m_fXYRatio);
+	UT_sint32 y = _tduY(r.top);
+	UT_sint32 iWidth = (UT_sint32)((double)_tduR(r.width) * m_fXYRatio);
+	UT_sint32 iHeight = _tduR(r.height);
+	if (x < 0)
+	{
+		iWidth += x;
+		x = 0;
+	}
+	if (y < 0)
+	{
+		iHeight += y;
+		y = 0;
+	}
+	if (iWidth < 1 || iHeight < 1)
+		return nullptr;
 
-	UT_return_val_if_fail((iWidth > 0) && (iHeight > 0) && (y >= 0) && (x >= 0), nullptr);
-
-	BITMAPINFO bmi; 
-	BYTE *imagedata;
 	HDC hMemDC = CreateCompatibleDC(m_hdc);
-		
-	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER); 	
+	if (!hMemDC)
+		return nullptr;
+
+	BITMAPINFO bmi;
+	memset(&bmi, 0, sizeof(bmi));
+	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.bmiHeader.biWidth = iWidth;
 	bmi.bmiHeader.biHeight = iHeight;
-	bmi.bmiHeader.biPlanes = 1; 
-	bmi.bmiHeader.biBitCount = 24; // as we want true-color
-	bmi.bmiHeader.biCompression = BI_RGB; // no compression
-	bmi.bmiHeader.biSizeImage = (((iWidth * bmi.bmiHeader.biBitCount + 31) & ~31) >> 3) * iHeight; 
-	bmi.bmiHeader.biXPelsPerMeter = 0;
-	bmi.bmiHeader.biYPelsPerMeter = 0; 
-	bmi.bmiHeader.biClrImportant = 0;
-	bmi.bmiHeader.biClrUsed = 0; // we are not using palette
+	bmi.bmiHeader.biPlanes = 1;
+	bmi.bmiHeader.biBitCount = 24;
+	bmi.bmiHeader.biCompression = BI_RGB;
 
-	HBITMAP hBit = CreateDIBSection(hMemDC, &bmi, DIB_RGB_COLORS, (void**)&imagedata, nullptr, 0);
-
-	GdiFlush();
+	void *imagedata = nullptr;
+	HBITMAP hBit = CreateDIBSection(hMemDC, &bmi, DIB_RGB_COLORS, &imagedata, nullptr, 0);
+	if (!hBit || !imagedata)
+	{
+		if (hBit)
+			DeleteObject(hBit);
+		DeleteDC(hMemDC);
+		return nullptr;
+	}
 
 	HBITMAP hOld = (HBITMAP) SelectObject(hMemDC, hBit);
-		BitBlt(hMemDC, 0, 0, iWidth, iHeight, m_hdc, x, y, SRCCOPY);
-		hBit =  (HBITMAP)SelectObject(hMemDC, hOld);
+	// The source DC may be clipped to a drag strip. Read the whole rectangle.
+	SelectClipRgn(m_hdc, nullptr);
+	BitBlt(hMemDC, 0, 0, iWidth, iHeight, m_hdc, x, y, SRCCOPY);
+	if (getClipRect())
+		setClipRect(getClipRect());
+	GdiFlush();
+	if (hOld)
+		SelectObject(hMemDC, hOld);
+
+	const UT_uint32 stride = (UT_uint32)(((iWidth * 3 + 3) & ~3));
+	const UT_uint32 imageBytes = stride * (UT_uint32)iHeight;
+	BITMAPINFO *dib = (BITMAPINFO *)g_try_malloc(sizeof(BITMAPINFOHEADER) + imageBytes);
+	if (!dib)
+	{
+		DeleteObject(hBit);
+		DeleteDC(hMemDC);
+		return nullptr;
+	}
+	memset(&dib->bmiHeader, 0, sizeof(BITMAPINFOHEADER));
+	dib->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	dib->bmiHeader.biWidth = iWidth;
+	dib->bmiHeader.biHeight = iHeight;
+	dib->bmiHeader.biPlanes = 1;
+	dib->bmiHeader.biBitCount = 24;
+	dib->bmiHeader.biCompression = BI_RGB;
+	dib->bmiHeader.biSizeImage = imageBytes;
+	memcpy(((UT_Byte *)dib) + sizeof(BITMAPINFOHEADER), imagedata, imageBytes);
+
+	DeleteObject(hBit);
 	DeleteDC(hMemDC);
 
-
 	GR_Win32Image *img = new GR_Win32Image("Screenshot");
-	img->setDIB((BITMAPINFO *)ConvertDDBToDIB(hBit, nullptr, BI_RGB));
+	img->setDIB(dib);
 	return img;
 	}
 
@@ -2858,7 +2899,10 @@ void GR_Win32Graphics::_DeviceContext_SwitchToBuffer()
 	if (!m_bufferHdc)
 		return;
 
-	// copy the screen to the buffer
+	// A drag may already have clipped this DC to a thin strip. Copy the
+	// whole window; the logical clip is applied to the buffer afterwards.
+	// Otherwise presenting the buffer erases the rest of the page.
+	SelectClipRgn(m_hdc, nullptr);
 	BOOL blt = BitBlt(m_bufferHdc, 0, 0, width, height, m_hdc, 0, 0, SRCCOPY);
 	UT_Win32TraceF("buffer-blt %d", blt ? 1 : 0);
 

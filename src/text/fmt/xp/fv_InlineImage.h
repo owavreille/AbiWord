@@ -97,5 +97,9 @@ private:
 	bool                  m_bIsEmbedded;
 	bool				  m_bEmbedCanResize;
 	std::string           m_sDataId;
+	std::string           m_sDragTitle;
+	std::string           m_sDragDescription;
+	std::string           m_sDragProps;
+	std::string           m_sDragEmbed;
 	bool                  m_bSelectionDrawn;
 };
