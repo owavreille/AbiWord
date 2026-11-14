@@ -279,7 +279,11 @@ int XAP_Win32DialogBase::getComboDataItem(UT_sint32 controlId, int nIndex)
 int XAP_Win32DialogBase::getComboItemIndex(UT_sint32 controlId, LPCSTR p_str)
 {
 	UT_return_val_if_fail(IsWindow(m_hDlg), CB_ERR);
-	return SendDlgItemMessageW(m_hDlg, controlId, CB_FINDSTRINGEXACT, -1, (LPARAM) p_str);
+	if (!p_str || !*p_str)
+		return CB_ERR;
+	UT_Win32LocaleString str;
+	str.fromUTF8(p_str);
+	return SendDlgItemMessageW(m_hDlg, controlId, CB_FINDSTRINGEXACT, -1, (LPARAM) str.c_str());
 }
 
 void XAP_Win32DialogBase::selectComboItem(UT_sint32 controlId, int index)

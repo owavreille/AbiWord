@@ -264,6 +264,7 @@ BOOL XAP_Win32Dialog_Image::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 		{
 			UT_Win32LocaleString str, units;
 			getDlgItemText (wId, str);
+			units.fromASCII (UT_dimensionName(getPreferedUnits()));
 
 			//let the user manually change dimensions too
 			if(!wcsstr(str.c_str(), units.c_str()))

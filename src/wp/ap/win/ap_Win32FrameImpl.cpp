@@ -866,13 +866,19 @@ void AP_Win32FrameImpl::_track(UT_sint32 /*x*/, UT_sint32 y)
 
 	if(Delta < 0)
 	{
-		int iNewPosition = (m_startScrollPosition - iMin) * (y - rect.top) / (m_startMouseWheelY - rect.top);
+		const int span = m_startMouseWheelY - rect.top;
+		if (span <= 0)
+			return;
+		int iNewPosition = (m_startScrollPosition - iMin) * (y - rect.top) / span;
 
 		SendMessageW(m_hwndContainer, WM_VSCROLL, MAKEWPARAM(SB_THUMBTRACK, (WORD)iNewPosition), 0);
 	}
 	else
 	{
-		int iNewPosition = m_startScrollPosition + (iMax - m_startScrollPosition) * (y - m_startMouseWheelY) / (rect.bottom - m_startMouseWheelY);
+		const int span = rect.bottom - m_startMouseWheelY;
+		if (span <= 0)
+			return;
+		int iNewPosition = m_startScrollPosition + (iMax - m_startScrollPosition) * (y - m_startMouseWheelY) / span;
 
 		SendMessageW(m_hwndContainer, WM_VSCROLL, MAKEWPARAM(SB_THUMBTRACK, (WORD)iNewPosition), 0);
 	}
