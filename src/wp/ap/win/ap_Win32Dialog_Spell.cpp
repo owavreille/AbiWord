@@ -289,9 +289,14 @@ void AP_Win32Dialog_Spell::_suggestChange(void)
 		// copy suggestion to edit field
 		UT_return_if_fail ((m_iSelectedRow > -1));
 
-		WCHAR buf[256];
-		SendMessageW(m_hwndSuggest, LB_GETTEXT, m_iSelectedRow, (LPARAM)buf);
-		SendMessageW(m_hwndChangeTo, WM_SETTEXT, 0, (LPARAM)buf);
+		const LRESULT textLen = SendMessageW(m_hwndSuggest, LB_GETTEXTLEN, m_iSelectedRow, 0);
+		if (textLen < 0)
+			return;
+		wchar_t * buf = new wchar_t[static_cast<size_t>(textLen) + 1];
+		buf[0] = 0;
+		if (SendMessageW(m_hwndSuggest, LB_GETTEXT, m_iSelectedRow, (LPARAM)buf) != LB_ERR)
+			SendMessageW(m_hwndChangeTo, WM_SETTEXT, 0, (LPARAM)buf);
+		delete [] buf;
 
 		// you'd think this'd be overkill...
 		SendMessageW(m_hwndSuggest, LB_SETCURSEL, m_iSelectedRow, 0);

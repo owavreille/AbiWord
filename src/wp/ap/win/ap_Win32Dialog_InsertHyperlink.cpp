@@ -148,9 +148,14 @@ BOOL AP_Win32Dialog_InsertHyperlink::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
 			UT_sint32 result = getListSelectedIndex( wId );
 			if( result != LB_ERR )
 			{
-				WCHAR buf[PATH_MAX];
-				SendDlgItemMessageW(m_hDlg, wId, LB_GETTEXT, result, (LPARAM)buf);
-				SetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTHYPERLINK_EBX_LINK, buf);
+				const LRESULT textLen = SendDlgItemMessageW(m_hDlg, wId, LB_GETTEXTLEN, result, 0);
+				if (textLen < 0)
+					return 1;
+				wchar_t * buf = new wchar_t[static_cast<size_t>(textLen) + 1];
+				buf[0] = 0;
+				if (SendDlgItemMessageW(m_hDlg, wId, LB_GETTEXT, result, (LPARAM)buf) != LB_ERR)
+					SetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTHYPERLINK_EBX_LINK, buf);
+				delete [] buf;
 			}
 		}
 		return 1;

@@ -20,6 +20,7 @@
 #include <windows.h>
 
 #include "ut_string.h"
+#include "ut_types.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 
@@ -51,6 +52,32 @@ AP_Win32Dialog_Goto::~AP_Win32Dialog_Goto(void)
 {
 }
 
+
+static void s_takeBookmark(HWND list, int index, UT_Win32LocaleString & dest)
+{
+	dest.clear();
+	if (!list || index < 0)
+		return;
+
+	const LRESULT len = SendMessageW(list, LB_GETTEXTLEN, (WPARAM)index, 0);
+	if (len < 0 || len > 8 * 1024 * 1024)
+		return;
+
+	wchar_t * value = static_cast<wchar_t *>(UT_calloc(static_cast<UT_uint32>(len) + 1, sizeof(wchar_t)));
+	if (!value)
+		return;
+	if (SendMessageW(list, LB_GETTEXT, (WPARAM)index, (LPARAM)value) != LB_ERR)
+		dest.fromLocale(value);
+	FREEP(value);
+}
+
+static void s_showBookmark(HWND dialog, const UT_Win32LocaleString & dest)
+{
+	if (dest.empty())
+		return;
+	SetWindowTextW(GetDlgItem(dialog, AP_RID_DIALOG_GOTO_EDIT_NUMBER), dest.c_str());
+	EnableWindow(GetDlgItem(dialog, AP_RID_DIALOG_GOTO_BTN_GOTO), TRUE);
+}
 
 void AP_Win32Dialog_Goto::activate(void)
 {
@@ -237,12 +264,9 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 				int nIndex = SendMessageW( hWndCtrl, LB_GETCURSEL, 0, 0);
 				if( nIndex != LB_ERR )
 				{
-					wchar_t value[1024];
-					SendMessageW( hWndCtrl, LB_GETTEXT, (WPARAM) nIndex, (LPARAM) &value);
-					m_oldvalue.fromLocale (value);
-					SetWindowTextW (GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_EDIT_NUMBER), value);
-					EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), TRUE );
-					if( wNotifyCode == LBN_DBLCLK )
+					s_takeBookmark(hWndCtrl, nIndex, m_oldvalue);
+					s_showBookmark(hWnd, m_oldvalue);
+					if( wNotifyCode == LBN_DBLCLK && !m_oldvalue.empty() )
 						GoTo( m_oldvalue.utf8_str().utf8_str());
 				}
 				return 1;
@@ -255,24 +279,15 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	case AP_RID_DIALOG_GOTO_BTN_PREV:
 		if( m_iRow == (short) AP_JUMPTARGET_BOOKMARK )
 		{
-			m_oldvalue.clear();
-			wchar_t value[1024];
-
-			int nIndex = SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_GETCURSEL, 0, 0);
-			if( nIndex == LB_ERR ) nIndex = 0;
-			if( nIndex == 0 )
-			{
-				SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_SETCURSEL, (WPARAM) nIndex, 0);
-                SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_GETTEXT,	(WPARAM) nIndex, (LPARAM) value);
-			}
+			HWND list = GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS);
+			int nIndex = SendMessageW(list, LB_GETCURSEL, 0, 0);
+			if (nIndex == LB_ERR || nIndex == 0)
+				nIndex = 0;
 			else
-			{
-				SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_SETCURSEL, (WPARAM) nIndex-1, 0);
-				SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_GETTEXT,	(WPARAM) nIndex-1, (LPARAM)value);
-			}
-            m_oldvalue.fromLocale (value);
-			SetWindowTextW( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_EDIT_NUMBER), value);
-			EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), TRUE );
+				nIndex = nIndex - 1;
+			SendMessageW(list, LB_SETCURSEL, (WPARAM)nIndex, 0);
+			s_takeBookmark(list, nIndex, m_oldvalue);
+			s_showBookmark(hWnd, m_oldvalue);
 
 			if (!m_oldvalue.empty ())
 				GoTo(m_oldvalue.utf8_str().utf8_str());
@@ -286,24 +301,18 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	case AP_RID_DIALOG_GOTO_BTN_NEXT:
 		if( m_iRow == (short) AP_JUMPTARGET_BOOKMARK )
 		{
-			m_oldvalue.clear();
-			wchar_t value[1024];
-
-			int nCount = SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_GETCOUNT, 0, 0);
-			int nIndex = SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_GETCURSEL, 0, 0);
-			if( nIndex == LB_ERR ) nIndex = nCount-1;
-			if( nIndex == nCount-1 )
-			{
-				SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_SETCURSEL, (WPARAM) nIndex, 0);
-				SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_GETTEXT,	(WPARAM) nIndex, (LPARAM) value);
-			}
-			else
-			{
-				SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_SETCURSEL, (WPARAM) nIndex+1, 0);
-				SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_GETTEXT,	(WPARAM) nIndex+1, (LPARAM) value);
-			}
-			SendMessageW( GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), LB_GETTEXT,	(WPARAM) nIndex+1, (LPARAM) value);
-			EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), TRUE );
+			HWND list = GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS);
+			int nCount = SendMessageW(list, LB_GETCOUNT, 0, 0);
+			int nIndex = SendMessageW(list, LB_GETCURSEL, 0, 0);
+			if (nCount <= 0)
+				return 1;
+			if (nIndex == LB_ERR)
+				nIndex = nCount - 1;
+			else if (nIndex < nCount - 1)
+				nIndex = nIndex + 1;
+			SendMessageW(list, LB_SETCURSEL, (WPARAM)nIndex, 0);
+			s_takeBookmark(list, nIndex, m_oldvalue);
+			s_showBookmark(hWnd, m_oldvalue);
 
 			if (!m_oldvalue.empty ())
 				GoTo( m_oldvalue.utf8_str().utf8_str());	

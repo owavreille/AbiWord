@@ -303,12 +303,19 @@ void XAP_Win32DialogBase::resetComboContent(UT_sint32 controlId)
 void XAP_Win32DialogBase::getComboTextItem(UT_sint32 controlId, int index, UT_Win32LocaleString& str)
 {
 	UT_return_if_fail(IsWindow(m_hDlg));
-	wchar_t szBuff[1024];
+	str.clear();
+
+	const LRESULT len = SendDlgItemMessageW(m_hDlg, controlId, CB_GETLBTEXTLEN, index, 0);
+	if (len < 0 || len > 1024 * 1024)
+		return;
+
+	wchar_t * szBuff = static_cast<wchar_t *>(UT_calloc(static_cast<UT_uint32>(len) + 1, sizeof(wchar_t)));
+	if (!szBuff)
+		return;
 
 	if (SendDlgItemMessageW(m_hDlg, controlId, CB_GETLBTEXT, index, (LPARAM)szBuff) != CB_ERR)
 		str.fromLocale(szBuff);
-	else
-		str.clear();
+	FREEP(szBuff);
 }
 
 // List boxes
@@ -379,20 +386,39 @@ bool XAP_Win32DialogBase::setDlgItemText(int nIDDlgItem,  const char* uft8_str)
 	return (bool) SetDlgItemTextW (m_hDlg, nIDDlgItem, str.c_str());
 }
 
-bool XAP_Win32DialogBase::getDlgItemText(int nIDDlgItem, UT_Win32LocaleString& str)
-{	
-	wchar_t szBuff [1024];	
-	bool rslt;
-	
-	rslt = (bool) GetDlgItemTextW(m_hDlg, nIDDlgItem, szBuff, 1024);
-	
-	if (rslt == true)
+static bool s_readDlgItem(HWND dialog, int controlId, UT_Win32LocaleString & str)
+{
+	str.clear();
+	HWND hCtrl = GetDlgItem(dialog, controlId);
+	if (!hCtrl)
+		return false;
+
+	int len = GetWindowTextLengthW(hCtrl);
+	if (len <= 0)
+		return false;
+	if (len > 8 * 1024 * 1024)
+		len = 8 * 1024 * 1024;
+
+	wchar_t * szBuff = static_cast<wchar_t *>(UT_calloc(static_cast<UT_uint32>(len) + 1, sizeof(wchar_t)));
+	if (!szBuff)
+		return false;
+
+	const int copied = GetWindowTextW(hCtrl, szBuff, len + 1);
+	if (copied > 0)
 		str.fromLocale(szBuff);
-	else
+	FREEP(szBuff);
+	return copied > 0;
+}
+
+bool XAP_Win32DialogBase::getDlgItemText(int nIDDlgItem, UT_Win32LocaleString& str)
+{
+	if (!IsWindow(m_hDlg))
+	{
 		str.clear();
-	
-	return rslt;
- }
+		return false;
+	}
+	return s_readDlgItem(m_hDlg, nIDDlgItem, str);
+}
 
 void XAP_Win32DialogBase::setControlInt(UT_sint32 controlId, int value)
 {
@@ -540,20 +566,9 @@ bool XAP_Win32DialogBase::setWindowText (HWND hWnd, const char* uft8_str)
 }
 
 bool XAP_Win32DialogBase::getDlgItemText(HWND hWnd, int nIDDlgItem, UT_Win32LocaleString& str)
-{	
+{
 	UT_return_val_if_fail(IsWindow(hWnd), false);
-	
-	wchar_t szBuff [1024];	
-	bool rslt;
-	
-	rslt = (bool) GetDlgItemTextW(hWnd, nIDDlgItem, szBuff, 1024);
-	
-	if (rslt == true)
-		str.fromLocale(szBuff);
-	else
-		str.clear();
-	
-	return rslt;
+	return s_readDlgItem(hWnd, nIDDlgItem, str);
 }
 
 bool XAP_Win32DialogBase::setDlgItemText(HWND hWnd, int nIDDlgItem,  const char* uft8_str)

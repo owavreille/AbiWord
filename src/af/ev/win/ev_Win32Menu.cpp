@@ -808,8 +808,7 @@ LPARAM EV_Win32Menu::onMenuChar(HWND /*hwnd*/, WPARAM wParam, LPARAM lParam)
 	HMENU hMenu = (HMENU) lParam;
 	MENUITEMINFOW	menuInfo;
 	int nItems = GetMenuItemCount(hMenu);
-	wchar_t szBuff[1024];
-	
+
 	for (int i=0; i<nItems; i++)
 	{					
 		memset (&menuInfo, 0, sizeof(MENUITEMINFOW));
@@ -820,22 +819,14 @@ LPARAM EV_Win32Menu::onMenuChar(HWND /*hwnd*/, WPARAM wParam, LPARAM lParam)
 
 		EV_Menu_Item*	item = (EV_Menu_Item *) menuInfo.dwItemData;            			           	
 
-		if (item)
+		if (item && item->szText)
 		{
-			wcscpy (szBuff, item->szText);
-			_wcslwr(szBuff);			
-
-			wchar_t* pHotKeyPos = wcschr (szBuff, L'&');
-				
-			if (pHotKeyPos)
-			{								
-				wchar_t n = (wchar_t)wParam & 0x000000ff;
-
-				pHotKeyPos++;
-
-				if (toupper(*pHotKeyPos)==toupper(n))			
-					return MAKELRESULT(i, MNC_EXECUTE);														 
-				
+			const wchar_t * pHotKeyPos = wcschr(item->szText, L'&');
+			if (pHotKeyPos && pHotKeyPos[1])
+			{
+				const wchar_t n = (wchar_t)(wParam & 0x000000ff);
+				if (towupper(pHotKeyPos[1]) == towupper(n))
+					return MAKELRESULT(i, MNC_EXECUTE);
 			}
 		}			
 	}

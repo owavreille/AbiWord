@@ -21,6 +21,7 @@
 
 #include "ut_string.h"
 #include "ut_string_class.h"
+#include "ut_Win32LocaleString.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_timer.h"
@@ -702,7 +703,10 @@ void AP_Win32Dialog_Lists::_fillStyleList(int iType)
 		if (hDC)
 		{
 			SIZE size;
-			::GetTextExtentPoint32(hDC, psz, strlen(psz), &size);
+			UT_Win32LocaleString label;
+			label.fromUTF8(psz ? psz : "");
+			const wchar_t * wide = label.c_str();
+			::GetTextExtentPoint32W(hDC, wide ? wide : L"", wide ? lstrlenW(wide) : 0, &size);
 			if (size.cx > nMaxWidth)
 			{
 				nMaxWidth = size.cx;

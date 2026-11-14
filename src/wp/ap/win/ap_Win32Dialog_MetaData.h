@@ -77,7 +77,6 @@ private:
 
 	virtual	void				_onInitDialog() override;
 	virtual	void				_onOK() override;
-	char* 						_get_text(XAP_String_Id nID, char *szBuff, int nSize);
 
 	UT_String					m_sTitle;
 	UT_String					m_sSubject;
@@ -101,7 +100,6 @@ class ABI_EXPORT AP_Win32Dialog_MetaData_Summary: public XAP_Win32PropertyPage
 private:
 
 	virtual	void				_onOK() override;
-	char* 						_get_text(XAP_String_Id nID, char *szBuff, int nSize);
 	virtual	void				_onInitDialog() override;
 
 	AP_Win32Dialog_MetaData*	m_pData;
@@ -124,7 +122,6 @@ public:
 
 private:
 
-	char* 						_get_text(XAP_String_Id nID, char *szBuff, int nSize);
 	virtual	void				_onInitDialog() override;
 	virtual	void				_onOK() override;
 

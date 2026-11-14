@@ -20,7 +20,9 @@
 #include <windows.h>
 
 #include "ut_string.h"
+#include "ut_types.h"
 #include "ut_assert.h"
+#include "ut_Win32LocaleString.h"
 #include "ut_debugmsg.h"
 #include "ap_Win32App.h"
 #include "xap_App.h"
@@ -54,6 +56,35 @@ const char* fromWinLocaletoUTF8(const char* szIn)
 {
 	sRsltUTF8 = AP_Win32App::s_fromWinLocaleToUTF8(szIn);				
 	return sRsltUTF8.utf8_str();
+}
+
+/*
+  Read the whole edit control as UTF-16, then keep the UTF-8 conversion in
+  its own string. The old code wrote the wide text into the byte buffer and
+  copied the UTF-8 back over it, which overflowed for any 3-byte character.
+*/
+static void s_metaText(HWND hwnd, int controlId, UT_String & dest)
+{
+	dest = "";
+	HWND hCtrl = GetDlgItem(hwnd, controlId);
+	if (!hCtrl)
+		return;
+
+	int len = GetWindowTextLengthW(hCtrl);
+	if (len < 0)
+		len = 0;
+	if (len > 8 * 1024 * 1024)
+		len = 8 * 1024 * 1024;
+
+	LPWSTR wbuf = static_cast<LPWSTR>(UT_calloc(static_cast<UT_uint32>(len) + 1, sizeof(WCHAR)));
+	if (!wbuf)
+		return;
+
+	GetWindowTextW(hCtrl, wbuf, len + 1);
+	UT_Win32LocaleString str;
+	str.fromLocale(wbuf);
+	FREEP(wbuf);
+	dest = str.utf8_str().utf8_str();
 }
 
 
@@ -165,29 +196,17 @@ void AP_Win32Dialog_MetaData_General::_onInitDialog()
 	XAP_Win32DialogHelper::s_centerDialog(hParent);							
 }
 
-char* AP_Win32Dialog_MetaData_General::_get_text(XAP_String_Id nID, char *szBuff, int nSize)
-{
-	UT_Win32LocaleString str;
-	*szBuff=0;
-	szBuff[1]=0;
-	GetDlgItemTextW(getHandle(), nID, (LPWSTR) szBuff, nSize>>1); 
-	str.fromLocale((LPWSTR)szBuff);
-	strcpy (szBuff, str.utf8_str().utf8_str());
-	return szBuff;
-}
 
 /*
 
 */
 void AP_Win32Dialog_MetaData_General::_onOK()
 {	
-	char szBuff[2048];
-
-	m_sTitle = 	_get_text(AP_RID_DIALOG_META_GENERAL_EDIT_TITLE, szBuff, sizeof(szBuff));
-	m_sSubject = _get_text(AP_RID_DIALOG_META_GENERAL_EDIT_SUBJECT, szBuff, sizeof(szBuff));
-	m_sAuthor =  _get_text(AP_RID_DIALOG_META_GENERAL_EDIT_AUTHOR, szBuff, sizeof(szBuff));
-	m_sPublisher = _get_text(AP_RID_DIALOG_META_GENERAL_EDIT_PUBLISHER, szBuff, sizeof(szBuff));
-	m_sCoAuthor = _get_text(AP_RID_DIALOG_META_GENERAL_EDIT_CONTRIBUTOR, szBuff, sizeof(szBuff));	
+	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_TITLE, m_sTitle);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_SUBJECT, m_sSubject);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_AUTHOR, m_sAuthor);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_PUBLISHER, m_sPublisher);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_CONTRIBUTOR, m_sCoAuthor);	
 }
 
 /*
@@ -248,16 +267,6 @@ void AP_Win32Dialog_MetaData_Summary::_onInitDialog()
 
 }
 
-char* AP_Win32Dialog_MetaData_Summary::_get_text(XAP_String_Id nID, char *szBuff, int nSize)
-{
-	UT_Win32LocaleString str;
-	*szBuff=0;
-	szBuff[1]=0;
-	GetDlgItemTextW(getHandle(), nID, (LPWSTR) szBuff, nSize>>1); 
-	str.fromLocale((LPWSTR)szBuff);
-	strcpy (szBuff, str.utf8_str().utf8_str());
-	return szBuff;
-}
 
 
 /*
@@ -265,12 +274,10 @@ char* AP_Win32Dialog_MetaData_Summary::_get_text(XAP_String_Id nID, char *szBuff
 */
 void AP_Win32Dialog_MetaData_Summary::_onOK()
 {	
-	char szBuff[8192];	// description can be long
-
-	m_sCategory = 	_get_text(AP_RID_DIALOG_META_SUMMARY_EDIT_CATEGORY, szBuff, sizeof(szBuff));
-	m_sKeywords = _get_text(AP_RID_DIALOG_META_SUMMARY_EDIT_KEYWORDS, szBuff, sizeof(szBuff));
-	m_sLanguages =  _get_text(AP_RID_DIALOG_META_SUMMARY_EDIT_LANGUAGE, szBuff, sizeof(szBuff));
-	m_sDescription = _get_text(AP_RID_DIALOG_META_SUMMARY_EDIT_DESCRIPTION, szBuff, sizeof(szBuff));
+	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_CATEGORY, m_sCategory);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_KEYWORDS, m_sKeywords);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_LANGUAGE, m_sLanguages);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_DESCRIPTION, m_sDescription);
 }
 
 /*
@@ -335,14 +342,11 @@ void AP_Win32Dialog_MetaData_Permissions::_onInitDialog()
 
 */
 void AP_Win32Dialog_MetaData_Permissions::_onOK()
-{	
-	char szBuff[1024];
-	
-	m_sSource = _get_text(AP_RID_DIALOG_META_PERMISSIONS_EDIT_SOURCE, szBuff, sizeof(szBuff));
-	m_sRelation = _get_text(AP_RID_DIALOG_META_PERMISSIONS_EDIT_RELATION, szBuff, sizeof(szBuff));
-	m_sCoverage = _get_text(AP_RID_DIALOG_META_PERMISSIONS_EDIT_COVERAGE, szBuff, sizeof(szBuff));
-	m_sRights = _get_text(AP_RID_DIALOG_META_PERMISSIONS_EDIT_RIGHTS, szBuff, sizeof(szBuff));
-
+{
+	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_SOURCE, m_sSource);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_RELATION, m_sRelation);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_COVERAGE, m_sCoverage);
+	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_RIGHTS, m_sRights);
 }
 
 /*
@@ -356,13 +360,3 @@ void AP_Win32Dialog_MetaData_Permissions::transferData()
 	getContainer()->setRights(m_sRights.c_str());	
 }
 
-char* AP_Win32Dialog_MetaData_Permissions::_get_text(XAP_String_Id nID, char *szBuff, int nSize)
-{
-	UT_Win32LocaleString str;
-	*szBuff=0;
-	szBuff[1]=0;
-	GetDlgItemTextW(getHandle(), nID, (LPWSTR) szBuff, nSize>>1); 
-	str.fromLocale((LPWSTR)szBuff);
-	strcpy (szBuff, str.utf8_str().utf8_str());
-	return szBuff;
-}

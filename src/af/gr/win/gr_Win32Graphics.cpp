@@ -26,6 +26,7 @@
 
 #include <windows.h>
 #include <winspool.h>
+#include <cstring>
 
 #include "gr_Win32Graphics.h"
 #include "gr_Win32Image.h"
@@ -1277,6 +1278,134 @@ GR_Image* GR_Win32Graphics::createNewImage(const char* pszName, const UT_ConstBy
 	return pImg;
 }
 
+typedef BOOL (WINAPI *GR_Win32AlphaBlendFn)(
+	HDC, int, int, int, int,
+	HDC, int, int, int, int,
+	BLENDFUNCTION);
+
+static GR_Win32AlphaBlendFn s_alphaBlendFn(void)
+{
+	static GR_Win32AlphaBlendFn fn = nullptr;
+	static bool tried = false;
+	if (!tried)
+	{
+		tried = true;
+		HMODULE dll = LoadLibraryW(L"msimg32.dll");
+		if (dll)
+			fn = reinterpret_cast<GR_Win32AlphaBlendFn>(GetProcAddress(dll, "AlphaBlend"));
+	}
+	return fn;
+}
+
+static void s_premultiplyStraight(UT_Byte *pixels, UT_uint32 count)
+{
+	for (UT_uint32 i = 0; i < count; ++i)
+	{
+		const UT_Byte a = pixels[3];
+		pixels[0] = (UT_Byte)((pixels[0] * a + 127) / 255);
+		pixels[1] = (UT_Byte)((pixels[1] * a + 127) / 255);
+		pixels[2] = (UT_Byte)((pixels[2] * a + 127) / 255);
+		pixels += 4;
+	}
+}
+
+/* Screen: blend the straight BGRA DIB over the page that was already painted. */
+static bool s_alphaBlendImage(HDC hdc, int xDest, int yDest, int destW, int destH,
+	const UT_Byte *src, int srcW, int srcH)
+{
+	if (!hdc || !src || destW <= 0 || destH <= 0 || srcW <= 0 || srcH <= 0)
+		return false;
+	GR_Win32AlphaBlendFn blend = s_alphaBlendFn();
+	if (!blend)
+		return false;
+
+	HDC mem = CreateCompatibleDC(hdc);
+	if (!mem)
+		return false;
+
+	BITMAPINFO bi;
+	memset(&bi, 0, sizeof(bi));
+	bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bi.bmiHeader.biWidth = srcW;
+	bi.bmiHeader.biHeight = srcH;
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+
+	void *bits = nullptr;
+	HBITMAP hbmp = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+	if (!hbmp || !bits)
+	{
+		if (hbmp)
+			DeleteObject(hbmp);
+		DeleteDC(mem);
+		return false;
+	}
+
+	const UT_uint32 count = (UT_uint32)srcW * (UT_uint32)srcH;
+	memcpy(bits, src, (size_t)count * 4);
+	s_premultiplyStraight(static_cast<UT_Byte *>(bits), count);
+
+	HGDIOBJ prev = SelectObject(mem, hbmp);
+	BLENDFUNCTION blendfn;
+	blendfn.BlendOp = AC_SRC_OVER;
+	blendfn.BlendFlags = 0;
+	blendfn.SourceConstantAlpha = 255;
+	blendfn.AlphaFormat = AC_SRC_ALPHA;
+	const BOOL ok = blend(hdc, xDest, yDest, destW, destH, mem, 0, 0, srcW, srcH, blendfn);
+	if (prev)
+		SelectObject(mem, prev);
+	DeleteObject(hbmp);
+	DeleteDC(mem);
+	return ok != FALSE;
+}
+
+/* Printer and metafile DCs do not record AlphaBlend. Composite on white paper. */
+static bool s_stretchAlphaOnWhite(HDC hdc, int xDest, int yDest, int destW, int destH,
+	const UT_Byte *src, int srcW, int srcH)
+{
+	if (!hdc || !src || destW <= 0 || destH <= 0 || srcW <= 0 || srcH <= 0)
+		return false;
+
+	const int stride = (srcW * 3 + 3) & ~3;
+	const size_t bytes = sizeof(BITMAPINFOHEADER) + (size_t)stride * (size_t)srcH;
+	if (bytes > 0xffffffffu)
+		return false;
+
+	UT_Byte *block = static_cast<UT_Byte *>(UT_calloc(1, (UT_uint32)bytes));
+	if (!block)
+		return false;
+
+	BITMAPINFOHEADER *hdr = reinterpret_cast<BITMAPINFOHEADER *>(block);
+	hdr->biSize = sizeof(BITMAPINFOHEADER);
+	hdr->biWidth = srcW;
+	hdr->biHeight = srcH;
+	hdr->biPlanes = 1;
+	hdr->biBitCount = 24;
+	hdr->biCompression = BI_RGB;
+
+	UT_Byte *dst = block + sizeof(BITMAPINFOHEADER);
+	for (int y = 0; y < srcH; ++y)
+	{
+		const UT_Byte *srow = src + (size_t)y * (size_t)srcW * 4;
+		UT_Byte *drow = dst + (size_t)y * (size_t)stride;
+		for (int x = 0; x < srcW; ++x)
+		{
+			const int a = srow[x * 4 + 3];
+			const int inv = 255 - a;
+			drow[x * 3 + 0] = (UT_Byte)((srow[x * 4 + 0] * a + 255 * inv + 127) / 255);
+			drow[x * 3 + 1] = (UT_Byte)((srow[x * 4 + 1] * a + 255 * inv + 127) / 255);
+			drow[x * 3 + 2] = (UT_Byte)((srow[x * 4 + 2] * a + 255 * inv + 127) / 255);
+		}
+	}
+
+	const int res = StretchDIBits(hdc, xDest, yDest, destW, destH,
+		0, 0, srcW, srcH, dst, reinterpret_cast<BITMAPINFO *>(block),
+		DIB_RGB_COLORS, SRCCOPY);
+	FREEP(block);
+	return res != (int)GDI_ERROR;
+}
+
 void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest)
 {
 	UT_return_if_fail(pImg);
@@ -1295,7 +1424,8 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 	if (queryProperties(GR_Graphics::DGP_PAPER))
 	{
 		UT_sint32 nPageHeight = GetDeviceCaps(m_hdc, PHYSICALHEIGHT);
-		yDest = ( yDest % nPageHeight );
+		if (nPageHeight > 0)
+			yDest = ( yDest % nPageHeight );
 	}
 
 	GR_Win32Image* pWin32Img = static_cast<GR_Win32Image*>(pImg);
@@ -1308,30 +1438,24 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 	UT_uint32 iSizeOfColorData = pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
 	UT_Byte* pBits = ((unsigned char*) pDIB) + pDIB->bmiHeader.biSize + iSizeOfColorData;
 
+	if (pWin32Img->hasAlpha() && pDIB->bmiHeader.biBitCount == 32
+		&& pDIB->bmiHeader.biWidth > 0 && pDIB->bmiHeader.biHeight > 0)
+	{
+		const DWORD kind = GetObjectType(m_hdc);
+		const bool paper = queryProperties(GR_Graphics::DGP_PAPER)
+			|| kind == OBJ_ENHMETADC || kind == OBJ_METADC;
+		const int srcW = pDIB->bmiHeader.biWidth;
+		const int srcH = pDIB->bmiHeader.biHeight;
+		const int destW = pImg->getDisplayWidth();
+		const int destH = pImg->getDisplayHeight();
+		if (!paper && s_alphaBlendImage(m_hdc, xDest, yDest, destW, destH, pBits, srcW, srcH))
+			return;
+		if (s_stretchAlphaOnWhite(m_hdc, xDest, yDest, destW, destH, pBits, srcW, srcH))
+			return;
+	}
+
 	int iRes = 0;
 
-#if 0
-	// AlphaBlend is supported from win98 upwards
-	// we need to turn the DIB into DC first
-	HDC memDC = CreateCompatibleDC(m_hdc);
-
-	if(memDC)
-	{
-		// need to convert the dib pointer to handle here ...
-
-		// now select into the memory dc and call AlphaBlend
-		SelectObject(memDC, hDIB);
-		iRes = AlphaBlend(m_hdc,
-						  xDest, yDest,
-						  pImg->getDisplayWidth(), pImg->getDisplayHeight(),
-						  memDC,
-						  0, 0,
-						  pDIB->bmiHeader.biWidth, pDIB->bmiHeader.biHeight,
-						  blendfnct);
-	}
-	
-#endif
-	
 	if(!iRes)
 	{
 		SetStretchBltMode(m_hdc, COLORONCOLOR);

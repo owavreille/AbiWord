@@ -48,6 +48,8 @@ protected:
 private:
 	bool				_convertFromPNG(const UT_ConstByteBufPtr& pBB, UT_sint32 iDisplayWidth, UT_sint32 iDisplayHeight);
 	bool				_convertFromJPEG(const UT_ConstByteBufPtr& pBB, UT_sint32 iDisplayWidth, UT_sint32 iDisplayHeight);
+
+	bool				m_bHasAlpha;
 };
 
 #endif /* GR_WIN32IMAGE_H */
