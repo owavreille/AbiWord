@@ -34,6 +34,10 @@
 #include "winezmouse.h"
 #endif
 
+#ifndef WM_MOUSEHWHEEL
+#define WM_MOUSEHWHEEL 0x020E
+#endif
+
 #include "ut_debugmsg.h"
 #include "ut_path.h"
 #include "ut_Win32OS.h"
@@ -1066,6 +1070,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 	}
 
 	case WM_MOUSEWHEEL:
+	case WM_MOUSEHWHEEL:
 	{
 		return SendMessageW(fimpl->m_hwndContainer, iMsg, wParam, lParam);
 	}
@@ -1096,94 +1101,102 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		return 0;
 	}
 
-	case WM_DROPFILES:              //TODO: CHECK
+	case WM_DROPFILES:
 		{
-			HDROP hDrop = (HDROP) wParam; 
+			HDROP hDrop = (HDROP) wParam;
 			// How many files were dropped?
 			int count = DragQueryFileW(hDrop, 0xFFFFFFFF, nullptr, 0);
-			WCHAR szFileName[PATH_MAX];
 			UT_Win32LocaleString str;
-			int i,pathlength;
-			for (i=0; i<count; i++)
+			for (int i = 0; i < count; i++)
 			{
-				pathlength = DragQueryFileW(hDrop, i, nullptr, 0);
-				if (pathlength < PATH_MAX)
-				{
-					DragQueryFileW(hDrop, i, szFileName, PATH_MAX);
-					XAP_App * pApp = XAP_App::getApp();
-					UT_return_val_if_fail(pApp, 0);
-					FV_View* pCurrentView = (FV_View *) f->getCurrentView();
-					XAP_Frame * pNewFrame = nullptr;
-					IEGraphicFileType iegft = IEGFT_Unknown;
-					IE_ImpGraphic *pIEG;
-					FG_ConstGraphicPtr pFG;
-					UT_Error errorCode = UT_ERROR;
+				const UINT pathlength = DragQueryFileW(hDrop, i, nullptr, 0);
+				if (pathlength == 0)
+					continue;
 
-					/*
-						The user may be dropping any kind of file
-						Check first if the file is a graphic. If it's a graphic we insert it 
-						in the document, if not we assume that it's a document 		
-					*/								
-					// If there is no import graphic, it's a document...
-					str.fromLocale(szFileName);
-					char * uri = UT_go_filename_to_uri(str.utf8_str().utf8_str());
+				WCHAR * szFileName = static_cast<WCHAR *>(UT_calloc(pathlength + 1, sizeof(WCHAR)));
+				if (!szFileName)
+					continue;
+				if (DragQueryFileW(hDrop, i, szFileName, pathlength + 1) == 0)
+				{
+					FREEP(szFileName);
+					continue;
+				}
+
+				XAP_App * pApp = XAP_App::getApp();
+				if (!pApp)
+				{
+					FREEP(szFileName);
+					DragFinish(hDrop);
+					return 0;
+				}
+				FV_View* pCurrentView = (FV_View *) f->getCurrentView();
+				XAP_Frame * pNewFrame = nullptr;
+				IEGraphicFileType iegft = IEGFT_Unknown;
+				IE_ImpGraphic *pIEG = nullptr;
+				FG_ConstGraphicPtr pFG;
+				UT_Error errorCode = UT_ERROR;
+
+				/*
+					The user may be dropping any kind of file
+					Check first if the file is a graphic. If it's a graphic we insert it
+					in the document, if not we assume that it's a document
+				*/
+				str.fromLocale(szFileName);
+				FREEP(szFileName);
+				char * uri = UT_go_filename_to_uri(str.utf8_str().utf8_str());
+				if(uri)
+					errorCode = IE_ImpGraphic::constructImporter(uri, iegft, &pIEG);
+
+				if(errorCode == UT_OK && pIEG)
+				{
+					errorCode = pIEG->importGraphic(uri, pFG);
+
+					DELETEP(pIEG);
+					if(errorCode == UT_OK && pFG && pCurrentView)
+					{
+					  errorCode = pCurrentView->cmdInsertGraphic(pFG);
+					}
+				}
+
+				if (errorCode != UT_OK)
+				{
+					// Check if the current document is empty.
+					if (f->isDirty() || f->getFilename() ||
+						(f->getViewNumber() > 0))
+					{
+						pNewFrame = pApp->newFrame();
+						if (pNewFrame == nullptr)
+						{
+						  f->setStatusMessage("Could not open another window");
+						  g_free(uri);
+						  DragFinish(hDrop);
+						  return 0;
+						}
+					}
+					else
+					{
+						pNewFrame = f;
+					}
+
 					if(uri)
-						errorCode = IE_ImpGraphic::constructImporter(uri, iegft, &pIEG);
-
-					if(errorCode == UT_OK)
-					{						
-						errorCode = pIEG->importGraphic(uri, pFG);
-
-						DELETEP(pIEG);
-						if(errorCode == UT_OK && pFG)
-						{
-						  errorCode = pCurrentView->cmdInsertGraphic(pFG);
-						}
-					  }
+						errorCode = pNewFrame->loadDocument(uri, IEFT_Unknown);
 
 					if (errorCode != UT_OK)
-					{	
-						// Check if the current document is empty.
-						if (f->isDirty() || f->getFilename() ||
-							(f->getViewNumber() > 0))
-						{
-							pNewFrame = pApp->newFrame();
-							if (pNewFrame == nullptr)
-							{
-							  errorCode = UT_ERROR;
-							  f->setStatusMessage("Could not open another window");
-							  g_free(uri);
-							  return 0;
-							}
-						}
-						else
-						{
-							pNewFrame = f;
-						}
-
-						if(uri)
-							errorCode = pNewFrame->loadDocument(uri, IEFT_Unknown);
-
-						if (errorCode != UT_OK)
-						{
-							if (f != pNewFrame)
-								pNewFrame->close();
-						}
-						else
-						{
-							pNewFrame->show();
-						}
-					  }
-
-					if (errorCode != UT_OK)
-					  {
-					    s_CouldNotLoadFileMessage(f, uri, errorCode);
-					  }
-					g_free(uri);
+					{
+						if (f != pNewFrame)
+							pNewFrame->close();
+					}
+					else
+					{
+						pNewFrame->show();
+					}
 				}
-				else
+
+				if (errorCode != UT_OK)
 				{
+				    s_CouldNotLoadFileMessage(f, uri, errorCode);
 				}
+				g_free(uri);
 			}
 			DragFinish(hDrop);
 		}

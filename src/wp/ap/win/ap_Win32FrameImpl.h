@@ -28,6 +28,7 @@
 #include <wchar.h>
 
 class AP_Win32Frame;
+class AV_View;
 
 class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
 {
@@ -106,6 +107,7 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
 	void						_onSize(AP_FrameData * pData, int nWidth, int nHeight);
 
 	static int 					_getMouseWheelLines();
+	void						_scrollWheel(AV_View * pView, HWND hwnd, bool horizontal, int delta);
 
 	void						_startTracking(UT_sint32 x, UT_sint32 y);
 	void						_endTracking(UT_sint32 x, UT_sint32 y);
@@ -128,6 +130,9 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
 	HWND						m_hWndGripperHack;
 
 	UT_uint32					m_vScale; /* vertical scroll scaling to get around 16-bit scrollbar problems */
+	int							m_wheelRemainderV;
+	int							m_wheelRemainderH;
+	int							m_wheelRemainderZoom;
 
 	bool						m_bMouseWheelTrack;
 	UT_sint32					m_startMouseWheelY;

@@ -847,9 +847,6 @@ void AP_Win32Dialog_PageSetup::updatePreview()
 	COLORREF colorBackground = GetSysColor(COLOR_BTNFACE);
 	COLORREF colorWhite(0x00FFFFFF);
 	COLORREF colorBlack(0x00000000);
-	HBRUSH brushBackground = CreateSolidBrush( colorBackground );
-	HBRUSH brushWhite = CreateSolidBrush( colorWhite );
-	HBRUSH brushBlack = CreateSolidBrush( colorBlack );
 
 	HWND hwndPreview = GetDlgItem( m_page.getHandle(),
 		                            AP_RID_DIALOG_PAGE_SETUP_BMP_PREVIEW );
@@ -857,13 +854,28 @@ void AP_Win32Dialog_PageSetup::updatePreview()
 	HWND hwndMargin = GetDlgItem( m_margin.getHandle(),
 								  AP_RID_DIALOG_PAGE_SETUP_BMP_MARGINPREVIEW );
 	// Calculate Rectangles
-	GetClientRect(hwndPreview, &rectBorder);
-	
-	UT_uint16 borderWidth  = rectBorder.right  - rectBorder.left - offset;
-	UT_uint16 borderHeight = rectBorder.bottom - rectBorder.top  - offset;
+	memset(&rectBorder, 0, sizeof(rectBorder));
+	if (!hwndPreview || !m_bmpPreview || !GetClientRect(hwndPreview, &rectBorder))
+		return;
 
-	UT_uint16 pageWidth  = (UT_uint16) m_PageSize.Width( DIM_MM );  // in mm
-	UT_uint16 pageHeight = (UT_uint16) m_PageSize.Height( DIM_MM ); // in mm
+	const int borderWidth  = rectBorder.right  - rectBorder.left - offset;
+	const int borderHeight = rectBorder.bottom - rectBorder.top  - offset;
+	if (borderWidth <= 0 || borderHeight <= 0)
+		return;
+
+	HBRUSH brushBackground = CreateSolidBrush( colorBackground );
+	HBRUSH brushWhite = CreateSolidBrush( colorWhite );
+	HBRUSH brushBlack = CreateSolidBrush( colorBlack );
+
+	int pageWidth  = (int) m_PageSize.Width( DIM_MM );  // in mm
+	int pageHeight = (int) m_PageSize.Height( DIM_MM ); // in mm
+	if (pageWidth <= 0 || pageHeight <= 0)
+	{
+		DeleteObject(brushBackground);
+		DeleteObject(brushWhite);
+		DeleteObject(brushBlack);
+		return;
+	}
 	UT_uint16 marginTop  = (UT_uint16) (getMarginTop() * mScale[getMarginUnits()] );
 	UT_uint16 marginLeft = (UT_uint16) (getMarginLeft() * mScale[getMarginUnits()] );
 	UT_uint16 marginRight= (UT_uint16) (getMarginRight() * mScale[getMarginUnits()] );
@@ -887,12 +899,17 @@ void AP_Win32Dialog_PageSetup::updatePreview()
 	rectMargin.bottom = rectPage.bottom - (int)(marginBottom/scale);
 
 	HDC hDC = CreateCompatibleDC(nullptr);
-
-	SelectObject( hDC, m_bmpPreview );
-	FillRect( hDC, &rectBorder, brushBackground );
-	FillRect( hDC, &rectShadow, brushBlack );
-	FillRect( hDC, &rectPage, brushWhite );
-	FrameRect( hDC, &rectMargin, brushBlack );
+	if (hDC)
+	{
+		HGDIOBJ previous = SelectObject( hDC, m_bmpPreview );
+		FillRect( hDC, &rectBorder, brushBackground );
+		FillRect( hDC, &rectShadow, brushBlack );
+		FillRect( hDC, &rectPage, brushWhite );
+		FrameRect( hDC, &rectMargin, brushBlack );
+		if (previous)
+			SelectObject( hDC, previous );
+		DeleteDC( hDC );
+	}
 
 	SendMessage( hwndPreview, STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)m_bmpPreview );
 	InvalidateRgn( hwndPreview, nullptr, FALSE );
@@ -902,6 +919,8 @@ void AP_Win32Dialog_PageSetup::updatePreview()
 		SendMessage( hwndMargin,  STM_SETIMAGE, IMAGE_BITMAP, (LPARAM)m_bmpPreview );
 		InvalidateRgn( hwndMargin,  nullptr, FALSE );
 	}
-	
-	DeleteDC( hDC );
+
+	DeleteObject(brushBackground);
+	DeleteObject(brushWhite);
+	DeleteObject(brushBlack);
 }

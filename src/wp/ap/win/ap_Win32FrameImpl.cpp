@@ -49,6 +49,12 @@
 #define WM_UNICHAR 0x109
 #endif
 
+// Vista. The project still targets _WIN32_WINNT 0x0500, so the tilt
+// message is not declared by the headers we compile against.
+#ifndef WM_MOUSEHWHEEL
+#define WM_MOUSEHWHEEL 0x020E
+#endif
+
 #ifndef UNICODE_NOCHAR
 #define UNICODE_NOCHAR 0xFFFF
 #endif
@@ -71,6 +77,9 @@ AP_Win32FrameImpl::AP_Win32FrameImpl(AP_Frame *pFrame) :
 	m_hWndVScroll(nullptr),
 	m_hWndGripperHack(nullptr),
 	m_vScale(0),
+	m_wheelRemainderV(0),
+	m_wheelRemainderH(0),
+	m_wheelRemainderZoom(0),
 	m_bMouseWheelTrack(false),
 	m_startMouseWheelY(0),
 	m_startScrollPosition(0),
@@ -757,6 +766,71 @@ int AP_Win32FrameImpl::_getMouseWheelLines()
  	return 3;
 }
 
+void AP_Win32FrameImpl::_scrollWheel(AV_View * pView, HWND hwnd, bool horizontal, int delta)
+{
+	if (!pView || !pView->getGraphics() || delta == 0)
+		return;
+
+	// A precision touchpad reports fractions of WHEEL_DELTA. Rounding a
+	// zero quotient up to one line turns a small downward delta into an
+	// upward jump. The unused part stays for the next message.
+	int & remainder = horizontal ? m_wheelRemainderH : m_wheelRemainderV;
+	remainder += delta;
+	const int notches = remainder / WHEEL_DELTA;
+	remainder -= notches * WHEEL_DELTA;
+	if (notches == 0)
+		return;
+
+	const int lines = _getMouseWheelLines();
+	if (lines == static_cast<int>(WHEEL_PAGESCROLL))
+	{
+		const UINT message = horizontal ? WM_HSCROLL : WM_VSCROLL;
+		const WORD code = horizontal
+			? (notches > 0 ? SB_PAGEDOWN : SB_PAGEUP)
+			: (notches > 0 ? SB_PAGEUP : SB_PAGEDOWN);
+		int count = notches > 0 ? notches : -notches;
+		while (count-- > 0)
+			SendMessageW(hwnd, message, MAKELONG(code, 0), 0);
+		return;
+	}
+
+	const int pixels = notches * lines * SCROLL_LINE_SIZE;
+	SCROLLINFO si;
+	memset(&si, 0, sizeof(si));
+	si.cbSize = sizeof(si);
+	si.fMask = SIF_ALL;
+
+	if (horizontal)
+	{
+		GetScrollInfo(m_hWndHScroll, SB_CTL, &si);
+		int iNewPos = si.nPos + pixels;
+		if (iNewPos > si.nMax)
+			iNewPos = si.nMax;
+		if (iNewPos < si.nMin)
+			iNewPos = si.nMin;
+		if (iNewPos == si.nPos)
+			return;
+		si.nPos = iNewPos;
+		SetScrollInfo(m_hWndHScroll, SB_CTL, &si, TRUE);
+		GetScrollInfo(m_hWndHScroll, SB_CTL, &si);
+		pView->sendHorizontalScrollEvent(pView->getGraphics()->tlu(si.nPos));
+		return;
+	}
+
+	_getVerticalScrollInfo(&si);
+	int iNewPos = si.nPos - pixels;
+	if (iNewPos > si.nMax)
+		iNewPos = si.nMax;
+	if (iNewPos < si.nMin)
+		iNewPos = si.nMin;
+	if (iNewPos == si.nPos)
+		return;
+	si.nPos = iNewPos;
+	_setVerticalScrollInfo(&si);
+	_getVerticalScrollInfo(&si);
+	pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos));
+}
+
 /////////////////////////////////////////////////////////////////////////
 
 void AP_Win32FrameImpl::_startTracking(UT_sint32 /*x*/, UT_sint32 y)
@@ -951,60 +1025,38 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 		}
 
 	 	case WM_MOUSEWHEEL:
- 		{	 
-			const int iDelta = (short) HIWORD(wParam);
+		case WM_MOUSEHWHEEL:
+ 		{
+			if (!pView)
+				return 0;
 
-			if (wParam & MK_CONTROL)	// Zoom in & Zoom out
-			{	
+			const int iDelta = static_cast<short>(HIWORD(wParam));
+			const bool horizontalTilt = (iMsg == WM_MOUSEHWHEEL);
+
+			if (!horizontalTilt && (wParam & MK_CONTROL))
+			{
 				EV_Win32Mouse*	pMouse = (EV_Win32Mouse *) fImpl->m_pMouse;
- 		
- 				if (iDelta>0)
- 					pMouse->onButtonWheel(pView,hwnd,EV_EMB_BUTTON4,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
- 				else
- 					pMouse->onButtonWheel(pView,hwnd,EV_EMB_BUTTON5,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
+				if (!pMouse || iDelta == 0)
+					return 0;
 
-				break;
-			} 			
- 			
-			const int cWheelLines = _getMouseWheelLines();
+				fImpl->m_wheelRemainderZoom += iDelta;
+				const int notches = fImpl->m_wheelRemainderZoom / WHEEL_DELTA;
+				fImpl->m_wheelRemainderZoom -= notches * WHEEL_DELTA;
+				if (notches == 0)
+					return 0;
 
-			if (cWheelLines == static_cast<int>(WHEEL_PAGESCROLL))
-			{
-				WORD wDir = (iDelta < 0) ? SB_PAGEDOWN : SB_PAGEUP;
-				SendMessageW(hwnd,
-							WM_VSCROLL,
-							MAKELONG(wDir, 0),
-							0);
+				const EV_EditMouseButton button = notches > 0 ? EV_EMB_BUTTON4 : EV_EMB_BUTTON5;
+				int count = notches > 0 ? notches : -notches;
+				while (count-- > 0)
+					pMouse->onButtonWheel(pView,hwnd,button,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
+				return 0;
 			}
-			else
-			{
 
-				// Calculate the movement offset to an integer resolution
-				const int iMove = (iDelta * cWheelLines) / WHEEL_DELTA;
-
-				// Get current scroll position
-				SCROLLINFO si;
-				memset(&si, 0, sizeof(si));
-
-				si.cbSize = sizeof(si);
-				si.fMask = SIF_ALL;
-				fImpl->_getVerticalScrollInfo(&si);
-
-				// Clip new position to limits
-				int iNewPos = si.nPos - (((iMove)?iMove:1) * SCROLL_LINE_SIZE);
-				if (iNewPos > si.nMax) iNewPos = si.nMax;
-				if (iNewPos < si.nMin) iNewPos = si.nMin;
-
-				if (iNewPos != si.nPos)
-				{
-					// If position has changed set new position
-					iNewPos >>= fImpl->m_vScale;
-					SendMessageW(hwnd,
-							WM_VSCROLL,
-							MAKELONG(SB_THUMBPOSITION, iNewPos),
-							0);
-				}
-			}
+			// Tilt right scrolls right. Shift plus a vertical wheel scrolls
+			// sideways, with the wheel-up direction moving toward the left.
+			const bool horizontal = horizontalTilt || ((wParam & MK_SHIFT) != 0);
+			const int signedDelta = (horizontal && !horizontalTilt) ? -iDelta : iDelta;
+			fImpl->_scrollWheel(pView, hwnd, horizontal, signedDelta);
 			return 0;
 		}
 
@@ -1034,6 +1086,15 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 		case WM_MOUSEACTIVATE:
 			fImpl->m_bMouseActivateReceived = true;
 			return MA_ACTIVATE;
+
+		case WM_MOUSEWHEEL:
+		case WM_MOUSEHWHEEL:
+		{
+			HWND parent = GetParent(hwnd);
+			if (parent)
+				return SendMessageW(parent, iMsg, wParam, lParam);
+			break;
+		}
 
 		case WM_SETFOCUS:			
 			if (pView)

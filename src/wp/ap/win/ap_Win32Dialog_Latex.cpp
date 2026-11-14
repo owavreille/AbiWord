@@ -32,6 +32,7 @@
 #include "ap_Win32Resources.rc2"
 #include "ap_Win32Dialog_Latex.h"
 #include "ap_Win32App.h"
+#include "ut_Win32LocaleString.h"
 
 XAP_Dialog * AP_Win32Dialog_Latex::static_constructor(XAP_DialogFactory * pFactory, XAP_Dialog_Id id)
 {
@@ -138,16 +139,25 @@ void AP_Win32Dialog_Latex::setLatexInGUI(void)
 
 bool AP_Win32Dialog_Latex::getLatexFromGUI(void)
 {
-	char buffer[2048]; // TODO: FIXME: BAD BAD FIXED LENGTH
 	UT_UTF8String sLatex;
+	HWND hCtrl = GetDlgItem(m_hDlg, AP_RID_DIALOG_LATEX_EDIT_LATEX);
+	if (hCtrl)
+	{
+		int len = GetWindowTextLengthW(hCtrl);
+		if (len < 0)
+			len = 0;
+		LPWSTR wbuf = static_cast<LPWSTR>(UT_calloc(len + 1, sizeof(WCHAR)));
+		if (wbuf)
+		{
+			GetWindowTextW(hCtrl, wbuf, len + 1);
+			UT_Win32LocaleString str;
+			str.fromLocale(wbuf);
+			FREEP(wbuf);
+			sLatex = str.utf8_str();
+		}
+	}
 
-	getControlText(AP_RID_DIALOG_LATEX_EDIT_LATEX, (LPSTR) buffer, 2048);
-	//sLatex = AP_Win32App::s_fromWinLocaleToUTF8(buffer);
-	
-	UT_DEBUGMSG(("LaTeX from widget is %s \n",buffer/*sLatex.utf8_str()*/));
-	sLatex.assign(buffer,0);
 	setLatex(sLatex);
-		
 	return true;
 }
 
