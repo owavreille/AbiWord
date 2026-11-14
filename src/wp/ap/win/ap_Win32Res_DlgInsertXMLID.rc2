@@ -1,0 +1,44 @@
+// AbiWord
+// Copyright (C) 2011 Ben Martin
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+// 02110-1301 USA.
+//////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////
+// THIS FILE IS INCLUDED BY .cpp AND .rc FILES.
+//////////////////////////////////////////////////////////////////
+
+#define AP_RID_DIALOG_INSERTXMLID_LBL_MESSAGE	1001
+#define AP_RID_DIALOG_INSERTXMLID_EBX_NAME		1002
+#define AP_RID_DIALOG_INSERTXMLID_BTN_DELETE	1003
+#define AP_RID_DIALOG_INSERTXMLID_BTN_OK		IDOK
+#define AP_RID_DIALOG_INSERTXMLID_BTN_CANCEL	IDCANCEL
+
+#ifdef RC_INVOKED
+
+AP_RID_DIALOG_INSERTXMLID DIALOG DISCARDABLE  15, 15, 220, 78
+STYLE DS_MODALFRAME | DS_CONTEXTHELP | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Insert RDF Link"
+FONT 8, "MS Shell Dlg 2"
+BEGIN
+	LTEXT			"Type a name",	AP_RID_DIALOG_INSERTXMLID_LBL_MESSAGE, 7, 7, 206, 16
+	EDITTEXT						AP_RID_DIALOG_INSERTXMLID_EBX_NAME, 7, 26, 206, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	DEFPUSHBUTTON	"Insert",		AP_RID_DIALOG_INSERTXMLID_BTN_OK, 7, 50, 60, 14
+	PUSHBUTTON		"Delete",		AP_RID_DIALOG_INSERTXMLID_BTN_DELETE, 74, 50, 60, 14
+	PUSHBUTTON		"Cancel",		AP_RID_DIALOG_INSERTXMLID_BTN_CANCEL, 141, 50, 60, 14
+END
+
+#endif /* RC_INVOKED */

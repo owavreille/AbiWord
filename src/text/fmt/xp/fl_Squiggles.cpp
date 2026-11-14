@@ -451,6 +451,13 @@ fl_Squiggles::clear(const fl_PartOfBlockPtr& pPOB)
 	{
 		return;
 	}
+	// A background pass marks the runs and paints once. Clearing each
+	// word immediately made the caret blink for the whole paragraph.
+	if (m_pOwner->getDocLayout()->isSpellCheckInProgress())
+	{
+		markForRedraw(pPOB);
+		return;
+	}
 	FV_View* pView = m_pOwner->getDocLayout()->getView();
 	PT_DocPosition pos1 = m_pOwner->getPosition() + pPOB->getOffset();
 	PT_DocPosition pos2 = pos1 + pPOB->getPTLength();
@@ -491,6 +498,8 @@ fl_Squiggles::textInserted(UT_sint32 iOffset, UT_sint32 iLength)
 	// Return if auto spell-checking disabled
 	if (!m_pOwner->getDocLayout()->getAutoSpellCheck())
 		return;
+
+	m_pOwner->m_iSpellCheckFrom = 0;
 
 	xxx_UT_DEBUGMSG(("fl_Squiggles::textInserted(%d, %d)\n", 
 					 iOffset, iLength));
@@ -553,6 +562,8 @@ fl_Squiggles::textDeleted(UT_sint32 iOffset, UT_sint32 iLength)
 	// Return if auto spell-checking disabled
 	if (!m_pOwner->getDocLayout()->getAutoSpellCheck())
 		return;
+
+	m_pOwner->m_iSpellCheckFrom = 0;
 
 	xxx_UT_DEBUGMSG(("fl_Squiggles::textDeleted(%d, %d)\n",
 					 iOffset, iLength));

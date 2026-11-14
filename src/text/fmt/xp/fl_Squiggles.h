@@ -39,6 +39,7 @@ virtual	~fl_Squiggles(void);
 	void					markForRedraw(const fl_PartOfBlockPtr& pPOB);
 
 	bool					deleteAll(void);
+	bool					deleteAtOffset(UT_sint32 iOffset) { return _deleteAtOffset(iOffset); }
 
 	fl_PartOfBlockPtr		get(UT_sint32 iOffset) const;
 	inline const fl_PartOfBlockPtr&	getNth(UT_sint32 n) const

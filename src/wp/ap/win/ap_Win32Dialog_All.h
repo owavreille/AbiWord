@@ -70,6 +70,7 @@
 #	include "ap_Win32Dialog_Background.h"
 #	include "ap_Win32Dialog_HdrFtr.h"
 #	include "ap_Win32Dialog_InsertBookmark.h"
+#	include "ap_Win32Dialog_InsertXMLID.h"
 #	include "ap_Win32Dialog_InsertHyperlink.h"
 #	include "ap_Win32Dialog_New.h"
 #	include "ap_Win32Dialog_MarkRevisions.h"
@@ -86,6 +87,8 @@
 #	include "ap_Win32Dialog_Latex.h"
 #	include "ap_Win32Dialog_Stylist.h"
 #	include "ap_Win32Dialog_Annotation.h"
+#	include "ap_Win32Dialog_RDFQuery.h"
+#	include "ap_Win32Dialog_RDFEditor.h"
 #   include "ap_Win32Preview_Annotation.h"
 	// ... add new dialogs here ...
 
@@ -147,6 +150,7 @@
 	DeclareDialog(AP_DIALOG_ID_BACKGROUND,		AP_Win32Dialog_Background)
 	DeclareDialog(AP_DIALOG_ID_HDRFTR,  		AP_Win32Dialog_HdrFtr)
  	DeclareDialog(AP_DIALOG_ID_INSERTBOOKMARK,	AP_Win32Dialog_InsertBookmark)
+	DeclareDialog(AP_DIALOG_ID_INSERTXMLID,		AP_Win32Dialog_InsertXMLID)
  	DeclareDialog(AP_DIALOG_ID_INSERTHYPERLINK,	AP_Win32Dialog_InsertHyperlink)
 	DeclareDialog(AP_DIALOG_ID_FILE_NEW,		AP_Win32Dialog_New)
 	DeclareDialog(AP_DIALOG_ID_MARK_REVISIONS,	AP_Win32Dialog_MarkRevisions)
@@ -164,8 +168,8 @@
 	DeclareDialog(AP_DIALOG_ID_STYLIST,			AP_Win32Dialog_Stylist)
 	DeclareDialog(AP_DIALOG_ID_LATEX,			AP_Win32Dialog_Latex)
 	DeclareDialog(AP_DIALOG_ID_ANNOTATION_PREVIEW,	AP_Win32Preview_Annotation)
-    // DeclareDialog(AP_DIALOG_ID_RDF_QUERY,			AP_Win32Dialog_RDFQuery)
-	// DeclareDialog(AP_DIALOG_ID_RDF_EDITOR,			AP_Win32Dialog_RDFEditor)
+	DeclareDialog(AP_DIALOG_ID_RDF_QUERY,		AP_Win32Dialog_RDFQuery)
+	DeclareDialog(AP_DIALOG_ID_RDF_EDITOR,		AP_Win32Dialog_RDFEditor)
  	// ... also add new dialogs here ...
 
 	//	Maleesh 6/8/2010 -

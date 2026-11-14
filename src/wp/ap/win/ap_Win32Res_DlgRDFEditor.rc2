@@ -1,0 +1,66 @@
+// AbiWord
+// Copyright (C) 2011 Ben Martin
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+// 02110-1301 USA.
+//////////////////////////////////////////////////////////////////
+
+//////////////////////////////////////////////////////////////////
+// THIS FILE IS INCLUDED BY .cpp AND .rc FILES.
+//////////////////////////////////////////////////////////////////
+
+#define AP_RID_DIALOG_RDFEDITOR_LIST		1001
+#define AP_RID_DIALOG_RDFEDITOR_LBL_SUBJ	1002
+#define AP_RID_DIALOG_RDFEDITOR_EDIT_SUBJ	1003
+#define AP_RID_DIALOG_RDFEDITOR_LBL_PRED	1004
+#define AP_RID_DIALOG_RDFEDITOR_EDIT_PRED	1005
+#define AP_RID_DIALOG_RDFEDITOR_LBL_OBJ		1006
+#define AP_RID_DIALOG_RDFEDITOR_EDIT_OBJ	1007
+#define AP_RID_DIALOG_RDFEDITOR_LBL_LINK	1008
+#define AP_RID_DIALOG_RDFEDITOR_CBX_LINK	1009
+#define AP_RID_DIALOG_RDFEDITOR_STATUS		1010
+#define AP_RID_DIALOG_RDFEDITOR_BTN_NEW		1011
+#define AP_RID_DIALOG_RDFEDITOR_BTN_COPY	1012
+#define AP_RID_DIALOG_RDFEDITOR_BTN_DELETE	1013
+#define AP_RID_DIALOG_RDFEDITOR_BTN_APPLY	1014
+#define AP_RID_DIALOG_RDFEDITOR_BTN_UPDATE	1015
+#define AP_RID_DIALOG_RDFEDITOR_BTN_CLOSE	IDCANCEL
+
+#ifdef RC_INVOKED
+
+AP_RID_DIALOG_RDFEDITOR DIALOG DISCARDABLE  0, 0, 440, 300
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "Edit document RDF"
+FONT 8, "MS Shell Dlg 2"
+BEGIN
+	LTEXT			"Restrict to RDF Link:", AP_RID_DIALOG_RDFEDITOR_LBL_LINK, 7, 8, 80, 10
+	COMBOBOX		AP_RID_DIALOG_RDFEDITOR_CBX_LINK, 90, 6, 250, 80, CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
+	CONTROL			"", AP_RID_DIALOG_RDFEDITOR_LIST, "SysListView32", LVS_REPORT | LVS_SINGLESEL | LVS_SHOWSELALWAYS | WS_BORDER | WS_TABSTOP, 7, 24, 426, 150
+	LTEXT			"Subject", AP_RID_DIALOG_RDFEDITOR_LBL_SUBJ, 7, 180, 50, 10
+	EDITTEXT		AP_RID_DIALOG_RDFEDITOR_EDIT_SUBJ, 60, 178, 370, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	LTEXT			"Predicate", AP_RID_DIALOG_RDFEDITOR_LBL_PRED, 7, 198, 50, 10
+	EDITTEXT		AP_RID_DIALOG_RDFEDITOR_EDIT_PRED, 60, 196, 370, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	LTEXT			"Object", AP_RID_DIALOG_RDFEDITOR_LBL_OBJ, 7, 216, 50, 10
+	EDITTEXT		AP_RID_DIALOG_RDFEDITOR_EDIT_OBJ, 60, 214, 370, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	LTEXT			"", AP_RID_DIALOG_RDFEDITOR_STATUS, 7, 236, 250, 10
+	PUSHBUTTON		"New", AP_RID_DIALOG_RDFEDITOR_BTN_NEW, 7, 278, 50, 14
+	PUSHBUTTON		"Copy", AP_RID_DIALOG_RDFEDITOR_BTN_COPY, 62, 278, 50, 14
+	PUSHBUTTON		"Delete", AP_RID_DIALOG_RDFEDITOR_BTN_DELETE, 117, 278, 50, 14
+	PUSHBUTTON		"Apply", AP_RID_DIALOG_RDFEDITOR_BTN_APPLY, 172, 278, 50, 14
+	PUSHBUTTON		"Update", AP_RID_DIALOG_RDFEDITOR_BTN_UPDATE, 300, 278, 60, 14
+	DEFPUSHBUTTON	"Close", AP_RID_DIALOG_RDFEDITOR_BTN_CLOSE, 366, 278, 60, 14
+END
+
+#endif /* RC_INVOKED */

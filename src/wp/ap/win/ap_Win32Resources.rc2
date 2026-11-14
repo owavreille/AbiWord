@@ -78,7 +78,10 @@
 #define AP_RID_DIALOG_OPT_SMARTQUOTES				249	// tab-sub-dlg
 
 //	Maleesh 6/8/2010 -  
-#define AP_RID_DIALOG_BORDER_SHADING			250	
+#define AP_RID_DIALOG_BORDER_SHADING			250
+#define AP_RID_DIALOG_INSERTXMLID				251
+#define AP_RID_DIALOG_RDFQUERY					252
+#define AP_RID_DIALOG_RDFEDITOR					253	
 
 // Bitmaps IDs
 #define AP_RID_TI_1COLUMN 3000
@@ -249,6 +252,9 @@
 #include "ap_Win32Res_DlgStylesNewModify.rc2"
 #include "ap_Win32Res_DlgHdrFtr.rc2"
 #include "ap_Win32Res_DlgInsertBookmark.rc2"
+#include "ap_Win32Res_DlgInsertXMLID.rc2"
+#include "ap_Win32Res_DlgRDFQuery.rc2"
+#include "ap_Win32Res_DlgRDFEditor.rc2"
 #include "ap_Win32Res_DlgInsertHyperlink.rc2"
 #include "ap_Win32Res_DlgNew.rc2"
 #include "ap_Win32Res_DlgMarkRevisions.rc2"

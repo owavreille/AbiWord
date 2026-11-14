@@ -53,11 +53,20 @@ AP_Win32Dialog_Columns::AP_Win32Dialog_Columns(XAP_DialogFactory * pDlgFactory,
 	: AP_Dialog_Columns(pDlgFactory,id)
 {
 	m_pPreviewWidget = nullptr;
+	m_hBitmapOne = nullptr;
+	m_hBitmapTwo = nullptr;
+	m_hBitmapThree = nullptr;
 }
 
 AP_Win32Dialog_Columns::~AP_Win32Dialog_Columns(void)
 {
 	delete m_pPreviewWidget;
+	if (m_hBitmapOne)
+		DeleteObject(m_hBitmapOne);
+	if (m_hBitmapTwo)
+		DeleteObject(m_hBitmapTwo);
+	if (m_hBitmapThree)
+		DeleteObject(m_hBitmapThree);
 }
 
 /*****************************************************************/
@@ -120,18 +129,24 @@ BOOL AP_Win32Dialog_Columns::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM 
 
 	bool bFoundIcon = Icons.getBitmapForIcon(hWnd, iWidth, iHeight, &Color, "1COLUMN",
 																&hBitmap);
-	UT_return_val_if_fail (bFoundIcon, false);
-	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_RADIO_ONE, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hBitmap);
+	if (!bFoundIcon)
+		return false;
+	m_hBitmapOne = hBitmap;
+	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_RADIO_ONE, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)m_hBitmapOne);
 
 	bFoundIcon = Icons.getBitmapForIcon(hWnd, iWidth, iHeight, &Color, "2COLUMN",
 																&hBitmap);
-	UT_return_val_if_fail (bFoundIcon, false);
-	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_RADIO_TWO, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hBitmap);
+	if (!bFoundIcon)
+		return false;
+	m_hBitmapTwo = hBitmap;
+	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_RADIO_TWO, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)m_hBitmapTwo);
 
 	bFoundIcon = Icons.getBitmapForIcon(hWnd, iWidth, iHeight, &Color, "3COLUMN",
 																&hBitmap);
-	UT_return_val_if_fail (bFoundIcon, false);
-	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_RADIO_THREE, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)hBitmap);
+	if (!bFoundIcon)
+		return false;
+	m_hBitmapThree = hBitmap;
+	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_RADIO_THREE, BM_SETIMAGE, IMAGE_BITMAP, (LPARAM)m_hBitmapThree);
 
 	// set initial state
 	wchar_t buf[BUFSIZE];

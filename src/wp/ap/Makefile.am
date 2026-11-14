@@ -763,6 +763,8 @@ libap_la_SOURCES += \
 	win/ap_Win32Dialog_HdrFtr.h \
 	win/ap_Win32Dialog_InsertBookmark.cpp \
 	win/ap_Win32Dialog_InsertBookmark.h \
+	win/ap_Win32Dialog_InsertXMLID.cpp \
+	win/ap_Win32Dialog_InsertXMLID.h \
 	win/ap_Win32Dialog_Insert_DateTime.cpp \
 	win/ap_Win32Dialog_Insert_DateTime.h \
 	win/ap_Win32Dialog_InsertHyperlink.cpp \
@@ -787,6 +789,10 @@ libap_la_SOURCES += \
 	win/ap_Win32Dialog_New.h \
 	win/ap_Win32Dialog_Options.cpp \
 	win/ap_Win32Dialog_Options.h \
+	win/ap_Win32Dialog_RDFEditor.cpp \
+	win/ap_Win32Dialog_RDFEditor.h \
+	win/ap_Win32Dialog_RDFQuery.cpp \
+	win/ap_Win32Dialog_RDFQuery.h \
 	win/ap_Win32Dialog_PageNumbers.cpp \
 	win/ap_Win32Dialog_PageNumbers.h \
 	win/ap_Win32Dialog_PageSetup.cpp \

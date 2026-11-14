@@ -106,6 +106,7 @@ FL_DocLayout::FL_DocLayout(PD_Document* doc, GR_Graphics* pG)
     m_pDoc(doc),
     m_pView(nullptr),
     m_lid((PL_ListenerId)-1),
+	m_iPageSequence(0),
     m_pFirstSection(nullptr),
     m_pLastSection(nullptr),
 	m_toSpellCheckHead(nullptr),
@@ -2436,6 +2437,7 @@ void FL_DocLayout::deletePage(fp_Page* pPage, bool bDontNotify /* default false 
 	pPage->setPrev(nullptr);
 	pPage->setNext(nullptr);
 	m_vecPages.deleteNthItem(ndx);
+	m_iPageSequence++;
 	delete pPage;
 	if(ndx < countPages())
 	{
@@ -2478,6 +2480,7 @@ fp_Page* FL_DocLayout::addNewPage(fl_DocSectionLayout* pOwner, bool bNoUpdate)
 	}
 	pPage->setPrev(pLastPage);
 	m_vecPages.addItem(pPage);
+	m_iPageSequence++;
 	pOwner->addOwnedPage(pPage);
 
 	// let the view know that we created a new page,

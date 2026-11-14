@@ -108,6 +108,17 @@ void GR_Win32Graphics::_constructorCommonCode(HDC hdc)
 	m_bufferHdc = nullptr;
 	m_bufferBitmap = nullptr;
 	m_bufferPrevBitmap = nullptr;
+	m_bufferWidth = 0;
+	m_bufferHeight = 0;
+	m_bufferCoherent = false;
+	m_bufferPersist = false;
+	m_omitPresent = false;
+	m_presentFull = false;
+	m_presentAny = false;
+	m_presentLeft = 0;
+	m_presentTop = 0;
+	m_presentRight = 0;
+	m_presentBottom = 0;
 	m_dummyHdc = nullptr;
 	m_dummyBitmap = nullptr;
 	m_dummyPrevBitmap = nullptr;
@@ -233,6 +244,8 @@ HDC GR_Win32Graphics::swapDC(HDC hdc)
 
 GR_Win32Graphics::~GR_Win32Graphics()
 {
+	// Deselect the buffer before the fonts it may still hold are destroyed.
+	_releasePersistentBuffer();
 	_destroyFonts ();
 	UT_VECTOR_SPARSEPURGEALL( UT_Rect*, m_vSaveRect);
 	s_iInstanceCount--;
@@ -1094,6 +1107,8 @@ void GR_Win32Graphics::scroll(UT_sint32 dx, UT_sint32 dy)
 	}
 	GR_Painter caretDisablerPainter(this); // not an elegant way to disable all carets, but it works beautifully - MARCM
 
+	// ScrollWindowEx moves pixels on the window, not in the retained bitmap.
+	m_bufferCoherent = false;
 	// A clip left on the CS_OWNDC window would scroll only that rectangle.
 	clearScreenClip();
 	ScrollWindowEx(m_hwnd, ddx, ddy, nullptr, nullptr, nullptr, nullptr, SW_INVALIDATE);
@@ -1117,6 +1132,7 @@ void GR_Win32Graphics::scroll(UT_sint32 x_dest, UT_sint32 y_dest,
 	
 	GR_Painter caretDisablerPainter(this); // not an elegant way to disable all carets, but it works beautifully - MARCM
 
+	m_bufferCoherent = false;
 	clearScreenClip();
 	ScrollWindowEx(m_hwnd, (x_dest - x_src), (y_dest - y_src),
 				   &r, nullptr, nullptr, nullptr, SW_INVALIDATE | SW_ERASE);
@@ -1232,6 +1248,7 @@ void GR_Win32Graphics::setClipRect(const UT_Rect* pRect)
 
 		DeleteObject(hrgn);
 		UT_Win32TraceHeap("clip");
+		_noteBufferClip(l, t, r, b, false);
 	}
 	else		// stop clipping
 	{
@@ -1240,6 +1257,7 @@ void GR_Win32Graphics::setClipRect(const UT_Rect* pRect)
 		res = selected;
 		UT_Win32TraceF("clip-clear-select %d", selected);
 		UT_Win32TraceHeap("clip-clear");
+		_noteBufferClip(0, 0, 0, 0, true);
 	}
 
 	UT_ASSERT_HARMLESS(res != ERROR);
@@ -1990,21 +2008,23 @@ UT_sint32 GR_Win32Font::measureUnremappedCharForCache(UT_UCS4Char cChar) const
 	// calculate the limits of the 256-char page
 	UT_UCS4Char base = (cChar & 0xffffff00);
 	UT_UCS4Char limit = (cChar | 0x000000ff);
-	HDC hdc = CreateDCW(L"DISPLAY",nullptr,nullptr,nullptr);
+	// One screen DC for the process. Creating and deleting a DC for every
+	// 256-glyph page made the first characters of a font wait on GDI.
+	static HDC measureDC = nullptr;
+	if (!measureDC)
+		measureDC = CreateDCW(L"DISPLAY", nullptr, nullptr, nullptr);
 	UT_Win32TraceF("widths-dc %p char=%u base=%u limit=%u",
-				   (void*)hdc, (unsigned)cChar, (unsigned)base, (unsigned)limit);
-	if (!hdc)
+				   (void*)measureDC, (unsigned)cChar, (unsigned)base, (unsigned)limit);
+	if (!measureDC)
 		return 0;
-	// The previous object must be restored before DeleteDC. Leaving the
-	// font selected deletes it with the DC on Windows 11 and corrupts the heap.
-	HGDIOBJ previous = SelectObject(hdc, m_layoutFont);
+	// Restore the previous font before returning. Leaving it selected is
+	// safe on this reused DC; deleting the DC while it is selected is not.
+	HGDIOBJ previous = SelectObject(measureDC, m_layoutFont);
 	UT_Win32TraceF("widths-font prev=%p", previous);
-	_getCharWidths()->setCharWidthsOfRange(hdc, base, limit);
+	_getCharWidths()->setCharWidthsOfRange(measureDC, base, limit);
 	UT_Win32TraceHeap("widths-range");
 	if (previous)
-		SelectObject(hdc, previous);
-	DeleteDC(hdc);
-	UT_Win32TraceHeap("widths-dc-deleted");
+		SelectObject(measureDC, previous);
 	return _getCharWidths()->getWidth(cChar);
 #else
 	UT_return_val_if_fail(UT_NOT_IMPLEMENTED,0);
@@ -2877,6 +2897,67 @@ void GR_Win32Graphics::_DeviceContext_MeasureBitBltCopySpeed(HDC sourceHdc, HDC 
 #endif
 }
 
+void GR_Win32Graphics::_releasePersistentBuffer()
+{
+	if (!m_bufferHdc)
+		return;
+	if (m_hdc == m_bufferHdc)
+	{
+		_DeviceContext_RestorePrevHDCFromStack();
+		if (m_hdc == m_bufferHdc)
+			m_hdc = nullptr;
+	}
+	_DoubleBuffering_ReleaseBuffer(m_bufferHdc, m_bufferBitmap, m_bufferPrevBitmap);
+	m_bufferHdc = nullptr;
+	m_bufferBitmap = nullptr;
+	m_bufferPrevBitmap = nullptr;
+	m_bufferWidth = 0;
+	m_bufferHeight = 0;
+	m_bufferCoherent = false;
+	m_bufferPersist = false;
+}
+
+void GR_Win32Graphics::_noteBufferClip(int left, int top, int right, int bottom, bool cleared)
+{
+	if (!m_bufferHdc || m_hdc != m_bufferHdc)
+		return;
+	if (cleared)
+	{
+		// Later drawing is unclipped, so the whole buffer may change.
+		m_presentFull = true;
+		return;
+	}
+	if (right < left)
+	{
+		int swap = left;
+		left = right;
+		right = swap;
+	}
+	if (bottom < top)
+	{
+		int swap = top;
+		top = bottom;
+		bottom = swap;
+	}
+	if (!m_presentAny)
+	{
+		m_presentLeft = left;
+		m_presentTop = top;
+		m_presentRight = right;
+		m_presentBottom = bottom;
+		m_presentAny = true;
+		return;
+	}
+	if (left < m_presentLeft)
+		m_presentLeft = left;
+	if (top < m_presentTop)
+		m_presentTop = top;
+	if (right > m_presentRight)
+		m_presentRight = right;
+	if (bottom > m_presentBottom)
+		m_presentBottom = bottom;
+}
+
 void GR_Win32Graphics::_DeviceContext_SwitchToBuffer()
 {
 	// Draw into a memory bitmap, then copy it to the window in one BitBlt.
@@ -2888,11 +2969,23 @@ void GR_Win32Graphics::_DeviceContext_SwitchToBuffer()
 	UT_Win32Trace("buffer-on");
 	// get client area size
 	int height(0), width(0);
-	getWidthAndHeightFromHWND(m_hwnd, width, height);
+	if (m_hwnd)
+		getWidthAndHeightFromHWND(m_hwnd, width, height);
 	UT_Win32TraceF("buffer-size w=%d h=%d", width, height);
 
-	// set up the buffer
-	m_bufferHdc = _DoubleBuffering_CreateBuffer(m_hdc, width, height, m_bufferBitmap, m_bufferPrevBitmap);
+	// Keep the bitmap for the screen. Recreate it only when the window
+	// changes size. Printer DCs have no window and stay one-shot.
+	bool persist = (m_hwnd && !m_bPrint && width > 0 && height > 0);
+	bool sizeChanged = (!m_bufferHdc || width != m_bufferWidth || height != m_bufferHeight);
+	if (!persist || sizeChanged)
+	{
+		_releasePersistentBuffer();
+		m_bufferHdc = _DoubleBuffering_CreateBuffer(m_hdc, width, height, m_bufferBitmap, m_bufferPrevBitmap);
+		m_bufferWidth = width;
+		m_bufferHeight = height;
+		m_bufferCoherent = false;
+		m_bufferPersist = persist;
+	}
 	UT_Win32TraceF("buffer-created hdc=%p bm=%p prev=%p",
 				   (void*)m_bufferHdc, (void*)m_bufferBitmap, (void*)m_bufferPrevBitmap);
 	UT_Win32TraceHeap("buffer-created");
@@ -2900,15 +2993,22 @@ void GR_Win32Graphics::_DeviceContext_SwitchToBuffer()
 		return;
 
 	// A drag may already have clipped this DC to a thin strip. Copy the
-	// whole window; the logical clip is applied to the buffer afterwards.
+	// whole window when the bitmap does not already match the screen.
 	// Otherwise presenting the buffer erases the rest of the page.
 	SelectClipRgn(m_hdc, nullptr);
-	BOOL blt = BitBlt(m_bufferHdc, 0, 0, width, height, m_hdc, 0, 0, SRCCOPY);
-	UT_Win32TraceF("buffer-blt %d", blt ? 1 : 0);
+	if (!m_bufferCoherent)
+	{
+		BOOL blt = BitBlt(m_bufferHdc, 0, 0, width, height, m_hdc, 0, 0, SRCCOPY);
+		UT_Win32TraceF("buffer-blt %d", blt ? 1 : 0);
+		m_bufferCoherent = true;
+	}
 
 	// save the current hdc & switch
 	_HDCSwitchStack.push_back(new _HDCSwitchRecord(m_hdc));
 	m_hdc = m_bufferHdc;
+	m_omitPresent = false;
+	m_presentFull = false;
+	m_presentAny = false;
 	// The clip was selected into the screen DC. The memory DC starts unclipped,
 	// so a selection rectangle would not limit drawing into the buffer.
 	if (getClipRect())
@@ -2926,31 +3026,60 @@ void GR_Win32Graphics::_DeviceContext_SwitchToScreen()
 	UT_Win32TraceHeap("screen-restored");
 
 	// get client area size
-	int height(0), width(0);
-	getWidthAndHeightFromHWND(m_hwnd, width, height);
+	int height = m_bufferHeight > 0 ? m_bufferHeight : 1;
+	int width = m_bufferWidth > 0 ? m_bufferWidth : 1;
+	if (m_hwnd)
+	{
+		int clientWidth = 0;
+		int clientHeight = 0;
+		getWidthAndHeightFromHWND(m_hwnd, clientWidth, clientHeight);
+		if (clientWidth > 0 && clientWidth < width)
+			width = clientWidth;
+		if (clientHeight > 0 && clientHeight < height)
+			height = clientHeight;
+	}
 	UT_Win32TraceF("screen-size w=%d h=%d", width, height);
 	
 	// copy any modifications back to the screen
-	if (m_bufferHdc)
+	if (m_bufferHdc && !m_omitPresent)
 	{
 		// The document window is CS_OWNDC, so a clip region stays on its DC.
 		// BitBlt honors that clip and would leave the selection highlight in
-		// the buffer. Present the whole buffer, then put the logical clip back.
+		// the buffer. Clear it, copy the changed rectangle, and leave the
+		// screen DC unclipped. Putting the clip back here makes the following
+		// scroll move only the selection rectangle.
 		SelectClipRgn(m_hdc, nullptr);
-		BOOL blt = BitBlt(m_hdc, 0, 0, width, height, m_bufferHdc, 0, 0, SRCCOPY);
-		// Leave the screen DC unclipped. The logical clip stays in m_pRect
-		// and is applied to the next memory DC. Putting it back here makes
-		// the following scroll move only the selection rectangle.
+		BOOL blt = FALSE;
+		if (!m_presentFull && m_presentAny)
+		{
+			int left = m_presentLeft;
+			int top = m_presentTop;
+			int right = m_presentRight;
+			int bottom = m_presentBottom;
+			if (left < 0)
+				left = 0;
+			if (top < 0)
+				top = 0;
+			if (right > width)
+				right = width;
+			if (bottom > height)
+				bottom = height;
+			if (right > left && bottom > top)
+				blt = BitBlt(m_hdc, left, top, right - left, bottom - top, m_bufferHdc, left, top, SRCCOPY);
+		}
+		else
+			blt = BitBlt(m_hdc, 0, 0, width, height, m_bufferHdc, 0, 0, SRCCOPY);
 		UT_Win32TraceF("screen-blt %d", blt ? 1 : 0);
 		UT_Win32TraceHeap("screen-blt");
+		m_bufferCoherent = true;
 	}
 
-	// free used resources
-	UT_Win32Trace("screen-release");
-	_DoubleBuffering_ReleaseBuffer(m_bufferHdc, m_bufferBitmap, m_bufferPrevBitmap);
-	m_bufferHdc = nullptr;
-	m_bufferBitmap = nullptr;
-	m_bufferPrevBitmap = nullptr;
+	m_omitPresent = false;
+	if (!m_bufferPersist)
+	{
+		UT_Win32Trace("screen-release");
+		_releasePersistentBuffer();
+	}
 	UT_Win32TraceHeap("screen-done");
 }
 
@@ -2978,6 +3107,10 @@ void GR_Win32Graphics::_DeviceContext_RestorePrevHDCFromStack()
 
 void GR_Win32Graphics::_DeviceContext_SuspendDrawing()
 {
+	// Drawing goes to the dummy DC, so the retained bitmap is unchanged
+	// and must not be copied back over the window.
+	if (m_bufferHdc && m_hdc == m_bufferHdc)
+		m_omitPresent = true;
 	// save the current hdc & switch them!
 	_HDCSwitchStack.push_back(new _HDCSwitchRecord(m_hdc));
 	m_hdc = m_dummyHdc;

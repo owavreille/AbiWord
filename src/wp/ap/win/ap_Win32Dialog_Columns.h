@@ -42,6 +42,9 @@ public:
 
 private:
 	XAP_Win32PreviewWidget *	m_pPreviewWidget;
+	HBITMAP				m_hBitmapOne;
+	HBITMAP				m_hBitmapTwo;
+	HBITMAP				m_hBitmapThree;
 
 protected:
 	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;

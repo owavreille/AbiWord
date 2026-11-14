@@ -1023,6 +1023,11 @@ private:
 
 	UT_uint32			m_iNumHorizPages; /////////////////////////////////////////////////
 	UT_uint32			m_getNumHorizPagesCachedWindowWidth;
+	UT_sint32			m_iHorizPagesCachePageWidth;
+	UT_sint32			m_iHorizPagesCachePageCount;
+	UT_sint32			m_iHorizPagesCacheMode;
+	bool				m_bHorizPagesCacheAuto;
+	bool				m_bHorizPagesCacheValid;
 	bool				m_autoNumHorizPages;
 	UT_uint32			m_horizPageSpacing;
 
@@ -1182,6 +1187,9 @@ private:
 														// This allows temporarily disabling smart quotes to allow inserting ANSI quote.
     int                 m_bubbleBlockerCount;
 	UT_sint32           m_iOldPageCount;
+	mutable const fp_Page * m_pStatusPageCache;
+	mutable UT_uint32   m_iStatusPageCache;
+	mutable UT_uint32   m_iStatusPageSeq;
 
 #if defined(TOOLKIT_GTK_ALL)
 	FV_UnixSelectionHandles m_SelectionHandles;

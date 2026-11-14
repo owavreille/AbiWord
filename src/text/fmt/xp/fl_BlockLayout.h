@@ -494,7 +494,9 @@ protected:
 
 	bool					_checkMultiWord(UT_sint32 iStart,
 											UT_sint32 eor,
-											bool bToggleIP) const;
+											bool bToggleIP,
+											UT_sint32 maxWords = -1,
+											UT_sint32 * pNextStart = nullptr) const;
 
 	void					_stuffAllRunsOnALine(void);
 	void					_insertEndOfParagraphRun(void);
@@ -544,6 +546,7 @@ protected:
 	fl_GrammarSquiggles *   m_pGrammarSquiggles;
 	fl_BlockLayout          *m_nextToSpell;
 	fl_BlockLayout          *m_prevToSpell;
+	UT_sint32               m_iSpellCheckFrom;
 #endif
 	bool                    m_bListItem;
 	const gchar *		m_szStyle;

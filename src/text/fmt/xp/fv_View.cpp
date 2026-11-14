@@ -220,6 +220,12 @@ fv_CaretProps::~fv_CaretProps(void)
 FV_View::FV_View(XAP_App * pApp, void* pParentData, FL_DocLayout* pLayout)
 	:	AV_View(pApp, pParentData),
 		m_iNumHorizPages(1), /* This should probably be grabbed from a preference or something */
+		m_getNumHorizPagesCachedWindowWidth(0),
+		m_iHorizPagesCachePageWidth(0),
+		m_iHorizPagesCachePageCount(0),
+		m_iHorizPagesCacheMode(-1),
+		m_bHorizPagesCacheAuto(true),
+		m_bHorizPagesCacheValid(false),
 		m_autoNumHorizPages(true), /* Same here */
 		m_horizPageSpacing(500),
 		m_iInsPoint(0),
@@ -318,6 +324,9 @@ FV_View::FV_View(XAP_App * pApp, void* pParentData, FL_DocLayout* pLayout)
 		m_bAllowSmartQuoteReplacement(true),
 		m_bubbleBlockerCount(0),
 		m_iOldPageCount(-1),
+		m_pStatusPageCache(nullptr),
+		m_iStatusPageCache(0),
+		m_iStatusPageSeq(0),
 		m_SelectionHandles(this, m_Selection),
 		m_pViewDoubleBufferingObject(nullptr)
 {
@@ -2614,11 +2623,11 @@ bool FV_View::notifyListeners(const AV_ChangeMask hint)
 
 			while (bMatch && i < propsBlock.size())
 			{
-				if (propsBlock[i] == m_chg.propsBlock[i])
-				{
-					bMatch = false;
-					break;
-				}
+			if (propsBlock[i] != m_chg.propsBlock[i])
+			{
+				bMatch = false;
+				break;
+			}
 
 				i++;
 			}
@@ -2688,7 +2697,7 @@ bool FV_View::notifyListeners(const AV_ChangeMask hint)
 		bool bMatch = false;
 
 		if (!propsSection.empty() && !m_chg.propsSection.empty()
-			&& propsSection.size() == propsSection.size())
+			&& propsSection.size() == m_chg.propsSection.size())
 		{
 			bMatch = true;
 
@@ -10992,23 +11001,20 @@ UT_uint32 FV_View::getCurrentPageNumForStatusBar(void) const
 	{
 		return 0;
 	}
-	UT_uint32 ndx = 1;
+	UT_uint32 seq = m_pLayout->getPageSequence();
+	if (pCurrentPage == m_pStatusPageCache && seq == m_iStatusPageSeq)
+		return m_iStatusPageCache;
 
-	fp_Page* pPage = m_pLayout->getFirstPage();
-	while (pPage)
+	UT_sint32 found = m_pLayout->findPage(pCurrentPage);
+	if (found < 0)
 	{
-		if (pPage == pCurrentPage)
-		{
-			return ndx;
-		}
-
-		ndx++;
-		pPage = pPage->getNext();
+		UT_DEBUGMSG(("Current page not found - could be has been deleted. Hopefully we can recover \n"));
+		return 0;
 	}
-	UT_DEBUGMSG(("Current page not found - could be has been deleted. Hopefully we can recover \n"));
-//	UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
-
-	return 0;
+	m_pStatusPageCache = pCurrentPage;
+	m_iStatusPageCache = static_cast<UT_uint32>(found + 1);
+	m_iStatusPageSeq = seq;
+	return m_iStatusPageCache;
 }
 
 #ifdef ENABLE_SPELL
@@ -14025,11 +14031,26 @@ void FV_View::calculateNumHorizPages()
 	if(windowWidth < 0)
 	{
 		m_iNumHorizPages = 1;
+		m_bHorizPagesCacheValid = false;
 		return;
 	}
 	if(!getGraphics()->queryProperties(GR_Graphics::DGP_SCREEN))
 	{
 		m_iNumHorizPages = 1;
+		m_bHorizPagesCacheValid = false;
+		return;
+	}
+	fp_Page * pFirstPage = m_pLayout ? m_pLayout->getFirstPage() : nullptr;
+	UT_sint32 pageWidth = pFirstPage ? pFirstPage->getWidth() : 0;
+	UT_sint32 pageCount = m_pLayout ? m_pLayout->countPages() : 0;
+	UT_sint32 viewMode = static_cast<UT_sint32>(getViewMode());
+	if (m_bHorizPagesCacheValid
+		&& m_getNumHorizPagesCachedWindowWidth == static_cast<UT_uint32>(windowWidth)
+		&& m_iHorizPagesCachePageWidth == pageWidth
+		&& m_iHorizPagesCachePageCount == pageCount
+		&& m_iHorizPagesCacheMode == viewMode
+		&& m_bHorizPagesCacheAuto == m_autoNumHorizPages)
+	{
 		return;
 	}
 	xxx_UT_DEBUGMSG(("Initial Number horizontal pages %d \n",iOldNo));
@@ -14112,6 +14133,12 @@ void FV_View::calculateNumHorizPages()
 		pFrame->nullUpdate();
 		_ensureInsertionPointOnScreen();
 	}
+	m_getNumHorizPagesCachedWindowWidth = static_cast<UT_uint32>(windowWidth);
+	m_iHorizPagesCachePageWidth = pageWidth;
+	m_iHorizPagesCachePageCount = pageCount;
+	m_iHorizPagesCacheMode = viewMode;
+	m_bHorizPagesCacheAuto = m_autoNumHorizPages;
+	m_bHorizPagesCacheValid = true;
 	return;
 }
 

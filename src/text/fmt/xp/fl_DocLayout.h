@@ -166,6 +166,8 @@ public:
 	fp_Page*	getNthPage(int n) const;
 	UT_sint32	countPages() const;
 	UT_sint32	findPage(const fp_Page * pPage) const;
+	UT_uint32	getPageSequence() const { return m_iPageSequence; }
+	bool		isSpellCheckInProgress() const { return m_bImSpellCheckingNow; }
 	void            setFramePageNumbers(UT_sint32 iStartPage);
 	fl_FrameLayout* relocateFrame(fl_FrameLayout * pFL, fl_BlockLayout * newBlock,
 				      const PP_PropertyVector & attributes = PP_NOPROPS, const PP_PropertyVector & properties = PP_NOPROPS);
@@ -409,6 +411,7 @@ private:
 	PL_ListenerId		m_lid;
 
 	UT_GenericVector<fp_Page *> m_vecPages;
+	UT_uint32			m_iPageSequence;
 	fl_DocSectionLayout*m_pFirstSection;
 	fl_DocSectionLayout*m_pLastSection;
 

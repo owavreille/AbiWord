@@ -45,6 +45,7 @@
 
 #include <sstream>
 #include <iostream>
+#include <set>
 using std::stringstream;
 using std::cerr;
 using std::endl;
@@ -97,6 +98,71 @@ AP_Dialog_RDFQuery::executeQuery( const std::string& sparql )
     {
         UT_DEBUGMSG(("iter.sz: %lu\n", (unsigned long) iter->size()));
         addBinding( *iter );
+    }
+#else
+    // Windows is built without Redland. The two queries the menus
+    // generate are "every triple" and "triples linked to these RDF ids".
+    const bool limited = sparql.find("str(?rdflink)") != std::string::npos;
+    const bool selectAll = !limited
+        && sparql.find("select ?s ?p ?o") != std::string::npos;
+    if (limited || selectAll)
+    {
+        std::set< std::string > limit;
+        if (limited)
+        {
+            const std::string key = "str(?rdflink) = \"";
+            for (size_t pos = 0; (pos = sparql.find(key, pos)) != std::string::npos; )
+            {
+                pos += key.size();
+                const size_t end = sparql.find('"', pos);
+                if (end == std::string::npos)
+                    break;
+                limit.insert(sparql.substr(pos, end - pos));
+                pos = end + 1;
+            }
+        }
+
+        std::map< std::string, std::string > columns;
+        columns["s"] = "";
+        columns["p"] = "";
+        columns["o"] = "";
+        if (limited)
+            columns["rdflink"] = "";
+        setupBindingsView(columns);
+
+        PD_DocumentRDFHandle rdf = getRDF();
+        const PD_URI idref("http://docs.oasis-open.org/opendocument/meta/package/common#idref");
+        if (rdf)
+        {
+            for (PD_RDFModelIterator it = rdf->begin(); it != rdf->end(); ++it)
+            {
+                const PD_RDFStatement& st = *it;
+                std::string rdflink;
+                if (limited)
+                {
+                    bool keep = false;
+                    const PD_ObjectList objs = rdf->getObjects(st.getSubject(), idref);
+                    for (PD_ObjectList::const_iterator oi = objs.begin(); oi != objs.end(); ++oi)
+                    {
+                        if (limit.count(oi->toString()))
+                        {
+                            keep = true;
+                            rdflink = oi->toString();
+                            break;
+                        }
+                    }
+                    if (!keep)
+                        continue;
+                }
+                std::map< std::string, std::string > row;
+                row["s"] = st.getSubject().toString();
+                row["p"] = st.getPredicate().toString();
+                row["o"] = st.getObject().toString();
+                if (limited)
+                    row["rdflink"] = rdflink;
+                addBinding(row);
+            }
+        }
     }
 #endif
     

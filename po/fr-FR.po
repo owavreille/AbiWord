@@ -2627,7 +2627,7 @@ msgstr "Diminuer le retrait"
 #. FIELD_DateTime_DefaultDate
 #: po/tmp/ap_String_Id.h
 msgid "Default date representation"
-msgstr "La date du jour courant"
+msgstr "Date et heure courantes"
 
 #. DLG_Options_Label_DefaultPageSize
 #: po/tmp/ap_String_Id.h

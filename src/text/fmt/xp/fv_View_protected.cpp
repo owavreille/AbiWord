@@ -4678,6 +4678,17 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		adjustedBottom = adjustedTop + iPageHeight;
 		adjustedRight = adjustedLeft + iPageWidth;
 
+		const UT_Rect * pDrawClip = m_pG->getClipRect();
+		if (pDrawClip)
+		{
+			UT_Rect pageOnScreen(adjustedLeft, adjustedTop, iPageWidth, iPageHeight);
+			if (!pageOnScreen.intersectsRect(pDrawClip))
+			{
+				pPage = pPage->getNext();
+				continue;
+			}
+		}
+
 		xxx_UT_DEBUGMSG(("Drawing page adjustedTop = %i, Bottom = %i, Left = %i, Right = %i\n", adjustedTop, adjustedBottom, adjustedLeft, adjustedRight));
 		xxx_UT_DEBUGMSG(("--Entered _draw loop:\n  iPageNumber = %i, vecitemcount = %i\n  iRow = %i, iCol = %i\n  iPageWidth = %i, iPageHeight = %i\n  getPageViewTopMargin() = %i, m_yScrollOffset = %i\n", iPageNumber, vecPagesOnScreen.getItemCount(), iRow, iCol, iPageWidth, iPageHeight, getPageViewTopMargin(), m_yScrollOffset));
 
@@ -4773,10 +4784,6 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		// advance to the next page
 		pPage = pPage -> getNext();
 	}
-	if (bClip)
-	{
-		m_pG->setClipRect(nullptr);
-	}
 	//
 	// Look if we have to blink the caret
 	//
@@ -4785,6 +4792,13 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 	if(m_pG->allCarets()->doBlinkIfNeeded())
 	{
 		xxx_UT_DEBUGMSG(("Pending blink drawn has bDirtyRunsOnly %d \n",bDirtyRunsOnly));
+	}
+	// Present while the clip still describes what this draw changed.
+	// Clearing it first would copy the whole window back to the screen.
+	painter.endDoubleBuffering();
+	if (bClip)
+	{
+		m_pG->setClipRect(nullptr);
 	}
 	xxx_UT_DEBUGMSG(("End _draw\n"));
 }

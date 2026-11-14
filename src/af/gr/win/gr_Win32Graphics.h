@@ -315,6 +315,17 @@ protected:
 	HDC m_bufferHdc;
 	HBITMAP m_bufferBitmap;
 	HBITMAP m_bufferPrevBitmap;
+	int m_bufferWidth;
+	int m_bufferHeight;
+	bool m_bufferCoherent;
+	bool m_bufferPersist;
+	bool m_omitPresent;
+	bool m_presentFull;
+	bool m_presentAny;
+	int m_presentLeft;
+	int m_presentTop;
+	int m_presentRight;
+	int m_presentBottom;
 	HDC m_dummyHdc;
 	HBITMAP m_dummyBitmap;
 	HBITMAP m_dummyPrevBitmap;
@@ -343,6 +354,8 @@ protected:
 	std::vector<_HDCSwitchRecord *> _HDCSwitchStack;
 
 	void _DeviceContext_RestorePrevHDCFromStack();
+	void _noteBufferClip(int left, int top, int right, int bottom, bool cleared);
+	void _releasePersistentBuffer();
 
 private:
 	virtual GR_Win32Font * _newFont(LOGFONTW & lf, double fPointSize, HDC hdc, HDC printDC);

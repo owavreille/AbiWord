@@ -201,6 +201,7 @@ fl_BlockLayout::fl_BlockLayout(pf_Frag_Strux* sdh,
 	  m_pGrammarSquiggles(nullptr),
 	  m_nextToSpell(nullptr),
 	  m_prevToSpell(nullptr),
+	  m_iSpellCheckFrom(0),
 #endif
 	  m_bListItem(false),
 	  m_szStyle(nullptr),
@@ -4997,34 +4998,24 @@ bool fl_BlockLayout::checkSpelling(void)
 	if(m_pFirstRun->getLine() == nullptr)
 		return false;
 
-	// we only want to do the cursor magic if the cursor is in this block
-	bool bIsCursorInBlock = false;
-	const FV_View* pView = getView();
-	const fp_Run* pLastRun = m_pFirstRun;
+	FV_View* pView = getView();
 
-	while(pLastRun && pLastRun->getNextRun())
-		pLastRun = pLastRun->getNextRun();
-	
-	
-	if(pView && pLastRun)
+	// Check a bounded run of words. Clearing every squiggle and redrawing
+	// the whole paragraph made the caret blink slowly on long blocks.
+	const UT_sint32 chunk = 32;
+	UT_sint32 next = -1;
+	bool bUpdateScreen = false;
+	if (m_iSpellCheckFrom < 0)
+		m_iSpellCheckFrom = 0;
+	bUpdateScreen |= _checkMultiWord(m_iSpellCheckFrom, -1, false, chunk, &next);
+	if (bUpdateScreen && pView && isOnScreen())
+		pView->updateScreen(true);
+	if (next >= 0)
 	{
-		UT_uint32 iBlPosStart = static_cast<UT_uint32>(getPosition());
-		UT_uint32 iBlPosEnd   = iBlPosStart + pLastRun->getBlockOffset() + pLastRun->getLength();
-		UT_uint32 iPos   = static_cast<UT_uint32>(pView->getPoint()); 
-
-		bIsCursorInBlock = ((iPos >= iBlPosStart) && (iPos <= iBlPosEnd));
+		m_iSpellCheckFrom = next;
+		return false;
 	}
-	
-	// Remove any existing squiggles from the screen...
-	bool bUpdateScreen = m_pSpellSquiggles->deleteAll();
-
-	// Now start checking
-	bUpdateScreen |= _checkMultiWord(0, -1, bIsCursorInBlock);
-	if( bUpdateScreen && pView)
-	{
-		markAllRunsDirty();
-		setNeedsRedraw();
-	}
+	m_iSpellCheckFrom = 0;
 	return true;
 }
 
@@ -5038,21 +5029,35 @@ bool fl_BlockLayout::checkSpelling(void)
 bool
 fl_BlockLayout::_checkMultiWord(UT_sint32 iStart,
 								UT_sint32 eor,
-								bool bToggleIP) const
+								bool bToggleIP,
+								UT_sint32 maxWords,
+								UT_sint32 * pNextStart) const
 {
 	xxx_UT_DEBUGMSG(("fl_BlockLayout::_checkMultiWord\n"));
 
 	bool bScreenUpdated = false;
+	if (pNextStart)
+		*pNextStart = -1;
 
 	fl_BlockSpellIterator wordIterator(this, iStart);
 
 	const UT_UCS4Char* pWord;
 	UT_sint32 iLength, iBlockPos, iPTLength;
+	UT_sint32 words = 0;
 
 	while (wordIterator.nextWordForSpellChecking(pWord, iLength, iBlockPos, iPTLength))
 	{
 		// When past the provided end position, break out
 		if (eor > 0 && iBlockPos > eor) break;
+		if (maxWords >= 0 && words >= maxWords)
+		{
+			if (pNextStart)
+				*pNextStart = iBlockPos;
+			break;
+		}
+		words++;
+		if (maxWords >= 0 && m_pSpellSquiggles)
+			bScreenUpdated |= m_pSpellSquiggles->deleteAtOffset(iBlockPos);
 
 		fl_PartOfBlockPtr pPOB(new fl_PartOfBlock(iBlockPos, iPTLength));
 		UT_ASSERT(pPOB);
