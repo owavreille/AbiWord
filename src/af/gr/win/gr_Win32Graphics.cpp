@@ -1292,7 +1292,7 @@ static GR_Win32AlphaBlendFn s_alphaBlendFn(void)
 		tried = true;
 		HMODULE dll = LoadLibraryW(L"msimg32.dll");
 		if (dll)
-			fn = reinterpret_cast<GR_Win32AlphaBlendFn>(GetProcAddress(dll, "AlphaBlend"));
+			fn = reinterpret_cast<GR_Win32AlphaBlendFn>(reinterpret_cast<void *>(GetProcAddress(dll, "AlphaBlend")));
 	}
 	return fn;
 }
