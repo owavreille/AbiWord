@@ -323,6 +323,17 @@ void AP_Dialog_Border_Shading::setCurBlockProps(void)
 			setShadingColorInGUI(UT_RGBColor(255, 255, 255));
 		}
 
+		const char* space_left = current_block->getProperty("left-space");
+		if (space_left && *space_left)
+		{
+			PP_addOrSetAttribute("left-space", space_left, m_vecProps);
+			PP_addOrSetAttribute("right-space", space_left, m_vecProps);
+			PP_addOrSetAttribute("top-space", space_left, m_vecProps);
+			PP_addOrSetAttribute("bot-space", space_left, m_vecProps);
+			// Showing the gap does not apply it again.
+			setShadingOffsetInGUI(space_left);
+		}
+
 
 		xxx_UT_DEBUGMSG(("Maleesh =============== Border props %s|%s|%s\n",style_left, color_left, thickness_left));
 		xxx_UT_DEBUGMSG(("Maleesh =============== Shading props %s|%s\n",shading_pattern, shading_color));
@@ -398,19 +409,8 @@ void AP_Dialog_Border_Shading::setBorderThickness(const std::string & sThick)
 	PP_addOrSetAttribute("top-thickness", m_sBorderThickness, m_vecProps);
 	PP_addOrSetAttribute("bot-thickness", m_sBorderThickness, m_vecProps);
 
-	guint index			= _findClosestThickness(sThick.c_str());
-	double space		= m_dThickness[index] + 0.02;
-	std::string str_space;
-	{
-		UT_LocaleTransactor l(LC_NUMERIC, "C");
-		str_space = UT_std_string_sprintf("%fin", space);
-	}
-
-	PP_addOrSetAttribute("left-space", str_space, m_vecProps);
-	PP_addOrSetAttribute("right-space", str_space, m_vecProps);
-	PP_addOrSetAttribute("top-space", str_space, m_vecProps);
-	PP_addOrSetAttribute("bot-space", str_space, m_vecProps);
-
+	// The offset list owns the gap. Changing the thickness must not
+	// replace the value the user chose there.
 	m_bSettingsChanged = true;
 	xxx_UT_DEBUGMSG(("Maleesh ======================= setBorderThickness\n"));
 }
@@ -466,9 +466,16 @@ void AP_Dialog_Border_Shading::setShadingColor(const UT_RGBColor & clr)
 	xxx_UT_DEBUGMSG(("Maleesh ======================= setShadingColor\n"));
 }
 
-void AP_Dialog_Border_Shading::setShadingOffset(const std::string & /*sOffset*/)
+void AP_Dialog_Border_Shading::setShadingOffset(const std::string & sOffset)
 {
-	// 7/7/2010 Maleesh  - TODO
+	if (sOffset.empty())
+		return;
+
+	PP_addOrSetAttribute("left-space", sOffset, m_vecProps);
+	PP_addOrSetAttribute("right-space", sOffset, m_vecProps);
+	PP_addOrSetAttribute("top-space", sOffset, m_vecProps);
+	PP_addOrSetAttribute("bot-space", sOffset, m_vecProps);
+	m_bSettingsChanged = true;
 }
 
 void AP_Dialog_Border_Shading::_createPreviewFromGC(GR_Graphics * gc,
@@ -592,6 +599,18 @@ void AP_Border_Shading_preview::drawImmediate(const UT_Rect* clip)
 	int cornerLength = m_gc->tlu(5);
 
 	const PP_PropertyVector & props = m_pBorderShading->getPropVector();
+	// The offset is the gap between the border and the content.
+	int gap = 0;
+	const std::string & space = PP_getAttribute("left-space", props);
+	if (!space.empty())
+	{
+		gap = UT_convertToLogicalUnits(space.c_str());
+		if (gap < 0)
+			gap = 0;
+	}
+	int line = border - gap;
+	if (line < m_gc->tlu(2))
+		line = m_gc->tlu(2);
 //
 //  Draw the cell background (Shading)
 //
@@ -613,28 +632,28 @@ void AP_Border_Shading_preview::drawImmediate(const UT_Rect* clip)
 	m_gc->setColor(UT_RGBColor(127,127,127));
 
 	// top left corner
-	painter.drawLine(pageRect.left + border - cornerLength, pageRect.top + border,
-				   pageRect.left + border, pageRect.top + border);
-	painter.drawLine(pageRect.left + border, pageRect.top + border  - cornerLength,
-				   pageRect.left + border, pageRect.top + border);
+	painter.drawLine(pageRect.left + line - cornerLength, pageRect.top + line,
+				   pageRect.left + line, pageRect.top + line);
+	painter.drawLine(pageRect.left + line, pageRect.top + line  - cornerLength,
+				   pageRect.left + line, pageRect.top + line);
 
 	// top right corner
-	painter.drawLine(pageRect.left + pageRect.width - border + cornerLength, pageRect.top + border,
-				   pageRect.left + pageRect.width - border, pageRect.top + border);
-	painter.drawLine(pageRect.left + pageRect.width - border, pageRect.top + border - cornerLength,
-				   pageRect.left + pageRect.width - border, pageRect.top + border);
+	painter.drawLine(pageRect.left + pageRect.width - line + cornerLength, pageRect.top + line,
+				   pageRect.left + pageRect.width - line, pageRect.top + line);
+	painter.drawLine(pageRect.left + pageRect.width - line, pageRect.top + line - cornerLength,
+				   pageRect.left + pageRect.width - line, pageRect.top + line);
 
 	// bottom left corner
-	painter.drawLine(pageRect.left + border - cornerLength, pageRect.top + pageRect.height - border,
-				   pageRect.left + border, pageRect.top + pageRect.height - border);
-	painter.drawLine(pageRect.left + border, pageRect.top + pageRect.height - border + cornerLength,
-				   pageRect.left + border, pageRect.top + pageRect.height - border);
+	painter.drawLine(pageRect.left + line - cornerLength, pageRect.top + pageRect.height - line,
+				   pageRect.left + line, pageRect.top + pageRect.height - line);
+	painter.drawLine(pageRect.left + line, pageRect.top + pageRect.height - line + cornerLength,
+				   pageRect.left + line, pageRect.top + pageRect.height - line);
 
 	// bottom right corner
-	painter.drawLine(pageRect.left + pageRect.width - border + cornerLength, pageRect.top + pageRect.height - border,
-				   pageRect.left + pageRect.width - border, pageRect.top + pageRect.height - border);
-	painter.drawLine(pageRect.left + pageRect.width - border, pageRect.top + pageRect.height - border + cornerLength,
-				   pageRect.left + pageRect.width - border, pageRect.top + pageRect.height - border);
+	painter.drawLine(pageRect.left + pageRect.width - line + cornerLength, pageRect.top + pageRect.height - line,
+				   pageRect.left + pageRect.width - line, pageRect.top + pageRect.height - line);
+	painter.drawLine(pageRect.left + pageRect.width - line, pageRect.top + pageRect.height - line + cornerLength,
+				   pageRect.left + pageRect.width - line, pageRect.top + pageRect.height - line);
 
 //
 //  Draw the cell borders
@@ -657,8 +676,8 @@ void AP_Border_Shading_preview::drawImmediate(const UT_Rect* clip)
 			m_gc->setLineWidth(m_gc->tlu(1));
 		}
 
-		painter.drawLine(pageRect.left + border, pageRect.top + border,
-					   pageRect.left + pageRect.width - border, pageRect.top + border);
+		painter.drawLine(pageRect.left + line, pageRect.top + line,
+					   pageRect.left + pageRect.width - line, pageRect.top + line);
 	}
 
 	// left border
@@ -678,8 +697,8 @@ void AP_Border_Shading_preview::drawImmediate(const UT_Rect* clip)
 		} else {
 			m_gc->setLineWidth(m_gc->tlu(1));
 		}
-		painter.drawLine(pageRect.left + border, pageRect.top + border,
-					   pageRect.left + border, pageRect.top + pageRect.height - border);
+		painter.drawLine(pageRect.left + line, pageRect.top + line,
+					   pageRect.left + line, pageRect.top + pageRect.height - line);
 	}
 
 	// right border
@@ -699,8 +718,8 @@ void AP_Border_Shading_preview::drawImmediate(const UT_Rect* clip)
 		} else {
 			m_gc->setLineWidth(m_gc->tlu(1));
 		}
-		painter.drawLine(pageRect.left + pageRect.width - border, pageRect.top + border,
-					   pageRect.left + pageRect.width - border, pageRect.top + pageRect.height - border);
+		painter.drawLine(pageRect.left + pageRect.width - line, pageRect.top + line,
+					   pageRect.left + pageRect.width - line, pageRect.top + pageRect.height - line);
 	}
 
 	// bottom border
@@ -720,7 +739,7 @@ void AP_Border_Shading_preview::drawImmediate(const UT_Rect* clip)
 		} else {
 			m_gc->setLineWidth(m_gc->tlu(1));
 		}
-		painter.drawLine(pageRect.left + border, pageRect.top + pageRect.height - border,
-					   pageRect.left + pageRect.width - border, pageRect.top + pageRect.height - border);
+		painter.drawLine(pageRect.left + line, pageRect.top + pageRect.height - line,
+					   pageRect.left + pageRect.width - line, pageRect.top + pageRect.height - line);
 	}
 }

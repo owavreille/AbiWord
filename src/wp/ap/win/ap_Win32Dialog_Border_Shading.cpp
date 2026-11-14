@@ -284,6 +284,10 @@ BOOL AP_Win32Dialog_Border_Shading::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, 
 	_insertItemToComboboxEx(m_hwndComboEx, nullptr, 2, 2);
 	_insertItemToComboboxEx(m_hwndComboEx, nullptr, 3, 3);
 
+	// Load the paragraph before the first paint, so the offset list
+	// is not stuck on its first entry until the timer fires.
+	setCurBlockProps();
+
 	centerDialog();
 	return 1; 
 }
@@ -490,8 +494,14 @@ void AP_Win32Dialog_Border_Shading::setShadingOffsetInGUI(const std::string & sO
 {
 	xxx_UT_DEBUGMSG(("Maleesh =============== Setup the shading offset in the GUI: %s \n", sOffset.c_str()));
 
+	if (!m_hDlg || sOffset.empty())
+		return;
+	HWND combo = GetDlgItem(m_hDlg, AP_RID_DIALOG_BORDERSHADING_COMBO_SHADING_OFFSET);
+	if (!combo)
+		return;
+	// CB_SETCURSEL does not notify, so showing the gap does not apply it.
 	guint closest = _findClosestOffset(sOffset.c_str());
-	SendMessageA(GetDlgItem(m_hDlg, AP_RID_DIALOG_BORDERSHADING_COMBO_SHADING_OFFSET), CB_SETCURSEL, WPARAM(closest), 0);
+	SendMessageW(combo, CB_SETCURSEL, WPARAM(closest), 0);
 }
 
 void AP_Win32Dialog_Border_Shading::setBorderColorInGUI(const UT_RGBColor & clr)
