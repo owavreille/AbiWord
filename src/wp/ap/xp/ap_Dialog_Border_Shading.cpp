@@ -240,6 +240,12 @@ void AP_Dialog_Border_Shading::setCurBlockProps(void)
 		}
 
 		setBorderStyleInGUI(active_style);
+		// The side buttons apply m_lineStyle, not the combo selection.
+		{
+			PP_PropertyMap::TypeLineStyle kind = PP_PropertyMap::linestyle_type(active_style.c_str());
+			if (kind != PP_PropertyMap::linestyle__unset && kind != PP_PropertyMap::linestyle_inherit)
+				m_lineStyle = static_cast<UT_sint32>(kind) - 1;
+		}
 
 		const char* color_left	= current_block->getProperty("left-color");
 		const char* thickness_left	= current_block->getProperty("left-thickness");
@@ -253,6 +259,7 @@ void AP_Dialog_Border_Shading::setCurBlockProps(void)
 
 			UT_RGBColor clr;
 			clr.setColor(color_left);
+			m_borderColor = clr;
 			setBorderColorInGUI(clr);
 		}
 		else
@@ -261,6 +268,7 @@ void AP_Dialog_Border_Shading::setCurBlockProps(void)
 			PP_removeAttribute("right-color", m_vecProps);
 			PP_removeAttribute("top-color", m_vecProps);
 			PP_removeAttribute("bot-color", m_vecProps);
+			m_borderColor = UT_RGBColor(0, 0, 0);
 		}
 
 		if (thickness_left)
@@ -270,6 +278,10 @@ void AP_Dialog_Border_Shading::setCurBlockProps(void)
 			PP_addOrSetAttribute("top-thickness", thickness_left, m_vecProps);
 			PP_addOrSetAttribute("bot-thickness", thickness_left, m_vecProps);
 
+			// Do not call setBorderThickness(): that marks the dialog
+			// changed and rewrites every side. The buttons only need
+			// the width the combo is about to show.
+			m_sBorderThickness = thickness_left;
 			setBorderThicknessInGUI(thickness_left);
 		}
 		else
@@ -278,6 +290,8 @@ void AP_Dialog_Border_Shading::setCurBlockProps(void)
 			PP_removeAttribute("right-thickness", m_vecProps);
 			PP_removeAttribute("top-thickness", m_vecProps);
 			PP_removeAttribute("bot-thickness", m_vecProps);
+			// The thickness combo is left on its first entry.
+			m_sBorderThickness = "0.25pt";
 		}
 
 		// Update shading.
@@ -403,6 +417,10 @@ void AP_Dialog_Border_Shading::setBorderThickness(const std::string & sThick)
 
 void AP_Dialog_Border_Shading::setBorderStyle(const std::string & sStyle)
 {
+	PP_PropertyMap::TypeLineStyle kind = PP_PropertyMap::linestyle_type(sStyle.c_str());
+	if (kind != PP_PropertyMap::linestyle__unset && kind != PP_PropertyMap::linestyle_inherit)
+		m_lineStyle = static_cast<UT_sint32>(kind) - 1;
+
 	PP_addOrSetAttribute("left-style", sStyle, m_vecProps);
 	PP_addOrSetAttribute("right-style", sStyle, m_vecProps);
 	PP_addOrSetAttribute("top-style", sStyle, m_vecProps);

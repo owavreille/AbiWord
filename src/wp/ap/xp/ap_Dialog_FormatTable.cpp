@@ -363,10 +363,14 @@ void AP_Dialog_FormatTable::setCurCellProps(void)
 
 		gchar * color = nullptr;
 
-		if (pView->getCellProperty(pos, "left-color", color)) {
+		if (pView->getCellProperty(pos, "left-color", color) && color && *color) {
 			PP_addOrSetAttribute("left-color", color, m_vecProps);
+			// The side buttons apply m_borderColor. Keep it on the
+			// color the swatch already shows.
+			m_borderColor.setColor(color);
 		} else {
 			PP_removeAttribute("left-color", m_vecProps);
+			m_borderColor = UT_RGBColor(0, 0, 0);
 		}
 
 		if (pView->getCellProperty(pos, "right-color", color)) {
