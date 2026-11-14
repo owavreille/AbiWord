@@ -59,6 +59,13 @@ insert = needle + "\n#if defined(__MINGW32__)\n#define NESTED_QSORT 1\n#endif\n"
 if needle not in header:
     raise SystemExit("sort_r.h inattendu")
 sort.write_text(header.replace(needle, insert, 1))
+old_type = "#define YYSTYPE date_ll\n"
+new_type = "#undef YYSTYPE\n#define YYSTYPE date_ll\n"
+for path in (Path("src/parsedate.y"), Path("src/parsedate.c")):
+    text = path.read_text()
+    if old_type not in text:
+        raise SystemExit(f"YYSTYPE introuvable dans {path}")
+    path.write_text(text.replace(old_type, new_type, 1))
 PY
 	./configure "${common[@]}" --with-www=none
 	mark_defined

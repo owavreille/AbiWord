@@ -84,6 +84,9 @@ jobs:
             --with-redland \
             lt_cv_deplibs_check_method=pass_all \
             lt_cv_to_host_file_cmd=func_convert_file_noop
+          # GCC annonce ses répertoires sous la forme lib/../lib.
+          # Libtool croit alors que les archives .la ont été déplacées.
+          sed -i 's|/lib/\.\./lib|/lib|g' libtool
           make -j"$(nproc)"
 
       - name: Assembler les fichiers à installer
