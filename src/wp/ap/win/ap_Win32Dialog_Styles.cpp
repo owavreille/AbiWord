@@ -626,7 +626,6 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 				getFrame()->repopulateCombos();
 				_populateWindowData(); // force a refresh
 				getDoc()->signalListeners(PD_SIGNAL_UPDATE_LAYOUT);
-				m_selectedStyle = "";
 			}
     	}
 		return 1;
@@ -642,6 +641,7 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 			{
 				createNewStyle((gchar *) m_newStyleName);
 				_populateCList();
+				_populatePreviews(false);
 			}
 			destroyAbiPreview();
 			DELETEP(m_pAbiPreviewWidget);
@@ -824,6 +824,11 @@ void AP_Win32Dialog_Styles::_populateCList(void)
 	UT_GenericVector<PD_Style*> * pStyles = nullptr;
 	getDoc()->enumStyles(pStyles);
 	UT_return_if_fail( pStyles );
+
+	// LB_SETCURSEL does not notify. Remember the first row so the
+	// preview and the description are filled without a click.
+	int chosenRow = LB_ERR;
+	UT_uint32 chosenStyle = 0;
 	
 	for (UT_uint32 i = 0; i < nStyles; i++)
 	{
@@ -850,13 +855,32 @@ void AP_Win32Dialog_Styles::_populateCList(void)
 			/*str = AP_Win32App::s_fromUTF8ToWinLocale(pLocalised);
 			pLocalised = str.c_str();*/
 			
-			nIndex = _win32Dialog.addItemToList(AP_RID_DIALOG_STYLES_TOP_LIST_STYLES, pLocalised);						
-			_win32Dialog.setListDataItem(AP_RID_DIALOG_STYLES_TOP_LIST_STYLES, nIndex, i);							
+			nIndex = _win32Dialog.addItemToList(AP_RID_DIALOG_STYLES_TOP_LIST_STYLES, pLocalised);
+			if (nIndex < 0)
+				continue;
+			_win32Dialog.setListDataItem(AP_RID_DIALOG_STYLES_TOP_LIST_STYLES, nIndex, i);
+			if (chosenRow == LB_ERR)
+			{
+				chosenRow = nIndex;
+				chosenStyle = i;
+			}
 			
 		}
 	}
 
 	delete pStyles;
+
+	if (chosenRow != LB_ERR)
+	{
+		const char * chosenName = nullptr;
+		const PD_Style * pcStyle = nullptr;
+		_win32Dialog.selectListItem(AP_RID_DIALOG_STYLES_TOP_LIST_STYLES, chosenRow);
+		getDoc()->enumStyles(chosenStyle, &chosenName, &pcStyle);
+		m_selectedStyle = chosenName ? chosenName : "";
+		m_nSelectedStyleIdx = chosenStyle;
+	}
+	else
+		m_selectedStyle = "";
 }
 
 const char * AP_Win32Dialog_Styles::getCurrentStyle (void) const
