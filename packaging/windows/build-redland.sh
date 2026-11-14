@@ -23,11 +23,14 @@ fetch() {
 	tar -xzf "$work/$name" -C "$work"
 }
 
+# Libtool cherche winepath pour convertir le chemin des exécutables non
+# installés. On ne les lance pas, donc le chemin de construction suffit.
 common=(
 	--host=x86_64-w64-mingw32
 	--prefix="$PREFIX"
 	--disable-static
 	--enable-shared
+	lt_cv_to_host_file_cmd=func_convert_file_noop
 )
 
 # libtool refuse une DLL MinGW tant que chaque symbole n'est pas résolu.
@@ -68,6 +71,18 @@ if ! "$PKG_CONFIG" --exists libpcre; then
 fetch https://downloads.sourceforge.net/project/pcre/pcre/8.45/pcre-8.45.tar.gz pcre.tar.gz
 (
 	cd "$work"/pcre-8.45
+	# config.h définit déjà ces macros via la visibilité GCC. Le bloc
+	# Windows les redéfinit avec __declspec, ce qui avertit sous MinGW.
+	python3 - << 'PY'
+from pathlib import Path
+path = Path("pcreposix.c")
+text = path.read_text()
+old = "#if defined(_WIN32) && !defined(PCRE_STATIC)\n"
+new = "#if defined(_WIN32) && !defined(PCRE_STATIC) && !defined(PCREPOSIX_EXP_DECL)\n"
+if old not in text:
+    raise SystemExit("garde PCREPOSIX_EXP_DECL introuvable dans pcreposix.c")
+path.write_text(text.replace(old, new, 1))
+PY
 	./configure "${common[@]}" --enable-utf --enable-unicode-properties
 	mark_defined
 	make -j"$(nproc)"
@@ -93,6 +108,21 @@ for path in Path(".").rglob("*"):
         changed += 1
 if changed == 0:
     raise SystemExit("aucune inclusion win32_rasqal_config.h")
+service = Path("src/rasqal_service.c")
+text = service.read_text()
+old_accept = """  if(svc->format)
+    raptor_www_set_http_accept(svc->www, svc->format);
+  else
+    raptor_www_set_http_accept(svc->www, DEFAULT_FORMAT);
+"""
+new_accept = """  if(svc->format)
+    raptor_www_set_http_accept2(svc->www, svc->format, strlen(svc->format));
+  else
+    raptor_www_set_http_accept2(svc->www, DEFAULT_FORMAT, strlen(DEFAULT_FORMAT));
+"""
+if old_accept not in text:
+    raise SystemExit("appel raptor_www_set_http_accept introuvable")
+service.write_text(text.replace(old_accept, new_accept, 1))
 PY
 	./configure "${common[@]}" \
 		--with-regex-library=pcre \
@@ -125,6 +155,20 @@ for path in Path(".").rglob("*"):
         changed += 1
 if changed == 0:
     raise SystemExit("aucune inclusion win32_rdf_config.h")
+parser = Path("src/rdf_parser_raptor.c")
+text = parser.read_text()
+old_accept = "      raptor_www_set_http_accept(pcontext->www, accept_h);\n"
+new_accept = "      raptor_www_set_http_accept2(pcontext->www, accept_h, strlen(accept_h));\n"
+if old_accept not in text:
+    raise SystemExit("appel raptor_www_set_http_accept introuvable")
+parser.write_text(text.replace(old_accept, new_accept, 1))
+results = Path("src/rdf_query_results.c")
+text = results.read_text()
+old_check = "rasqal_query_results_formats_check("
+new_check = "rasqal_query_results_formats_check2("
+if old_check not in text:
+    raise SystemExit("appel rasqal_query_results_formats_check introuvable")
+results.write_text(text.replace(old_check, new_check, 1))
 PY
 	./configure "${common[@]}" \
 		--disable-modular \
