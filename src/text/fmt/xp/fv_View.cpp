@@ -12504,6 +12504,8 @@ bool FV_View::getAnnotationText(UT_uint32 iAnnotation, std::string & sText) cons
  */
 bool FV_View::selectAnnotation(fl_AnnotationLayout * pAL)
 {
+		if (!pAL)
+			return false;
 		pf_Frag_Strux* sdhAnn = pAL->getStruxDocHandle();
 		const pf_Frag_Strux* sdhEnd = nullptr;
 		getDocument()->getNextStruxOfType(sdhAnn,PTX_EndAnnotation, &sdhEnd);

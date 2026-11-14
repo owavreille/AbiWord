@@ -34,7 +34,11 @@
 #include "ap_Win32Dialog_Goto.h"
 #include "ap_Win32Resources.rc2"
 #include "fv_View.h"
+#include "fl_DocLayout.h"
+#include "fl_FootnoteLayout.h"
 #include "ap_Win32App.h"
+
+#include <set>
 
 /*****************************************************************/
 
@@ -77,6 +81,117 @@ static void s_showBookmark(HWND dialog, const UT_Win32LocaleString & dest)
 		return;
 	SetWindowTextW(GetDlgItem(dialog, AP_RID_DIALOG_GOTO_EDIT_NUMBER), dest.c_str());
 	EnableWindow(GetDlgItem(dialog, AP_RID_DIALOG_GOTO_BTN_GOTO), TRUE);
+}
+
+static bool s_targetUsesList(int row)
+{
+	return row == static_cast<int>(AP_JUMPTARGET_BOOKMARK)
+		|| row == static_cast<int>(AP_JUMPTARGET_XMLID)
+		|| row == static_cast<int>(AP_JUMPTARGET_ANNOTATION);
+}
+
+static void s_fillJumpList(AP_Win32Dialog_Goto * dlg, HWND list, int row)
+{
+	if (!list)
+		return;
+	SendMessageW(list, LB_RESETCONTENT, 0, 0);
+
+	UT_Win32LocaleString str;
+	if (row == static_cast<int>(AP_JUMPTARGET_BOOKMARK))
+	{
+		const UT_sint32 count = dlg->getExistingBookmarksCount();
+		for (UT_sint32 i = 0; i < count; ++i)
+		{
+			str.fromUTF8(dlg->getNthExistingBookmark(i).c_str());
+			SendMessageW(list, LB_ADDSTRING, 0, (LPARAM)str.c_str());
+		}
+	}
+	else if (row == static_cast<int>(AP_JUMPTARGET_XMLID))
+	{
+		if (PD_DocumentRDFHandle rdf = dlg->getRDF())
+		{
+			std::set<std::string> xmlids;
+			rdf->getAllIDs(xmlids);
+			for (const std::string & id : xmlids)
+			{
+				str.fromUTF8(id.c_str());
+				SendMessageW(list, LB_ADDSTRING, 0, (LPARAM)str.c_str());
+			}
+		}
+	}
+	else if (row == static_cast<int>(AP_JUMPTARGET_ANNOTATION))
+	{
+		FV_View * view = dlg->getView();
+		FL_DocLayout * layout = view ? view->getLayout() : nullptr;
+		if (!view || !layout)
+			return;
+		const UT_uint32 count = view->countAnnotations();
+		for (UT_uint32 i = 0; i < count; ++i)
+		{
+			fl_AnnotationLayout * ann = layout->getNthAnnotation(static_cast<UT_sint32>(i));
+			if (!ann)
+				continue;
+			const UT_uint32 pid = ann->getAnnotationPID();
+			std::string label = std::to_string(pid);
+			const char * title = ann->getTitle();
+			const char * author = ann->getAuthor();
+			if (title && title[0])
+			{
+				label += " - ";
+				label += title;
+			}
+			if (author && author[0])
+			{
+				label += (title && title[0]) ? ", " : " - ";
+				label += author;
+			}
+			str.fromUTF8(label.c_str());
+			const LRESULT index = SendMessageW(list, LB_ADDSTRING, 0, (LPARAM)str.c_str());
+			if (index != LB_ERR)
+				SendMessageW(list, LB_SETITEMDATA, (WPARAM)index, (LPARAM)pid);
+		}
+	}
+}
+
+static void s_takeJumpValue(HWND list, int index, int row, UT_Win32LocaleString & dest)
+{
+	dest.clear();
+	if (!list || index < 0)
+		return;
+	if (row == static_cast<int>(AP_JUMPTARGET_ANNOTATION))
+	{
+		const LRESULT pid = SendMessageW(list, LB_GETITEMDATA, (WPARAM)index, 0);
+		if (pid == LB_ERR || pid < 0)
+			return;
+		wchar_t buf[16];
+		swprintf(buf, L"%u", static_cast<unsigned>(pid));
+		dest.fromLocale(buf);
+		return;
+	}
+	s_takeBookmark(list, index, dest);
+}
+
+static bool s_stepList(HWND list, bool forward, int & index)
+{
+	const int count = static_cast<int>(SendMessageW(list, LB_GETCOUNT, 0, 0));
+	if (count <= 0)
+		return false;
+	index = static_cast<int>(SendMessageW(list, LB_GETCURSEL, 0, 0));
+	if (forward)
+	{
+		if (index < 0)
+			index = 0;
+		else if (++index >= count)
+			index = 0;
+	}
+	else
+	{
+		index--;
+		if (index < 0)
+			index = count - 1;
+	}
+	SendMessageW(list, LB_SETCURSEL, (WPARAM)index, 0);
+	return true;
 }
 
 void AP_Win32Dialog_Goto::activate(void)
@@ -190,18 +305,7 @@ BOOL AP_Win32Dialog_Goto::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*l
 	_DS(GOTO_TEXT_NUMBER,		DLG_Goto_Label_Number);
 	_DS(GOTO_TEXT_INFO, 		DLG_Goto_Label_Help);
 
-	// Initial data
-
-	UT_uint32 count = getExistingBookmarksCount();
-	for( UT_uint32 i = 0; i < count; i++) {
-		str.fromUTF8(getNthExistingBookmark(i).c_str());
-		SendMessageW( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_LIST_BOOKMARKS),
-					 LB_ADDSTRING,
-					 0,
-					(LPARAM)str.c_str());
-	}
-
-	ShowWindow(GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), FALSE);
+	ShowWindow(GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), SW_HIDE);
 
 
 	SetFocus( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_EDIT_NUMBER) );
@@ -235,19 +339,22 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		{
 		case LBN_SELCHANGE:
 			m_iRow = (short) SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_LIST_WHAT), LB_GETCURSEL, 0, 0);
-			if( m_iRow == (short) AP_JUMPTARGET_BOOKMARK )
+			m_oldvalue.clear();
+			SetWindowTextW(GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_EDIT_NUMBER), L"");
+			EnableWindow(GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_BTN_GOTO), FALSE);
 			{
-				ShowWindow(GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_TEXT_INFO),FALSE);
-				ShowWindow(GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_LIST_BOOKMARKS),TRUE);
+				HWND list = GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS);
+				const bool useList = s_targetUsesList(m_iRow);
+				ShowWindow(GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_TEXT_INFO), useList ? SW_HIDE : SW_SHOW);
+				ShowWindow(list, useList ? SW_SHOW : SW_HIDE);
 				const XAP_StringSet * pSS = m_pApp->getStringSet();
-				setDlgItemText(AP_RID_DIALOG_GOTO_TEXT_NUMBER,pSS->getValue(AP_STRING_ID_DLG_Goto_Label_Name));
-			}
-			else
-			{
-				ShowWindow(GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_TEXT_INFO),TRUE);
-				ShowWindow(GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_LIST_BOOKMARKS),FALSE);
-				const XAP_StringSet * pSS = m_pApp->getStringSet();
-				setDlgItemText(AP_RID_DIALOG_GOTO_TEXT_NUMBER,pSS->getValue(AP_STRING_ID_DLG_Goto_Label_Number));
+				const XAP_String_Id label = (m_iRow == (short) AP_JUMPTARGET_BOOKMARK
+					|| m_iRow == (short) AP_JUMPTARGET_XMLID)
+					? AP_STRING_ID_DLG_Goto_Label_Name
+					: AP_STRING_ID_DLG_Goto_Label_Number;
+				setDlgItemText(AP_RID_DIALOG_GOTO_TEXT_NUMBER, pSS->getValue(label));
+				if (useList)
+					s_fillJumpList(this, list, m_iRow);
 			}
 			return 1;
 
@@ -264,7 +371,7 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 				int nIndex = SendMessageW( hWndCtrl, LB_GETCURSEL, 0, 0);
 				if( nIndex != LB_ERR )
 				{
-					s_takeBookmark(hWndCtrl, nIndex, m_oldvalue);
+					s_takeJumpValue(hWndCtrl, nIndex, m_iRow, m_oldvalue);
 					s_showBookmark(hWnd, m_oldvalue);
 					if( wNotifyCode == LBN_DBLCLK && !m_oldvalue.empty() )
 						GoTo( m_oldvalue.utf8_str().utf8_str());
@@ -277,20 +384,13 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		}
 
 	case AP_RID_DIALOG_GOTO_BTN_PREV:
-		if( m_iRow == (short) AP_JUMPTARGET_BOOKMARK )
+		if( s_targetUsesList(m_iRow) )
 		{
 			HWND list = GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS);
-			int nCount = SendMessageW(list, LB_GETCOUNT, 0, 0);
-			int nIndex = SendMessageW(list, LB_GETCURSEL, 0, 0);
-			if (nCount <= 0)
+			int nIndex = 0;
+			if (!s_stepList(list, false, nIndex))
 				return 1;
-			// Same wrap as AP_Dialog_Goto::performGotoPrev: no selection,
-			// or the first item, moves to the last bookmark.
-			nIndex--;
-			if (nIndex < 0)
-				nIndex = nCount - 1;
-			SendMessageW(list, LB_SETCURSEL, (WPARAM)nIndex, 0);
-			s_takeBookmark(list, nIndex, m_oldvalue);
+			s_takeJumpValue(list, nIndex, m_iRow, m_oldvalue);
 			s_showBookmark(hWnd, m_oldvalue);
 
 			if (!m_oldvalue.empty ())
@@ -303,21 +403,13 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		return 1;
 
 	case AP_RID_DIALOG_GOTO_BTN_NEXT:
-		if( m_iRow == (short) AP_JUMPTARGET_BOOKMARK )
+		if( s_targetUsesList(m_iRow) )
 		{
 			HWND list = GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS);
-			int nCount = SendMessageW(list, LB_GETCOUNT, 0, 0);
-			int nIndex = SendMessageW(list, LB_GETCURSEL, 0, 0);
-			if (nCount <= 0)
+			int nIndex = 0;
+			if (!s_stepList(list, true, nIndex))
 				return 1;
-			// Same wrap as AP_Dialog_Goto::performGotoNext: no selection,
-			// or the last item, moves to the first bookmark.
-			if (nIndex < 0)
-				nIndex = 0;
-			else if (++nIndex >= nCount)
-				nIndex = 0;
-			SendMessageW(list, LB_SETCURSEL, (WPARAM)nIndex, 0);
-			s_takeBookmark(list, nIndex, m_oldvalue);
+			s_takeJumpValue(list, nIndex, m_iRow, m_oldvalue);
 			s_showBookmark(hWnd, m_oldvalue);
 
 			if (!m_oldvalue.empty ())
@@ -339,7 +431,8 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		{
 		case EN_UPDATE:
 			dwTextLength = GetWindowTextLengthW( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_EDIT_NUMBER) );
-			if( m_iRow != (short) AP_JUMPTARGET_BOOKMARK )
+			if( m_iRow != (short) AP_JUMPTARGET_BOOKMARK
+				&& m_iRow != (short) AP_JUMPTARGET_XMLID )
 			{
 				if( dwTextLength )
 				{
