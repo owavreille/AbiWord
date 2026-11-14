@@ -81,7 +81,9 @@
 #define AP_RID_DIALOG_BORDER_SHADING			250
 #define AP_RID_DIALOG_INSERTXMLID				251
 #define AP_RID_DIALOG_RDFQUERY					252
-#define AP_RID_DIALOG_RDFEDITOR					253	
+#define AP_RID_DIALOG_RDFEDITOR					253
+#define AP_RID_DIALOG_RDFCONTACT				254
+#define AP_RID_DIALOG_RDFREFERENCE				255
 
 // Bitmaps IDs
 #define AP_RID_TI_1COLUMN 3000
@@ -255,6 +257,8 @@
 #include "ap_Win32Res_DlgInsertXMLID.rc2"
 #include "ap_Win32Res_DlgRDFQuery.rc2"
 #include "ap_Win32Res_DlgRDFEditor.rc2"
+#include "ap_Win32Res_DlgRDFContact.rc2"
+#include "ap_Win32Res_DlgRDFReference.rc2"
 #include "ap_Win32Res_DlgInsertHyperlink.rc2"
 #include "ap_Win32Res_DlgNew.rc2"
 #include "ap_Win32Res_DlgMarkRevisions.rc2"

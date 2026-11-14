@@ -4619,6 +4619,21 @@ msgstr "Nouvelle &annotation"
 msgid "New Contact"
 msgstr "Nouveau contact"
 
+#. DLG_RDF_Contact_Phone
+#: po/tmp/ap_String_Id.h
+msgid "Phone:"
+msgstr "Téléphone :"
+
+#. DLG_RDF_Contact_Email
+#: po/tmp/ap_String_Id.h
+msgid "EMail:"
+msgstr "Courriel :"
+
+#. DLG_RDF_Contact_HomePage
+#: po/tmp/ap_String_Id.h
+msgid "Home Page:"
+msgstr "Page Web :"
+
 #. DLG_NEW_Title
 #: po/tmp/ap_String_Id.h
 msgid "New Document"

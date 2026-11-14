@@ -640,11 +640,17 @@ Defun_EV_GetMenuItemState_Fn(ap_GetState_RDF_Query)
 	ABIWORD_VIEW ;
 	UT_return_val_if_fail (pView, EV_MIS_Gray);
 
-	return 
-#ifdef WITH_REDLAND
-	       EV_MIS_ZERO; 
+	return EV_MIS_ZERO;
+}
+
+Defun_EV_GetMenuItemState_Fn(ap_GetState_RDF_StylesheetSettings)
+{
+	UT_UNUSED(id);
+	UT_UNUSED(pAV_View);
+#ifdef TOOLKIT_GTK_ALL
+	return EV_MIS_ZERO;
 #else
-	       EV_MIS_Gray;
+	return EV_MIS_Gray;
 #endif
 }
 
@@ -654,12 +660,7 @@ Defun_EV_GetMenuItemState_Fn(ap_GetState_RDF_Contact)
 	ABIWORD_VIEW ;
 	UT_return_val_if_fail (pView, EV_MIS_Gray);
 
-	return 
-#ifdef WITH_EVOLUTION_DATA_SERVER
-	       EV_MIS_ZERO; 
-#else
-	       EV_MIS_Gray;
-#endif
+	return EV_MIS_ZERO;
 }
 
 Defun_EV_GetMenuItemState_Fn(ap_GetState_haveSemItems)
@@ -675,11 +676,6 @@ Defun_EV_GetMenuItemState_Fn(ap_GetState_haveSemItems)
 	if (id == (XAP_Menu_Id)AP_MENU_ID_RDFANCHOR_EDITSEMITEM) 
 		return EV_MIS_Gray;
 
-#ifndef WITH_EVOLUTION_DATA_SERVER
-	if (id == (XAP_Menu_Id)AP_MENU_ID_RDFANCHOR_EXPORTSEMITEM) 
-		return EV_MIS_Gray;
-#endif
-    
 	EV_Menu_ItemState s = EV_MIS_ZERO ;
     return s;
 

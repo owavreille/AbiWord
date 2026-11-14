@@ -1,0 +1,52 @@
+// AbiWord
+// Copyright (C) 2011 Ben Martin
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program; if not, write to the Free Software
+// Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+// 02110-1301 USA.
+//////////////////////////////////////////////////////////////////
+
+#define AP_RID_DIALOG_RDFCONTACT_LBL_NAME		1001
+#define AP_RID_DIALOG_RDFCONTACT_EBX_NAME		1002
+#define AP_RID_DIALOG_RDFCONTACT_LBL_NICK		1003
+#define AP_RID_DIALOG_RDFCONTACT_EBX_NICK		1004
+#define AP_RID_DIALOG_RDFCONTACT_LBL_PHONE		1005
+#define AP_RID_DIALOG_RDFCONTACT_EBX_PHONE		1006
+#define AP_RID_DIALOG_RDFCONTACT_LBL_EMAIL		1007
+#define AP_RID_DIALOG_RDFCONTACT_EBX_EMAIL		1008
+#define AP_RID_DIALOG_RDFCONTACT_LBL_HOME		1009
+#define AP_RID_DIALOG_RDFCONTACT_EBX_HOME		1010
+
+#ifdef RC_INVOKED
+
+AP_RID_DIALOG_RDFCONTACT DIALOG DISCARDABLE  15, 15, 250, 132
+STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "New Contact"
+FONT 8, "MS Shell Dlg 2"
+BEGIN
+	LTEXT			"Name",		AP_RID_DIALOG_RDFCONTACT_LBL_NAME, 7, 8, 70, 10
+	EDITTEXT					AP_RID_DIALOG_RDFCONTACT_EBX_NAME, 80, 6, 160, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	LTEXT			"Nick",		AP_RID_DIALOG_RDFCONTACT_LBL_NICK, 7, 26, 70, 10
+	EDITTEXT					AP_RID_DIALOG_RDFCONTACT_EBX_NICK, 80, 24, 160, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	LTEXT			"Phone:",	AP_RID_DIALOG_RDFCONTACT_LBL_PHONE, 7, 44, 70, 10
+	EDITTEXT					AP_RID_DIALOG_RDFCONTACT_EBX_PHONE, 80, 42, 160, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	LTEXT			"EMail:",	AP_RID_DIALOG_RDFCONTACT_LBL_EMAIL, 7, 62, 70, 10
+	EDITTEXT					AP_RID_DIALOG_RDFCONTACT_EBX_EMAIL, 80, 60, 160, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	LTEXT			"Home Page:", AP_RID_DIALOG_RDFCONTACT_LBL_HOME, 7, 80, 70, 10
+	EDITTEXT					AP_RID_DIALOG_RDFCONTACT_EBX_HOME, 80, 78, 160, 14, ES_AUTOHSCROLL | WS_TABSTOP
+	DEFPUSHBUTTON	"OK",		IDOK, 124, 108, 50, 14
+	PUSHBUTTON		"Cancel",	IDCANCEL, 180, 108, 50, 14
+END
+
+#endif

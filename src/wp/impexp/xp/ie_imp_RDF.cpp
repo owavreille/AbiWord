@@ -332,17 +332,14 @@ IE_Imp_RDF_VCard::pasteFromBufferSS( PD_DocumentRange * pDocRange,
                                      std::stringstream& inputss,
                                      const char * /*szEncoding*/ )
 {
-#ifndef WITH_EVOLUTION_DATA_SERVER
-	UT_UNUSED(pDocRange);
-	UT_UNUSED(inputss);
-    UT_DEBUGMSG(("can not parse vcards!\n"));
-    return true;
-#else
-
     UT_DEBUGMSG(("trying to get card for data:%s\n",inputss.str().c_str() ));
 
     PD_DocumentRDFHandle rdf = getDoc()->getDocumentRDF();
+    if (!rdf)
+        return false;
     PD_RDFSemanticItemHandle obj = PD_RDFSemanticItem::createSemanticItem( rdf, "Contact" );
+    if (!obj)
+        return false;
     obj->importFromData( inputss, rdf, pDocRange );
     
     // if( EVCard* c = e_vcard_new_from_string( inputss.str().c_str() ) )
@@ -393,8 +390,6 @@ IE_Imp_RDF_VCard::pasteFromBufferSS( PD_DocumentRange * pDocRange,
     // }
 
     return true;
-
-#endif
 }
 
 /**********/

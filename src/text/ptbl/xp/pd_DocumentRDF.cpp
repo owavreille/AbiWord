@@ -1914,6 +1914,342 @@ static void set( EVCard* c, const char* k, const std::string& v )
 }
 #endif
 
+#ifndef WITH_EVOLUTION_DATA_SERVER
+
+// vCard 3 reader and writer. Evolution Data Server is a GNOME library
+// with no usable MinGW port; AbiWord only used it to parse a .vcf file.
+
+struct s_VCard
+{
+    std::string fn;
+    std::string nick;
+    std::string email;
+    std::string tel;
+    std::string uid;
+    std::string url;
+    std::string jabber;
+};
+
+static std::string s_vcardUpper(const std::string& text)
+{
+    std::string out = text;
+    for (size_t i = 0; i < out.size(); ++i)
+    {
+        if (out[i] >= 'a' && out[i] <= 'z')
+            out[i] = static_cast<char>(out[i] - 'a' + 'A');
+    }
+    return out;
+}
+
+static void s_appendUtf8(std::string& out, unsigned int code)
+{
+    if (code < 0x80)
+        out.push_back(static_cast<char>(code));
+    else if (code < 0x800)
+    {
+        out.push_back(static_cast<char>(0xC0 | (code >> 6)));
+        out.push_back(static_cast<char>(0x80 | (code & 0x3F)));
+    }
+    else
+    {
+        out.push_back(static_cast<char>(0xE0 | (code >> 12)));
+        out.push_back(static_cast<char>(0x80 | ((code >> 6) & 0x3F)));
+        out.push_back(static_cast<char>(0x80 | (code & 0x3F)));
+    }
+}
+
+static std::string s_bytesToUtf8(const std::string& bytes, const std::string& charset)
+{
+    const std::string set = s_vcardUpper(charset);
+    if (set.empty() || set == "UTF-8" || set == "UTF8")
+        return bytes;
+    if (set != "ISO-8859-1" && set != "LATIN1" && set != "WINDOWS-1252" && set != "CP1252")
+        return bytes;
+    static const unsigned short cp1252[32] = {
+        0x20AC, 0x0081, 0x201A, 0x0192, 0x201E, 0x2026, 0x2020, 0x2021,
+        0x02C6, 0x2030, 0x0160, 0x2039, 0x0152, 0x008D, 0x017D, 0x008F,
+        0x0090, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014,
+        0x02DC, 0x2122, 0x0161, 0x203A, 0x0153, 0x009D, 0x017E, 0x0178
+    };
+    std::string out;
+    for (size_t i = 0; i < bytes.size(); ++i)
+    {
+        const unsigned char c = static_cast<unsigned char>(bytes[i]);
+        if (set != "ISO-8859-1" && set != "LATIN1" && c >= 0x80 && c <= 0x9F)
+            s_appendUtf8(out, cp1252[c - 0x80]);
+        else
+            s_appendUtf8(out, c);
+    }
+    return out;
+}
+
+static int s_hexValue(char c)
+{
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    return -1;
+}
+
+static std::string s_decodeQuotedPrintable(const std::string& text)
+{
+    std::string out;
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        if (text[i] == '=' && i + 2 < text.size())
+        {
+            const int hi = s_hexValue(text[i + 1]);
+            const int lo = s_hexValue(text[i + 2]);
+            if (hi >= 0 && lo >= 0)
+            {
+                out.push_back(static_cast<char>((hi << 4) | lo));
+                i += 2;
+                continue;
+            }
+        }
+        out.push_back(text[i]);
+    }
+    return out;
+}
+
+static std::string s_unfoldVCard(const std::string& text)
+{
+    std::string out;
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        if (text[i] == '\r')
+            continue;
+        if (text[i] == '=' && i + 1 < text.size() && (text[i + 1] == '\n' || text[i + 1] == '\r'))
+        {
+            ++i;
+            if (i < text.size() && text[i] == '\r')
+                ++i;
+            if (i < text.size() && text[i] == '\n')
+                continue;
+        }
+        if (text[i] == '\n' && i + 1 < text.size() && (text[i + 1] == ' ' || text[i + 1] == '\t'))
+        {
+            ++i;
+            continue;
+        }
+        out.push_back(text[i]);
+    }
+    return out;
+}
+
+static std::string s_unescapeVCard(const std::string& text)
+{
+    std::string out;
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        if (text[i] == '\\' && i + 1 < text.size())
+        {
+            const char n = text[++i];
+            if (n == 'n' || n == 'N')
+                out.push_back('\n');
+            else
+                out.push_back(n);
+            continue;
+        }
+        out.push_back(text[i]);
+    }
+    return out;
+}
+
+static std::string s_vcardParam(const std::string& params, const char* key)
+{
+    const std::string want = s_vcardUpper(key);
+    size_t i = 0;
+    while (i < params.size())
+    {
+        const size_t semi = params.find(';', i);
+        const std::string part = params.substr(i, semi == std::string::npos ? std::string::npos : semi - i);
+        const size_t eq = part.find('=');
+        const std::string name = s_vcardUpper(eq == std::string::npos ? part : part.substr(0, eq));
+        std::string value = eq == std::string::npos ? "" : part.substr(eq + 1);
+        if (value.size() >= 2 && value.front() == '"' && value.back() == '"')
+            value = value.substr(1, value.size() - 2);
+        if (name == want)
+            return value;
+        if (semi == std::string::npos)
+            break;
+        i = semi + 1;
+    }
+    return "";
+}
+
+static bool s_vcardPref(const std::string& params)
+{
+    return s_vcardUpper(params).find("PREF") != std::string::npos;
+}
+
+static void s_takeVCard(std::string& dest, const std::string& value, bool preferred)
+{
+    if (value.empty())
+        return;
+    if (dest.empty() || preferred)
+        dest = value;
+}
+
+static std::string s_vcardValue(const std::string& params, const std::string& raw);
+
+static std::string s_nameFromN(const std::string& params, const std::string& raw)
+{
+    std::string parts[5];
+    size_t at = 0;
+    for (int i = 0; i < 5; ++i)
+    {
+        size_t semi = at;
+        while (semi < raw.size())
+        {
+            if (raw[semi] == ';' && (semi == at || raw[semi - 1] != '\\'))
+                break;
+            ++semi;
+        }
+        if (semi >= raw.size())
+            semi = std::string::npos;
+        parts[i] = s_vcardValue(params, raw.substr(at, semi == std::string::npos ? std::string::npos : semi - at));
+        if (semi == std::string::npos)
+            break;
+        at = semi + 1;
+    }
+    std::string name;
+    if (!parts[1].empty())
+        name = parts[1];
+    if (!parts[0].empty())
+    {
+        if (!name.empty())
+            name += " ";
+        name += parts[0];
+    }
+    if (name.empty())
+        name = parts[3];
+    return name;
+}
+
+static bool s_splitVCardLine(const std::string& line, std::string& name, std::string& params, std::string& value)
+{
+    bool quoted = false;
+    size_t colon = std::string::npos;
+    for (size_t i = 0; i < line.size(); ++i)
+    {
+        if (line[i] == '"')
+            quoted = !quoted;
+        else if (line[i] == ':' && !quoted)
+        {
+            colon = i;
+            break;
+        }
+    }
+    if (colon == std::string::npos)
+        return false;
+    const std::string left = line.substr(0, colon);
+    value = line.substr(colon + 1);
+    const size_t semi = left.find(';');
+    name = semi == std::string::npos ? left : left.substr(0, semi);
+    params = semi == std::string::npos ? "" : left.substr(semi + 1);
+    const size_t dot = name.rfind('.');
+    if (dot != std::string::npos)
+        name = name.substr(dot + 1);
+    name = s_vcardUpper(name);
+    return !name.empty();
+}
+
+static std::string s_vcardValue(const std::string& params, const std::string& raw)
+{
+    std::string value = raw;
+    const std::string encoding = s_vcardUpper(s_vcardParam(params, "ENCODING"));
+    if (encoding == "QUOTED-PRINTABLE" || encoding == "QP")
+        value = s_decodeQuotedPrintable(value);
+    value = s_bytesToUtf8(value, s_vcardParam(params, "CHARSET"));
+    return s_unescapeVCard(value);
+}
+
+static bool s_parseVCard(std::istream& input, s_VCard& card)
+{
+    std::stringstream buffer;
+    buffer << input.rdbuf();
+    const std::string text = s_unfoldVCard(buffer.str());
+    bool inside = false;
+    bool sawEnd = false;
+    size_t at = 0;
+    while (at < text.size())
+    {
+        size_t nl = text.find('\n', at);
+        std::string line = text.substr(at, nl == std::string::npos ? std::string::npos : nl - at);
+        at = nl == std::string::npos ? text.size() : nl + 1;
+        if (!line.empty() && line.back() == '\r')
+            line.erase(line.size() - 1);
+        if (line.empty())
+            continue;
+        std::string name, params, raw;
+        if (!s_splitVCardLine(line, name, params, raw))
+            continue;
+        const std::string value = s_vcardValue(params, raw);
+        if (name == "BEGIN" && s_vcardUpper(value) == "VCARD")
+        {
+            inside = true;
+            continue;
+        }
+        if (!inside)
+            continue;
+        if (name == "END" && s_vcardUpper(value) == "VCARD")
+        {
+            sawEnd = true;
+            break;
+        }
+        const bool preferred = s_vcardPref(params);
+        if (name == "FN")
+            s_takeVCard(card.fn, value, preferred);
+        else if (name == "N" && card.fn.empty())
+            s_takeVCard(card.fn, s_nameFromN(params, raw), preferred);
+        else if (name == "NICKNAME")
+            s_takeVCard(card.nick, value, preferred);
+        else if (name == "EMAIL")
+            s_takeVCard(card.email, value, preferred);
+        else if (name == "TEL")
+            s_takeVCard(card.tel, value, preferred);
+        else if (name == "UID")
+            s_takeVCard(card.uid, value, preferred);
+        else if (name == "URL")
+            s_takeVCard(card.url, value, preferred);
+        else if (name == "X-JABBER" || name == "X-JABBERID")
+            s_takeVCard(card.jabber, value, preferred);
+    }
+    return inside && sawEnd && !card.fn.empty();
+}
+
+static std::string s_escapeVCard(const std::string& text)
+{
+    std::string out;
+    for (size_t i = 0; i < text.size(); ++i)
+    {
+        const char c = text[i];
+        if (c == '\\' || c == ';' || c == ',')
+        {
+            out.push_back('\\');
+            out.push_back(c);
+        }
+        else if (c == '\n')
+            out += "\\n";
+        else if (c != '\r')
+            out.push_back(c);
+    }
+    return out;
+}
+
+static void s_writeVCardLine(std::ostream& out, const char* name, const std::string& value)
+{
+    if (value.empty())
+        return;
+    out << name << ":" << s_escapeVCard(value) << "\r\n";
+}
+
+#endif
+
 std::list< std::pair< std::string, std::string> >
 PD_RDFContact::getImportTypes() const
 {
@@ -1992,9 +2328,33 @@ PD_RDFContact::importFromData( std::istream& iss, PD_DocumentRDFHandle rdf, PD_D
         m->commit();
     }
 #else
-	UT_UNUSED(iss);
-	UT_UNUSED(rdf);
-	UT_UNUSED(pDocRange);
+    UT_UNUSED(pDocRange);
+    s_VCard card;
+    if (!s_parseVCard(iss, card) || !rdf)
+        return;
+    m_name = card.fn;
+    m_nick = card.nick;
+    m_email = card.email;
+    m_phone = card.tel;
+    m_homePage = card.url;
+    m_jabberID = card.jabber;
+    if (card.uid.find("://") != std::string::npos)
+        m_linkingSubject = PD_URI(card.uid);
+    else if (!card.uid.empty())
+        m_linkingSubject = PD_URI("http://abicollab.net/rdf/foaf#" + card.uid);
+    else
+        m_linkingSubject = PD_URI(XAP_App::getApp()->createUUIDString());
+
+    PD_DocumentRDFMutationHandle m = rdf->createMutation();
+    const std::string base = "http://xmlns.com/foaf/0.1/";
+    setRDFType(m, base + "Person");
+    updateTriple(m, m_name, card.fn, PD_URI(base + "name"));
+    updateTriple(m, m_nick, card.nick, PD_URI(base + "nick"));
+    updateTriple(m, m_email, card.email, PD_URI(base + "mbox"));
+    updateTriple(m, m_homePage, card.url, PD_URI(base + "homepage"));
+    updateTriple(m, m_phone, card.tel, PD_URI(base + "phone"));
+    updateTriple(m, m_jabberID, card.jabber, PD_URI(base + "jabberid"));
+    m->commit();
 #endif
 }
 
@@ -2044,6 +2404,21 @@ PD_RDFContact::exportToFile( const std::string& filename_const ) const
         g_free(data);
     }
     
+#else
+    if (filename.empty())
+        return;
+    std::ofstream oss(filename.c_str(), std::ios::binary);
+    if (!oss)
+        return;
+    oss << "BEGIN:VCARD\r\nVERSION:3.0\r\n";
+    s_writeVCardLine(oss, "FN", m_name);
+    s_writeVCardLine(oss, "NICKNAME", m_nick);
+    s_writeVCardLine(oss, "EMAIL", m_email);
+    s_writeVCardLine(oss, "TEL", m_phone);
+    s_writeVCardLine(oss, "URL", m_homePage);
+    s_writeVCardLine(oss, "UID", m_linkingSubject.toString());
+    s_writeVCardLine(oss, "X-JABBER", m_jabberID);
+    oss << "END:VCARD\r\n";
 #endif    
 }
 
@@ -5064,6 +5439,92 @@ PD_DocumentRDF::showEditorWindow( const PD_RDFSemanticItems & cl )
 
 
 
+#ifndef WITH_REDLAND
+typedef std::list< std::map< std::string, std::string > > s_RDFRows;
+
+static std::string s_firstObject(PD_RDFModelHandle model, const PD_URI& subj, const char* pred)
+{
+    if (!model)
+        return "";
+    PD_ObjectList objs = model->getObjects(subj, PD_URI(pred));
+    if (objs.empty())
+        return "";
+    return objs.front().toString();
+}
+
+static s_RDFRows s_contactsWithoutSparql(PD_RDFModelHandle model)
+{
+    s_RDFRows bindings;
+    if (!model)
+        return bindings;
+    const std::string typePred = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    const std::string person = "http://xmlns.com/foaf/0.1/Person";
+    std::set< std::string > seen;
+    for (PD_RDFModelIterator it = model->begin(); it != model->end(); ++it)
+    {
+        const PD_RDFStatement& st = *it;
+        if (st.getPredicate().toString() != typePred)
+            continue;
+        if (st.getObject().toString() != person)
+            continue;
+        const std::string subj = st.getSubject().toString();
+        if (!seen.insert(subj).second)
+            continue;
+        const std::string name = s_firstObject(model, st.getSubject(), "http://xmlns.com/foaf/0.1/name");
+        if (name.empty())
+            continue;
+        std::string image = s_firstObject(model, st.getSubject(), "http://xmlns.com/foaf/0.1/image");
+        if (image.empty())
+            image = s_firstObject(model, st.getSubject(), "http://xmlns.com/foaf/0.1/img");
+        std::map< std::string, std::string > row;
+        row["person"] = subj;
+        row["name"] = name;
+        row["nick"] = s_firstObject(model, st.getSubject(), "http://xmlns.com/foaf/0.1/nick");
+        row["email"] = s_firstObject(model, st.getSubject(), "http://xmlns.com/foaf/0.1/mbox");
+        row["homepage"] = s_firstObject(model, st.getSubject(), "http://xmlns.com/foaf/0.1/homepage");
+        row["img"] = image;
+        row["phone"] = s_firstObject(model, st.getSubject(), "http://xmlns.com/foaf/0.1/phone");
+        bindings.push_back(row);
+    }
+    return bindings;
+}
+
+static s_RDFRows s_eventsWithoutSparql(PD_RDFModelHandle model)
+{
+    s_RDFRows bindings;
+    if (!model)
+        return bindings;
+    const std::string typePred = "http://www.w3.org/1999/02/22-rdf-syntax-ns#type";
+    const std::string vevent = "http://www.w3.org/2002/12/cal/icaltzd#Vevent";
+    const std::string cal = "http://www.w3.org/2002/12/cal/icaltzd#";
+    std::set< std::string > seen;
+    for (PD_RDFModelIterator it = model->begin(); it != model->end(); ++it)
+    {
+        const PD_RDFStatement& st = *it;
+        if (st.getPredicate().toString() != typePred)
+            continue;
+        if (st.getObject().toString() != vevent)
+            continue;
+        const std::string subj = st.getSubject().toString();
+        if (!seen.insert(subj).second)
+            continue;
+        const std::string uid = s_firstObject(model, st.getSubject(), (cal + "uid").c_str());
+        if (uid.empty())
+            continue;
+        std::map< std::string, std::string > row;
+        row["ev"] = subj;
+        row["uid"] = uid;
+        row["dtstart"] = s_firstObject(model, st.getSubject(), (cal + "dtstart").c_str());
+        row["dtend"] = s_firstObject(model, st.getSubject(), (cal + "dtend").c_str());
+        row["summary"] = s_firstObject(model, st.getSubject(), (cal + "summary").c_str());
+        row["location"] = s_firstObject(model, st.getSubject(), (cal + "location").c_str());
+        row["description"] = s_firstObject(model, st.getSubject(), (cal + "description").c_str());
+        bindings.push_back(row);
+    }
+    return bindings;
+}
+#endif
+
 PD_RDFContacts
 PD_DocumentRDF::getContacts( PD_RDFModelHandle alternateModel )
 {
@@ -5072,11 +5533,14 @@ PD_DocumentRDF::getContacts( PD_RDFModelHandle alternateModel )
         m = getDocument()->getDocumentRDF();
 
     PD_RDFContacts ret;
+    PD_DocumentRDFHandle rdf = getDocument()->getDocumentRDF();
+    PD_ResultBindings_t bindings;
+#ifdef WITH_REDLAND
     std::stringstream sparqlQuery;
     sparqlQuery << "prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \n"
                 << "prefix foaf: <http://xmlns.com/foaf/0.1/> \n"
                 << "prefix pkg: <http://docs.oasis-open.org/opendocument/meta/package/common#> \n"
-                << "select distinct ?person ?name ?nick ?email ?homepage ?img ?phone \n"
+                << "select distinct ?person ?name ?nick ?email ?homepage ?img ?image ?phone \n"
                 << "where { \n"
                 << "    ?person rdf:type foaf:Person . \n"
                 << "    ?person foaf:name ?name \n"
@@ -5084,13 +5548,16 @@ PD_DocumentRDF::getContacts( PD_RDFModelHandle alternateModel )
                 << "    OPTIONAL { ?person foaf:mbox  ?email } \n"
                 << "    OPTIONAL { ?person foaf:nick ?nick } \n"
                 << "    OPTIONAL { ?person foaf:homepage ?homepage } \n"
+                << "    OPTIONAL { ?person foaf:image ?image } \n"
                 << "    OPTIONAL { ?person foaf:img ?img } \n"
                 << "}\n";
     UT_DEBUGMSG(("getContacts() sparql:\n%s\n\n", sparqlQuery.str().c_str() ));
 
-    PD_DocumentRDFHandle rdf = getDocument()->getDocumentRDF();
     PD_RDFQuery q( rdf, m );
-    PD_ResultBindings_t bindings = q.executeQuery( sparqlQuery.str() );
+    bindings = q.executeQuery( sparqlQuery.str() );
+#else
+    bindings = s_contactsWithoutSparql(m);
+#endif
     UT_DEBUGMSG(("getContacts() bindings.sz:%lu\n", (long unsigned)bindings.size() ));
     
     // uniqfilter is needed because redland might not honour the
@@ -5102,8 +5569,12 @@ PD_DocumentRDF::getContacts( PD_RDFModelHandle alternateModel )
         if (uniqfilter.count(n))
             continue;
         uniqfilter.insert(n);
+        if ((*it)["img"].empty())
+            (*it)["img"] = (*it)["image"];
 
         PD_RDFContact* newItem = PD_DocumentRDF::getSemanticItemFactory()->createContact( rdf, it );
+        if (!newItem)
+            continue;
         PD_RDFContactHandle h( newItem );
         ret.push_back( h );
     }
@@ -5120,6 +5591,9 @@ PD_DocumentRDF::getEvents( PD_RDFModelHandle alternateModel )
         m = getDocument()->getDocumentRDF();
 
     PD_RDFEvents ret;
+    PD_DocumentRDFHandle rdf = getDocument()->getDocumentRDF();
+    PD_ResultBindings_t bindings;
+#ifdef WITH_REDLAND
     std::stringstream sparqlQuery;
     sparqlQuery << " prefix rdf:  <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \n"
                 << " prefix foaf: <http://xmlns.com/foaf/0.1/>  \n"
@@ -5143,9 +5617,11 @@ PD_DocumentRDF::getEvents( PD_RDFModelHandle alternateModel )
     
     UT_DEBUGMSG(("getEvents() sparql:\n%s\n\n", sparqlQuery.str().c_str() ));
 
-    PD_DocumentRDFHandle rdf = getDocument()->getDocumentRDF();
     PD_RDFQuery q( rdf, m );
-    PD_ResultBindings_t bindings = q.executeQuery( sparqlQuery.str() );
+    bindings = q.executeQuery( sparqlQuery.str() );
+#else
+    bindings = s_eventsWithoutSparql(m);
+#endif
     UT_DEBUGMSG(("getEvents() bindings.sz:%lu\n", (long unsigned)bindings.size() ));
     
     // uniqfilter is needed because redland might not honour the
@@ -5159,6 +5635,8 @@ PD_DocumentRDF::getEvents( PD_RDFModelHandle alternateModel )
         uniqfilter.insert(n);
 
         PD_RDFEvent* newItem = PD_DocumentRDF::getSemanticItemFactory()->createEvent( rdf, it );
+        if (!newItem)
+            continue;
         PD_RDFEventHandle h( newItem );
         ret.push_back( h );
     }

@@ -61,6 +61,13 @@ jobs:
           make -j"$(nproc)"
           make install
 
+      - name: Compiler Redland
+        env:
+          PKG_CONFIG: /usr/bin/x86_64-w64-mingw32-pkg-config
+        run: |
+          chmod +x packaging/windows/build-redland.sh
+          packaging/windows/build-redland.sh
+
       - name: Configurer et compiler AbiWord
         env:
           PKG_CONFIG: /usr/bin/x86_64-w64-mingw32-pkg-config
@@ -74,6 +81,7 @@ jobs:
             --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
             --with-boost=/usr/x86_64-w64-mingw32/sys-root/mingw \
             --enable-plugins="opendocument openxml" \
+            --with-redland \
             lt_cv_deplibs_check_method=pass_all \
             lt_cv_to_host_file_cmd=func_convert_file_noop
           make -j"$(nproc)"

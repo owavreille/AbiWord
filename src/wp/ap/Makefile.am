@@ -793,6 +793,7 @@ libap_la_SOURCES += \
 	win/ap_Win32Dialog_RDFEditor.h \
 	win/ap_Win32Dialog_RDFQuery.cpp \
 	win/ap_Win32Dialog_RDFQuery.h \
+	win/ap_Win32RDFSemanticItem.cpp \
 	win/ap_Win32Dialog_PageNumbers.cpp \
 	win/ap_Win32Dialog_PageNumbers.h \
 	win/ap_Win32Dialog_PageSetup.cpp \

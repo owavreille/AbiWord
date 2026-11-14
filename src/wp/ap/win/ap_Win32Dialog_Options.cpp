@@ -2,7 +2,7 @@
 
 /* AbiWord
  * Copyright (C) 1998 AbiSource, Inc.
- *			 (c) 2002-2006 Jordi Mas i Hernàndez jmas@softcatala.org
+ *			 (c) 2002-2006 Jordi Mas i HernÃ ndez jmas@softcatala.org
  * 			
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -649,7 +649,15 @@ void AP_Win32Dialog_Options_Spelling::_onInitDialog()
 		SendMessageW(GetDlgItem(getHandle(), boldFields[i]), WM_SETFONT, 
 			(WPARAM)(AP_Win32Dialog_Options*)getContainer()->getBoldFontHandle(), MAKELPARAM(FALSE /* Redraw */, 0));
 	}
-		
+
+	// The grammar engine is the abigrammar plugin. This build does not
+	// ship it, so the checkbox must not look like it checks grammar.
+	if (!getApp()->getPlugin("abigrammar"))
+	{
+		ShowWindow(GetDlgItem(getHandle(), AP_RID_DIALOG_OPTIONS_CHK_GrammarCheck), SW_HIDE);
+		ShowWindow(GetDlgItem(getHandle(), AP_RID_DIALOG_OPTIONS_STATIC_Grammar), SW_HIDE);
+		EnableWindow(GetDlgItem(getHandle(), AP_RID_DIALOG_OPTIONS_CHK_GrammarCheck), FALSE);
+	}
 }
 
 

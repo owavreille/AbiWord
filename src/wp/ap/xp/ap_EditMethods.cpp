@@ -10915,6 +10915,8 @@ Defun1(rdfInsertNewContact)
 			const XAP_StringSet *pSS = XAP_App::getApp()->getStringSet();
 			pSS->getValueUTF8(AP_STRING_ID_DLG_RDF_Insert_NewContact, objname);
 			PD_RDFSemanticItemHandle obj = PD_RDFSemanticItem::createSemanticItem( rdf, "Contact" );
+			if (!obj)
+				return false;
 			obj->setName( objname );
 			/*std::pair< PT_DocPosition, PT_DocPosition > range =*/
 			obj->insert( pView );
@@ -10937,6 +10939,8 @@ Defun1(rdfInsertNewContactFromFile)
 			const XAP_StringSet *pSS = XAP_App::getApp()->getStringSet();
 			pSS->getValueUTF8(AP_STRING_ID_DLG_RDF_Insert_NewContact, objname);
 			PD_RDFSemanticItemHandle obj = PD_RDFSemanticItem::createSemanticItem( rdf, "Contact" );
+			if (!obj)
+				return false;
 			obj->setName( objname );
 			obj->importFromFile();
 		}

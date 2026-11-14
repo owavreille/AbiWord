@@ -72,9 +72,7 @@ void IE_ImpExp_RegisterXP ()
 	IE_Imp::registerImporter(new IE_Imp_Text_Sniffer ());
 	IE_Imp::registerImporter(new IE_Imp_EncodedText_Sniffer ());
 	IE_Imp::registerImporter(new IE_Imp_XHTML_Sniffer ());
-#ifdef WITH_EVOLUTION_DATA_SERVER
 	IE_Imp::registerImporter(new IE_Imp_RDF_VCard_Sniffer ());
-#endif
 #ifdef WITH_LIBICAL
 	IE_Imp::registerImporter(new IE_Imp_RDF_Calendar_Sniffer ());
 #endif
