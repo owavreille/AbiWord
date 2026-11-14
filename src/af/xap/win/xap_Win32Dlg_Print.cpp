@@ -321,16 +321,11 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 	
 	if (m_bDoPrintToFile)
 	{
-		char bufSuggestedName[1030];
-		memset(bufSuggestedName,0,sizeof(bufSuggestedName));
-
-		// we construct a suggested pathname for the print-to-file pathname.
-		// we append a .print to the string.  it would be better to append
-		// a .ps or whatever, but we don't know what the technology/language
-		// of the device is....
-		
-		sprintf(bufSuggestedName,"%s.print",m_szDocumentPathname);
-		if (!_getPrintToFilePathname(pFrame,bufSuggestedName))
+		// Append .print without a fixed buffer. A document opened from a
+		// very long path must not overflow the stack here.
+		UT_String suggested(m_szDocumentPathname ? m_szDocumentPathname : "document");
+		suggested += ".print";
+		if (!_getPrintToFilePathname(pFrame, suggested.c_str()))
 			goto Fail;
 	}
 

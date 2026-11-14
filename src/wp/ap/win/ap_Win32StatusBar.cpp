@@ -115,8 +115,22 @@ LRESULT APIENTRY StatusbarWndProc (HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 				}
 				
 			// update
-			SendMessageW(hwnd, SB_SETPARTS, nParts, (LPARAM)pArOffsets);	
-			MoveWindow(pBar->getProgressBar(),*pArOffsets/2,2,*pArOffsets/2,20,true);
+			SendMessageW(hwnd, SB_SETPARTS, nParts, (LPARAM)pArOffsets);
+			// Part 0 is the page number. The progress bar belongs in the
+			// message pane that follows it, so the page indicator stays visible.
+			RECT client;
+			GetClientRect(hwnd, &client);
+			int left = pArOffsets[0];
+			int right = (nParts > 1) ? pArOffsets[1] : client.right;
+			if (left < 0)
+				left = 0;
+			if (right < 0)
+				right = client.right;
+			int barH = client.bottom - client.top;
+			if (barH > 6)
+				barH -= 4;
+			if (right > left + 8 && barH > 0)
+				MoveWindow(pBar->getProgressBar(), left + 2, 2, right - left - 4, barH, TRUE);
 
 			delete [] pArWidths;
 			delete [] pArOffsets;
@@ -271,10 +285,11 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 	// add progress bar and hide it 
 	//  set the color and range 
 	m_hwndProgressBar= UT_CreateWindowEx(0, PROGRESS_CLASSW, nullptr,
-			WS_CHILD | WS_VISIBLE|PBS_MARQUEE,
+			WS_CHILD | PBS_MARQUEE,
 			0, 0, 0, 0,
 			m_hwndStatusBar, nullptr, app->getInstance(),nullptr);
 	SendMessage(m_hwndProgressBar,PBM_SETRANGE,0,MAKELONG(0,100));
+	ShowWindow(m_hwndProgressBar, SW_HIDE);
 
 	UT_return_val_if_fail (m_hwndStatusBar, nullptr);
 

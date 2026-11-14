@@ -140,6 +140,8 @@ BOOL AP_Win32Dialog_New::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*lP
 
 	XAP_Win32DialogHelper::s_centerDialog(hWnd);	
 	_updateControls();
+	if (getOpenType() == AP_Dialog_New::open_Template)
+		_selectNormalTemplate(hWnd);
 	return 1;	// 1 == we did not call SetFocus()
 }
 
@@ -176,16 +178,7 @@ BOOL AP_Win32Dialog_New::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam*/)
 
 	case AP_RID_DIALOG_NEW_RDO_TEMPLATE:
 		setOpenType(AP_Dialog_New::open_Template);
-		{
-			int nIndex = _win32Dialog.getListSelectedIndex(AP_RID_DIALOG_NEW_LBX_TEMPLATE);
-			if( nIndex == LB_ERR )
-			{
-				HWND hControl = GetDlgItem(hWnd, AP_RID_DIALOG_NEW_LBX_TEMPLATE);
-				nIndex = SendMessageW( hControl, LB_FINDSTRING , (WPARAM) -1, (LPARAM) "Normal" );
-				_win32Dialog.selectListItem(AP_RID_DIALOG_NEW_LBX_TEMPLATE, nIndex);
-				_setFileName( nIndex );
-			}
-		}
+		_selectNormalTemplate(hWnd);
 		_updateControls();
 		return 1;
 
@@ -298,6 +291,40 @@ void AP_Win32Dialog_New::_updateControls()
 		_win32Dialog.checkButton( AP_RID_DIALOG_NEW_RDO_TEMPLATE, false );
 		break;
 	}
+}
+
+void AP_Win32Dialog_New::_selectNormalTemplate(HWND hWnd)
+{
+	HWND hControl = GetDlgItem(hWnd, AP_RID_DIALOG_NEW_LBX_TEMPLATE);
+	if (!hControl)
+		return;
+
+	int selected = static_cast<int>(SendMessageW(hControl, LB_GETCURSEL, 0, 0));
+	if (selected != LB_ERR)
+	{
+		_setFileName(selected);
+		return;
+	}
+
+	const int count = static_cast<int>(SendMessageW(hControl, LB_GETCOUNT, 0, 0));
+	int found = LB_ERR;
+	for (int i = 0; i < count; ++i)
+	{
+		wchar_t text[MAX_PATH];
+		const LRESULT n = SendMessageW(hControl, LB_GETTEXT, i, (LPARAM)text);
+		if (n <= 0 || n >= MAX_PATH)
+			continue;
+		if (_wcsicmp(text, L"normal") == 0 || _wcsnicmp(text, L"normal.awt", 10) == 0)
+		{
+			found = i;
+			break;
+		}
+	}
+	if (found == LB_ERR)
+		return;
+
+	SendMessageW(hControl, LB_SETCURSEL, found, 0);
+	_setFileName(found);
 }
 
 void AP_Win32Dialog_New::_setFileName( UT_sint32 nIndex )
