@@ -272,6 +272,8 @@ public:
       m_multiPageTiff(nullptr),
       m_tiffFilename(nullptr)
   {
+    takeOwnershipOfDCAndDocInfo();
+
     GpStatus status = gdip_init ();
     ASSERT_GDIP_SUCCESS (status, gdip_init);
     if (status != 0)

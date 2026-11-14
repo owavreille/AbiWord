@@ -1768,8 +1768,26 @@ GR_Graphics* GR_Graphics::newNullGraphics()
 	GR_CairoNullGraphicsAllocInfo ai;
 	return XAP_App::getApp()->newGraphics(GRID_CAIRO_NULL, (GR_AllocInfo&)ai);
 #elif defined(TOOLKIT_WIN)
-	GR_Win32AllocInfo ai (GR_Win32Graphics::createbestmetafilehdc(), GR_Win32Graphics::getDocInfo(), nullptr);
-	return XAP_App::getApp()->newGraphics(GRID_WIN32, (GR_AllocInfo&)ai);
+	HDC hdc = GR_Win32Graphics::createbestmetafilehdc();
+	DOCINFOW * info = GR_Win32Graphics::getDocInfo();
+	if (!hdc || !info)
+	{
+		if (hdc)
+			DeleteDC(hdc);
+		g_free(info);
+		return nullptr;
+	}
+	GR_Win32AllocInfo ai (hdc, info, nullptr);
+	GR_Graphics * graphics = XAP_App::getApp()->newGraphics(GRID_WIN32, (GR_AllocInfo&)ai);
+	GR_Win32Graphics * win = static_cast<GR_Win32Graphics *>(graphics);
+	if (win)
+		win->takeOwnershipOfDCAndDocInfo();
+	else
+	{
+		DeleteDC(hdc);
+		g_free(info);
+	}
+	return graphics;
 #elif defined(TOOLKIT_COCOA)
 #endif
 

@@ -291,6 +291,8 @@ public:
 
 	static DOCINFOW *getDocInfo();
 	static HDC createbestmetafilehdc();
+	// The HDC and DOCINFO passed to the print constructor are deleted with this object.
+	void takeOwnershipOfDCAndDocInfo();
 
 protected:
 	// all instances have to be created via GR_GraphicsFactory; see gr_Graphics.h
@@ -350,6 +352,8 @@ protected:
 	UT_uint32               m_iDCFontAllocNo;
 	UT_uint32               m_iPrintDCFontAllocNo;
 	HDC						m_hdc;
+	bool					m_bOwnHDC;
+	bool					m_bOwnDocInfo;
 	HDC                     m_printHDC;
 	static HDC				m_defPrintHDC;
 	static UT_uint32		s_iInstanceCount;

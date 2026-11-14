@@ -68,18 +68,22 @@ static void CreateBMPFile(HWND /*hwnd*/, UT_ByteBuf & pBB, PBITMAPINFO pbi,
   PBITMAPINFOHEADER pbih;     // bitmap info-header 
   LPBYTE lpBits;              // memory pointer 	
   
-  if (!hBMP) return;
-  
-  pbih = (PBITMAPINFOHEADER) pbi; 
+  if (!hBMP || !pbi || pbi->bmiHeader.biHeight <= 0 || pbi->bmiHeader.biSizeImage == 0)
+    return;
+
+  pbih = (PBITMAPINFOHEADER) pbi;
   lpBits = (LPBYTE) GlobalAlloc(GMEM_FIXED, pbih->biSizeImage);
 
   if (!lpBits) return;
-  
-  // Retrieve the color table (RGBQUAD array) and the bits 
-  // (array of palette indices) from the DIB. 
-  if (!GetDIBits(hDC, hBMP, 0, (WORD) pbih->biHeight, lpBits, pbi, 
-		 DIB_RGB_COLORS)) 
+
+  // Retrieve the color table (RGBQUAD array) and the bits
+  // (array of palette indices) from the DIB.
+  if (!GetDIBits(hDC, hBMP, 0, static_cast<UINT>(pbih->biHeight), lpBits, pbi,
+		 DIB_RGB_COLORS))
+  {
+    GlobalFree((HGLOBAL)lpBits);
     return;
+  }
   
   hdr.bfType = 0x4d42;        // 0x42 = "B" 0x4d = "M" 
   // Compute the size of the entire file. 
@@ -125,39 +129,34 @@ static PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
   // Convert the color format to a count of bits. 
   cClrBits = (WORD)(bmp.bmPlanes * bmp.bmBitsPixel); 
   
-  if (cClrBits == 1) 
-    cClrBits = 1; 
-  else if (cClrBits <= 4) 
+  if (cClrBits == 1)
+    cClrBits = 1;
+  else if (cClrBits <= 4)
     cClrBits = 4;
-  else if (cClrBits <= 8) 
-    cClrBits = 8; 
-  else if (cClrBits <= 16) 
+  else if (cClrBits <= 8)
+    cClrBits = 8;
+  else if (cClrBits <= 16)
     cClrBits = 16;
-  else if (cClrBits <= 24) 
+  else if (cClrBits <= 24)
     cClrBits = 24;
-  else cClrBits = 32; 
-  
-  // Allocate memory for the BITMAPINFO structure. (This structure 
-  // contains a BITMAPINFOHEADER structure and an array of RGBQUAD 
-  // data structures.) 
-  
-  if (cClrBits != 24) 
-    pbmi = (PBITMAPINFO) LocalAlloc(LPTR, 
-				    sizeof(BITMAPINFOHEADER) + 
-				    sizeof(RGBQUAD) * (1 << cClrBits)); 
-  else // There is no RGBQUAD array for the 24-bit-per-pixel format. 	
-    pbmi = (PBITMAPINFO) LocalAlloc(LPTR, 
-				    sizeof(BITMAPINFOHEADER)); 
-  
-  // Initialize the fields in the BITMAPINFO structure. 
-  
-  pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER); 
-  pbmi->bmiHeader.biWidth = bmp.bmWidth; 
-  pbmi->bmiHeader.biHeight = bmp.bmHeight; 
-  pbmi->bmiHeader.biPlanes = bmp.bmPlanes; 
-  pbmi->bmiHeader.biBitCount = bmp.bmBitsPixel; 
-  if (cClrBits < 24) 
-    pbmi->bmiHeader.biClrUsed = (1<<cClrBits); 
+  else
+    cClrBits = 32;
+
+  DWORD paletteEntries = 0;
+  if (cClrBits <= 8)
+    paletteEntries = 1u << cClrBits;
+
+  pbmi = (PBITMAPINFO) LocalAlloc(LPTR,
+				  sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * paletteEntries);
+  if (!pbmi)
+    return nullptr;
+
+  pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  pbmi->bmiHeader.biWidth = bmp.bmWidth;
+  pbmi->bmiHeader.biHeight = bmp.bmHeight;
+  pbmi->bmiHeader.biPlanes = bmp.bmPlanes;
+  pbmi->bmiHeader.biBitCount = bmp.bmBitsPixel;
+  pbmi->bmiHeader.biClrUsed = paletteEntries; 
   
   // If the bitmap is not compressed, set the BI_RGB flag. 
   pbmi->bmiHeader.biCompression = BI_RGB; 
@@ -262,11 +261,16 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
     hBitmap = (HBITMAP)CopyImage(hB,IMAGE_BITMAP,0,0,LR_COPYRETURNORG);
     
     HWND hWnd = GetDesktopWindow();
-    
-    // Create a BMP file from a BITMAP	
-    bi = CreateBitmapInfoStruct(hBitmap);						
-    CreateBMPFile(hWnd, bBufBMP, bi, hBitmap, GetDC(hWnd));
-    LocalFree ((HLOCAL)bi);
+
+    // Create a BMP file from a BITMAP
+    bi = CreateBitmapInfoStruct(hBitmap);
+    HDC hdc = GetDC(hWnd);
+    if (bi && hdc)
+      CreateBMPFile(hWnd, bBufBMP, bi, hBitmap, hdc);
+    if (hdc)
+      ReleaseDC(hWnd, hdc);
+    if (bi)
+      LocalFree(bi);
     
     InitializePrivateClassData();
     
@@ -334,8 +338,7 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
 
 		
 		DeleteDC(hMemDC);
-		DeleteDC(hWndDC);
-	    DeleteObject(hBrush); 
+		ReleaseDC(hWnd, hWndDC);
 		DeleteObject(hBit);	  
     
 		err = Read_BMP_Header(&bBufBMP);

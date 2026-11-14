@@ -67,15 +67,16 @@ void AP_Win32TopRuler::setView(AV_View * pView)
 	AP_TopRuler::setView(pView);
 
 	DELETEP(m_pG);
-	GR_Win32AllocInfo ai(GetDC(m_hwndTopRuler), m_hwndTopRuler);
+	HDC hdc = GetDC(m_hwndTopRuler);
+	GR_Win32AllocInfo ai(hdc, m_hwndTopRuler);
 	GR_Win32Graphics * pG = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
 
 	m_pG = pG;
 	UT_return_if_fail (m_pG);		
 	pG->init3dColors();
 
-	if (IsWindow(m_hwndTopRuler))
-		SendMessageW(m_hwndTopRuler, WM_ERASEBKGND, (WPARAM)GetDC(m_hwndTopRuler), 0);
+	if (IsWindow(m_hwndTopRuler) && hdc)
+		SendMessageW(m_hwndTopRuler, WM_ERASEBKGND, (WPARAM)hdc, 0);
 }
 
 /*****************************************************************/

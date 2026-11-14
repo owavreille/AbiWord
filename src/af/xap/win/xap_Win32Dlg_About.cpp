@@ -360,6 +360,9 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	}
 
 	DestroyWindow(hwndAbout);
+	DeleteObject(hfontHeading);
+	DeleteObject(hfontPrimary);
+	DeleteObject(hfontSmall);
 
 	UnregisterClassW(pClassName, pWin32App->getInstance());
 

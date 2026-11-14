@@ -22,6 +22,7 @@
 #include "xap_Win32App.h"
 #include "xap_Win32LabelledSeparator.h"
 #include <commctrl.h>
+#include <cstring>
 
 /*****************************************************************/
 
@@ -62,21 +63,24 @@ static WNDPROC s_pfnWndProc;
  */
 static void AdaptSeparatorLength(HWND hwnd, const wchar_t* text, HFONT hFont)
 {
-	// Provide the right font
-	LOGFONTW logFont;
-	int status = GetObjectW(hFont, sizeof(LOGFONTW), &logFont);
-	UT_return_if_fail(status);
-	HFONT hCtrlFont = CreateFontIndirectW(&logFont);
-	UT_return_if_fail(hCtrlFont);
+	if (!hwnd)
+		return;
+	if (!text)
+		text = L"";
 
-	// Evaluate text size
-	int length = wcslen(text);
-	SIZE textSize;
-	HFONT hPrevCtrlFont;
 	HDC hdc = GetDC(hwnd);
-	hPrevCtrlFont = (HFONT) SelectObject(hdc, hFont);
-	GetTextExtentPoint32W(hdc, text, length, &textSize);
-	SelectObject(hdc, hPrevCtrlFont);
+	if (!hdc)
+		return;
+
+	HFONT previous = nullptr;
+	if (hFont)
+		previous = static_cast<HFONT>(SelectObject(hdc, hFont));
+	SIZE textSize;
+	memset(&textSize, 0, sizeof(textSize));
+	GetTextExtentPoint32W(hdc, text, static_cast<int>(wcslen(text)), &textSize);
+	if (hFont)
+		SelectObject(hdc, previous);
+	ReleaseDC(hwnd, hdc);
 
 	// Modifiy separator line length
 	RECT controlRect;

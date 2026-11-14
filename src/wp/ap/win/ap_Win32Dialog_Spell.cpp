@@ -301,30 +301,40 @@ void AP_Win32Dialog_Spell::_suggestChange(void)
 // returns a pointer which needs to be FREEP'd by the caller
 static UT_UCS4Char * s_getUCSText(HWND hwnd)
 {
-	char * pBuf = nullptr;
-	UT_UCS4Char * pUCS = nullptr;
-
-	DWORD len = GetWindowTextLength(hwnd);
-	if (!len)
+	const int len = GetWindowTextLengthW(hwnd);
+	if (len <= 0)
 		return nullptr;
 
-	pBuf = new char [len + 1];
-	if (!pBuf)
-		goto FreeMemory;
-	GetWindowText(hwnd,pBuf,len+1);
+	wchar_t * wide = new wchar_t[static_cast<size_t>(len) + 1];
+	if (!wide)
+		return nullptr;
+	if (GetWindowTextW(hwnd, wide, len + 1) <= 0)
+	{
+		delete [] wide;
+		return nullptr;
+	}
 
-	UT_UCS4_cloneString_char(&pUCS,pBuf);
-	if (!pUCS)
-		goto FreeMemory;
+	UT_UCS4Char * text = static_cast<UT_UCS4Char *>(UT_calloc(static_cast<UT_uint32>(len) + 1, sizeof(UT_UCS4Char)));
+	if (!text)
+	{
+		delete [] wide;
+		return nullptr;
+	}
 
-	DELETEP(pBuf);
-	return pUCS;
-
-FreeMemory:
-	DELETEP(pBuf);
-	FREEP(pUCS);
-
-	return nullptr;
+	int out = 0;
+	for (int i = 0; wide[i] != 0 && out < len; )
+	{
+		UT_uint32 unit = static_cast<UT_uint32>(wide[i++]);
+		if (unit >= 0xD800 && unit <= 0xDBFF && wide[i] >= 0xDC00 && wide[i] <= 0xDFFF)
+		{
+			const UT_uint32 low = static_cast<UT_uint32>(wide[i++]);
+			unit = 0x10000 + (((unit - 0xD800) << 10) | (low - 0xDC00));
+		}
+		text[out++] = static_cast<UT_UCS4Char>(unit);
+	}
+	text[out] = 0;
+	delete [] wide;
+	return text;
 }
 
 void AP_Win32Dialog_Spell::_change(void)
@@ -339,7 +349,7 @@ void AP_Win32Dialog_Spell::_change(void)
 	else
 	{
 		replace = s_getUCSText(m_hwndChangeTo);
-		if (!UT_UCS4_strlen(replace)) 
+		if (!replace || !UT_UCS4_strlen(replace))
 		{
 			FREEP(replace);
 			return;
@@ -363,7 +373,7 @@ void AP_Win32Dialog_Spell::_changeAll(void)
 	else
 	{
 		replace = s_getUCSText(m_hwndChangeTo);
-		if (!UT_UCS4_strlen(replace)) 
+		if (!replace || !UT_UCS4_strlen(replace))
 		{
 			FREEP(replace);
 			return;

@@ -102,6 +102,8 @@ void GR_Win32Graphics::_constructorCommonCode(HDC hdc)
 	m_iDCFontAllocNo = 0;
 	m_iPrintDCFontAllocNo = 0;
 	m_hdc = hdc;
+	m_bOwnHDC = false;
+	m_bOwnDocInfo = false;
 	m_bufferHdc = nullptr;
 	m_bufferBitmap = nullptr;
 	m_bufferPrevBitmap = nullptr;
@@ -265,6 +267,19 @@ GR_Win32Graphics::~GR_Win32Graphics()
 	if (s_iInstanceCount == 0)
 		DeleteDC(m_defPrintHDC);
 
+	if (m_bOwnHDC && m_hdc)
+	{
+		DeleteDC(m_hdc);
+		m_hdc = nullptr;
+	}
+	if (m_bOwnDocInfo && m_pDocInfo)
+		FREEP(m_pDocInfo);
+}
+
+void GR_Win32Graphics::takeOwnershipOfDCAndDocInfo()
+{
+	m_bOwnHDC = (m_hdc != nullptr);
+	m_bOwnDocInfo = (m_pDocInfo != nullptr);
 }
 
 bool GR_Win32Graphics::queryProperties(GR_Graphics::Properties gp) const
@@ -2293,10 +2308,11 @@ BITMAPINFO * GR_Win32Graphics::ConvertDDBToDIB(HBITMAP bitmap, HPALETTE hPal, DW
 	bi.biClrUsed		= 0;	
 	bi.biClrImportant	= 0;
 	
-	// Compute the size of the  infoheader and the color table
-	int nColors = (1 << bi.biBitCount);	
-	if( nColors > 256 ) 		
-		nColors = 0;
+	// A 16-bit or 32-bit DIB has no color table. Shifting by the bit count
+	// is undefined once the count reaches the width of an int.
+	int nColors = 0;
+	if (bi.biBitCount > 0 && bi.biBitCount <= 8)
+		nColors = 1 << bi.biBitCount;
 	dwLen  = bi.biSize + nColors * sizeof(RGBQUAD);
 	
 	// We need a device context to get the DIB from	
@@ -2622,48 +2638,49 @@ DOCINFOW *GR_Win32Graphics::getDocInfo()
  */
 HDC GR_Win32Graphics::createbestmetafilehdc()
 {
-  DWORD neededsize;
-  DWORD noprinters;
-  LPPRINTER_INFO_5W printerinfo = nullptr;
+  // A zero-size EnumPrintersW call fails and reports the buffer size.
+  // Treating that failure as "no printer" returned a screen DC from GetDC
+  // that nothing released.
+  DWORD neededsize = 0;
+  DWORD noprinters = 0;
+  HDC besthdc = CreateDCW(L"DISPLAY", nullptr, nullptr, nullptr);
   int bestres = 0;
-  HDC besthdc = nullptr;
+  if (besthdc)
+    bestres = GetDeviceCaps(besthdc, LOGPIXELSX) + GetDeviceCaps(besthdc, LOGPIXELSY);
 
-  if (EnumPrintersW(PRINTER_ENUM_CONNECTIONS|PRINTER_ENUM_LOCAL, nullptr, 5, nullptr, 0,
-		&neededsize, &noprinters))
+  EnumPrintersW(PRINTER_ENUM_CONNECTIONS | PRINTER_ENUM_LOCAL, nullptr, 5,
+		nullptr, 0, &neededsize, &noprinters);
+  if (neededsize == 0)
+    return besthdc;
+
+  LPPRINTER_INFO_5W printerinfo = static_cast<LPPRINTER_INFO_5W>(malloc(neededsize));
+  if (!printerinfo)
+    return besthdc;
+
+  if (EnumPrintersW(PRINTER_ENUM_CONNECTIONS | PRINTER_ENUM_LOCAL, nullptr, 5,
+		    reinterpret_cast<LPBYTE>(printerinfo), neededsize, &neededsize, &noprinters))
   {
-	printerinfo = (LPPRINTER_INFO_5W) malloc(neededsize);
-  } else {
-	return GetDC(nullptr);
+    for (DWORD i = 0; i < noprinters; i++)
+    {
+      if (!printerinfo[i].pPrinterName)
+        continue;
+      HDC curhdc = CreateDCW(L"WINSPOOL", printerinfo[i].pPrinterName, nullptr, nullptr);
+      if (!curhdc)
+        continue;
+      int curres = GetDeviceCaps(curhdc, LOGPIXELSX) + GetDeviceCaps(curhdc, LOGPIXELSY);
+      if (curres > bestres)
+      {
+        if (besthdc)
+          DeleteDC(besthdc);
+        bestres = curres;
+        besthdc = curhdc;
+      }
+      else
+        DeleteDC(curhdc);
+    }
   }
 
-  if (EnumPrintersW(PRINTER_ENUM_CONNECTIONS|PRINTER_ENUM_LOCAL, nullptr, 5,
-		   (LPBYTE)printerinfo, neededsize, &neededsize, &noprinters)) {
-    // init best resolution for hdc=0, which is screen resolution:
-    HDC curhdc = GetDC(nullptr);
-    if (curhdc) {
-      bestres = GetDeviceCaps(curhdc, LOGPIXELSX) + GetDeviceCaps(curhdc,
-								  LOGPIXELSY);
-      bestres = ReleaseDC(nullptr, curhdc);
-    }
-
-    for (UT_uint32 i = 0; i < noprinters; i++) {
-      curhdc = CreateDCW(L"WINSPOOL", printerinfo[i].pPrinterName, nullptr, nullptr);
-      if (curhdc) {
-	int curres = GetDeviceCaps(curhdc, LOGPIXELSX) + GetDeviceCaps(curhdc,
-								       LOGPIXELSY);
-	if (curres > bestres) {
-	  if (besthdc)
-	    DeleteDC(besthdc);
-	  bestres = curres;
-	  besthdc = curhdc;
-	} else {
-	  DeleteDC(curhdc);
-	}
-      }
-    }
-  } else return GetDC(nullptr);
-  
-  if (printerinfo) free(printerinfo);
+  free(printerinfo);
   return besthdc;
 }
 
