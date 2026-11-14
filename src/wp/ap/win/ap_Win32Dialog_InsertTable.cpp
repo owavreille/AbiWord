@@ -114,12 +114,17 @@ BOOL AP_Win32Dialog_InsertTable::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 	SetFocus(GetDlgItem(hWnd,AP_RID_DIALOG_INSERTTABLE_VAL_COLUMN));
 	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_INSERTTABLE_VAL_COLUMN, EM_SETSEL, 0, -1);
 	
-	// Set default values		
+	// Set default values. The spin position starts at 0, so park it on
+	// the number shown or the first click replaces 5 and 2 with 1.
 	swprintf(szValue, L"%u", getNumCols());
 	SetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTTABLE_VAL_COLUMN, szValue);
-		
+	SendMessageW(GetDlgItem(hWnd, AP_RID_DIALOG_INSERTTABLE_SPIN_COLUMN),
+		UDM_SETPOS, 0, MAKELPARAM(static_cast<WORD>(getNumCols()), 0));
+
 	swprintf(szValue, L"%u", getNumRows());
 	SetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTTABLE_VAL_ROW, szValue);
+	SendMessageW(GetDlgItem(hWnd, AP_RID_DIALOG_INSERTTABLE_SPIN_ROW),
+		UDM_SETPOS, 0, MAKELPARAM(static_cast<WORD>(getNumRows()), 0));
 				
 	// m_columnWidth is already in the ruler unit shown beside the field.
 	// getColumnWidth() converts that to inches, so a metric ruler would
@@ -173,6 +178,29 @@ void AP_Win32Dialog_InsertTable::getCtrlValues(void)
 
 BOOL AP_Win32Dialog_InsertTable::_onDeltaPos(NM_UPDOWN * pnmud)
 {
+	if (pnmud->hdr.idFrom == AP_RID_DIALOG_INSERTTABLE_SPIN_COLUMN
+		|| pnmud->hdr.idFrom == AP_RID_DIALOG_INSERTTABLE_SPIN_ROW)
+	{
+		const bool columns = pnmud->hdr.idFrom == AP_RID_DIALOG_INSERTTABLE_SPIN_COLUMN;
+		const int editId = columns
+			? AP_RID_DIALOG_INSERTTABLE_VAL_COLUMN
+			: AP_RID_DIALOG_INSERTTABLE_VAL_ROW;
+		const int minimum = 1;
+		const int maximum = columns ? 64 : 500;
+		wchar_t text[16];
+		text[0] = 0;
+		GetDlgItemTextW(m_hDlg, editId, text, 16);
+		// iDelta is negative for the up arrow. Step from the number shown.
+		int next = _wtoi(text) - pnmud->iDelta;
+		if (next < minimum)
+			next = minimum;
+		else if (next > maximum)
+			next = maximum;
+		swprintf(text, L"%d", next);
+		SetDlgItemTextW(m_hDlg, editId, text);
+		return TRUE;
+	}
+
 	if(pnmud->hdr.idFrom!=AP_RID_DIALOG_INSERTTABLE_SPIN_SIZE)
 		return FALSE;
 
