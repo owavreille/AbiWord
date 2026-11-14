@@ -206,6 +206,10 @@ BOOL AP_Win32Dialog_FormatFrame::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 		addItemToCombo (AP_RID_DIALOG_FORMATFRAME_COMBO_THICKNESS, sThickness[i]);
 
 	setBorderThicknessInGUI(getBorderThicknessLeft());
+	// Load the frame under the caret before the first paint, so the
+	// swatches are not the empty button face until the timer fires.
+	setCurFrameProps();
+	_showFrameColors();
 
 	centerDialog();
 	return 1; 
@@ -266,7 +270,7 @@ BOOL AP_Win32Dialog_FormatFrame::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*l
 			cc.lStructSize = sizeof(CHOOSECOLORW);
 			cc.hwndOwner = m_hDlg;
 			cc.lpCustColors = (LPDWORD) acrCustClr;
-			cc.rgbResult = 0;
+			cc.rgbResult = RGB(borderColorLeft().m_red, borderColorLeft().m_grn, borderColorLeft().m_blu);
 			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
 		 
 			if(ChooseColorW(&cc))			
@@ -293,7 +297,7 @@ BOOL AP_Win32Dialog_FormatFrame::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*l
 			cc.lStructSize = sizeof(CHOOSECOLORW);
 			cc.hwndOwner = m_hDlg;
 			cc.lpCustColors = (LPDWORD) acrCustClr2;
-			cc.rgbResult = 0;
+			cc.rgbResult = RGB(backgroundColor().m_red, backgroundColor().m_grn, backgroundColor().m_blu);
 			cc.Flags = CC_FULLOPEN | CC_RGBINIT;
 		 
 			if(ChooseColorW(&cc))			
@@ -437,10 +441,25 @@ void AP_Win32Dialog_FormatFrame::setBorderThicknessInGUI(const std::string & sTh
 	selectComboItem(AP_RID_DIALOG_FORMATFRAME_COMBO_THICKNESS, closest);
 }
 
+void AP_Win32Dialog_FormatFrame::_showFrameColors(void)
+{
+	if (!m_hDlg)
+		return;
+	// One swatch stands for the border. The left side is the same
+	// side the thickness combo already displays.
+	const UT_RGBColor & border = borderColorLeft();
+	const UT_RGBColor & back = backgroundColor();
+	m_borderButton.setColour(RGB(border.m_red, border.m_grn, border.m_blu));
+	m_backgButton.setColour(RGB(back.m_red, back.m_grn, back.m_blu));
+	InvalidateRect(GetDlgItem(m_hDlg, AP_RID_DIALOG_FORMATFRAME_BTN_BORDERCOLOR), nullptr, FALSE);
+	InvalidateRect(GetDlgItem(m_hDlg, AP_RID_DIALOG_FORMATFRAME_BTN_BACKCOLOR), nullptr, FALSE);
+}
+
 void AP_Win32Dialog_FormatFrame::notifyActiveFrame(XAP_Frame *pFrame)
 { 	
 	setAllSensitivities();
 	setBorderThicknessInGUI(getBorderThicknessLeft());
+	_showFrameColors();
 	
 	if((HWND)GetWindowLongPtrW(m_hDlg, GWLP_HWNDPARENT) != static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow())
 	{

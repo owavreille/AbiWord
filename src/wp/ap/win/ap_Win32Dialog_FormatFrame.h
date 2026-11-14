@@ -47,6 +47,7 @@ public:
 	virtual void            	notifyActiveFrame(XAP_Frame * pFrame) override;
 	virtual void                setBorderThicknessInGUI(const std::string & sThick) override;
 	virtual void *				pGetWindowHandle( void )  override {  return (void *) m_hDlg; }
+	void                        _showFrameColors(void);
 
 	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
