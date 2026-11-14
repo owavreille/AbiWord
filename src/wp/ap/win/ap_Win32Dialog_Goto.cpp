@@ -36,8 +36,12 @@
 #include "fv_View.h"
 #include "fl_DocLayout.h"
 #include "fl_FootnoteLayout.h"
+#include "fp_Line.h"
+#include "fp_Run.h"
+#include "pd_Document.h"
 #include "ap_Win32App.h"
 
+#include <cstdio>
 #include <set>
 
 /*****************************************************************/
@@ -169,6 +173,63 @@ static void s_takeJumpValue(HWND list, int index, int row, UT_Win32LocaleString 
 		return;
 	}
 	s_takeBookmark(list, index, dest);
+}
+
+static void s_gotoNumber(AP_Win32Dialog_Goto * dlg, UT_uint32 number)
+{
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%u", static_cast<unsigned>(number));
+	dlg->GoTo(buf);
+}
+
+// Previous on the first page or the first line wraps to the last one.
+// Next stays put at the end, matching the Linux dialog.
+static void s_prevPageOrLine(AP_Win32Dialog_Goto * dlg, int row)
+{
+	FV_View * view = dlg->getView();
+	if (!view)
+	{
+		dlg->GoTo("-1");
+		return;
+	}
+	if (row == static_cast<int>(AP_JUMPTARGET_PAGE))
+	{
+		const UT_uint32 page = view->getCurrentPageNumForStatusBar();
+		const UT_sint32 pages = view->getLayout() ? view->getLayout()->countPages() : 0;
+		if (page == 1 && pages > 1)
+			s_gotoNumber(dlg, static_cast<UT_uint32>(pages));
+		else
+			dlg->GoTo("-1");
+		return;
+	}
+
+	PT_DocPosition start = 0;
+	if (view->getDocument())
+		view->getDocument()->getBounds(false, start);
+	fl_BlockLayout * block = view->getBlockAtPosition(start);
+	fl_BlockLayout * currentBlock = view->getCurrentBlock();
+	UT_sint32 x = 0, y = 0, x2 = 0, y2 = 0, height = 0;
+	bool direction = false;
+	fp_Run * currentRun = currentBlock
+		? currentBlock->findPointCoords(view->getPoint(), false, x, y, x2, y2, height, direction)
+		: nullptr;
+	fp_Line * currentLine = currentRun ? currentRun->getLine() : nullptr;
+	fp_Line * firstLine = nullptr;
+	UT_uint32 total = 0;
+	while (block)
+	{
+		for (fp_Container * line = block->getFirstContainer(); line; line = static_cast<fp_Container *>(line->getNext()))
+		{
+			if (!firstLine)
+				firstLine = static_cast<fp_Line *>(line);
+			total++;
+		}
+		block = block->getNextBlockInDocument();
+	}
+	if (currentLine && firstLine && currentLine == firstLine && total > 1)
+		s_gotoNumber(dlg, total);
+	else
+		dlg->GoTo("-1");
 }
 
 static bool s_stepList(HWND list, bool forward, int & index)
@@ -398,7 +459,7 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		}
 		else
 		{
-			GoTo("-1");
+			s_prevPageOrLine(this, m_iRow);
 		}
 		return 1;
 
