@@ -2469,7 +2469,7 @@ msgstr "&Couper"
 #. FIELD_DateTime_DefaultDateNoTime
 #: po/tmp/ap_String_Id.h
 msgid "Current Date"
-msgstr "Date de création du document"
+msgstr "Date courante"
 
 #. DLG_Lists_Current_Font
 #: po/tmp/ap_String_Id.h
