@@ -8,7 +8,7 @@ cd $srcdir
 
 ./autogen-common.sh
 
-autoreconf --force --install
+autoreconf --force --install || exit 1
 
 cd $olddir
 
