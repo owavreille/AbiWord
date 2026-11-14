@@ -243,9 +243,14 @@ void AP_Win32Dialog_FormatTOC::setDetailsLevel(UT_sint32 iLevel)
 	
 	/* Start at */
 	sVal = getTOCPropVal("toc-label-start", getDetailsLevel());
+	m_iStartValue = atoi(sVal.utf8_str());
 
 	setWindowText (GetDlgItem (m_pLayout->getHandle(),
 		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_STARTAT), sVal.utf8_str());
+
+	sVal = getTOCPropVal("toc-indent", getDetailsLevel());
+	setWindowText (GetDlgItem (m_pLayout->getHandle(),
+		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_IDENT), sVal.utf8_str());
 
 	m_pLayout->loadCtrlsValuesForDetailsLevel ();
 
@@ -508,6 +513,8 @@ void AP_Win32Dialog_FormatTOC_General::_onOK()
 	Layout Details
 
 */
+static void s_detachSpinBuddy(HWND spin);
+
 AP_Win32Dialog_FormatTOC_Layout::AP_Win32Dialog_FormatTOC_Layout()
 {
 
@@ -539,9 +546,15 @@ void AP_Win32Dialog_FormatTOC_Layout::_fillGUI()
 
 	/* Start at */
 	sVal = getContainer()->getTOCPropVal("toc-label-start", getContainer()->getDetailsLevel());
+	getContainer()->m_iStartValue = atoi(sVal.utf8_str());
 
 	setWindowText (GetDlgItem (getHandle(),
 		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_STARTAT), sVal.utf8_str());
+
+	/* Indent. A dimension such as "0.5in", not the spin position. */
+	sVal = getContainer()->getTOCPropVal("toc-indent", getContainer()->getDetailsLevel());
+	setWindowText (GetDlgItem (getHandle(),
+		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_IDENT), sVal.utf8_str());
 
 }
 
@@ -586,6 +599,12 @@ void AP_Win32Dialog_FormatTOC_Layout::_onInitDialog()
 
 	SendMessage(GetDlgItem(getHandle(),AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_SPIN_IDENT),UDM_SETRANGE,
 		0,(WPARAM)9999);
+
+	// UDS_SETBUDDYINT would replace the indent ("0.5in") with the spin's
+	// integer. Both spins are driven by hand, and their position stays in
+	// the middle of the range so the up arrow is not stuck at zero.
+	s_detachSpinBuddy(GetDlgItem(getHandle(), AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_SPIN_STARTAT));
+	s_detachSpinBuddy(GetDlgItem(getHandle(), AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_SPIN_IDENT));
 
 	/* Levels */
 	int item;
@@ -668,6 +687,17 @@ BOOL AP_Win32Dialog_FormatTOC_Layout::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 	return FALSE;
 }
 
+// The up arrow reports a negative iDelta. Freeze the control position so
+// it cannot write that integer into the buddy field.
+static void s_detachSpinBuddy(HWND spin)
+{
+	if (!spin)
+		return;
+	LONG_PTR style = GetWindowLongPtrW(spin, GWL_STYLE);
+	SetWindowLongPtrW(spin, GWL_STYLE, style & ~static_cast<LONG_PTR>(UDS_SETBUDDYINT));
+	SendMessage(spin, UDM_SETPOS, 0, MAKELPARAM(5000, 0));
+}
+
 // Spin control notification
 void AP_Win32Dialog_FormatTOC_Layout::_onNotify(LPNMHDR pNMHDR, int /*iCtrlID*/)
 {
@@ -676,22 +706,26 @@ void AP_Win32Dialog_FormatTOC_Layout::_onNotify(LPNMHDR pNMHDR, int /*iCtrlID*/)
 			return;	
 
 	NMUPDOWN* up = (NMUPDOWN* ) pNMHDR;
-	
-	/* Start at*/
-	UT_sint32 iNew = up->iPos + up->iDelta;
-	bool bInc = true;
-	if(iNew != getContainer()->m_iStartValue)
-	{	
-		UT_UTF8String sVal;
+	const bool bInc = (up->iDelta < 0);
+	up->iDelta = 0;
 
-		if(iNew < getContainer()->m_iStartValue)
-			bInc = false;
-		
-		getContainer()->m_iStartValue = iNew;
-		getContainer()->incrementStartAt(getContainer()->getDetailsLevel(),bInc);
-		sVal = getContainer()->getTOCPropVal("toc-label-start",getContainer()->getDetailsLevel());
-		SetWindowText (GetDlgItem (getHandle(),
+	UT_UTF8String sVal;
+	const UINT id = static_cast<UINT>(pNMHDR->idFrom);
+
+	if (id == AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_SPIN_STARTAT)
+	{
+		getContainer()->incrementStartAt(getContainer()->getDetailsLevel(), bInc);
+		sVal = getContainer()->getTOCPropVal("toc-label-start", getContainer()->getDetailsLevel());
+		getContainer()->m_iStartValue = atoi(sVal.utf8_str());
+		setWindowText(GetDlgItem(getHandle(),
 			AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_STARTAT), sVal.utf8_str());
+	}
+	else if (id == AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_SPIN_IDENT)
+	{
+		getContainer()->incrementIndent(getContainer()->getDetailsLevel(), bInc);
+		sVal = getContainer()->getTOCPropVal("toc-indent", getContainer()->getDetailsLevel());
+		setWindowText(GetDlgItem(getHandle(),
+			AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_IDENT), sVal.utf8_str());
 	}
 
 }
@@ -724,6 +758,15 @@ void AP_Win32Dialog_FormatTOC_Layout::loadCtrlsValuesForDetailsLevel ()
 
 	SetWindowTextW (GetDlgItem (getHandle(),
 		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_TEXTAFTER), str.c_str());	
+
+	sVal = getContainer()->getTOCPropVal("toc-label-start", getContainer()->getDetailsLevel());
+	getContainer()->m_iStartValue = atoi(sVal.utf8_str());
+	setWindowText (GetDlgItem (getHandle(),
+		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_STARTAT), sVal.utf8_str());
+
+	sVal = getContainer()->getTOCPropVal("toc-indent", getContainer()->getDetailsLevel());
+	setWindowText (GetDlgItem (getHandle(),
+		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_IDENT), sVal.utf8_str());
 
 }
 
