@@ -375,7 +375,18 @@ void AP_Win32Dialog_Options::_gatherAutoSaveFilePeriod(UT_String &stRetVal)
 
 void AP_Win32Dialog_Options::_setAutoSaveFilePeriod(const UT_String &stPeriod)
 {
-	SetDlgItemInt((HWND)getPage(PG_DOCUMENT), AP_RID_DIALOG_OPTIONS_TXT_AutoSavePeriod, atoi(stPeriod.c_str()), FALSE );
+	int value = atoi(stPeriod.c_str());
+	if (value < MINAUTOSAVEPERIOD)
+		value = MINAUTOSAVEPERIOD;
+	else if (value > MAXAUTOSAVEPERIOD)
+		value = MAXAUTOSAVEPERIOD;
+
+	HWND page = (HWND)getPage(PG_DOCUMENT);
+	SetDlgItemInt(page, AP_RID_DIALOG_OPTIONS_TXT_AutoSavePeriod, value, FALSE);
+	// The spin starts at 0. Park it on the period shown, or the first
+	// click replaces 5 with 1.
+	SendMessageW(GetDlgItem(page, AP_RID_DIALOG_OPTIONS_SPN_AutoSavePeriodSpin),
+		UDM_SETPOS, 0, MAKELPARAM(static_cast<WORD>(value), 0));
 }
 
 UT_Dimension AP_Win32Dialog_Options::_gatherViewRulerUnits(void)
@@ -839,6 +850,33 @@ BOOL AP_Win32Dialog_Options_Document::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		    break;
 	}
     return FALSE;
+}
+
+void AP_Win32Dialog_Options_Document::_onNotify(LPNMHDR hdr, int /*iCtrlID*/)
+{
+	if (!hdr || hdr->code != UDN_DELTAPOS
+		|| hdr->idFrom != AP_RID_DIALOG_OPTIONS_SPN_AutoSavePeriodSpin)
+		return;
+
+	NMUPDOWN *up = reinterpret_cast<NMUPDOWN *>(hdr);
+	BOOL translated = FALSE;
+	int value = GetDlgItemInt(getHandle(), AP_RID_DIALOG_OPTIONS_TXT_AutoSavePeriod,
+		&translated, FALSE);
+	if (!translated)
+		value = MINAUTOSAVEPERIOD;
+
+	// The up arrow reports a negative iDelta. Step from the number shown,
+	// including one the user just typed. The page proc lets the control
+	// apply iDelta, so point that step at the new number: UDS_SETBUDDYINT
+	// would otherwise write the old position back over the field.
+	int next = value - up->iDelta;
+	if (next < MINAUTOSAVEPERIOD)
+		next = MINAUTOSAVEPERIOD;
+	else if (next > MAXAUTOSAVEPERIOD)
+		next = MAXAUTOSAVEPERIOD;
+
+	SetDlgItemInt(getHandle(), AP_RID_DIALOG_OPTIONS_TXT_AutoSavePeriod, next, FALSE);
+	up->iDelta = next - up->iPos;
 }
 
 /*

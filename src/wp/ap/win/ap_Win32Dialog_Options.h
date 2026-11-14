@@ -129,6 +129,7 @@ private:
 	void						_onInitDialog() override;
 	void						_onKillActive() override {};
 	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	void						_onNotify(LPNMHDR hdr, int iCtrlID) override;
 
 	AP_Win32Dialog_Options*		m_pParent;
 
