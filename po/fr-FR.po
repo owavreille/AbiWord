@@ -4965,7 +4965,7 @@ msgstr "Numéros de page"
 #. FIELD_Numbers_PageReference
 #: po/tmp/ap_String_Id.h
 msgid "Page Reference to Bookmark"
-msgstr "Référence aux hyperliens"
+msgstr "Référence de page d'un signet"
 
 #. MENU_LABEL_FILE_PAGESETUP
 #: po/tmp/ap_String_Id.h
