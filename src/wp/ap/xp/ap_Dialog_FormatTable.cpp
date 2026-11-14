@@ -350,7 +350,9 @@ void AP_Dialog_FormatTable::setCurCellProps(void)
 		}
 
 		m_iOldPos = pView->getPoint();
-		PT_DocPosition pos = 0;pView->getPoint();
+		// The caret is the cell to format. A backward selection can sit on
+		// the cell boundary, so step two positions into that cell.
+		PT_DocPosition pos = pView->getPoint();
 		if (pView->getSelectionAnchor() > pView->getPoint())
 		{
 		    pos = pView->getPoint() + 2;
@@ -383,6 +385,22 @@ void AP_Dialog_FormatTable::setCurCellProps(void)
 			PP_addOrSetAttribute("bot-color", color, m_vecProps);
 		} else {
 			PP_removeAttribute("bot-color", m_vecProps);
+		}
+
+		/*
+		 * A missing side keeps the default solid border. An explicit
+		 * style of 0 is a side the user turned off.
+		 */
+		static const char * s_sides[] = {
+			"left-style", "right-style", "top-style", "bot-style"
+		};
+		for (const char * side : s_sides)
+		{
+			gchar * style = nullptr;
+			if (pView->getCellProperty(pos, side, style) && style && *style)
+				PP_addOrSetAttribute(side, style, m_vecProps);
+			else
+				PP_removeAttribute(side, m_vecProps);
 		}
 
 		/*
@@ -460,6 +478,10 @@ void AP_Dialog_FormatTable::setCurCellProps(void)
 		}
 
 		PP_addOrSetAttribute("bg-style", UT_std_string_sprintf("%d", FS_FILL), m_vecProps);
+
+		// The line buttons read m_vecProps. Refresh them now that the
+		// current cell has been copied in.
+		setAllSensitivities();
 
 		// draw the preview with the changed properties
 		if(m_pFormatTablePreview)
