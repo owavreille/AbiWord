@@ -311,11 +311,12 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 			DestroyMenu(oldMenu);
 	}
 
-	// create a rebar container for all the toolbars
+	// Flat command bar. Band borders are the old raised separators;
+	// Windows 11 keeps the bar on the window color without a frame.
 	m_hwndRebar = UT_CreateWindowEx(0L, REBARCLASSNAMEW, nullptr,
-									WS_VISIBLE | WS_BORDER | WS_CHILD | WS_CLIPCHILDREN |
+									WS_VISIBLE | WS_CHILD | WS_CLIPCHILDREN |
 									WS_CLIPSIBLINGS | CCS_NODIVIDER | CCS_NOPARENTALIGN |
-									RBS_VARHEIGHT | RBS_BANDBORDERS,
+									RBS_VARHEIGHT,
 									0, 0, 0, 0,
 									m_hwndFrame, nullptr, pWin32App->getInstance(), nullptr);
 	UT_ASSERT(m_hwndRebar);

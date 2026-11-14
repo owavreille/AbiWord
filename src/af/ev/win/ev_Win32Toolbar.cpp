@@ -699,6 +699,18 @@ bool EV_Win32Toolbar::synthesize(void)
 	else
 		SendMessageW(m_hwnd, TB_SETBITMAPSIZE, 0, (LPARAM) MAKELONG(0,0));
 
+	// Room around the 24px glyphs, closer to a Windows 11 command bar.
+	SendMessageW(m_hwnd, TB_SETPADDING, 0, MAKELPARAM(6, 4));
+	DWORD exStyle = (DWORD)SendMessageW(m_hwnd, TB_GETEXTENDEDSTYLE, 0, 0);
+	exStyle |= TBSTYLE_EX_DOUBLEBUFFER | TBSTYLE_EX_HIDECLIPPEDBUTTONS;
+	SendMessageW(m_hwnd, TB_SETEXTENDEDSTYLE, 0, exStyle);
+	COLORSCHEME scheme;
+	memset(&scheme, 0, sizeof(scheme));
+	scheme.dwSize = sizeof(scheme);
+	scheme.clrBtnHighlight = RGB(0, 103, 192);
+	scheme.clrBtnShadow = RGB(229, 229, 229);
+	SendMessageW(m_hwnd, TB_SETCOLORSCHEME, 0, (LPARAM)&scheme);
+
 	DWORD dwColor = GetSysColor(COLOR_BTNFACE);
 	UT_RGBColor backgroundColor(GetRValue(dwColor),GetGValue(dwColor),GetBValue(dwColor));
 

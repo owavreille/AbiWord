@@ -157,7 +157,7 @@ void ap_usb_TextListener::notify()
 	UT_Win32LocaleString str;	
 	str.fromUTF8 (textInfo->getBuf().c_str());	
 
-	SendMessageW(m_hWnd, SB_SETTEXTW, m_nID | m_pSB->getDir(), (LPARAM)  str.c_str());
+	SendMessageW(m_hWnd, SB_SETTEXTW, m_nID | SBT_NOBORDERS | m_pSB->getDir(), (LPARAM)  str.c_str());
 	
 }
 /*****************************************************************/
@@ -261,6 +261,13 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 										WS_CHILD | WS_VISIBLE | SBS_SIZEGRIP,
 										0, 0, 0, 0,
 										hwndFrame, nullptr, app->getInstance(),nullptr);
+	static HFONT statusFont = nullptr;
+	if (!statusFont)
+		statusFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+			CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+	if (statusFont)
+		SendMessageW(m_hwndStatusBar, WM_SETFONT, (WPARAM)statusFont, FALSE);
 	// add progress bar and hide it 
 	//  set the color and range 
 	m_hwndProgressBar= UT_CreateWindowEx(0, PROGRESS_CLASSW, nullptr,
