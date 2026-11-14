@@ -515,6 +515,30 @@ void AP_Win32Dialog_FormatTOC_General::_onOK()
 */
 static void s_detachSpinBuddy(HWND spin);
 
+static UT_sint32 s_tabLeaderIndex(const char * sVal)
+{
+	if (sVal && g_ascii_strcasecmp(sVal, "none") == 0)
+		return 0;
+	if (sVal && g_ascii_strcasecmp(sVal, "hyphen") == 0)
+		return 2;
+	if (sVal && g_ascii_strcasecmp(sVal, "underline") == 0)
+		return 3;
+	return 1;
+}
+
+static const char * s_footnotePropAt(int index)
+{
+	if (index < 0)
+		return nullptr;
+	const FootnoteTypeDesc * list = AP_Dialog_FormatFootnotes::getFootnoteTypeLabelList();
+	for (int i = 0; list[i].n != _FOOTNOTE_TYPE_INVALID; ++i)
+	{
+		if (i == index)
+			return list[i].prop;
+	}
+	return nullptr;
+}
+
 AP_Win32Dialog_FormatTOC_Layout::AP_Win32Dialog_FormatTOC_Layout()
 {
 
@@ -556,6 +580,7 @@ void AP_Win32Dialog_FormatTOC_Layout::_fillGUI()
 	setWindowText (GetDlgItem (getHandle(),
 		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_IDENT), sVal.utf8_str());
 
+	loadCtrlsValuesForDetailsLevel ();
 }
 
 void AP_Win32Dialog_FormatTOC_Layout::_onInitDialog()
@@ -629,12 +654,6 @@ void AP_Win32Dialog_FormatTOC_Layout::_onInitDialog()
 		addItemToCombo ( AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_PAGENUMERING, szVal);
 	}	
 	
-	/*FV_View * pView = static_cast<FV_View *>(getContainer()->getActiveFrame()->getCurrentView());
-	val = getContainer()->getTOCPropVal("toc-page-type", getContainer()->getDetailsLevel());	
-	UT_sint32 iHist = static_cast<UT_sint32>(pView->getLayout()->FootnoteTypeFromString(val.utf8_str()));
-		
-	SendDlgItemMessage(getHandle(), AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_NUMTYPE, CB_SETCURSEL, iHist, 0);	*/
-
 	/* Tab Type styles */
 	const UT_GenericVector<const gchar*> * vecLabels = getContainer()->getVecTABLeadersLabel();
 	UT_sint32 nTypes = vecLabels->getItemCount();
@@ -646,8 +665,6 @@ void AP_Win32Dialog_FormatTOC_Layout::_onInitDialog()
 
 		addItemToCombo ( AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_TABLEADER, szLab);
 	}
-	
-	selectComboItem ( AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_TABLEADER, 0);	
 
 	loadCtrlsValuesForDetailsLevel ();	
 
@@ -738,10 +755,21 @@ void AP_Win32Dialog_FormatTOC_Layout::loadCtrlsValuesForDetailsLevel ()
 	UT_sint32 iHist;
 
 	FV_View * pView = static_cast<FV_View *>(getContainer()->getActiveFrame()->getCurrentView());
+	sVal = getContainer()->getTOCPropVal("toc-label-type", getContainer()->getDetailsLevel());
+	iHist = static_cast<UT_sint32>(pView->getLayout()->FootnoteTypeFromString(sVal.utf8_str()));
+	selectComboItem(AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_NUMTYPE, iHist);
+
 	sVal = getContainer()->getTOCPropVal("toc-page-type", getContainer()->getDetailsLevel());
 	iHist = static_cast<UT_sint32>(pView->getLayout()->FootnoteTypeFromString(sVal.utf8_str()));
-	SendDlgItemMessage(getHandle(), AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_NUMTYPE, 
-			CB_SETCURSEL, iHist, 0);                            //TODO
+	selectComboItem(AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_PAGENUMERING, iHist);
+
+	sVal = getContainer()->getTOCPropVal("toc-label-inherits", getContainer()->getDetailsLevel());
+	CheckDlgButton(getHandle(), AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_CHECK_INHERITLABEL,
+		(g_ascii_strcasecmp(sVal.utf8_str(), "1") == 0) ? BST_CHECKED : BST_UNCHECKED);
+
+	sVal = getContainer()->getTOCPropVal("toc-tab-leader", getContainer()->getDetailsLevel());
+	selectComboItem(AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_TABLEADER,
+		s_tabLeaderIndex(sVal.utf8_str()));
 
 	/* Text Before */
 	sVal = getContainer()->getTOCPropVal("toc-label-before", getContainer()->getDetailsLevel());
@@ -799,22 +827,37 @@ void AP_Win32Dialog_FormatTOC_Layout::saveCtrlsValuesForDetailsLevel ()
 	sProp += sNum;
 	getContainer()->setTOCProperty(sProp, sVal);
 
-	/* Numering type */
-	nSelected = getComboSelectedIndex(AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_NUMTYPE);					
-
-	if (nSelected!=CB_ERR) 
+	/* Numbering type is the label, not the page number. */
+	nSelected = getComboSelectedIndex(AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_NUMTYPE);
+	if (const char * szType = s_footnotePropAt(nSelected))
 	{
-		const FootnoteTypeDesc * footnoteTypeList = AP_Dialog_FormatFootnotes::getFootnoteTypeLabelList();
-		const char * szVal = footnoteTypeList[nSelected].prop;
-		sProp = "toc-page-type";
-		sVal = szVal;
-		
-		sProp += UT_std_string_sprintf("%d",getContainer()->getDetailsLevel());
-		getContainer()->setTOCProperty(sProp,sVal);				
-		
+		sProp = "toc-label-type";
+		sProp += sNum;
+		getContainer()->setTOCProperty(sProp, szType);
 	}
 
+	nSelected = getComboSelectedIndex(AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_PAGENUMERING);
+	if (const char * szType = s_footnotePropAt(nSelected))
+	{
+		sProp = "toc-page-type";
+		sProp += sNum;
+		getContainer()->setTOCProperty(sProp, szType);
+	}
 
+	sProp = "toc-label-inherits";
+	sProp += sNum;
+	sVal = (IsDlgButtonChecked(getHandle(),
+		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_CHECK_INHERITLABEL) == BST_CHECKED) ? "1" : "0";
+	getContainer()->setTOCProperty(sProp, sVal);
+
+	nSelected = getComboSelectedIndex(AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_COMBO_TABLEADER);
+	const UT_GenericVector<const gchar*> * vecProps = getContainer()->getVecTABLeadersProp();
+	if (nSelected != CB_ERR && nSelected >= 0 && nSelected < vecProps->getItemCount())
+	{
+		sProp = "toc-tab-leader";
+		sProp += sNum;
+		getContainer()->setTOCProperty(sProp, vecProps->getNthItem(nSelected));
+	}
 }
 
 void AP_Win32Dialog_FormatTOC_Layout::_onApply()
