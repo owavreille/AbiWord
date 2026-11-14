@@ -2594,7 +2594,7 @@ msgstr "Date"
 #. FIELD_Document_Date_Last_Changed
 #: po/tmp/ap_String_Id.h
 msgid "Date Last Changed"
-msgstr ""
+msgstr "Date de dernière modification"
 
 #. MENU_LABEL_INSERT_DATETIME
 #: po/tmp/ap_String_Id.h
@@ -6096,7 +6096,7 @@ msgstr "Couleur d'ombrage:"
 #. FIELD_Application_ShortFilename
 #: po/tmp/ap_String_Id.h
 msgid "Short File Name"
-msgstr ""
+msgstr "Nom de fichier court"
 
 #. DLG_Styles_ModifyShortCut
 #: po/tmp/ap_String_Id.h
