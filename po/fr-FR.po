@@ -7212,10 +7212,16 @@ msgid "With extension:"
 msgstr "Avec extension :"
 
 #. DLG_WordCount_WordCountTitle
-#. FIELD_Numbers_WordCount
 #: po/tmp/ap_String_Id.h
+msgctxt "DLG_WordCount_WordCountTitle"
 msgid "Word Count"
 msgstr "Statistiques"
+
+#. FIELD_Numbers_WordCount
+#: po/tmp/ap_String_Id.h
+msgctxt "FIELD_Numbers_WordCount"
+msgid "Word Count"
+msgstr "Nombre de mots"
 
 #. DLG_NEW_Tab1
 #: po/tmp/ap_String_Id.h
