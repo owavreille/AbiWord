@@ -85,6 +85,7 @@ UT_UUID::UT_UUID(const char * in)
 UT_UUID::UT_UUID(const struct uuid &u)
 {
     memcpy(&m_uuid, &u, sizeof(u));
+	m_bIsValid = true;
 	m_bIsValid = !isNull();
 }
 

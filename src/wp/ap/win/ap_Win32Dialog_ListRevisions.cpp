@@ -67,7 +67,7 @@ void AP_Win32Dialog_ListRevisions::runModal(XAP_Frame * pFrame)
 
 	XAP_Win32LabelledSeparator_RegisterClass(pWin32App);
 
-	UT_return_if_fail (m_id == AP_DIALOG_ID_LIST_REVISIONS);
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_LIST_REVISIONS));
 
     createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_LIST_REVISIONS));
 }
@@ -133,7 +133,7 @@ BOOL AP_Win32Dialog_ListRevisions::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, L
 			str.fromASCII(tmp,-1);
 			item.pszText = (LPWSTR) str.c_str();
 		} else {
-			item.pszText = L"";
+			item.pszText = const_cast<LPWSTR>(L"");
 		}
 		item.mask = LVIF_TEXT;
 		SendMessageW(h, LVM_SETITEMW, 0, (LPARAM)&item);

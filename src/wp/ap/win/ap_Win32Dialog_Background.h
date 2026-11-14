@@ -32,12 +32,12 @@ public:
 	AP_Win32Dialog_Background(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Background(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
 private:
-	static UINT CALLBACK s_hookProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam);
+	static UINT_PTR CALLBACK s_hookProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam);
 
 	void _centerDialog();
 	void _callHelp();

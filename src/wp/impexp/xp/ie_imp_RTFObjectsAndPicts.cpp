@@ -1456,6 +1456,7 @@ bool IE_Imp_RTF::HandleObject()
 		}
 	} while (!((tokenType == RTF_TOKEN_CLOSE_BRACE) && (nested <= 1)));
 
+	(void)objectType;
 	return true;
 }
 

@@ -120,6 +120,7 @@ jobs:
             -DDIST="$PWD/dist/windows-x86_64" \
             -DOUTFILE="$PWD/dist/AbiWord-${version}-windows-x64-setup.exe" \
             -DLICENSE="$PWD/COPYING" \
+            -DFLUENT_LICENSE="$PWD/src/wp/ap/win/ToolbarIcons/LICENSE.fluent.txt" \
             -DICON="$PWD/src/wp/ap/win/abiword_app_32.ico" \
             packaging/windows/abiword.nsi
           echo "SETUP=dist/AbiWord-${version}-windows-x64-setup.exe" >> "$GITHUB_ENV"

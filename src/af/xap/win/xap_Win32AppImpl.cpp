@@ -179,7 +179,7 @@ bool XAP_Win32AppImpl::openURL(const char * szURL)
 			case ERROR_FILE_NOT_FOUND:
 				{
 					errMsg = "Error ("; 
-					errMsg += UT_String_sprintf("%d", res);
+					errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
 					errMsg += ") displaying URL: The system cannot find the file specified.\n";
 					errMsg += " [ ";  errMsg += sURL;  errMsg += " ] ";
 				}
@@ -188,7 +188,7 @@ bool XAP_Win32AppImpl::openURL(const char * szURL)
 			case ERROR_PATH_NOT_FOUND:
 				{
 					errMsg = "Error ("; 
-					errMsg += UT_String_sprintf("%d", res);
+					errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
 					errMsg += ") displaying URL: The system cannot find the path specified.\n";
 					errMsg += " [ ";  errMsg += sURL;  errMsg += " ] ";
 				}
@@ -197,7 +197,7 @@ bool XAP_Win32AppImpl::openURL(const char * szURL)
 			case SE_ERR_ACCESSDENIED:
 				{
 					errMsg = "Error ("; 
-					errMsg += UT_String_sprintf("%d", res);
+					errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
 					errMsg += ") displaying URL: Access is denied.\n";
 					errMsg += " [ ";  errMsg += sURL;  errMsg += " ] ";
 				}
@@ -206,7 +206,7 @@ bool XAP_Win32AppImpl::openURL(const char * szURL)
 			default:
 				{
 					errMsg = "Error ("; 
-					errMsg += UT_String_sprintf("%d", res);
+					errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
 					errMsg += ") displaying URL: \n";
 					errMsg += " [ ";  errMsg += sURL;  errMsg += " ] ";
 				}

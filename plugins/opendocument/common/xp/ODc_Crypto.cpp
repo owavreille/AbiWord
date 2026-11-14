@@ -109,7 +109,9 @@ UT_Error ODc_Crypto::performDecrypt(GsfInput* pStream,
 #else
 
     // removed old blowfish code
-    
+    (void)ivec;
+    (void)ivec_length;
+
 #endif
     
 	// deflate the decrypted content

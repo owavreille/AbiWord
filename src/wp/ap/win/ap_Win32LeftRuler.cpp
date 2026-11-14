@@ -32,7 +32,7 @@
 /*****************************************************************/
 
 #define GWL(hwnd)		(AP_Win32LeftRuler*)GetWindowLongPtrW((hwnd), GWLP_USERDATA)
-#define SWL(hwnd, f)	(AP_Win32LeftRuler*)SetWindowLongPtrW((hwnd), GWLP_USERDATA,(LONG_PTR)(f))
+#define SWL(hwnd, f)	((void)SetWindowLongPtrW((hwnd), GWLP_USERDATA,(LONG_PTR)(f)))
 
 #define ENSUREP(p)		do { UT_ASSERT_HARMLESS(p); if (!p) goto Cleanup; } while (0)
 
@@ -86,8 +86,10 @@ bool AP_Win32LeftRuler::registerClass(XAP_Win32App * app)
 	a = UT_RegisterClassEx(CS_DBLCLKS | CS_OWNDC, AP_Win32LeftRuler::_LeftRulerWndProc, app->getInstance(),
 						   nullptr, LoadCursor(nullptr, IDC_ARROW), GetSysColorBrush(COLOR_BTNFACE), nullptr,
 						   nullptr, s_LeftRulerWndClassName);
-	
-	UT_ASSERT_HARMLESS(a);
+	if (!a)
+	{
+		UT_DEBUGMSG(("Left ruler window class was not registered\n"));
+	}
 
 	return true;
 }

@@ -54,17 +54,17 @@ public:
 	virtual ~XAP_Win32DropTarget() {}
 
 	// Ole Methods
-	STDMETHODIMP QueryInterface (REFIID riid, LPVOID FAR* ppv);
-	STDMETHODIMP_(ULONG) AddRef ();
-	STDMETHODIMP_(ULONG) Release ();
+	STDMETHODIMP QueryInterface (REFIID riid, LPVOID FAR* ppv) override;
+	STDMETHODIMP_(ULONG) AddRef () override;
+	STDMETHODIMP_(ULONG) Release () override;
 
 
 	STDMETHODIMP DragEnter (LPDATAOBJECT pDataObj, DWORD grfKeyState,
-			POINTL pt, LPDWORD pdwEffect);
-	STDMETHODIMP DragOver  (DWORD grfKeyState, POINTL pt, LPDWORD pdwEffect);
-	STDMETHODIMP DragLeave ();
+			POINTL pt, LPDWORD pdwEffect) override;
+	STDMETHODIMP DragOver  (DWORD grfKeyState, POINTL pt, LPDWORD pdwEffect) override;
+	STDMETHODIMP DragLeave () override;
 	STDMETHODIMP Drop (LPDATAOBJECT pDataObj, DWORD grfKeyState, POINTL pt,
-			LPDWORD pdwEffect);
+			LPDWORD pdwEffect) override;
 
 	// Helper
 	void setFrame(XAP_Frame* pFrame) {m_pFrame = pFrame;};

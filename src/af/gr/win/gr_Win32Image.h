@@ -32,15 +32,15 @@ public:
 	GR_Win32Image(const char* szName);
 	virtual ~GR_Win32Image();
 
-	virtual bool		convertToBuffer(UT_ConstByteBufPtr& ppBB) const;
-	virtual bool		convertFromBuffer(const UT_ConstByteBufPtr& pBB, const std::string& mimetype, UT_sint32 iDisplayWidth, UT_sint32 iDisplayHeight);
+	virtual bool		convertToBuffer(UT_ConstByteBufPtr& ppBB) const override;
+	virtual bool		convertFromBuffer(const UT_ConstByteBufPtr& pBB, const std::string& mimetype, UT_sint32 iDisplayWidth, UT_sint32 iDisplayHeight) override;
 
 	void				setDIB(BITMAPINFO *pDIB) { m_pDIB = pDIB; if (m_pDIB) setDisplaySize(m_pDIB->bmiHeader.biWidth,m_pDIB->bmiHeader.biHeight); }
 	inline BITMAPINFO*	getDIB(void) const { return m_pDIB; }
 
-	virtual GR_Image *  createImageSegment(GR_Graphics * pG, const UT_Rect & rec);
-	virtual bool hasAlpha (void) const;
-	virtual bool isTransparentAt(UT_sint32 x, UT_sint32 y);
+	virtual GR_Image *  createImageSegment(GR_Graphics * pG, const UT_Rect & rec) override;
+	virtual bool hasAlpha (void) const override;
+	virtual bool isTransparentAt(UT_sint32 x, UT_sint32 y) override;
 
 protected:
 	BITMAPINFO*			m_pDIB;

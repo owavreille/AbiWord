@@ -109,7 +109,7 @@ AP_Win32Dialog_PageSetup_Sheet::AP_Win32Dialog_PageSetup_Sheet() :
 XAP_Win32PropertySheet()
 {
 	m_pParent = nullptr;
-	setCallBack((PFNPROPSHEETCALLBACK)s_sheetInit);
+	setCallBack(s_sheetInit);
 }
 
 /*
@@ -139,7 +139,7 @@ int AP_Win32Dialog_PageSetup_Sheet::_onCommand(HWND /*hWnd*/, WPARAM wParam, LPA
 	return 1;	// The application did not process the message
 }
 
-INT_PTR CALLBACK AP_Win32Dialog_PageSetup_Sheet::s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM /*lParam*/)
+int CALLBACK AP_Win32Dialog_PageSetup_Sheet::s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM /*lParam*/)
 {	
 	if (uMsg==PSCB_INITIALIZED)
 	{	

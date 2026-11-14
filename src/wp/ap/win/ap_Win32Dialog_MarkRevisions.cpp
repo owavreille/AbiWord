@@ -59,7 +59,7 @@ void AP_Win32Dialog_MarkRevisions::runModal(XAP_Frame * pFrame)
 {
 	XAP_Win32App * pWin32App = static_cast<XAP_Win32App *>(m_pApp);
 	XAP_Win32LabelledSeparator_RegisterClass(pWin32App);
-	UT_return_if_fail (m_id == AP_DIALOG_ID_MARK_REVISIONS);
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_MARK_REVISIONS));
 
     createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_MARK_REVISIONS));
 }

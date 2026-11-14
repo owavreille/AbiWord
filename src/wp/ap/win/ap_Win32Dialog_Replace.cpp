@@ -75,7 +75,7 @@ void AP_Win32Dialog_Replace::activate(void)
 	UT_return_if_fail ((iResult != 0));
 	
 	{
-	UT_UCSChar * bufferUnicode = getFindString();
+	UT_UCS4Char * bufferUnicode = getFindString();
 	findstr.fromUCS4 (bufferUnicode);
 	if (!findstr.empty())
 	{
@@ -85,10 +85,10 @@ void AP_Win32Dialog_Replace::activate(void)
 	FREEP(bufferUnicode);
 	}
 	
-	if (m_id == AP_DIALOG_ID_REPLACE)
+	if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE))
 	{
 	
-		UT_UCSChar * bufferUnicode = getReplaceString();
+		UT_UCS4Char * bufferUnicode = getReplaceString();
 		findstr.fromUCS4 (bufferUnicode);
 		if (!findstr.empty())
 		{			
@@ -136,9 +136,9 @@ void AP_Win32Dialog_Replace::notifyCloseFrame(XAP_Frame *pFrame)
 void AP_Win32Dialog_Replace::runModeless(XAP_Frame * pFrame)
 {
 	LPCWSTR lpTemplate = nullptr;
-	if (m_id == AP_DIALOG_ID_REPLACE)
+	if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE))
 		lpTemplate = MAKEINTRESOURCEW(AP_RID_DIALOG_REPLACE);
-	else if (m_id == AP_DIALOG_ID_FIND)
+	else if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_FIND))
 		lpTemplate = MAKEINTRESOURCEW(AP_RID_DIALOG_FIND);
 	else
 	{
@@ -171,7 +171,7 @@ void AP_Win32Dialog_Replace::_initButtons(HWND hWnd)
 	EnableWindow(GetDlgItem(hWnd,AP_RID_DIALOG_REPLACE_BTN_FINDNEXT),bEnableFind);
 
 
-	if (m_id == AP_DIALOG_ID_REPLACE)
+	if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE))
 	{
 	
 		BOOL bEnableReplace = bEnableFind;
@@ -199,7 +199,7 @@ BOOL AP_Win32Dialog_Replace::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM 
 	
 	const XAP_StringSet * pSS = m_pApp->getStringSet();
 
-	if (m_id == AP_DIALOG_ID_FIND)
+	if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_FIND))
 		setDialogTitle(pSS->getValue(AP_STRING_ID_DLG_FR_FindTitle));
 	else
 		setDialogTitle(pSS->getValue(AP_STRING_ID_DLG_FR_ReplaceTitle));
@@ -214,7 +214,7 @@ BOOL AP_Win32Dialog_Replace::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM 
 	_DSX(REPLACE_BTN_CLOSE, 		DLG_Cancel);
 
 
-	if (m_id == AP_DIALOG_ID_REPLACE)
+	if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE))
 	{
 
 		// localize replace-specific controls
@@ -309,11 +309,11 @@ BOOL AP_Win32Dialog_Replace::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lPara
 	}
 }
 
-BOOL AP_Win32Dialog_Replace::_onBtn_Find(HWND hWnd, tFindType tFindType)
+BOOL AP_Win32Dialog_Replace::_onBtn_Find(HWND hWnd, tFindType findType)
 {
 	wchar_t * pBufFromDialogFind = nullptr;
 	wchar_t * pBufFromDialogReplace = nullptr;
-	UT_UCSChar * pUCSReplace = nullptr;
+	UT_UCS4Char * pUCSReplace = nullptr;
     UT_Win32LocaleString findstr;    
     UT_Win32LocaleString replacestr;
 
@@ -334,7 +334,7 @@ BOOL AP_Win32Dialog_Replace::_onBtn_Find(HWND hWnd, tFindType tFindType)
 
 	setFindString(findstr.ucs4_str().ucs4_str());
 
-    if (m_id == AP_DIALOG_ID_REPLACE)
+    if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE))
 	{
 		// Check Replace string
 		HWND hWndEditReplace = GetDlgItem(hWnd,AP_RID_DIALOG_REPLACE_COMBO_REPLACE);
@@ -351,20 +351,20 @@ BOOL AP_Win32Dialog_Replace::_onBtn_Find(HWND hWnd, tFindType tFindType)
 		setReplaceString(replacestr.ucs4_str().ucs4_str());
 	}
 
-	if (tFindType == find_REPLACE_ALL)
+	if (findType == find_REPLACE_ALL)
 	{
-		UT_return_val_if_fail ((m_id == AP_DIALOG_ID_REPLACE),0); //should never happen in Find dialog
+		UT_return_val_if_fail ((m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE)),0); //should never happen in Find dialog
 		findReplaceAll();
 	}
-	else if (tFindType == find_REPLACE)
+	else if (findType == find_REPLACE)
 	{
-		UT_return_val_if_fail ((m_id == AP_DIALOG_ID_REPLACE),0); //should never happen in Find dialog
+		UT_return_val_if_fail ((m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE)),0); //should never happen in Find dialog
 		if (!getReverseFind())
 			findReplace();
 		else
 			findReplaceReverse();
 	}
-	else if (tFindType == find_FIND_NEXT)
+	else if (findType == find_FIND_NEXT)
 	{
 		if (!getReverseFind())
 			findNext();

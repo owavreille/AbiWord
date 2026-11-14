@@ -97,7 +97,7 @@ public:
 	virtual bool 					doWindowlessArgs (const AP_Args *, bool & bSuccess) override;
 
 	static int WinMain (const char * szAppName, HINSTANCE hInstance,
-						HINSTANCE hPrevInstance, PSTR szCmdLine, int iCmdShow);
+						HINSTANCE hPrevInstance, const char * szCmdLine, int iCmdShow);
 
 	virtual HICON							getIcon(void) override;
 	virtual HICON							getSmallIcon(void) override;

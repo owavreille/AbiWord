@@ -506,7 +506,7 @@ AP_Win32Dialog_Options_Sheet::AP_Win32Dialog_Options_Sheet() :
 XAP_Win32PropertySheet()
 {
 	m_pParent = nullptr;
-	setCallBack((PFNPROPSHEETCALLBACK)s_sheetInit);
+	setCallBack(s_sheetInit);
 }
 
 
@@ -541,7 +541,7 @@ BOOL AP_Win32Dialog_Options_Sheet::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /
 	return 1;	// The application did not process the message
 }
 
-INT_PTR CALLBACK AP_Win32Dialog_Options_Sheet::s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM /*lParam*/)
+int CALLBACK AP_Win32Dialog_Options_Sheet::s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM /*lParam*/)
 {	
 	if (uMsg==PSCB_INITIALIZED)
 	{	
@@ -683,7 +683,9 @@ BOOL AP_Win32Dialog_Options_General::_onCommand(HWND /*hWnd*/, WPARAM wParam, LP
 		{
 			pColorDialog = (AP_Dialog_Background *)(pParent->getDialogFactory()->requestDialog((XAP_Dialog_Id)AP_DIALOG_ID_BACKGROUND));
             if (pColorDialog == nullptr)
-		    	return FALSE;
+			{
+				return FALSE;
+			}
 	
 			UT_parseColor(pParent->_gatherColorForTransparent(), rgbColor );
 			pColorDialog->setColor(rgbColor);
@@ -931,12 +933,12 @@ void AP_Win32Dialog_Options_SmartQuotes::_onInitDialog()
 	_DS2(OPTIONS_LBL_OuterQuoteStyle,		DLG_Options_Label_OuterQuoteStyle);
 	_DS2(OPTIONS_LBL_InnerQuoteStyle,		DLG_Options_Label_InnerQuoteStyle);
 	
-	UT_UCSChar buf[4];
+	UT_UCS4Char buf[4];
 
 	HWND hQIn  = GetDlgItem(m_hDlg, AP_RID_DIALOG_OPTIONS_COMBO_INNERQUOTE);
 	HWND hQOut = GetDlgItem(m_hDlg, AP_RID_DIALOG_OPTIONS_COMBO_OUTERQUOTE);
 
-	for(size_t i = 0; XAP_EncodingManager::smartQuoteStyles[i].leftQuote != (UT_UCSChar)0; i++)
+	for(size_t i = 0; XAP_EncodingManager::smartQuoteStyles[i].leftQuote != (UT_UCS4Char)0; i++)
 	{
 		buf[0] = XAP_EncodingManager::smartQuoteStyles[i].leftQuote;
 		buf[1] = 'O';

@@ -116,6 +116,7 @@ UT_iconv_t auto_iconv::getHandle () const
 // everything below this line is extern "C"
 //
 
+#if !defined(TOOLKIT_WIN) && !defined(_LIBICONV_H) && !defined(__FreeBSD__) && !defined(__OpenBSD__) && !defined(__NetBSD__)
 static const char * s_ucs2_internal = nullptr;
 static const char * s_ucs4_internal = nullptr;
 
@@ -231,6 +232,7 @@ static void s_internal_init ()
 		}
 	UT_DEBUGMSG(("using '%s' for UCS-4 internal\n", s_ucs4_internal));
 }
+#endif
 
 /*!
  * \return the internal iconv UCS-2 charset name

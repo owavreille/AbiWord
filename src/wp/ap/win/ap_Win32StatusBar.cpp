@@ -1,6 +1,6 @@
 /* AbiWord
  * Copyright (C) 1998 AbiSource, Inc.
- *			 (c) 2002 Jordi Mas i Hernàndez jmas@softcatala.org 
+ *			 (c) 2002 Jordi Mas i Hernï¿½ndez jmas@softcatala.org 
  * 
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -142,7 +142,7 @@ public:
 		m_pSB(pSB)
 	{UT_ASSERT_HARMLESS( m_pSB );}
 	
-	virtual void notify(); 
+	virtual void notify() override; 
 
 private:
 	HWND	m_hWnd;
@@ -169,7 +169,7 @@ public:
 		m_ProgressWND = wProgress; 
 		m_isMARQUEEState=false;
 	}
-	virtual void notify(); 
+	virtual void notify() override; 
 
 protected:
 	HWND m_ProgressWND;
@@ -242,8 +242,8 @@ void AP_Win32StatusBar::setView(AV_View * pView)
 
 */
 HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
-									 UT_uint32 left, UT_uint32 top,
-									 UT_uint32 width)
+									 UT_uint32 /*left*/, UT_uint32 /*top*/,
+									 UT_uint32 /*width*/)
 {
 	XAP_Win32App * app = static_cast<XAP_Win32App *>(XAP_App::getApp());
 	UINT nID = 0;

@@ -35,27 +35,27 @@ public:
 	AP_Win32Dialog_Border_Shading(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Border_Shading(void);
 
-	virtual void			runModeless(XAP_Frame * pFrame);
+	virtual void			runModeless(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 	
 	virtual void			event_Close(void);
 	void					event_previewExposed(void);
-	virtual void			setShadingColorInGUI(const UT_RGBColor& clr);
-	virtual void			setBorderColorInGUI(const UT_RGBColor& clr);
-	virtual void			setBorderStyleInGUI(const std::string & sStyle);
-	virtual void            setBorderThicknessInGUI(const std::string & sThick);
-	virtual void            setShadingPatternInGUI(const std::string & sPattern);
-	virtual void            setShadingOffsetInGUI(const std::string & sOffset);
+	virtual void			setShadingColorInGUI(const UT_RGBColor& clr) override;
+	virtual void			setBorderColorInGUI(const UT_RGBColor& clr) override;
+	virtual void			setBorderStyleInGUI(const std::string & sStyle) override;
+	virtual void            setBorderThicknessInGUI(const std::string & sThick) override;
+	virtual void            setShadingPatternInGUI(const std::string & sPattern) override;
+	virtual void            setShadingOffsetInGUI(const std::string & sOffset) override;
 	void					setShadingEnable(bool enable);
-	virtual void            setSensitivity(bool bsens);
-	virtual void            destroy(void);
-	virtual void            activate(void);
-	virtual void            notifyActiveFrame(XAP_Frame * pFrame);
+	virtual void            setSensitivity(bool bsens) override;
+	virtual void            destroy(void) override;
+	virtual void            activate(void) override;
+	virtual void            notifyActiveFrame(XAP_Frame * pFrame) override;
 	
-	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-    virtual BOOL 			_onDlgMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+    virtual BOOL 			_onDlgMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
 	HWND					_createComboboxEx(const HWND hParent,const HINSTANCE hInst,DWORD dwStyle,const RECT& rc,const int id);
 	int						_insertItemToComboboxEx(
 										HWND hCbx, 

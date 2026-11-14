@@ -33,15 +33,15 @@ public:
 	XAP_Win32Dialog_FontChooser(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~XAP_Win32Dialog_FontChooser(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
-	static UINT CALLBACK	s_hookProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	static UINT_PTR CALLBACK	s_hookProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 protected:
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_callHelp();
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_callHelp() override;
 
 	XAP_Frame *				m_pWin32Frame;
 	XAP_Win32PreviewWidget* m_pPreviewWidget;

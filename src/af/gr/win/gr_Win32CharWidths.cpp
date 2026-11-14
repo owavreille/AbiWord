@@ -29,7 +29,7 @@
 
 //////////////////////////////////////////////////////////////////
 
-void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCSChar c0, UT_UCSChar c1)
+void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Char c1)
 {
 	if(m_vRanges.getItemCount() == 0)
 	{
@@ -121,7 +121,7 @@ void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCSChar c0, UT_UCSChar
 				else
 				{
 					SIZE Size;
-					char str[sizeof(UT_UCSChar)];
+					char str[sizeof(UT_UCS4Char)];
 					int iConverted = WideCharToMultiByte(CP_ACP, 0, (LPCWSTR) &k, 1,
 														 str, sizeof(str), nullptr, nullptr);
 					GetTextExtentPoint32A(hdc, str, iConverted, &Size);

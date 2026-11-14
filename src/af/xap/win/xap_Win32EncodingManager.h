@@ -10,18 +10,18 @@ protected:
     XAP_Win32EncodingManager();
     virtual ~XAP_Win32EncodingManager();
 
-    void 	initialize();
+    void 	initialize() override;
 
 public:
 
-    const char* getNativeEncodingName() 	const;
-    const char* getNativeSystemEncodingName() 	const;
-    const char* getNative8BitEncodingName() const;
-    const char* getNativeNonUnicodeEncodingName() const;
-    const char* getNativeUnicodeEncodingName() const;
-	inline virtual bool isUnicodeLocale()	const {return m_bIsUnicodeLocale;}
-    const char* getLanguageISOName() 		const;
-    const char* getLanguageISOTerritory() 	const;
+    const char* getNativeEncodingName() 	const override;
+    const char* getNativeSystemEncodingName() 	const override;
+    const char* getNative8BitEncodingName() const override;
+    const char* getNativeNonUnicodeEncodingName() const override;
+    const char* getNativeUnicodeEncodingName() const override;
+	inline virtual bool isUnicodeLocale()	const  override {return m_bIsUnicodeLocale;}
+    const char* getLanguageISOName() 		const override;
+    const char* getLanguageISOTerritory() 	const override;
 
 	friend class XAP_EncodingManager;
 

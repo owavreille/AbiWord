@@ -82,7 +82,7 @@ public:
 										UT_sint32				resource_id,
 										XAP_Dialog_Modeless*	p_dialog);
 
-	static BOOL CALLBACK	s_dlgProc(	HWND	hWnd,
+	static INT_PTR CALLBACK	s_dlgProc(	HWND	hWnd,
 									UINT	msg,
 									WPARAM	wParam,
 									LPARAM	lParam);

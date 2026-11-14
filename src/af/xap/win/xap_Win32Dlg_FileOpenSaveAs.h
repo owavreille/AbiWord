@@ -36,11 +36,11 @@ public:
 	XAP_Win32Dialog_FileOpenSaveAs(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~XAP_Win32Dialog_FileOpenSaveAs(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog * 	static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
-	static UINT CALLBACK	s_hookSaveAsProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
-	static UINT CALLBACK	s_hookInsertPicProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	static UINT_PTR CALLBACK	s_hookSaveAsProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	static UINT_PTR CALLBACK	s_hookInsertPicProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam);
 
 protected:
 	UINT _previewPicture(HWND hwnd);

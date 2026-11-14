@@ -55,12 +55,12 @@ public:
 	virtual ~EV_Win32Toolbar(void);
 
 	bool toolbarEvent(XAP_Toolbar_Id id,
-						 UT_UCSChar * pData = nullptr,
+						 UT_UCS4Char * pData = nullptr,
 						 UT_uint32 dataLength = 0);
-	virtual bool synthesize(void);
+	virtual bool synthesize(void) override;
 	bool bindListenerToView(AV_View * pView);
 	virtual bool refreshToolbar(AV_View * pView, AV_ChangeMask mask);
-	virtual bool repopulateStyles(void);
+	virtual bool repopulateStyles(void) override;
 	bool getToolTip(LPARAM lParam);
 
 	HWND getWindow(void) const;
@@ -78,8 +78,8 @@ public:
 	inline bool				bVisible( void ) { return m_bVisible; }
 
 protected:
-	virtual void					show(void);
-	virtual void					hide(void);
+	virtual void					show(void) override;
+	virtual void					hide(void) override;
 
 	void							_releaseListener(void);
 	HWND							_getControlWindow(XAP_Toolbar_Id id);

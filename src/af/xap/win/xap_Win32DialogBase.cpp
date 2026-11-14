@@ -100,7 +100,7 @@ void XAP_Win32DialogBase::createModal(XAP_Frame* pFrame, LPCWSTR dlgTemplate)
 	UT_DebugOnly<int> result = DialogBoxParamW(pWin32App->getInstance(),
 						dlgTemplate,
 						hFrameWnd,
-						(DLGPROC)&XAP_Win32DialogBase::s_dlgProc,
+						XAP_Win32DialogBase::s_dlgProc,
 						(LPARAM)this);
 	// since we can't really know what to do in case of failure, we really
 	// *should* return the error-code from this function I think.
@@ -127,7 +127,7 @@ HWND XAP_Win32DialogBase::createModeless(XAP_Frame* pFrame, LPCWSTR dlgTemplate)
 	HWND hWnd = CreateDialogParamW(pWin32App->getInstance(),
 							dlgTemplate,
 							hFrameWnd,
-							(DLGPROC)&XAP_Win32DialogBase::s_dlgProc,
+							XAP_Win32DialogBase::s_dlgProc,
 							(LPARAM)this);
 	UT_return_val_if_fail(hWnd, nullptr);
 
@@ -139,7 +139,7 @@ HWND XAP_Win32DialogBase::createModeless(XAP_Frame* pFrame, LPCWSTR dlgTemplate)
 }
 
 
-BOOL CALLBACK XAP_Win32DialogBase::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK XAP_Win32DialogBase::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	XAP_Win32DialogBase* pThis = nullptr;
 

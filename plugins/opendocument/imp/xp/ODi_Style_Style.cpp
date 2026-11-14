@@ -973,7 +973,7 @@ void ODi_Style_Style::defineAbiStyle(PD_Document* pDocument) {
      *           ...
      *           a[n] = 0 (nullptr character)
      */
-    bool ok;
+    bool appended;
 
     PP_PropertyVector pAttr;
     pAttr.push_back("type");
@@ -1004,8 +1004,11 @@ void ODi_Style_Style::defineAbiStyle(PD_Document* pDocument) {
     pAttr.push_back("props");
     pAttr.push_back(m_abiPropsAttr.c_str());
 
-    ok = pDocument->appendStyle(pAttr);
-    UT_ASSERT_HARMLESS(ok);
+    appended = pDocument->appendStyle(pAttr);
+    if (!appended)
+    {
+        UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+    }
 }
 
 

@@ -33,15 +33,15 @@ public:
 	XAP_Win32Dialog_PluginManager(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~XAP_Win32Dialog_PluginManager(void);
 
-	virtual void		runModal(XAP_Frame * pFrame);
+	virtual void		runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *	static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
 protected:
 
-	BOOL _onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL _onDeltaPos(NM_UPDOWN * pnmud);
+	BOOL _onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL _onDeltaPos(NM_UPDOWN * pnmud) override;
 	void refreshPluginList();
 	void refreshPluginInfo();
 

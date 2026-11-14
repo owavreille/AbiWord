@@ -33,10 +33,10 @@ public:
 	AP_Win32Toolbar_FontCombo(EV_Toolbar * pToolbar, XAP_Toolbar_Id id);
 	virtual ~AP_Win32Toolbar_FontCombo(void);
 
-	virtual bool		populate(void);
+	virtual bool		populate(void) override;
 
 	static EV_Toolbar_Control *		static_constructor(EV_Toolbar *, XAP_Toolbar_Id id);
-	virtual UT_uint32   getDroppedWidth() const;
+	virtual UT_uint32   getDroppedWidth() const override;
 	UT_Vector*	 getFontsCharset(){return &m_vecFontCharSet;};
 
 protected:

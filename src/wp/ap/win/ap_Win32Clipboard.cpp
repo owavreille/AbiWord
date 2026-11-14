@@ -36,7 +36,7 @@
 AP_Win32Clipboard::AP_Win32Clipboard(void)
 	: XAP_Win32Clipboard(), m_pClipboardDoc(nullptr)
 {
-#define AddFmt(szFormat,cf)	do { m_vecFormat.addItem((void*)szFormat); m_vecCF.addItem((void *)cf); } while (0)
+#define AddFmt(szFormat,cf)	do { uintptr_t formatId = static_cast<uintptr_t>(cf); m_vecFormat.addItem(const_cast<void *>(static_cast<const void *>(szFormat))); m_vecCF.addItem(reinterpret_cast<void *>(formatId)); } while (0)
 
 	// TODO We may want to add CF_LOCALE to supplement CF_TEXT
 	AddFmt(AP_CLIPBOARD_TEXTPLAIN_8BIT,		CF_TEXT);

@@ -34,12 +34,12 @@ public:
 	AP_Win32Dialog_Latex(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Latex(void);
 
-	virtual void			runModeless(XAP_Frame * pFrame);
-	virtual void			destroy(void);
-	virtual void			activate(void);
-	virtual void			notifyActiveFrame(XAP_Frame *pFrame);
-	virtual void			notifyCloseFrame(XAP_Frame *pFrame);
-	virtual void *			pGetWindowHandle( void ) { return  (void *) m_hDlg; }
+	virtual void			runModeless(XAP_Frame * pFrame) override;
+	virtual void			destroy(void) override;
+	virtual void			activate(void) override;
+	virtual void			notifyActiveFrame(XAP_Frame *pFrame) override;
+	virtual void			notifyCloseFrame(XAP_Frame *pFrame) override;
+	virtual void *			pGetWindowHandle( void )  override { return  (void *) m_hDlg; }
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
@@ -47,13 +47,13 @@ public:
 	void			event_Insert(void);
 	void			event_Close(void);
 	void			event_WindowDelete(void);
-	virtual void    setLatexInGUI(void);
-	virtual bool    getLatexFromGUI(void);
+	virtual void    setLatexInGUI(void) override;
+	virtual bool    getLatexFromGUI(void) override;
 
 protected:
-	BOOL	_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL	_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL	_onDeltaPos(NM_UPDOWN * pnmud);
+	BOOL	_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL	_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL	_onDeltaPos(NM_UPDOWN * pnmud) override;
 
 	HWND m_hDlg;
 	// pointers to widgets we need

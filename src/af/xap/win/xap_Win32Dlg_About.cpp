@@ -95,7 +95,7 @@ static void turnOffVisualTheme(HWND hwnd)
 		if (!themeDll)
 			themeDll = LoadLibraryW(L"uxtheme.dll");
 		if (themeDll)
-			setTheme = reinterpret_cast<SetWindowThemeFn>(GetProcAddress(themeDll, "SetWindowTheme"));
+			setTheme = reinterpret_cast<SetWindowThemeFn>(reinterpret_cast<void *>(GetProcAddress(themeDll, "SetWindowTheme")));
 		lookedUp = true;
 	}
 	if (setTheme && hwnd)

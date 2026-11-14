@@ -159,10 +159,10 @@ void GR_Win32Graphics::_constructorCommonCode(HDC hdc)
 		int  nWidth;
 		int	 nColour;
 	
-	} CACHE_PEN;
+	} CachedPen;
 	
 	m_pArPens = new GR_Win32Graphics::CACHE_PEN [_MAX_CACHE_PENS];
-	memset (m_pArPens, 0, _MAX_CACHE_PENS*sizeof(CACHE_PEN));
+	memset (m_pArPens, 0, _MAX_CACHE_PENS*sizeof(CachedPen));
 	m_nArPenPos = 0;
 
 	_DoubleBuffering_SetUpDummyBuffer();
@@ -405,7 +405,7 @@ void GR_Win32Graphics::drawGlyph(UT_uint32 /*Char*/, UT_sint32 /*xoff*/, UT_sint
 	UT_ASSERT_HARMLESS(UT_TODO);
 }
 
-void GR_Win32Graphics::drawChar(UT_UCSChar Char, UT_sint32 xoff, UT_sint32 yoff)
+void GR_Win32Graphics::drawChar(UT_UCS4Char Char, UT_sint32 xoff, UT_sint32 yoff)
 {
 	#ifdef GR_GRAPHICS_DEBUG
 	UT_DEBUGMSG(("GR_Win32Graphics::drawChar %c %u %u\n", Char, xoff, yoff));	
@@ -424,7 +424,7 @@ void GR_Win32Graphics::drawChar(UT_UCSChar Char, UT_sint32 xoff, UT_sint32 yoff)
 	SetTextAlign(m_hdc, TA_LEFT | TA_TOP);
 	SetBkMode(m_hdc, TRANSPARENT);		// TODO: remember and reset?
 
-	UT_UCSChar currentChar = Char;
+	UT_UCS4Char currentChar = Char;
 	//TODO this is a temporary hack -- need a way to handle true 32-bit chars
 	UT_UCS2Char aChar = (UT_UCS2Char) currentChar;
 
@@ -458,7 +458,7 @@ void GR_Win32Graphics::drawChar(UT_UCSChar Char, UT_sint32 xoff, UT_sint32 yoff)
 	}
 }
 
-UT_uint16*	GR_Win32Graphics::_remapGlyphs(const UT_UCSChar* pChars, int iCharOffset, int &iLength)
+UT_uint16*	GR_Win32Graphics::_remapGlyphs(const UT_UCS4Char* pChars, int iCharOffset, int &iLength)
 {
 	// TODO -- make this handle 32-bit chars properly
 	if (iLength > (int)m_remapBufferSize)
@@ -491,7 +491,7 @@ UT_uint16*	GR_Win32Graphics::_remapGlyphs(const UT_UCSChar* pChars, int iCharOff
 	return m_remapBuffer;
 }
 
-void GR_Win32Graphics::drawChars(const UT_UCSChar* pChars,
+void GR_Win32Graphics::drawChars(const UT_UCS4Char* pChars,
 								 int iCharOffset, int iLengthOrig,
 								 UT_sint32 xoff, UT_sint32 yoff,
 								 int * pCharWidths)
@@ -532,7 +532,7 @@ void GR_Win32Graphics::drawChars(const UT_UCSChar* pChars,
 	// Reference Microsoft knowledge base:
 	// Q145754 - PRB ExtTextOutW or TextOutW Unicode Text Output Is Blank
 	LOGFONTW lf;
-	int iRes = GetObjectW(hFont, sizeof(LOGFONTW), &lf);
+	UT_DebugOnly<int> iRes = GetObjectW(hFont, sizeof(LOGFONTW), &lf);
 	UT_ASSERT(iRes);
 
 	if (UT_IsWinNT() == false && lf.lfCharSet == SYMBOL_CHARSET)
@@ -541,7 +541,7 @@ void GR_Win32Graphics::drawChars(const UT_UCSChar* pChars,
 		char* str = new char[iLength * sizeof(UT_UCS2Char)];
 		int iConverted = WideCharToMultiByte(CP_ACP, 0,
 			(LPCWSTR) currentChars, iLength,
-			str, iLength * sizeof(UT_UCSChar), nullptr, nullptr);
+			str, iLength * sizeof(UT_UCS4Char), nullptr, nullptr);
 
 		ExtTextOutA(m_hdc, xoff, yoff, 0, nullptr, str, iConverted, nullptr);
 		delete [] str;
@@ -552,7 +552,7 @@ void GR_Win32Graphics::drawChars(const UT_UCSChar* pChars,
 
 		if (pCharWidths)
 		{
-			if (iLengthOrig > (sizeof(duCharWidths)/sizeof(int)) )
+			if (iLengthOrig > static_cast<int>(sizeof(duCharWidths)/sizeof(int)) )
 				pCharAdvances = new int [iLengthOrig];
 			else
 				pCharAdvances = duCharWidths;
@@ -648,7 +648,7 @@ void GR_Win32Graphics::drawChars(const UT_UCSChar* pChars,
 			ExtTextOutW(m_hdc, xoff, yoff, 0, nullptr, (LPCWSTR) currentChars, iLength, pCharAdvances);
 		}
 
-		if (pCharAdvances && (iLengthOrig > (sizeof(duCharWidths)/sizeof(int))) )
+		if (pCharAdvances && (iLengthOrig > static_cast<int>(sizeof(duCharWidths)/sizeof(int))) )
 			delete[] pCharAdvances;
 	}
 }
@@ -736,7 +736,7 @@ void GR_Win32Graphics::getCoverage(UT_NumberVector& coverage)
 	//UT_ASSERT(UT_TODO);
 }
 
-UT_sint32 GR_Win32Graphics::measureUnRemappedChar(const UT_UCSChar c, UT_uint32 * /*height*/)
+UT_sint32 GR_Win32Graphics::measureUnRemappedChar(const UT_UCS4Char c, UT_uint32 * /*height*/)
 {
 	#ifdef GR_GRAPHICS_DEBUG
 	UT_DEBUGMSG(("GR_Win32Graphics::measureUnRemappedChar\n"));	
@@ -1328,7 +1328,7 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 							 pBits, pDIB, DIB_RGB_COLORS, SRCCOPY);
 	}
 	
-	if (iRes == GDI_ERROR)
+	if (iRes == static_cast<int>(GDI_ERROR))
 	{
 		UT_DebugOnly<DWORD> err = GetLastError();
 		UT_DEBUGMSG(("StretchDIBits failed with err %d\n", err));
@@ -1678,7 +1678,7 @@ GR_Win32Font::GR_Win32Font(LOGFONTW & lf, double fPoints, HDC hdc, HDC printHDC)
 
 			_updateFontYMetrics(hdc, printHDC);
 
-			m_hashKey = UT_std_string_sprintf("%s-%ld-%ld-%d-%d-%d-%d-%d",
+			m_hashKey = UT_std_string_sprintf("%ls-%ld-%ld-%d-%d-%d-%d-%d",
 							  lpFaceName,
 							  m_tm.tmHeight, m_tm.tmWeight, m_tm.tmItalic, m_tm.tmUnderlined,
 							  m_tm.tmStruckOut,
@@ -1836,7 +1836,7 @@ UT_uint32 GR_Win32Font::getHeight(HDC hdc, HDC printHDC)
 }
 
 
-UT_sint32 GR_Win32Font::measureUnremappedCharForCache(UT_UCSChar cChar) const
+UT_sint32 GR_Win32Font::measureUnremappedCharForCache(UT_UCS4Char cChar) const
 {
 #ifndef ABI_GRAPHICS_PLUGIN_NO_WIDTHS
 	// first of all, handle 0-width spaces ...
@@ -2055,7 +2055,7 @@ HFONT GR_Win32Font::getDisplayFont(GR_Graphics * pG)
 	return getFontFromCache(pixels, false, zoom);
 }
 
-UT_sint32 GR_Win32Font::measureUnRemappedChar(UT_UCSChar c, UT_uint32 * /*height*/)
+UT_sint32 GR_Win32Font::measureUnRemappedChar(UT_UCS4Char c, UT_uint32 * /*height*/)
 {
 #ifndef ABI_GRAPHICS_PLUGIN_NO_WIDTHS
 	// first of all, handle 0-width spaces ...
@@ -2722,7 +2722,7 @@ void GR_Win32Graphics::_DeviceContext_SwitchToBuffer()
 	UT_Win32TraceF("buffer-blt %d", blt ? 1 : 0);
 
 	// save the current hdc & switch
-	_HDCSwitchStack.push(new _HDCSwitchRecord(m_hdc));
+	_HDCSwitchStack.push_back(new _HDCSwitchRecord(m_hdc));
 	m_hdc = m_bufferHdc;
 	// The clip was selected into the screen DC. The memory DC starts unclipped,
 	// so a selection rectangle would not limit drawing into the buffer.
@@ -2773,7 +2773,14 @@ void GR_Win32Graphics::_DeviceContext_RestorePrevHDCFromStack()
 {
 	_HDCSwitchRecord *switchRecord = nullptr;
 	UT_Win32Trace("hdc-pop");
-	if (!_HDCSwitchStack.pop((void**)&switchRecord) || !switchRecord)
+	if (_HDCSwitchStack.empty())
+	{
+		UT_Win32Trace("hdc-pop-empty");
+		return;
+	}
+	switchRecord = _HDCSwitchStack.back();
+	_HDCSwitchStack.pop_back();
+	if (!switchRecord)
 	{
 		UT_Win32Trace("hdc-pop-empty");
 		return;
@@ -2787,7 +2794,7 @@ void GR_Win32Graphics::_DeviceContext_RestorePrevHDCFromStack()
 void GR_Win32Graphics::_DeviceContext_SuspendDrawing()
 {
 	// save the current hdc & switch them!
-	_HDCSwitchStack.push(new _HDCSwitchRecord(m_hdc));
+	_HDCSwitchStack.push_back(new _HDCSwitchRecord(m_hdc));
 	m_hdc = m_dummyHdc;
 }
 

@@ -29,13 +29,13 @@ class ABI_EXPORT AP_Win32Dialog_Insert_DateTime : public AP_Dialog_Insert_DateTi
 public:
     AP_Win32Dialog_Insert_DateTime(XAP_DialogFactory * pDlgFactory,XAP_Dialog_Id id);
 
-    virtual void      runModal(XAP_Frame * pFrame);
+    virtual void      runModal(XAP_Frame * pFrame) override;
 
     static XAP_Dialog *   static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
 protected:
-    BOOL          _onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-    BOOL          _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+    BOOL          _onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+    BOOL          _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 private:
     HWND m_hwndFormats;
     void SetFormatsList(void);

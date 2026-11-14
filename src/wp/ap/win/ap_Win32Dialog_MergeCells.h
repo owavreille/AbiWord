@@ -32,19 +32,19 @@ public:
 	AP_Win32Dialog_MergeCells(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_MergeCells(void);
 
-	virtual void			runModeless(XAP_Frame * pFrame);
+	virtual void			runModeless(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
-	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 
 	// callbacks can fire these events
 	virtual void			event_Close(void);
-	virtual void            setSensitivity(AP_Dialog_MergeCells::mergeWithCell mergeThis, bool bsens);
-	virtual void            destroy(void);
-	virtual void            activate(void);
-	virtual void            notifyActiveFrame(XAP_Frame * pFrame);
+	virtual void            setSensitivity(AP_Dialog_MergeCells::mergeWithCell mergeThis, bool bsens) override;
+	virtual void            destroy(void) override;
+	virtual void            activate(void) override;
+	virtual void            notifyActiveFrame(XAP_Frame * pFrame) override;
 
 protected:
 

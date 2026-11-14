@@ -115,9 +115,13 @@ void AP_Win32Dialog_Styles::_onDrawButton(LPDRAWITEMSTRUCT lpDrawItemStruct, HWN
 
     // draw the border of the button
     if(uiState&ODS_SELECTED)
+	{
         DrawFrameControl(hdc, &lpDrawItemStruct->rcItem, DFC_BUTTON, DFCS_BUTTONPUSH|DFCS_PUSHED);
+	}
     else
-        DrawFrameControl(hdc, &lpDrawItemStruct->rcItem, DFC_BUTTON, DFCS_BUTTONPUSH);	
+	{
+        DrawFrameControl(hdc, &lpDrawItemStruct->rcItem, DFC_BUTTON, DFCS_BUTTONPUSH);
+	}	
 	
 	// Draw arrow
 	y = nHeight/2;
@@ -359,7 +363,7 @@ BOOL AP_Win32Dialog_Styles::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 			const char * szCurrentStyle = nullptr;
 			const char * szBasedOn = nullptr;
 			const char * szFollowedBy = nullptr;
-			const char * pLocalised = nullptr;
+			pLocalised = nullptr;
 			PD_Style * pStyle = nullptr;
 			PD_Style * pBasedOnStyle = nullptr;
 			PD_Style * pFollowedByStyle = nullptr;
@@ -390,10 +394,10 @@ BOOL AP_Win32Dialog_Styles::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 		    pBasedOnStyle = pStyle->getBasedOn();
 			pFollowedByStyle = pStyle->getFollowedBy();
 			
-			size_t nStyles = getDoc()->getStyleCount();
-			const char * name = nullptr;
-			const PD_Style * pcStyle = nullptr;
-			UT_GenericVector<PD_Style*> * pStyles = nullptr;
+			nStyles = getDoc()->getStyleCount();
+			name = nullptr;
+			pcStyle = nullptr;
+			pStyles = nullptr;
 			getDoc()->enumStyles(pStyles);
 			UT_return_val_if_fail( pStyles, FALSE );
 	

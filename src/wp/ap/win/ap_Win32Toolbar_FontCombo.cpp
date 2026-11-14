@@ -121,7 +121,7 @@ int CALLBACK AP_Win32Toolbar_FontCombo::_EnumFontsProc(LPLOGFONTW lplf,
 	}
 
 	ctl->m_vecContents.addItem(p);
-	ctl->m_vecFontCharSet.addItem((void*)lplf->lfCharSet);
+	ctl->m_vecFontCharSet.addItem(reinterpret_cast<void *>(static_cast<UINT_PTR>(lplf->lfCharSet)));
 
 	seenFonts.insert(p);
 

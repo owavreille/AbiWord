@@ -17,13 +17,14 @@
  * 02110-1301 USA.
  */
 
-#include "ut_misc.h"
-#include <windows.h>
 #ifdef _MSC_VER
 #include <winsock.h>
 #else
+#include <winsock2.h>
 #include <mswsock.h>
 #endif
+#include "ut_misc.h"
+#include <windows.h>
 #ifndef __WINE__
 #include <snmp.h>
 #endif
@@ -113,7 +114,7 @@ bool UT_getEthernetAddress(UT_EthernetAddress &A)
 	}
 	else
 	{
-		m_WSAStartup = (pWSAStartup)   GetProcAddress(m_hWSInst, "WSAStartup");
+		m_WSAStartup = reinterpret_cast<pWSAStartup>(reinterpret_cast<void *>(GetProcAddress(m_hWSInst, "WSAStartup")));
 		if(!m_WSAStartup)
 		{
 			UT_DEBUGMSG(("UT_getEthernetAddress: no WSAStartup\n"));
@@ -177,14 +178,14 @@ bool UT_getEthernetAddress(UT_EthernetAddress &A)
 			goto  try_netbios;
 		}
 
-		m_SnmpUtilVarBindFree = (pSnmpUtilVarBindFree) GetProcAddress(m_hSNMPInst,
-																	  "SnmpUtilVarBindFree");
+		m_SnmpUtilVarBindFree = reinterpret_cast<pSnmpUtilVarBindFree>(reinterpret_cast<void *>(GetProcAddress(m_hSNMPInst,
+																	  "SnmpUtilVarBindFree")));
 		
-		m_SnmpUtilOidNCmp = (pSnmpUtilOidNCmp) GetProcAddress(m_hSNMPInst,
-																	  "SnmpUtilOidNCmp");
+		m_SnmpUtilOidNCmp = reinterpret_cast<pSnmpUtilOidNCmp>(reinterpret_cast<void *>(GetProcAddress(m_hSNMPInst,
+																	  "SnmpUtilOidNCmp")));
 		
-		m_SnmpUtilOidCpy = (pSnmpUtilOidCpy) GetProcAddress(m_hSNMPInst,
-																	  "SnmpUtilOidCpy");
+		m_SnmpUtilOidCpy = reinterpret_cast<pSnmpUtilOidCpy>(reinterpret_cast<void *>(GetProcAddress(m_hSNMPInst,
+																	  "SnmpUtilOidCpy")));
 		
 		
 		if(!m_SnmpUtilVarBindFree || !m_SnmpUtilOidNCmp || !m_SnmpUtilOidCpy)
@@ -206,8 +207,8 @@ bool UT_getEthernetAddress(UT_EthernetAddress &A)
 			goto  try_netbios;
 		}
 	
-		m_Init =   (pSnmpExtensionInit)   GetProcAddress(m_hInst, "SnmpExtensionInit");
-		m_Query =  (pSnmpExtensionQuery)  GetProcAddress(m_hInst, "SnmpExtensionQuery");
+		m_Init =   reinterpret_cast<pSnmpExtensionInit>(reinterpret_cast<void *>(GetProcAddress(m_hInst, "SnmpExtensionInit")));
+		m_Query =  reinterpret_cast<pSnmpExtensionQuery>(reinterpret_cast<void *>(GetProcAddress(m_hInst, "SnmpExtensionQuery")));
 
 		if(!m_Init || !m_Query)
 		{
@@ -352,7 +353,7 @@ bool UT_getEthernetAddress(UT_EthernetAddress &A)
 		}
 
 		pNetbios m_Netbios = nullptr;
-		m_Netbios = (pNetbios) GetProcAddress(m_hInst, "Netbios");
+		m_Netbios = reinterpret_cast<pNetbios>(reinterpret_cast<void *>(GetProcAddress(m_hInst, "Netbios")));
 
 		if(!m_Netbios)
 		{
@@ -383,8 +384,10 @@ bool UT_getEthernetAddress(UT_EthernetAddress &A)
 		Ncb.ncb_command = NCBASTAT;
 		Ncb.ncb_lana_num = 0;
 
-		char namebuf[] = "*               ";
-		strcpy((char *)Ncb.ncb_callname, namebuf);
+		char namebuf[NCBNAMSZ];
+		memset(namebuf, ' ', NCBNAMSZ);
+		namebuf[0] = '*';
+		memcpy(Ncb.ncb_callname, namebuf, NCBNAMSZ);
 
 		ASTAT Adapter;
 		Ncb.ncb_buffer = (unsigned char *) &Adapter;
@@ -427,7 +430,7 @@ class ABI_EXPORT UT_Win32AssertDlg
 		: m_iLine(iLine), m_pCond(pCond), m_pFile(pFile), m_iCount(iCount), m_myHWND(nullptr), m_bTimersPaused(false){};
 	~UT_Win32AssertDlg(){};
 
-	static BOOL CALLBACK  s_dlgProc(HWND,UINT,WPARAM,LPARAM);
+	static INT_PTR CALLBACK  s_dlgProc(HWND,UINT,WPARAM,LPARAM);
 
 	BOOL		  _onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL		  _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -483,7 +486,7 @@ int ABI_EXPORT UT_Win32ThrowAssert(const char * pCond, const char * pFile, int i
 	return 1;
 }
 
-BOOL CALLBACK UT_Win32AssertDlg::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
+INT_PTR CALLBACK UT_Win32AssertDlg::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 {
 	// This is a static function.
 	
@@ -512,7 +515,7 @@ UT_Win32AssertDlg::answer UT_Win32AssertDlg::runModal()
 	UT_DebugOnly<int> result = DialogBoxParamA(GetModuleHandleA(nullptr),
 								lpTemplate,
 								nullptr,
-								(DLGPROC)s_dlgProc,(LPARAM)this);
+								s_dlgProc,(LPARAM)this);
 
 	UT_ASSERT_HARMLESS((result != -1));
 

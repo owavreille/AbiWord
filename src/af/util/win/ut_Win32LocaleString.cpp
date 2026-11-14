@@ -383,10 +383,10 @@ void UT_Win32LocaleString::fromASCII (const char* szASCII, size_t sz)
 #ifdef DEBUG
 	if (!szASCII) szASCII="FIXME: nullptr passed to UT_Win32LocaleString::fromASCII";
 #endif
-	size_t len = (sz == -1) ? strlen(szASCII) : sz;
+	size_t len = (sz == static_cast<size_t>(-1)) ? strlen(szASCII) : sz;
 	UT_UCS2Char * src = new UT_UCS2Char [len + 1];
 	char *p_str = (char *)szASCII;
-	for (UT_uint32 i = 0; i < len; i++)
+	for (size_t i = 0; i < len; i++)
 	{
 		src[i] = *p_str;
 		p_str++;
@@ -412,7 +412,7 @@ void UT_Win32LocaleString::appendASCII (const char* szASCII)
 	size_t len = strlen(szASCII);
 	UT_UCS2Char * src = new UT_UCS2Char [len + 1];
 	char *p_str = (char *)szASCII;
-	for (UT_uint32 i = 0; i < strlen (szASCII); i++)
+	for (size_t i = 0; i < len; i++)
 	{
 		src[i] = *p_str;
 		p_str++;

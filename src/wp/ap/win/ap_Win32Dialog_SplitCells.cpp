@@ -72,7 +72,7 @@ AP_Win32Dialog_SplitCells::~AP_Win32Dialog_SplitCells(void)
 void AP_Win32Dialog_SplitCells::runModeless(XAP_Frame * pFrame)
 {
 	UT_return_if_fail (pFrame);
-	UT_return_if_fail (m_id == AP_DIALOG_ID_SPLIT_CELLS);
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_SPLIT_CELLS));
 
 	createModeless(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_SPLITCELLS));
 

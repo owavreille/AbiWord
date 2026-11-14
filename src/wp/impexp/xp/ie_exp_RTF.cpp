@@ -1645,7 +1645,7 @@ void IE_Exp_RTF::_write_parafmt(const PP_AttrProp * pSpanAP, const PP_AttrProp *
 		leftDelim[i] = '\0';
 		i += 2;
 		rTmp = i;
-		while (p[i] || p[i] != '\0')
+		while (p[i] != '\0')
 		{
 			rightDelim[i - rTmp] = p[i];
 			i++;

@@ -35,22 +35,22 @@ public:
 	AP_Win32Dialog_FormatFrame(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_FormatFrame(void);
 
-	virtual void			runModeless(XAP_Frame * pFrame);
+	virtual void			runModeless(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
 	virtual void			event_Close(void);
 	void					event_previewExposed(void);
-	virtual void            	setSensitivity(bool bsens);
-	virtual void            	destroy(void);
-	virtual void            	activate(void);
-	virtual void            	notifyActiveFrame(XAP_Frame * pFrame);
+	virtual void            	setSensitivity(bool bsens) override;
+	virtual void            	destroy(void) override;
+	virtual void            	activate(void) override;
+	virtual void            	notifyActiveFrame(XAP_Frame * pFrame) override;
 	virtual void                setBorderThicknessInGUI(const std::string & /*sThick*/) override { UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED); };
-	virtual void *				pGetWindowHandle( void ) {  return (void *) m_hDlg; }
+	virtual void *				pGetWindowHandle( void )  override {  return (void *) m_hDlg; }
 
-	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-    virtual BOOL 			_onDlgMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+    virtual BOOL 			_onDlgMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
 
 protected:
 	HBITMAP					m_hBitmapBottom;

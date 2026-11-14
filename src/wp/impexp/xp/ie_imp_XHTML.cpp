@@ -1502,6 +1502,7 @@ void IE_Imp_XHTML::startElement(const gchar *name,
 	UT_ASSERT(m_error == 0);
 
 X_Fail:
+	(void)failLine;
 	return;
 }
 
@@ -1766,6 +1767,7 @@ void IE_Imp_XHTML::endElement(const gchar *name)
 	}
 	return;
 X_Fail:
+	(void)failLine;
 	UT_DEBUGMSG (("X_Fail at %d\n", failLine));
 	return;
 }
@@ -1827,6 +1829,7 @@ void IE_Imp_XHTML::charData (const gchar * buffer, int length)
 	return;
 
 X_Fail:
+	(void)failLine;
 	UT_DEBUGMSG (("X_Fail at %d\n", failLine));
 	return;
 }

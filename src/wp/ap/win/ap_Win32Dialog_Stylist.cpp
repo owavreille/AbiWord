@@ -65,7 +65,7 @@ void AP_Win32Dialog_Stylist::runModal(XAP_Frame * pFrame)
 {
 	UT_return_if_fail(pFrame);
 	
-	UT_return_if_fail(m_id == AP_DIALOG_ID_STYLIST);
+	UT_return_if_fail(m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_STYLIST));
 	m_bIsModal = true;
 
     createModal (pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_STYLIST));
@@ -76,7 +76,7 @@ void AP_Win32Dialog_Stylist::runModeless(XAP_Frame * pFrame)
 	// raise the dialog
 	UT_DebugOnly<int> iResult;
 	m_bIsModal = false;
-	UT_return_if_fail (m_id == AP_DIALOG_ID_STYLIST);
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_STYLIST));
 	createModeless (pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_STYLIST));
 
 	// Save dialog the ID number and pointer to the widget

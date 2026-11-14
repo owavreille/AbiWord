@@ -32,21 +32,21 @@ public:
 	AP_Win32Dialog_Stylist(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Stylist(void);
 
-	virtual void			runModeless(XAP_Frame * pFrame);
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModeless(XAP_Frame * pFrame) override;
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
-	virtual void            activate(void);
-	virtual void            destroy(void);
-	virtual void            notifyActiveFrame(XAP_Frame * pFrame);
+	virtual void            activate(void) override;
+	virtual void            destroy(void) override;
+	virtual void            notifyActiveFrame(XAP_Frame * pFrame) override;
 	static BOOL CALLBACK	s_dlgProc(HWND,UINT,WPARAM,LPARAM);
 	static LRESULT CALLBACK	s_treeProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
-	virtual void            setStyleInGUI(void);
-	virtual void *  		pGetWindowHandle(void) {  return (void *) m_hDlg; }
+	virtual void            setStyleInGUI(void) override;
+	virtual void *  		pGetWindowHandle(void)  override {  return (void *) m_hDlg; }
 
 protected:
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 	void					_populateWindowData(void);
 	void					_fillTree(void);
 	BOOL					_styleClicked(void);

@@ -1,5 +1,5 @@
 /* AbiWord
- * Copyright (C) 2002 Jordi Mas i Hernàndez <jmas@softcatala.org>
+ * Copyright (C) 2002 Jordi Mas i Hernï¿½ndez <jmas@softcatala.org>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -54,7 +54,7 @@ public:
 	AP_Win32Dialog_MetaData(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_MetaData(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
@@ -75,8 +75,8 @@ public:
 
 private:
 
-	virtual	void				_onInitDialog();
-	virtual	void				_onOK();
+	virtual	void				_onInitDialog() override;
+	virtual	void				_onOK() override;
 	char* 						_get_text(XAP_String_Id nID, char *szBuff, int nSize);
 
 	UT_String					m_sTitle;
@@ -100,9 +100,9 @@ class ABI_EXPORT AP_Win32Dialog_MetaData_Summary: public XAP_Win32PropertyPage
 
 private:
 
-	virtual	void				_onOK();
+	virtual	void				_onOK() override;
 	char* 						_get_text(XAP_String_Id nID, char *szBuff, int nSize);
-	virtual	void				_onInitDialog();
+	virtual	void				_onInitDialog() override;
 
 	AP_Win32Dialog_MetaData*	m_pData;
 	UT_String					m_sCategory;
@@ -125,8 +125,8 @@ public:
 private:
 
 	char* 						_get_text(XAP_String_Id nID, char *szBuff, int nSize);
-	virtual	void				_onInitDialog();
-	virtual	void				_onOK();
+	virtual	void				_onInitDialog() override;
+	virtual	void				_onOK() override;
 
 	AP_Win32Dialog_MetaData*	m_pData;
 	UT_String					m_sSource;

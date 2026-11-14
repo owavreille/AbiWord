@@ -95,7 +95,7 @@ void AP_Win32Dialog_Goto::notifyCloseFrame(XAP_Frame *pFrame)
 
 void AP_Win32Dialog_Goto::runModeless(XAP_Frame * pFrame)
 {
-	UT_return_if_fail (pFrame && m_id == AP_DIALOG_ID_GOTO);
+	UT_return_if_fail (pFrame && m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_GOTO));
     createModeless (pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_GOTO));
 
 	// Save dialog the ID number and pointer to the widget
@@ -106,7 +106,7 @@ void AP_Win32Dialog_Goto::runModeless(XAP_Frame * pFrame)
 
 void AP_Win32Dialog_Goto::GoTo (const char *number)
 {
-	UT_UCSChar *ucsnumber = (UT_UCSChar *) g_try_malloc (sizeof (UT_UCSChar) * (strlen(number) + 1));
+	UT_UCS4Char *ucsnumber = (UT_UCS4Char *) g_try_malloc (sizeof (UT_UCS4Char) * (strlen(number) + 1));
 	UT_return_if_fail(ucsnumber);
 	UT_UCS4_strcpy_utf8_char(ucsnumber, number);
 	int target = this->getSelectedRow ();

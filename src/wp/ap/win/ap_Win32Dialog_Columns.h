@@ -35,8 +35,8 @@ public:
 	AP_Win32Dialog_Columns(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Columns(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
-	virtual void			enableLineBetweenControl(bool bState = true);
+	virtual void			runModal(XAP_Frame * pFrame) override;
+	virtual void			enableLineBetweenControl(bool bState = true) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
@@ -44,9 +44,9 @@ private:
 	XAP_Win32PreviewWidget *	m_pPreviewWidget;
 
 protected:
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onDeltaPos(NM_UPDOWN * pnmud);
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onDeltaPos(NM_UPDOWN * pnmud) override;
 };
 
 #endif /* AP_Win32Dialog_Columns_H */

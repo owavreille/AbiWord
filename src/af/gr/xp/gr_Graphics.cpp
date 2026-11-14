@@ -355,7 +355,7 @@ void GR_Graphics::endDoubleBuffering(bool token)
 
 	UT_ASSERT(m_DCSwitchManagementStack.size() > 0);
 	
-	UT_sint32 topMostSwitch = m_DCSwitchManagementStack.top();
+	UT_DebugOnly<UT_sint32> topMostSwitch = m_DCSwitchManagementStack.top();
 	UT_ASSERT(topMostSwitch == (UT_sint32)SWITCHED_TO_BUFFER);
 
 	_DeviceContext_SwitchToScreen();
@@ -382,7 +382,7 @@ void GR_Graphics::resumeDrawing(bool token)
 
 	UT_ASSERT(m_DCSwitchManagementStack.size() > 0);
 	
-	UT_sint32 topMostSwitch = m_DCSwitchManagementStack.top();
+	UT_DebugOnly<UT_sint32> topMostSwitch = m_DCSwitchManagementStack.top();
 	UT_ASSERT(topMostSwitch == (UT_sint32)DRAWING_SUSPENDED);
 
 	// take action only if the caller has the good token

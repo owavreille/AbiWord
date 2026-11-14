@@ -42,7 +42,7 @@ public:
 	HWND					createWindow(HWND hwndContainer,
 										 UT_uint32 left, UT_uint32 top,
 										 UT_uint32 height);
-	virtual void			setView(AV_View * pView);
+	virtual void			setView(AV_View * pView) override;
 
 	static bool			registerClass(XAP_Win32App * app);
 	static LRESULT CALLBACK	_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam);

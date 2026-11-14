@@ -50,7 +50,7 @@ class ABI_EXPORT XAP_Win32FrameImpl : public XAP_FrameImpl
 	XAP_Win32FrameImpl(XAP_Frame *pFrame);
 	virtual ~XAP_Win32FrameImpl(void);
 
-	virtual XAP_FrameImpl * createInstance(XAP_Frame *pFrame) = 0;
+	virtual XAP_FrameImpl * createInstance(XAP_Frame *pFrame)  override= 0;
 
 	inline HWND getTopLevelWindow(void) const 	{  return _getTopLevelWindow();  }
 	inline HWND getToolbarWindow(void) const		{  return m_hwndRebar;  }
@@ -58,36 +58,36 @@ class ABI_EXPORT XAP_Win32FrameImpl : public XAP_FrameImpl
 protected:
 	friend class XAP_Frame;
 
-	virtual UT_RGBColor getColorSelBackground () const;
-	virtual UT_RGBColor getColorSelForeground () const;
+	virtual UT_RGBColor getColorSelBackground () const override;
+	virtual UT_RGBColor getColorSelForeground () const override;
 
 #if 0
 	void _startViewAutoUpdater(void);
 	static void viewAutoUpdater(UT_Worker *wkr);
 #endif
 
-	virtual bool _updateTitle(void);
+	virtual bool _updateTitle(void) override;
 
-	virtual void _initialize(void);
-	virtual bool _close(void);
-	virtual bool _raise(void);
-	virtual bool _show(void);
+	virtual void _initialize(void) override;
+	virtual bool _close(void) override;
+	virtual bool _raise(void) override;
+	virtual bool _show(void) override;
 
-	virtual XAP_DialogFactory * _getDialogFactory(void);
-	virtual EV_Toolbar * _newToolbar(XAP_Frame *frame, const char *szLayout, const char *szLanguage);
-	virtual EV_Menu* _getMainMenu(void);
-	virtual void _rebuildMenus(void);
+	virtual XAP_DialogFactory * _getDialogFactory(void) override;
+	virtual EV_Toolbar * _newToolbar(XAP_Frame *frame, const char *szLayout, const char *szLanguage) override;
+	virtual EV_Menu* _getMainMenu(void) override;
+	virtual void _rebuildMenus(void) override;
 
 	// Useful to refresh the size of the Frame.  For instance,
 	// when the user selects hide statusbar, the Frame has to be
 	// resized in order to fill the gap leaved by the statusbar
-	virtual void _queue_resize(void);
+	virtual void _queue_resize(void) override;
 
 	virtual bool _runModalContextMenu(AV_View * pView, const char * szMenuName,
-									  UT_sint32 x, UT_sint32 y);
-	virtual void _setFullScreen(bool isFullScreen);
-	virtual void _nullUpdate (void) const;
-	virtual void _setCursor(GR_Graphics::Cursor cursor);
+									  UT_sint32 x, UT_sint32 y) override;
+	virtual void _setFullScreen(bool isFullScreen) override;
+	virtual void _nullUpdate (void) const override;
+	virtual void _setCursor(GR_Graphics::Cursor cursor) override;
 
 	static bool _RegisterClass(XAP_Win32App * app);
 
@@ -99,7 +99,7 @@ protected:
 								UT_uint32 iLeft, UT_uint32 iTop, UT_uint32 iWidth, UT_uint32 iHeight) = 0;
 	virtual HWND				_createStatusBarWindow(XAP_Frame *pFrame, HWND hwndParent,
 								UT_uint32 iLeft, UT_uint32 iTop, UT_uint32 iWidth) = 0;
-	void						_createTopLevelWindow(void);
+	void						_createTopLevelWindow(void) override;
 
 	void						_setHwndRebar(HWND hWnd)     {  m_hwndRebar = hWnd;  }
 	HWND						_getHwndRebar(void)          {  return m_hwndRebar;  }

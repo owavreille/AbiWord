@@ -52,7 +52,7 @@ class ABI_EXPORT GR_Win32USPFont : public GR_Win32Font
 	// all construction has to be done via the graphics class
 	GR_Win32USPFont(LOGFONTW & lf, double fPoints, HDC hdc, HDC printHDC);
 
-	virtual void _clearAnyCachedInfo();
+	virtual void _clearAnyCachedInfo() override;
 
   private:
 	SCRIPT_CACHE m_sc;
@@ -70,65 +70,65 @@ public:
 	virtual ~GR_Win32USPGraphics();
 
 	static UT_uint32 s_getClassId() {return GRID_WIN32_UNISCRIBE;}
-	virtual UT_uint32 getClassId() {return s_getClassId();}
+	virtual UT_uint32 getClassId()  override {return s_getClassId();}
 
-	virtual GR_Capability  getCapability() {return GRCAP_SCREEN_AND_PRINTER;}
+	virtual GR_Capability  getCapability()  override {return GRCAP_SCREEN_AND_PRINTER;}
 	static const char *    graphicsDescriptor();
 	static const char *    getUSPVersion();
 	static GR_Graphics *   graphicsAllocator(GR_AllocInfo&);
 
-	virtual void		   setFont(const GR_Font* pFont);
+	virtual void		   setFont(const GR_Font* pFont) override;
 
-	virtual void		   drawChars(const UT_UCSChar* pChars,
+	virtual void		   drawChars(const UT_UCS4Char* pChars,
 									  int iCharOffset, int iLength,
 									  UT_sint32 xoff, UT_sint32 yoff,
-									  int * pCharWidth);
+									  int * pCharWidth) override;
 
-	virtual void           drawCharsRelativeToBaseline(const UT_UCSChar* pChars,
+	virtual void           drawCharsRelativeToBaseline(const UT_UCS4Char* pChars,
 													   int iCharOffset,
 													   int iLength,
 													   UT_sint32 xoff,
 													   UT_sint32 yoff,
-													   int* pCharWidths = nullptr);
+													   int* pCharWidths = nullptr) override;
 
-	virtual UT_uint32		getFontHeight();
-	virtual UT_uint32		getFontAscent();
-	virtual UT_uint32		getFontDescent();
+	virtual UT_uint32		getFontHeight() override;
+	virtual UT_uint32		getFontAscent() override;
+	virtual UT_uint32		getFontDescent() override;
 	virtual UT_uint32		getFontAscent(GR_Font *);
 	virtual UT_uint32		getFontDescent(GR_Font *);
 	virtual UT_uint32		getFontHeight(GR_Font *);
 
-	virtual void      setZoomPercentage(UT_uint32 iZoom);
+	virtual void      setZoomPercentage(UT_uint32 iZoom) override;
 
 	///////////////////////////////////////////////////////////////////
 	// complex script processing
 	//
-	virtual bool itemize(UT_TextIterator & text, GR_Itemization & I);
-	virtual bool shape(GR_ShapingInfo & si, GR_RenderInfo *& ri);
-	virtual void prepareToRenderChars(GR_RenderInfo & ri);
-	virtual void renderChars(GR_RenderInfo & ri);
-	virtual void measureRenderedCharWidths(GR_RenderInfo & ri);
-	virtual void appendRenderedCharsToBuff(GR_RenderInfo & ri, UT_GrowBuf & buf) const;
+	virtual bool itemize(UT_TextIterator & text, GR_Itemization & I) override;
+	virtual bool shape(GR_ShapingInfo & si, GR_RenderInfo *& ri) override;
+	virtual void prepareToRenderChars(GR_RenderInfo & ri) override;
+	virtual void renderChars(GR_RenderInfo & ri) override;
+	virtual void measureRenderedCharWidths(GR_RenderInfo & ri) override;
+	virtual void appendRenderedCharsToBuff(GR_RenderInfo & ri, UT_GrowBuf & buf) const override;
 
-	virtual bool canBreak(GR_RenderInfo & ri, UT_sint32 &iNext, bool bAfter);
+	virtual bool canBreak(GR_RenderInfo & ri, UT_sint32 &iNext, bool bAfter) override;
 
-	virtual bool nativeBreakInfoForRightEdge() {return false;}
+	virtual bool nativeBreakInfoForRightEdge()  override {return false;}
 
-	virtual UT_sint32 resetJustification(GR_RenderInfo & ri, bool bPermanent);
-	virtual UT_sint32 countJustificationPoints(const GR_RenderInfo & ri) const;
-	virtual void      justify(GR_RenderInfo & ri);
+	virtual UT_sint32 resetJustification(GR_RenderInfo & ri, bool bPermanent) override;
+	virtual UT_sint32 countJustificationPoints(const GR_RenderInfo & ri) const override;
+	virtual void      justify(GR_RenderInfo & ri) override;
 
-    virtual UT_uint32 XYToPosition(const GR_RenderInfo & ri, UT_sint32 x, UT_sint32 y) const;
+    virtual UT_uint32 XYToPosition(const GR_RenderInfo & ri, UT_sint32 x, UT_sint32 y) const override;
     virtual void      positionToXY(const GR_RenderInfo & ri,
 								   UT_sint32& x, UT_sint32& y,
 								   UT_sint32& x2, UT_sint32& y2,
-								   UT_sint32& height, bool& bDirection) const;
+								   UT_sint32& height, bool& bDirection) const override;
 
-	virtual UT_sint32 getTextWidth(GR_RenderInfo & ri);
+	virtual UT_sint32 getTextWidth(GR_RenderInfo & ri) override;
 
-	virtual bool      needsSpecialCaretPositioning(GR_RenderInfo & ri);
-	virtual UT_uint32 adjustCaretPosition(GR_RenderInfo & ri, bool bForward);
-	virtual void      adjustDeletePosition(GR_RenderInfo & ri);
+	virtual bool      needsSpecialCaretPositioning(GR_RenderInfo & ri) override;
+	virtual UT_uint32 adjustCaretPosition(GR_RenderInfo & ri, bool bForward) override;
+	virtual void      adjustDeletePosition(GR_RenderInfo & ri) override;
 
   protected:
 	inline bool       _needsSpecialBreaking(GR_Win32USPRenderInfo &ri);
@@ -136,9 +136,9 @@ public:
 	inline bool       _scriptBreak(GR_Win32USPRenderInfo &ri);
 
   public:
-	virtual const UT_VersionInfo & getVersion() const {return s_Version;}
+	virtual const UT_VersionInfo & getVersion() const  override {return s_Version;}
 
-	virtual void          setPrintDC(HDC dc);
+	virtual void          setPrintDC(HDC dc) override;
 
 
   protected:
@@ -148,11 +148,11 @@ public:
 
   private:
 	bool      _constructorCommonCode();
-	virtual GR_Win32Font * _newFont(LOGFONTW & lf, double fPoints, HDC hdc, HDC printHDC);
+	virtual GR_Win32Font * _newFont(LOGFONTW & lf, double fPoints, HDC hdc, HDC printHDC) override;
 
 	void   _setupFontOnDC(GR_Win32USPFont *pFont, bool bZoomMe);
 
-	void   _drawChars(const UT_UCSChar* pChars,
+	void   _drawChars(const UT_UCS4Char* pChars,
 					  int iCharOffset, int iLength,
 					  UT_sint32 xoff, UT_sint32 yoff,
 					  int * pCharWidth);

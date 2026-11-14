@@ -151,7 +151,7 @@ static bool s_createDirectoryIfNecessary(const char * szDir)
 	return false;
 }
 
-typedef BOOL __declspec(dllimport) (CALLBACK *InitCommonControlsEx_fn)(LPINITCOMMONCONTROLSEX lpInitCtrls);
+typedef BOOL (CALLBACK *InitCommonControlsEx_fn)(LPINITCOMMONCONTROLSEX lpInitCtrls);
 
 bool AP_Win32App::initialize(void)
 {
@@ -308,7 +308,7 @@ bool AP_Win32App::initialize(void)
 	UT_return_val_if_fail (hinstCC, false);
 	InitCommonControlsEx_fn  pInitCommonControlsEx = nullptr;
 	if( hinstCC != nullptr )
-		pInitCommonControlsEx = (InitCommonControlsEx_fn)GetProcAddress( hinstCC, "InitCommonControlsEx");
+		pInitCommonControlsEx = reinterpret_cast<InitCommonControlsEx_fn>(reinterpret_cast<void *>(GetProcAddress( hinstCC, "InitCommonControlsEx")));
 	if( pInitCommonControlsEx != nullptr )
 	{
 		INITCOMMONCONTROLSEX icex;
@@ -1162,7 +1162,7 @@ void abi_win32_install_crashlog(void)
 }
 
 int AP_Win32App::WinMain(const char * szAppName, HINSTANCE hInstance,
-						 HINSTANCE /*hPrevInstance*/, PSTR /*szCmdLine*/, int iCmdShow)
+						 HINSTANCE /*hPrevInstance*/, const char * /*szCmdLine*/, int iCmdShow)
 {
 	abi_win32_install_crashlog();
 	abi_win32_note("winmain");
@@ -1684,4 +1684,5 @@ GR_Graphics * AP_Win32App::newDefaultScreenGraphics() const
 void AP_Win32App::catchSignals(int /*sig_num*/)
 {
 	UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+	abort();
 }

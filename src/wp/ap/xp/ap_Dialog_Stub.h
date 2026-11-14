@@ -46,7 +46,7 @@ public:
 	  : XAP_Dialog_NonPersistent(pDlgFactory, id) {}
 	virtual ~AP_Dialog_Stub(void) {}
 
-	virtual void runModal(XAP_Frame * pFrame) = 0;
+	virtual void runModal(XAP_Frame * pFrame)  override= 0;
 
 	enum tAnswer: uint8_t { a_OK, a_CANCEL };
 

@@ -29,13 +29,13 @@ class ABI_EXPORT AP_Win32Dialog_Field : public AP_Dialog_Field, XAP_Win32DialogB
 public:
 	AP_Win32Dialog_Field(XAP_DialogFactory * pDlgFactory,XAP_Dialog_Id id);
 
-	virtual void	  runModal(XAP_Frame * pFrame);
+	virtual void	  runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *   static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
 protected:
-	BOOL		  _onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL		  _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	BOOL		  _onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL		  _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 private:
 	HWND m_hwndTypes;
 	HWND m_hwndFormats;

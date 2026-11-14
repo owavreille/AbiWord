@@ -24,6 +24,8 @@ cp "$BUILDDIR/plugins/opendocument/.libs/opendocument.dll" \
 cp "$BUILDDIR/plugins/openxml/.libs/openxml.dll" \
 	"$DEST/lib/abiword-3.1/plugins/"
 cp "$BUILDDIR"/po/*.strings "$DEST/share/abiword-3.1/strings/"
+ROOT=$(CDPATH= cd -- "$(dirname "$0")/../../.." && pwd)
+cp "$ROOT/src/wp/ap/win/ToolbarIcons/LICENSE.fluent.txt" "$DEST/share/abiword-3.1/"
 
 cp "$PREFIX/lib/enchant-2/enchant_hunspell.dll" "$DEST/lib/enchant-2/"
 ordering=$(find "$PREFIX/share" -name enchant.ordering -print -quit)

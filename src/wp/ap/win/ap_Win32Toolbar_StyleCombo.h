@@ -35,10 +35,10 @@ public:
 	AP_Win32Toolbar_StyleCombo(EV_Toolbar * pToolbar, XAP_Toolbar_Id id);
 	virtual ~AP_Win32Toolbar_StyleCombo(void);
 
-	virtual bool		populate(void);
+	virtual bool		populate(void) override;
 	bool				repopulate(void);
 
-	virtual UT_uint32   getDroppedWidth() const { return m_nDroppedWidth; }
+	virtual UT_uint32   getDroppedWidth() const  override { return m_nDroppedWidth; }
 
 	static EV_Toolbar_Control *		static_constructor(EV_Toolbar *, XAP_Toolbar_Id id);
 

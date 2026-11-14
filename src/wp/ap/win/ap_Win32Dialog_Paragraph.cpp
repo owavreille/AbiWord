@@ -113,7 +113,7 @@ void AP_Win32Dialog_Paragraph::runModal(XAP_Frame * pFrame)
 
 	LPCWSTR lpTemplate = nullptr;
 
-	UT_ASSERT(m_id == AP_DIALOG_ID_PARAGRAPH);
+	UT_ASSERT(m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_PARAGRAPH));
 
 	lpTemplate = MAKEINTRESOURCEW(AP_RID_DIALOG_PARAGRAPH);
 
@@ -123,12 +123,12 @@ void AP_Win32Dialog_Paragraph::runModal(XAP_Frame * pFrame)
 
 	UT_DebugOnly<int> result = DialogBoxParamW(pWin32App->getInstance(),lpTemplate,
 								hFrameWnd,
-								(DLGPROC)s_dlgProc,(LPARAM)this);
+								s_dlgProc,(LPARAM)this);
 	UT_ASSERT((result != -1));
 }
 
 /**/ //was commented out from here
-BOOL CALLBACK AP_Win32Dialog_Paragraph::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
+INT_PTR CALLBACK AP_Win32Dialog_Paragraph::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 {
 	// This is a static function.
 
@@ -187,7 +187,7 @@ typedef struct _tabParam
 	WORD which;
 } TabParam;
 
-BOOL CALLBACK AP_Win32Dialog_Paragraph::s_tabProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
+INT_PTR CALLBACK AP_Win32Dialog_Paragraph::s_tabProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 {
 	// This is a static function.
 
@@ -277,13 +277,13 @@ BOOL AP_Win32Dialog_Paragraph::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARA
 		tp.which = AP_RID_DIALOG_PARA_TAB1;
 		pTemplate = UT_LockDlgRes(hinst, MAKEINTRESOURCEW(tp.which));
 		w = CreateDialogIndirectParamW(hinst, pTemplate, m_hwndTab,
-										(DLGPROC)s_tabProc, (LPARAM)&tp);
+										s_tabProc, (LPARAM)&tp);
 		UT_ASSERT_HARMLESS((w && (w == m_hwndSpacing)));
 
 		tp.which = AP_RID_DIALOG_PARA_TAB2;
 		pTemplate = UT_LockDlgRes(hinst, MAKEINTRESOURCEW(tp.which));
 		w = CreateDialogIndirectParamW(hinst, pTemplate, m_hwndTab,
-										(DLGPROC)s_tabProc, (LPARAM)&tp);
+										s_tabProc, (LPARAM)&tp);
 		UT_ASSERT_HARMLESS((w && (w == m_hwndBreaks)));
 	}
 

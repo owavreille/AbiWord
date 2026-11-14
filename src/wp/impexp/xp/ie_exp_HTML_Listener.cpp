@@ -2485,12 +2485,6 @@ void IE_Exp_HTML_Listener::_insertTOC(PT_AttrPropIndex api)
     }
 
     const gchar *pValue = nullptr;
-    bool hasHeading = true; // AbiWord's default
-    ok = pAP->getProperty("toc-has-heading", pValue);
-    if (ok && pValue)
-    {
-        hasHeading = (*pValue == '1');
-    }
 
     // determine the style of the TOC heading
     UT_UTF8String headingStyle;

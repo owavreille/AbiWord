@@ -114,7 +114,7 @@ BOOL AP_Win32Dialog_Lists::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*
 	delete m_pPreviewWidget;
 	m_pPreviewWidget = nullptr;
 
-	register unsigned int i;
+	unsigned int i;
 
 	m_hThisDlg = hWnd;
 	setbisCustomized(false);
@@ -1057,8 +1057,6 @@ void AP_Win32Dialog_Lists::_selectFont()
 
 	bool bStrikeOut = false;
 
-	bool bTopLine = false;
-	bool bBottomLine = false;
 
 
 	if (pView->getCharFormat(props_in))
@@ -1089,9 +1087,6 @@ void AP_Win32Dialog_Lists::_selectFont()
 			bOverline = s.find("overline") != std::string::npos;
 			bStrikeOut = s.find("line-through") != std::string::npos;
 
-			bTopLine = s.find("topline") != std::string::npos;
-
-			bBottomLine = s.find("bottomline") != std::string::npos;
 		}
 		pDialog->setFontDecoration(bUnderline,bOverline,bStrikeOut,false,false);
 	}

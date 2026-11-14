@@ -34,12 +34,12 @@ class ABI_EXPORT AP_Win32Dialog_PageSetup_Sheet: public XAP_Win32PropertySheet, 
 {
 public:
 		AP_Win32Dialog_PageSetup_Sheet();
-		void _onInitDialog(HWND hwnd);
+		void _onInitDialog(HWND hwnd) override;
 
 		void setParent(AP_Win32Dialog_PageSetup*	pData){m_pParent=pData;};
 		AP_Win32Dialog_PageSetup* getParent(){return m_pParent;};
-		int _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-		static INT_PTR CALLBACK s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM lParam);
+		int _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+		static int CALLBACK s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM lParam);
 
 private:
 
@@ -64,9 +64,9 @@ protected:
 
 private:
 
-	void						_onInitDialog();
-	void						_onKillActive(){};
-	BOOL						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	void						_onInitDialog() override;
+	void						_onKillActive() override {};
+	BOOL						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 
 	AP_Win32Dialog_PageSetup*	m_pParent;
     int							m_nCentered;
@@ -90,9 +90,9 @@ protected:
 
 private:
 
-	void						_onInitDialog();
-	void						_onKillActive(){};
-	BOOL						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	void						_onInitDialog() override;
+	void						_onKillActive() override {};
+	BOOL						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 
 	AP_Win32Dialog_PageSetup*	m_pParent;
 
@@ -112,7 +112,7 @@ public:
 	AP_Win32Dialog_PageSetup(XAP_DialogFactory *pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_PageSetup (void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 

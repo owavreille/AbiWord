@@ -343,9 +343,9 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 	*/
 	for (UT_uint32 i=0; i<iHeight; i++)
 	{
-		UT_Byte *pRow = pData + i * iWidth * 3;
-		
-		png_write_rows(png_ptr, &pRow, 1);
+		UT_Byte *pngRow = pData + i * iWidth * 3;
+
+		png_write_rows(png_ptr, &pngRow, 1);
 	}
 
 	/*

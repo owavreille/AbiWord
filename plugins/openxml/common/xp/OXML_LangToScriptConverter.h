@@ -78,6 +78,7 @@ inline /*ARGSUSED*/
 unsigned int
 OXML_LangToScriptConverter::hash (const char *str, size_t len)
 {
+  (void)len;
   static unsigned short asso_values[] =
     {
       500, 500, 500, 500, 500, 500, 500, 500, 500, 500,
@@ -611,5 +612,5 @@ OXML_LangToScriptConverter::in_word_set (const char *str, size_t len)
             return &wordlist[key];
         }
     }
-  return 0;
+  return nullptr;
 }

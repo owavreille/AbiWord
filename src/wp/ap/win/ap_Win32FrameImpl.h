@@ -34,9 +34,9 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
  public:
 	AP_Win32FrameImpl(AP_Frame *pFrame);
 	~AP_Win32FrameImpl(void);
-	virtual XAP_FrameImpl * createInstance(XAP_Frame *pFrame);
+	virtual XAP_FrameImpl * createInstance(XAP_Frame *pFrame) override;
 
-	virtual UT_RGBColor getColorSelBackground () const;
+	virtual UT_RGBColor getColorSelBackground () const override;
 
 	HWND						getHwndDocument(void)  {  return m_hwndDocument;  }
 
@@ -45,10 +45,10 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
  protected:
 	friend class AP_Win32Frame;
 
-	virtual void _initialize(void);
+	virtual void _initialize(void) override;
 
-	virtual void _refillToolbarsInFrameData();
-	virtual void _rebuildToolbar(UT_uint32 ibar);
+	virtual void _refillToolbarsInFrameData() override;
+	virtual void _rebuildToolbar(UT_uint32 ibar) override;
 	virtual void _bindToolbars(AV_View *pView);
 
 	virtual void				_toggleBar(UT_uint32 iBarNb, bool bBarOn);
@@ -56,12 +56,12 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
 	void						_showOrHideToolbars(void);
 	void						_showOrHideStatusbar(void);
 
-	virtual void				_hideMenuScroll(bool bHideMenuScroll);
+	virtual void				_hideMenuScroll(bool bHideMenuScroll) override;
 
 	virtual void 				_toggleTopRuler(AP_Win32Frame *pFrame, bool bRulerOn);
 	virtual void 				_toggleLeftRuler(AP_Win32Frame *pFrame, bool bRulerOn);
 
-	void _translateDocumentToScreen(UT_sint32 &x, UT_sint32 &y);
+	void _translateDocumentToScreen(UT_sint32 &x, UT_sint32 &y) override;
 
 	virtual void 				_setXScrollRange(AP_FrameData * pData, AV_View *pView);
 	virtual void 				_setYScrollRange(AP_FrameData * pData, AV_View *pView);
@@ -87,10 +87,10 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
 
 	HWND						_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent,
 													  UT_uint32 iLeft, UT_uint32 iTop,
-													  UT_uint32 iWidth, UT_uint32 iHeight);
+													  UT_uint32 iWidth, UT_uint32 iHeight) override;
 	HWND						_createStatusBarWindow(XAP_Frame *pFrame, HWND hwndParent,
 													   UT_uint32 iLeft, UT_uint32 iTop,
-													   UT_uint32 iWidth);
+													   UT_uint32 iWidth) override;
 
 	// helper methods for helper methods for _showDocument (meta-helper-methods?) :-)
 	void						_getDocumentArea(RECT &r);

@@ -41,12 +41,12 @@ private:
 	// TMN: Respect "private" scope. No "please", no nothing. Respect it!
 
 	// implemented for AP_Dialog_PageNumbers
-	virtual void		runModal(XAP_Frame* pFrame);
+	virtual void		runModal(XAP_Frame* pFrame) override;
 
 	// implemented for XAP_Win32Dialog
-	virtual BOOL		_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	virtual BOOL		_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	virtual BOOL		_onDeltaPos(NM_UPDOWN * /*pnmud*/) { return FALSE; };
+	virtual BOOL		_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	virtual BOOL		_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	virtual BOOL		_onDeltaPos(NM_UPDOWN * /*pnmud*/)  override { return FALSE; };
 
 	void				_createPreviewWidget();
 

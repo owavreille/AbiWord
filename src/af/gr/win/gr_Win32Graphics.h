@@ -25,7 +25,7 @@
 #include "gr_Graphics.h"
 #include "gr_Win32CharWidths.h"
 #include "ut_vector.h"
-#include "ut_stack.h"
+#include <vector>
 #include <wchar.h>
 #include <winuser.h>
 
@@ -54,8 +54,8 @@ public:
 
 	HFONT       getDisplayFont(GR_Graphics * pGr);
 
-	virtual UT_sint32 measureUnremappedCharForCache(UT_UCSChar cChar) const override;
-	UT_sint32	measureUnRemappedChar(UT_UCSChar c, UT_uint32 * height = nullptr);
+	virtual UT_sint32 measureUnremappedCharForCache(UT_UCS4Char cChar) const override;
+	UT_sint32	measureUnRemappedChar(UT_UCS4Char c, UT_uint32 * height = nullptr);
 	virtual GR_CharWidths* newFontWidths(void) const override;
 //
 // UT_Rect of glyph in Logical units.
@@ -198,15 +198,15 @@ public:
 											   const wchar_t * pDocName);
 
 	virtual void			drawGlyph(UT_uint32 glyph_idx, UT_sint32 xoff, UT_sint32 yoff) override;
-	virtual void			drawChar(UT_UCSChar Char, UT_sint32 xoff, UT_sint32 yoff);
-	virtual void			drawChars(const UT_UCSChar* pChars,
+	virtual void			drawChar(UT_UCS4Char Char, UT_sint32 xoff, UT_sint32 yoff);
+	virtual void			drawChars(const UT_UCS4Char* pChars,
                                                   int iCharOffset, int iLength,
                                                   UT_sint32 xoff, UT_sint32 yoff,
                                                   int * pCharWidth) override;
 	virtual void			setFont(const GR_Font* pFont) override;
 	virtual void            clearFont(void) override { m_pFont = nullptr;}
 	virtual UT_uint32		getFontHeight() override;
-	virtual UT_sint32		measureUnRemappedChar(const UT_UCSChar c, UT_uint32 * height = nullptr) override;
+	virtual UT_sint32		measureUnRemappedChar(const UT_UCS4Char c, UT_uint32 * height = nullptr) override;
 	virtual void			setColor(const UT_RGBColor& clr) override;
 	virtual void            getColor(UT_RGBColor& clr) override;
 	virtual GR_Font*		getGUIFont() override;
@@ -338,7 +338,7 @@ protected:
           _HDCSwitchRecord(HDC h) : oldHdc(h) { }
 	};
 
-	UT_Stack _HDCSwitchStack;
+	std::vector<_HDCSwitchRecord *> _HDCSwitchStack;
 
 	void _DeviceContext_RestorePrevHDCFromStack();
 
@@ -377,8 +377,8 @@ protected:
 
 private:
 	void 					_constructorCommonCode(HDC);
-	UT_uint16*				_remapGlyphs(const UT_UCSChar* pChars, int iCharOffset, int &iLength);
-	virtual bool            _setTransform(const GR_Transform & tr);
+	UT_uint16*				_remapGlyphs(const UT_UCS4Char* pChars, int iCharOffset, int &iLength);
+	virtual bool            _setTransform(const GR_Transform & tr) override;
 
 	DWORD					m_clrXorPen;
 	HPEN					m_hXorPen;

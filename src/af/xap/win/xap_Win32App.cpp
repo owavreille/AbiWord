@@ -544,7 +544,7 @@ void XAP_Win32App::_setBidiOS(void)
 	}
 	else
 	{
-		const UT_UCSChar hebAlef = 0x05D0;
+		const UT_UCS4Char hebAlef = 0x05D0;
 		inStr[0] = hebAlef;
 		inStr[1] = one;
 		if (GetCharacterPlacementW(displayDC, (LPCWSTR)inStr, 2, 0, &gcpResult, GCP_REORDER)

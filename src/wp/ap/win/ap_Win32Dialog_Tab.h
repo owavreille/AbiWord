@@ -33,7 +33,7 @@ public:
 	AP_Win32Dialog_Tab(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Tab(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
@@ -42,21 +42,21 @@ private:
 	char Buffer[128];
 
 protected:
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onDeltaPos(NM_UPDOWN * pnmud);
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onDeltaPos(NM_UPDOWN * pnmud) override;
 
-	void _controlEnable( tControl id, bool value );
+	void _controlEnable( tControl id, bool value ) override;
 
-#define SET_GATHER(a,t) virtual t _gather##a(void);  \
- 					    virtual void    _set##a( t )
+#define SET_GATHER(a,t) virtual t _gather##a(void) override;  \
+ 					    virtual void    _set##a( t ) override
 	SET_GATHER			(Alignment,			eTabType);
 	SET_GATHER			(Leader,			eTabLeader);
 	SET_GATHER			(DefaultTabStop,	const gchar*);
 
 
 	// to populate the whole list
-	virtual void _setTabList(UT_uint32 count);
+	virtual void _setTabList(UT_uint32 count) override;
 
 	// get/set the selected tab
 	// the list of n tabs are index 0..(n-1)
@@ -67,7 +67,7 @@ protected:
 	SET_GATHER			(TabEdit,			const char *);
 #undef SET_GATHER
 
-	virtual void _clearList();
+	virtual void _clearList() override;
 
 };
 

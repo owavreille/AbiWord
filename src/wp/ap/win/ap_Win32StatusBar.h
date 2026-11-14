@@ -1,6 +1,6 @@
 /* AbiWord
  * Copyright (C) 1998 AbiSource, Inc.
- *			 (c) 2002 Jordi Mas i Hernàndez jmas@softcatala.org
+ *			 (c) 2002 Jordi Mas i Hernï¿½ndez jmas@softcatala.org
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -42,7 +42,7 @@ public:
 	HWND					createWindow(HWND hwndFrame,
 										 UT_uint32 left, UT_uint32 top,
 										 UT_uint32 width);
-	virtual void			setView(AV_View * pView);
+	virtual void			setView(AV_View * pView) override;
 
 	WNDPROC getOrgWndProc() { return m_pOrgStatusbarWndProc; }
 	int getPrevWidth () { return m_iPrevWidth; }
@@ -50,11 +50,11 @@ public:
 
 	UINT                    getDir() const {return m_iDIR;}
 	HWND getProgressBar() const {return m_hwndProgressBar;}
-	void        showProgressBar(void);
-	void        hideProgressBar(void);
+	void        showProgressBar(void) override;
+	void        hideProgressBar(void) override;
 protected:
-	virtual void			show();
-	virtual void			hide();
+	virtual void			show() override;
+	virtual void			hide() override;
 
 	HWND					m_hwndStatusBar;
 	HWND					m_hwndProgressBar;

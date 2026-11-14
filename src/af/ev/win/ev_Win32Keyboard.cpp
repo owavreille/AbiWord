@@ -83,8 +83,8 @@ ev_Win32Keyboard::ev_Win32Keyboard(EV_EditEventMapper * pEEM)
 	HINSTANCE hInstUser = LoadLibraryW(L"USER32.DLL");
 	if (hInstUser)
 	{
-		m_pToUnicodeEx = reinterpret_cast<int (*)(UINT,UINT,CONST PBYTE,LPWSTR,int,UINT,HKL)>
-			(GetProcAddress(hInstUser, "ToUnicodeEx"));
+		m_pToUnicodeEx = reinterpret_cast<int (*)(UINT,UINT,CONST PBYTE,LPWSTR,int,UINT,HKL)>(
+			reinterpret_cast<void *>(GetProcAddress(hInstUser, "ToUnicodeEx")));
 		FreeLibrary(hInstUser);
 	}
 	
@@ -160,7 +160,7 @@ bool ev_Win32Keyboard::onKeyDown(AV_View * pView,
 	EV_EditBits nvk;
 	
 	int						charLen;
-	UT_UCSChar				charData[2];
+	UT_UCS4Char				charData[2];
 
 	UT_UNUSED(keyData);
 	UT_DEBUGMSG(("WIN32KEY_DEBUG->onKeyDown %x, %x\n", nVirtKey, keyData));
@@ -220,7 +220,7 @@ bool ev_Win32Keyboard::onKeyDown(AV_View * pView,
 					  m_hKeyboardLayout)==0)
 			return true;
 		charLen		= 1;
-		charData[0]	= UT_UCSChar(char_value [0] & 0x000000FF);		
+		charData[0]	= UT_UCS4Char(char_value [0] & 0x000000FF);		
 		charData[1]	= 0;
 #else
 		charLen = 1;
@@ -283,7 +283,7 @@ void ev_Win32Keyboard::_emitChar(AV_View * pView,
 {
 	// do the dirty work of pumping this character thru the state machine.
 
-	UT_UCSChar charData[2];
+	UT_UCS4Char charData[2];
 	size_t ret;
 	if( m_iconv != UT_ICONV_INVALID )
 	{
@@ -303,14 +303,14 @@ void ev_Win32Keyboard::_emitChar(AV_View * pView,
 		
 		len_out = sizeof(charData);
 
-		if ((ret = UT_iconv( m_iconv, &In, &len_in, &Out, &len_out )) == -1)
+		if ((ret = UT_iconv( m_iconv, &In, &len_in, &Out, &len_out )) == static_cast<size_t>(-1))
 		{
 			UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
 		}
 		if (Out == (char *)charData)
 		{
 			// m_iconv is waiting for a combination keystroke. Flush the buffer
-		    if ((ret = UT_iconv( m_iconv, nullptr, &len_in, &Out, &len_out )) == -1)
+		    if ((ret = UT_iconv( m_iconv, nullptr, &len_in, &Out, &len_out )) == static_cast<size_t>(-1))
 			{
 			    UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
 			}

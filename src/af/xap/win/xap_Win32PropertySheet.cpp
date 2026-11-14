@@ -311,7 +311,9 @@ int XAP_Win32PropertySheet::runModal(XAP_Win32App* pWin32App, XAP_Frame * pFrame
      	m_psh.dwFlags |= PSH_USECALLBACK;    	
     
     if (!m_bApplyButton)
+	{
     	m_psh.dwFlags |= PSH_NOAPPLYNOW;
+	}
     
 	if (nID)
 	{
@@ -373,7 +375,9 @@ int XAP_Win32PropertySheet::runModeless (XAP_Win32App* pWin32App, XAP_Frame * pF
     	m_psh.dwFlags |= PSH_USECALLBACK;    	
     
     if (!m_bApplyButton)
+	{
     	m_psh.dwFlags |= PSH_NOAPPLYNOW;
+	}
     
 	if (nID)
 		{

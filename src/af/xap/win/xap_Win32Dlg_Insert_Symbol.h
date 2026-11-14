@@ -29,8 +29,8 @@ class XAP_Win32PreviewWidget;
 
 /*****************************************************************/
 
-static UT_UCSChar m_CurrentSymbol = UCS_SPACE;
-static UT_UCSChar m_PreviousSymbol = UCS_SPACE;
+static UT_UCS4Char m_CurrentSymbol = UCS_SPACE;
+static UT_UCS4Char m_PreviousSymbol = UCS_SPACE;
 
 extern char Symbol_font_selected[];
 
@@ -65,23 +65,23 @@ public:
 	XAP_Win32Dialog_Insert_Symbol(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~XAP_Win32Dialog_Insert_Symbol(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
-	virtual void			runModeless(XAP_Frame * pFrame);
-	virtual void			notifyActiveFrame(XAP_Frame *pFrame);
-	virtual void			notifyCloseFrame(XAP_Frame *pFrame);
-	virtual void			destroy(void);
-	virtual void			activate(void);
+	virtual void			runModal(XAP_Frame * pFrame) override;
+	virtual void			runModeless(XAP_Frame * pFrame) override;
+	virtual void			notifyActiveFrame(XAP_Frame *pFrame) override;
+	virtual void			notifyCloseFrame(XAP_Frame *pFrame) override;
+	virtual void			destroy(void) override;
+	virtual void			activate(void) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 	static int CALLBACK		fontEnumProcedure(const LOGFONTW *pLogFont, const TEXTMETRICW *pTextMetric, DWORD Font_type, LPARAM lParam);
 
-	virtual void *			pGetWindowHandle(void) { return (void *) m_hDlg; }
+	virtual void *			pGetWindowHandle(void)  override { return (void *) m_hDlg; }
 	void					doInsertSymbol( void );
 
 protected:
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL 					_onDeltaPos(NM_UPDOWN * pnmud);
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL 					_onDeltaPos(NM_UPDOWN * pnmud) override;
 	int						_enumFont(const LOGFONTW *pLogFont, const TEXTMETRICW *pTextMetric, DWORD Font_type);
 	void			    		_setFontFromCombo(UT_sint32 Index);
 

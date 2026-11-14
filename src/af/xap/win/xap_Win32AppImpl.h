@@ -26,7 +26,7 @@ class ABI_EXPORT XAP_Win32AppImpl
 	: public XAP_AppImpl
 {
 protected:
-	virtual bool openURL(const char * url);
+	virtual bool openURL(const char * url) override;
 };
 
 #endif

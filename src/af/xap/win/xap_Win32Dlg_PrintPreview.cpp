@@ -215,7 +215,7 @@ gdip_init (void)
 
 #define LOOKUP(func) \
   G_STMT_START { \
-    func = (func##Func) GetProcAddress (gdipluslib, #func); \
+    func = reinterpret_cast<func##Func>(reinterpret_cast<void *>(GetProcAddress (gdipluslib, #func))); \
     if (!func) {\
       g_warning ("Couldn't load function: %s\n", #func); \
       return 18; \
@@ -295,38 +295,38 @@ public:
     // todo: delete DC and docInfo
   }
 
-  virtual UT_uint32 getClassId() {return s_getClassId();}
+  virtual UT_uint32 getClassId()  override {return s_getClassId();}
   
-  virtual GR_Capability getCapability() {return GRCAP_PRINTER_ONLY;}
+  virtual GR_Capability getCapability()  override {return GRCAP_PRINTER_ONLY;}
   
   static const char * graphicsDescriptor(){return "Win32 Print Preview";}
 
   virtual void drawGlyph(UT_uint32 glyph_idx, UT_sint32 xoff, UT_sint32 yoff)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("drawGlyph()\n"));
     m_pGraphics->drawGlyph(glyph_idx, xoff, yoff);
   }
 
-  virtual void drawChar(UT_UCSChar Char, UT_sint32 xoff, UT_sint32 yoff)
-  {
+  virtual void drawChar(UT_UCS4Char Char, UT_sint32 xoff, UT_sint32 yoff)
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("drawChar()\n"));
     m_pGraphics->drawChar(Char, xoff, yoff);
   }
 
-  virtual void drawChars(const UT_UCSChar* pChars,
+  virtual void drawChars(const UT_UCS4Char* pChars,
 			 int iCharOffset, int iLength,
 			 UT_sint32 xoff, UT_sint32 yoff,
 			 int * pCharWidth)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("drawChars()\n"));
     m_pGraphics->drawChars(pChars, iCharOffset, iLength, xoff, yoff, pCharWidth);
   }
 
   virtual void setFont(const GR_Font* pFont)
-  {
+   override {
     if (m_pGraphics) {
       m_pGraphics->setFont(pFont);
       d (g_print ("setFont()\n"));
@@ -336,7 +336,7 @@ public:
   }
 
   virtual void clearFont(void)
-  {
+   override {
     if (m_pGraphics) {
       m_pGraphics->clearFont();
       d (g_print ("clearFont()\n"));
@@ -346,35 +346,35 @@ public:
   }
 
   virtual void setColor(const UT_RGBColor& clr)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("setColor()\n"));
     m_pGraphics->setColor(clr);
   }
 
   virtual void getColor(UT_RGBColor& clr)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("getColor()\n"));
     m_pGraphics->getColor(clr);
   }
 
   virtual void drawLine(UT_sint32 a, UT_sint32 b, UT_sint32 c, UT_sint32 d)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("drawLine()\n"));
     m_pGraphics->drawLine(a, b, c, d);
   }
 
   virtual void xorLine(UT_sint32 a, UT_sint32 b, UT_sint32 c, UT_sint32 d)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("xorLine()\n"));
     m_pGraphics->xorLine(a, b, c, d);
   }
 
   virtual void setLineWidth(UT_sint32 w)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("setLineWidth()\n"));
     m_pGraphics->setLineWidth(w);
@@ -384,14 +384,14 @@ public:
 				   JoinStyle inJoinStyle = JOIN_MITER,
 				   CapStyle inCapStyle   = CAP_BUTT,
 				   LineStyle inLineStyle = LINE_SOLID )
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("setLineProperties()\n"));
     m_pGraphics->setLineProperties(inWidthPixels, inJoinStyle, inCapStyle, inLineStyle);
   }
 
   virtual void polyLine(const UT_Point * pts, UT_uint32 nPoints)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("polyLine()\n"));
     m_pGraphics->polyLine(pts, nPoints);
@@ -400,28 +400,28 @@ public:
   virtual void fillRect(const UT_RGBColor& c,
 			UT_sint32 x, UT_sint32 y,
 			UT_sint32 w, UT_sint32 h)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("fillRect()\n"));
     m_pGraphics->fillRect(c, x, y, w, h);
   }
 
   virtual void invertRect(const UT_Rect* pRect)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("invertRect()\n"));
     m_pGraphics->invertRect(pRect);
   }
 
   virtual void setClipRect(const UT_Rect* pRect)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("setClipRect()\n"));
     m_pGraphics->setClipRect(pRect);
   }
 
   virtual void clearArea(UT_sint32 a, UT_sint32 b, UT_sint32 c, UT_sint32 d)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("clearArea()\n"));
     m_pGraphics->clearArea(a, b, c, d);
@@ -430,7 +430,7 @@ public:
   virtual GR_Image* createNewImage(const char* pszName, const UT_ConstByteBufPtr& pBB, const std::string& mimetype,
 				   UT_sint32 iDisplayWidth, UT_sint32 iDisplayHeight,
 				   GR_Image::GRType iType)
-  {
+   override {
     d (g_print ("createNewImage()\n"));
     if (m_pGraphics)
       return m_pGraphics->createNewImage(pszName, pBB, mimetype, iDisplayWidth, iDisplayHeight, iType);
@@ -439,55 +439,55 @@ public:
   }
 
   virtual void drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("drawImage()\n"));
     m_pGraphics->drawImage(pImg, xDest, yDest);
   }
 
   virtual bool queryProperties(GR_Graphics::Properties gp) const
-  {
+   override {
     d (g_print ("queryProperties()\n"));
     return (gp == DGP_PAPER);
   }
 
   virtual void polygon(const UT_RGBColor& c, const UT_Point *pts, UT_uint32 nPoints)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("polygon()\n"));
     m_pGraphics->polygon(c, pts, nPoints);
   }
 
   virtual GR_Image * genImageFromRectangle(const UT_Rect & r)
-  {
+   override {
     UT_return_val_if_fail(m_pGraphics != nullptr, nullptr);
     d (g_print ("genImageFromRectangle()\n"));
     return m_pGraphics->genImageFromRectangle(r);
   }
 
   virtual void saveRectangle(UT_Rect & r, UT_uint32 iIndx)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("saveRectangle()\n"));
     m_pGraphics->saveRectangle(r, iIndx);
   }
 
   virtual void restoreRectangle(UT_uint32 iIndx)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("restoreRectangle()\n"));
     m_pGraphics->restoreRectangle(iIndx);
   }
 
   virtual void flush(void)
-  {
+   override {
     UT_return_if_fail(m_pGraphics != nullptr);
     d (g_print ("flush()\n"));
     m_pGraphics->flush();
   }
 
   virtual bool startPrint(void)
-  {
+   override {
     std::string sName = UT_createTmpFile("pr", ".tif");
 
     d (g_print ("saving to %s\n", sName.c_str()));
@@ -498,7 +498,7 @@ public:
 
   virtual bool startPage(const char * /*szPageLabel*/, UT_uint32 /*pageNumber*/,
 			 bool /*bPortrait*/, UT_uint32 /*iWidth*/, UT_uint32 /*iHeight*/)
-  {
+   override {
     endPage(); // prints any previous pages and clears the font cache
 
     d (g_print ("startPage(%d)\n", pageNumber));
@@ -512,7 +512,7 @@ public:
   }
 
   virtual bool endPrint(void)
-  {
+   override {
     endPage();
 
     EncoderParameters encoder_params;
@@ -641,7 +641,7 @@ protected:
 			     const char* pszFontStretch,
 			     const char* pszFontSize,
 			     const char* pszLang)
-  {
+   override {
     if (!m_pGraphics)
       return GR_Win32Graphics::_findFont(pszFontFamily, pszFontStyle, pszFontVariant, pszFontWeight, pszFontStretch, pszFontSize, pszLang);
     else

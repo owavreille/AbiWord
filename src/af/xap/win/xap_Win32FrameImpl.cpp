@@ -248,11 +248,11 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 			if (!SystemParametersInfoW(SPI_GETWORKAREA,0,&rcDesktop,0))
 				SetRect(&rcDesktop,0,0,GetSystemMetrics(SM_CXSCREEN),GetSystemMetrics(SM_CYSCREEN));
 
-		if (iWidth > (rcDesktop.right-rcDesktop.left)) iWidth=rcDesktop.right-rcDesktop.left;
-		if (iHeight > (rcDesktop.bottom-rcDesktop.top)) iHeight=rcDesktop.bottom-rcDesktop.top;
+		if (static_cast<LONG>(iWidth) > (rcDesktop.right-rcDesktop.left)) iWidth=rcDesktop.right-rcDesktop.left;
+		if (static_cast<LONG>(iHeight) > (rcDesktop.bottom-rcDesktop.top)) iHeight=rcDesktop.bottom-rcDesktop.top;
 
-		if (iPosX+iWidth > rcDesktop.right) iPosX=rcDesktop.right-iWidth;
-		if (iPosY+iHeight > rcDesktop.bottom) iPosY=rcDesktop.bottom-iHeight;
+		if (static_cast<LONG>(iPosX)+static_cast<LONG>(iWidth) > rcDesktop.right) iPosX=rcDesktop.right-iWidth;
+		if (static_cast<LONG>(iPosY)+static_cast<LONG>(iHeight) > rcDesktop.bottom) iPosY=rcDesktop.bottom-iHeight;
 
 		if (iPosX < rcDesktop.left) iPosX=rcDesktop.left;
 		if (iPosY < rcDesktop.top)  iPosY=rcDesktop.top;
@@ -349,8 +349,8 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 			GetClientRect(m_hwndRebar, &r);
 			barHeight = r.bottom - r.top;
 		}
-		if (barHeight > iHeight)
-			barHeight = iHeight;
+		if (barHeight > static_cast<int>(iHeight))
+			barHeight = static_cast<int>(iHeight);
 		MoveWindow(m_hwndRebar, 0, 0, iWidth, barHeight, TRUE);
 		m_iBarHeight = (UT_uint32)barHeight;
 
@@ -788,7 +788,8 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 			
 			// fall through ...
 		}
-			
+		[[fallthrough]];
+
 	case WM_EXITMENULOOP:
 		if (pView)
 		{

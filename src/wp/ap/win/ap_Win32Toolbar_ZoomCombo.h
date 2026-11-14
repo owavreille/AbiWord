@@ -32,7 +32,7 @@ public:
 	AP_Win32Toolbar_ZoomCombo(EV_Toolbar * pToolbar, XAP_Toolbar_Id id);
 	virtual ~AP_Win32Toolbar_ZoomCombo(void);
 
-	virtual bool		populate(void);
+	virtual bool		populate(void) override;
 
 	static EV_Toolbar_Control *		static_constructor(EV_Toolbar *, XAP_Toolbar_Id id);
 

@@ -33,23 +33,23 @@ public:
 	AP_Win32Dialog_Replace(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Replace(void);
 
-	virtual void			runModal(XAP_Frame * /*pFrame*/){};
-	virtual void			runModeless(XAP_Frame * pFrame);
-	virtual void			notifyActiveFrame(XAP_Frame *pFrame);
-	virtual void			notifyCloseFrame(XAP_Frame *pFrame);
-	virtual void			destroy(void);
-	virtual void			activate(void);
-	virtual void *			pGetWindowHandle( void ) { return (void*)m_hDlg; }
+	virtual void			runModal(XAP_Frame * /*pFrame*/) override {};
+	virtual void			runModeless(XAP_Frame * pFrame) override;
+	virtual void			notifyActiveFrame(XAP_Frame *pFrame) override;
+	virtual void			notifyCloseFrame(XAP_Frame *pFrame) override;
+	virtual void			destroy(void) override;
+	virtual void			activate(void) override;
+	virtual void *			pGetWindowHandle( void )  override { return (void*)m_hDlg; }
 
 	static XAP_Dialog * 	static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
-    virtual void                    _updateLists();
+    virtual void                    _updateLists() override;
 
 protected:
 	void					    _initButtons(HWND hWnd);
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onBtn_Find(HWND hWnd, tFindType tFindType);
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onBtn_Find(HWND hWnd, tFindType findType);
 	void 					_updateList(HWND hWnd, UT_GenericVector<UT_UCS4Char*>* vec);
 };
 

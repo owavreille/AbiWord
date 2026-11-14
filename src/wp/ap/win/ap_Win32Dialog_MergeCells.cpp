@@ -66,7 +66,7 @@ AP_Win32Dialog_MergeCells::~AP_Win32Dialog_MergeCells(void)
 void AP_Win32Dialog_MergeCells::runModeless(XAP_Frame * pFrame)
 {
  	UT_return_if_fail (pFrame);
-	UT_return_if_fail (m_id == AP_DIALOG_ID_MERGE_CELLS);
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_MERGE_CELLS));
 
 	createModeless(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_MERGECELLS));
 

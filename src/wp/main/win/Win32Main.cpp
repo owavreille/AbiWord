@@ -29,7 +29,7 @@
 #include "ap_Win32App.h"
 
 int WINAPI wWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
-                    LPWSTR szCmdLine, int iCmdShow)
+                    LPWSTR /*szCmdLine*/, int iCmdShow)
 {
 #ifdef _WIN32
 	if (fileno (stdout) != -1 &&
@@ -42,7 +42,7 @@ int WINAPI wWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		typedef BOOL (WINAPI * AttachConsole_t) (DWORD);
 
 		AttachConsole_t p_AttachConsole =
-			(AttachConsole_t) GetProcAddress (GetModuleHandleW(L"kernel32.dll"), "AttachConsole");
+			reinterpret_cast<AttachConsole_t>(reinterpret_cast<void *>(GetProcAddress (GetModuleHandleW(L"kernel32.dll"), "AttachConsole")));
 
 		if (p_AttachConsole != nullptr && p_AttachConsole (ATTACH_PARENT_PROCESS))
 		{
@@ -75,7 +75,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
 		typedef BOOL (WINAPI * AttachConsole_t) (DWORD);
 
 		AttachConsole_t p_AttachConsole =
-			(AttachConsole_t) GetProcAddress (GetModuleHandle ("kernel32.dll"), "AttachConsole");
+			reinterpret_cast<AttachConsole_t>(reinterpret_cast<void *>(GetProcAddress (GetModuleHandle ("kernel32.dll"), "AttachConsole")));
 
 		if (p_AttachConsole != nullptr && p_AttachConsole (ATTACH_PARENT_PROCESS))
 		{

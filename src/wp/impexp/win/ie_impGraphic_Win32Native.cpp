@@ -628,13 +628,13 @@ UT_Error IE_ImpGraphic_Win32Native::Convert_BMP(UT_ByteBuf* pBB)
 UT_Byte IE_ImpGraphic_Win32Native::ReadByte  (UT_ByteBuf* pBB, 
 											  UT_uint32 offset)
 {
-    return ( static_cast<const UT_Byte>(ReadBytes(pBB,offset,1) ));
+    return ( static_cast<UT_Byte>(ReadBytes(pBB,offset,1) ));
 }
   
 UT_uint16 IE_ImpGraphic_Win32Native::Read2Bytes(UT_ByteBuf* pBB, 
 												UT_uint32 offset)
 {
-    return ( static_cast<const UT_uint16>(ReadBytes(pBB,offset,2) ));
+    return ( static_cast<UT_uint16>(ReadBytes(pBB,offset,2) ));
 }
     
 UT_uint32 IE_ImpGraphic_Win32Native::Read4Bytes(UT_ByteBuf* pBB, 

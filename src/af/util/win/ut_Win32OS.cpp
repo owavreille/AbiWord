@@ -200,7 +200,7 @@ wchar_t * UT_GetDefaultPrinterName()
 					return nullptr;
 
 				HRESULT (WINAPI * fnGetDefaultPrinter)(LPWSTR, LPDWORD) =
-					(HRESULT (WINAPI * )(LPWSTR, LPDWORD)) GetProcAddress(hWinSpool, GETDEFAULTPRINTER);
+					reinterpret_cast<HRESULT (WINAPI * )(LPWSTR, LPDWORD)>(reinterpret_cast<void *>(GetProcAddress(hWinSpool, GETDEFAULTPRINTER)));
 				
 				if (!fnGetDefaultPrinter)
 				{

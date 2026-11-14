@@ -73,7 +73,7 @@ tScriptRecordDigitSubstitution GR_Win32USPGraphics::fScriptRecordDigitSubstituti
 #define LOG_USP_EXCPT_X(msg, par)                                               \
 {                                                                               \
     UT_String __s;                                                              \
-    UT_String_sprintf(__s, "%s (%d): %s [0x%x]",__FILE__, __LINE__, msg, par);  \
+    UT_String_sprintf(__s, "%s (%d): %s [0x%lx]",__FILE__, __LINE__, msg, static_cast<unsigned long>(par));  \
 	UT_DEBUGMSG(("%s",__s.c_str()));                                            \
     if(XAP_App::getApp()->getPrefs())                                           \
     {                                                                           \
@@ -97,7 +97,7 @@ tScriptRecordDigitSubstitution GR_Win32USPGraphics::fScriptRecordDigitSubstituti
 #define LOG_USP_EXCPT_SX(msg, str, par)                                                  \
 {                                                                                        \
     UT_String __s;                                                                       \
-    UT_String_sprintf(__s, "%s (%d): %s [%s, 0x%x]",__FILE__, __LINE__, msg, str, par);  \
+    UT_String_sprintf(__s, "%s (%d): %s [%ls, 0x%lx]",__FILE__, __LINE__, msg, str, static_cast<unsigned long>(par));  \
 	UT_DEBUGMSG(("%s",__s.c_str()));                                                     \
     if(XAP_App::getApp()->getPrefs())                                                    \
     {                                                                                    \
@@ -113,9 +113,9 @@ class ABI_EXPORT GR_Win32USPItem: public GR_Item
   public:
 	virtual ~GR_Win32USPItem(){};
 	
-	virtual GR_ScriptType getType() const {return (GR_ScriptType) m_si.a.eScript;}
-	virtual GR_Item *     makeCopy() const {return new GR_Win32USPItem(m_si);} // make a copy of this item
-	virtual GRRI_Type     getClassId() const {return GRRI_WIN32_UNISCRIBE;}
+	virtual GR_ScriptType getType() const  override {return (GR_ScriptType) m_si.a.eScript;}
+	virtual GR_Item *     makeCopy() const  override {return new GR_Win32USPItem(m_si);} // make a copy of this item
+	virtual GRRI_Type     getClassId() const  override {return GRRI_WIN32_UNISCRIBE;}
 
 	bool isRTL() const {return m_si.a.fRTL != 0;}
 	
@@ -179,11 +179,11 @@ class ABI_EXPORT GR_Win32USPRenderInfo : public GR_RenderInfo
 			}
 		}
 
-	virtual GRRI_Type getType() const {return GRRI_WIN32_UNISCRIBE;}
-	virtual bool      append(GR_RenderInfo &ri, bool bReverse = false);
-	virtual bool      split (GR_RenderInfo *&pri, bool bReverse = false);
-	virtual bool      cut(UT_uint32 offset, UT_uint32 iLen, bool bReverse = false);
-	virtual bool      isJustified() const;
+	virtual GRRI_Type getType() const  override {return GRRI_WIN32_UNISCRIBE;}
+	virtual bool      append(GR_RenderInfo &ri, bool bReverse = false) override;
+	virtual bool      split (GR_RenderInfo *&pri, bool bReverse = false) override;
+	virtual bool      cut(UT_uint32 offset, UT_uint32 iLen, bool bReverse = false) override;
+	virtual bool      isJustified() const override;
 	
 	inline bool       allocStaticBuffers(UT_uint32 iSize)
 	    {
@@ -308,7 +308,7 @@ GR_Win32Font * GR_Win32USPGraphics::_newFont(LOGFONTW & lf, double fPoints, HDC 
 }
 
 #define loadUSPFunction(name)                           \
-f##name = (t##name)GetProcAddress(s_hUniscribe, #name); \
+f##name = reinterpret_cast<t##name>(reinterpret_cast<void *>(GetProcAddress(s_hUniscribe, #name))); \
 if(!f##name)                                            \
 {                                                       \
 	LOG_USP_EXCPT(#name)                                \
@@ -752,7 +752,7 @@ bool GR_Win32USPGraphics::itemize(UT_TextIterator & text, GR_Itemization & I)
 	
 	SCRIPT_STATE ss;
 	ss.uBidiLevel = I.getEmbedingLevel();
-	ss.fOverrideDirection = I.getDirOverride() == FRIBIDI_TYPE_UNSET ? 0 : 1;
+	ss.fOverrideDirection = static_cast<int>(I.getDirOverride()) == FRIBIDI_TYPE_UNSET ? 0 : 1;
 	ss.fInhibitSymSwap = 0;
 	ss.fCharShape = 1;
 	ss.fDigitSubstitute = 1;
@@ -2270,7 +2270,7 @@ void GR_Win32USPGraphics::positionToXY(const GR_RenderInfo & ri,
 	x2 = x;
 }
 
-void GR_Win32USPGraphics::_drawChars(const UT_UCSChar* pChars,
+void GR_Win32USPGraphics::_drawChars(const UT_UCS4Char* pChars,
 									int iCharOffset, int iLength,
 									UT_sint32 xoff, UT_sint32 yoff,
 									int * /*pCharWidth*/)
@@ -2326,7 +2326,7 @@ void GR_Win32USPGraphics::_drawChars(const UT_UCSChar* pChars,
 	}
 }
 
-void GR_Win32USPGraphics::drawChars(const UT_UCSChar* pChars,
+void GR_Win32USPGraphics::drawChars(const UT_UCS4Char* pChars,
 									int iCharOffset, int iLength,
 									UT_sint32 xoff, UT_sint32 yoff,
 									int * pCharWidth)
@@ -2336,7 +2336,7 @@ void GR_Win32USPGraphics::drawChars(const UT_UCSChar* pChars,
 }
 
 
-void GR_Win32USPGraphics::drawCharsRelativeToBaseline(const UT_UCSChar* pChars,
+void GR_Win32USPGraphics::drawCharsRelativeToBaseline(const UT_UCS4Char* pChars,
 								 int iCharOffset,
 								 int iLength,
 								 UT_sint32 xoff,

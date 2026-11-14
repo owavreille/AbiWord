@@ -35,20 +35,20 @@ public:
 	AP_Win32Dialog_Paragraph(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Paragraph(void);
 
-	virtual void				runModal(XAP_Frame * pFrame);
+	virtual void				runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *			static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
-	static BOOL CALLBACK		s_dlgProc(HWND,UINT,WPARAM,LPARAM);
+	static INT_PTR CALLBACK		s_dlgProc(HWND,UINT,WPARAM,LPARAM);
 
 protected:
-	BOOL						_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL						_onDeltaPos(NM_UPDOWN * pnmud);
+	BOOL						_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL						_onDeltaPos(NM_UPDOWN * pnmud) override;
 
-	static BOOL CALLBACK		s_tabProc(HWND,UINT,WPARAM,LPARAM);
+	static INT_PTR CALLBACK		s_tabProc(HWND,UINT,WPARAM,LPARAM);
 	BOOL						_onInitTab(HWND hWnd, WPARAM wParam, LPARAM lParam);
 
-	virtual void				_syncControls(tControl changed, bool bAll = false);
+	virtual void				_syncControls(tControl changed, bool bAll = false) override;
 
 	XAP_Win32PreviewWidget *	m_pPreviewWidget;
 

@@ -109,7 +109,7 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
                CF_ENABLETEMPLATE |
                CF_INITTOLOGFONTSTRUCT;
     cf.lpTemplateName = MAKEINTRESOURCEW(XAP_RID_DIALOG_FONT);
-    cf.lpfnHook = (LPCFHOOKPROC) s_hookProc;
+    cf.lpfnHook = s_hookProc;
 	cf.lCustData = (LPARAM) this;
 	cf.hInstance = pApp->getInstance();
 
@@ -277,7 +277,7 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
 	m_pWin32Frame = nullptr;
 }
 
-UINT CALLBACK XAP_Win32Dialog_FontChooser::s_hookProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+UINT_PTR CALLBACK XAP_Win32Dialog_FontChooser::s_hookProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	// static routine
 	XAP_Win32Dialog_FontChooser* pThis;

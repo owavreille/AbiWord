@@ -62,14 +62,14 @@ AP_Win32Dialog_WordCount::~AP_Win32Dialog_WordCount(void)
 void AP_Win32Dialog_WordCount::runModal(XAP_Frame * pFrame)
 {
 	// raise the dialog	
-	UT_return_if_fail (m_id == AP_DIALOG_ID_WORDCOUNT);
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_WORDCOUNT));
     createModal (pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_WORDCOUNT));	
 }
 
 void AP_Win32Dialog_WordCount::runModeless(XAP_Frame * pFrame)
 {
 	// raise the dialog	
-	UT_return_if_fail (m_id == AP_DIALOG_ID_WORDCOUNT);	
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_WORDCOUNT));	
 	createModeless (pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_WORDCOUNT));
 
 	// Save dialog the ID number and pointer to the widget

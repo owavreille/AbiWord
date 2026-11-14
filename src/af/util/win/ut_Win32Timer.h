@@ -31,9 +31,9 @@ public:
 	UT_Win32Timer(UT_TimerCallback pCallback, void* pData);
 	~UT_Win32Timer();
 
-	virtual UT_sint32 set(UT_uint32 iMilliseconds);
-	virtual void      stop(void);
-	virtual void      start(void);
+	virtual UT_sint32 set(UT_uint32 iMilliseconds) override;
+	virtual void      stop(void) override;
+	virtual void      start(void) override;
 
 	bool              isActive(void) const { return m_bStarted; }
 

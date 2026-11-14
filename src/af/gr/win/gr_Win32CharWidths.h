@@ -29,7 +29,7 @@
 class ABI_EXPORT GR_Win32CharWidths : public GR_CharWidths
 {
 public:
-	void  setCharWidthsOfRange(HDC hdc, UT_UCSChar c0, UT_UCSChar c1);
+	void  setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Char c1);
 
 private:
 	bool _doesGlyphExist(UT_UCS4Char g);

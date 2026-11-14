@@ -30,6 +30,7 @@ void abi_register_builtin_plugins()
 	XAP_ModuleInfo *pmi;
 
 	pmi = &mi;
+	(void)pmi;
 
 #include "abi-builtin-plugins-calls.inc"
 }

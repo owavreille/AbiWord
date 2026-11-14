@@ -154,7 +154,7 @@ EV_Win32Toolbar::~EV_Win32Toolbar(void)
 }
 
 bool EV_Win32Toolbar::toolbarEvent(XAP_Toolbar_Id id,
-									  UT_UCSChar * pData,
+									  UT_UCS4Char * pData,
 									  UT_uint32 dataLength)
 {
 	// user selected something from this toolbar.
@@ -197,21 +197,21 @@ bool EV_Win32Toolbar::toolbarEvent(XAP_Toolbar_Id id,
 	if (pAction->getItemType() == EV_TBIT_ColorFore || pAction->getItemType() == EV_TBIT_ColorBack)
 	{
 		UT_UCS4String ucs4color;
-		UT_uint32 dataLength;
+		UT_uint32 colorLength = 0;
 		XAP_Win32FrameImpl* fimpl = static_cast<XAP_Win32FrameImpl*>(m_pWin32Frame->getFrameImpl());
 		//int id = ItemIdFromWmCommand(cmd);
 
 		UT_ASSERT(id== AP_TOOLBAR_ID_COLOR_BACK || id== AP_TOOLBAR_ID_COLOR_FORE);
-		
-		const EV_Toolbar_ActionSet * pToolbarActionSet = m_pWin32App->getToolbarActionSet();
+
+		pToolbarActionSet = m_pWin32App->getToolbarActionSet();
 		UT_return_val_if_fail(pToolbarActionSet,false);
 
-		const EV_Toolbar_Action * pAction = pToolbarActionSet->getAction(id);
+		pAction = pToolbarActionSet->getAction(id);
 
-		if (!pAction) 
+		if (!pAction)
             return true;
 
-		AV_View * pView = m_pWin32Frame->getCurrentView();
+		pView = m_pWin32Frame->getCurrentView();
 		
 		const char * szMethodName = pAction->getMethodName();
 		if (!szMethodName) 
@@ -225,17 +225,17 @@ bool EV_Win32Toolbar::toolbarEvent(XAP_Toolbar_Id id,
 			if (fimpl->m_sColorBack.empty())
 				fimpl->m_sColorBack = "transparent";
 			ucs4color = fimpl->m_sColorBack.ucs4_str();
-			dataLength =  fimpl->m_sColorBack.size();
+			colorLength =  fimpl->m_sColorBack.size();
 		}
 		else
 		{
 			if (fimpl->m_sColorFore.empty())
 				fimpl->m_sColorFore = "000000";
 			ucs4color = fimpl->m_sColorFore.ucs4_str();
-			dataLength =  fimpl->m_sColorFore.size();
+			colorLength =  fimpl->m_sColorFore.size();
 		}	
 
-		invokeToolbarMethod(pView,pEM, ucs4color.ucs4_str(),dataLength);
+		invokeToolbarMethod(pView,pEM, ucs4color.ucs4_str(),colorLength);
 		return true;
 	}
 
@@ -500,7 +500,7 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 									
 					if(iSelected != -1)
 					{
-						static UT_UCSChar ucs_buf[COMBO_BUF_LEN];
+						static UT_UCS4Char ucs_buf[COMBO_BUF_LEN];
 						UT_Win32LocaleString str;
 						int textChars = static_cast<int>(SendMessageW(hWnd, CB_GETLBTEXTLEN, iSelected, 0));
 						wchar_t * buf = nullptr;
@@ -519,7 +519,7 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 							if (str.size() < COMBO_BUF_LEN)
 							{
 								UT_UCS4_strcpy_utf8_char(ucs_buf, str.utf8_str().utf8_str());
-								UT_UCSChar * pData = ucs_buf;
+								UT_UCS4Char * pData = ucs_buf;
 								UT_uint32 dataLength = static_cast<UT_uint32>(got);
 
 								UINT u = GetDlgCtrlID(hWnd);
@@ -571,7 +571,8 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				
 			} // swich
 		} // case command
-			
+		break;
+
 		case WM_KEYDOWN:
 		{
 			EV_Win32Toolbar * t = (EV_Win32Toolbar *) GetWindowLongPtrW(hWnd, GWLP_USERDATA);
@@ -716,7 +717,7 @@ bool EV_Win32Toolbar::synthesize(void)
 
 	// TODO: is there any advantage to building up all the TBBUTTONs at once
 	//		 and then adding them en masse, instead of one at a time? 
-	UINT last_id=0;
+	UT_DebugOnly<UINT> last_id = 0;
 	bool bControls = false;
 
 	for (UT_uint32 k=0; (k < nrLabelItemsInLayout); k++)
@@ -806,7 +807,7 @@ bool EV_Win32Toolbar::synthesize(void)
 							dwStyle,						// Styles and defaults.
 							0, 2, iWidth, 250,				// Size and position.
 							m_hwnd,							// Parent window.
-							(HMENU) u,						// ID.
+							reinterpret_cast<HMENU>(static_cast<UINT_PTR>(u)),						// ID.
 							m_pWin32App->getInstance(),		// Current instance.
 							nullptr );							// No class data.
 
@@ -844,11 +845,11 @@ bool EV_Win32Toolbar::synthesize(void)
 								UT_uint32 items = v->getItemCount();
 								int nIndex;
                                 UT_Win32LocaleString localised;
-								for (UT_uint32 k=0; k < items; k++)
+								for (UT_uint32 item = 0; item < items; item++)
 								{
-									localised.fromUTF8(v->getNthItem(k));									
+									localised.fromUTF8(v->getNthItem(item));
     								nIndex = SendMessageW(hwndCombo, CB_ADDSTRING,(WPARAM)0, (LPARAM)localised.c_str());
- 	     							SendMessageW(hwndCombo,CB_SETITEMDATA, nIndex, k);
+ 	     							SendMessageW(hwndCombo,CB_SETITEMDATA, nIndex, item);
 								}
 							}
 

@@ -119,7 +119,7 @@ protected:
 HWND m_hDlg;
 
 protected:
-	static BOOL CALLBACK s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam);
+	static INT_PTR CALLBACK s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam);
 private:
 
 	// disallow copying and assignment

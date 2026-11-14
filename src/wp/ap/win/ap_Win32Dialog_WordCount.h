@@ -34,22 +34,22 @@ public:
 	AP_Win32Dialog_WordCount(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_WordCount(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
-	virtual void			runModeless(XAP_Frame * pFrame);
-	virtual void			destroy(void);
-	virtual void			activate(void);
-	virtual void			notifyActiveFrame(XAP_Frame *pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
+	virtual void			runModeless(XAP_Frame * pFrame) override;
+	virtual void			destroy(void) override;
+	virtual void			activate(void) override;
+	virtual void			notifyActiveFrame(XAP_Frame *pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 	static void				autoupdateWC(UT_Worker * pTimer);
 	virtual void			setUpdateCounter( UT_uint32 );
 	virtual void			event_Update(void);
-	void *					pGetWindowHandle( void ) { return (void*)m_hDlg; }
-	virtual BOOL 			_onDlgMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	void *					pGetWindowHandle( void )  override { return (void*)m_hDlg; }
+	virtual BOOL 			_onDlgMessage(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) override;
 
 protected:
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 	void 					_setDlgItemInt(UINT nCtrl, int nValue);
 	void 					_updateWindowData(void);
 

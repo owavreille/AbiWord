@@ -1,5 +1,5 @@
 /* AbiWord
- * Copyright (C) 2004 Jordi Mas i Hernàndez <jmas@softcatala.org>
+ * Copyright (C) 2004 Jordi Mas i Hernï¿½ndez <jmas@softcatala.org>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -34,14 +34,14 @@ class ABI_EXPORT AP_Win32Dialog_FormatTOC: public AP_Dialog_FormatTOC, XAP_Win32
 public:
 	AP_Win32Dialog_FormatTOC(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_FormatTOC(void);
-	virtual void			runModeless(XAP_Frame * pFrame);
+	virtual void			runModeless(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
-	virtual void            notifyActiveFrame(XAP_Frame * pFrame);
-	virtual void            setTOCPropsInGUI(void);
-   	virtual void            setSensitivity(bool bSensitive);
-	virtual void            destroy(void);
-	virtual void            activate(void);
+	virtual void            notifyActiveFrame(XAP_Frame * pFrame) override;
+	virtual void            setTOCPropsInGUI(void) override;
+   	virtual void            setSensitivity(bool bSensitive) override;
+	virtual void            destroy(void) override;
+	virtual void            activate(void) override;
 	void 					setStyle(HWND hWnd, int nCtrlID);
 	void 					setMainLevel(UT_sint32 iLevel);
 	void					setDetailsLevel(UT_sint32 iLevel);
@@ -66,9 +66,9 @@ public:
 	void						setContainer(AP_Win32Dialog_FormatTOC*	pData){m_pData=pData;};
 	AP_Win32Dialog_FormatTOC*	getContainer(){return m_pData;};
 	static int CALLBACK			s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM lParam);
-	void						_onInitDialog(HWND hwnd);
-	virtual void				cleanup(void);
-	virtual	void				_onOK();
+	void						_onInitDialog(HWND hwnd) override;
+	virtual void				cleanup(void) override;
+	virtual	void				_onOK() override;
 
 private:
 
@@ -86,12 +86,12 @@ public:
 	void						setContainer(AP_Win32Dialog_FormatTOC*	pData){m_pData=pData;};
 	AP_Win32Dialog_FormatTOC*	getContainer(){return m_pData;};
 	void						_fillGUI(void);
-	virtual BOOL				_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	virtual BOOL				_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 private:
 
-	virtual	void				_onInitDialog();
-	virtual	void				_onApply();
-	virtual	void				_onOK();
+	virtual	void				_onInitDialog() override;
+	virtual	void				_onApply() override;
+	virtual	void				_onOK() override;
 
 	AP_Win32Dialog_FormatTOC*			m_pData;
 
@@ -107,16 +107,16 @@ public:
 	void						setContainer(AP_Win32Dialog_FormatTOC*	pData){m_pData=pData;};
 	AP_Win32Dialog_FormatTOC*	getContainer(){return m_pData;};
 	void						_fillGUI(void);
-	virtual BOOL				_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	virtual void				_onNotify(LPNMHDR hdr, int iCtrlID);
+	virtual BOOL				_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	virtual void				_onNotify(LPNMHDR hdr, int iCtrlID) override;
 	void						saveCtrlsValuesForDetailsLevel ();
 	void						loadCtrlsValuesForDetailsLevel ();
 
 private:
 
-	virtual	void				_onInitDialog();
-	virtual	void				_onApply();
-	virtual	void				_onOK();
+	virtual	void				_onInitDialog() override;
+	virtual	void				_onApply() override;
+	virtual	void				_onOK() override;
 	void						getCtrlsValues ();
 
 	AP_Win32Dialog_FormatTOC*			m_pData;

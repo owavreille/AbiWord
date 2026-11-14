@@ -42,12 +42,12 @@ class ABI_EXPORT AP_Win32Dialog_Options_Sheet: public XAP_Win32PropertySheet
 
 public:
 		AP_Win32Dialog_Options_Sheet();
-		void _onInitDialog(HWND hwnd);
+		void _onInitDialog(HWND hwnd) override;
 
 		void setParent(AP_Win32Dialog_Options*	pData){m_pParent=pData;};
 		AP_Win32Dialog_Options* getParent(){return m_pParent;};
-		BOOL _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-		static INT_PTR CALLBACK s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM lParam);
+		BOOL _onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+		static int CALLBACK s_sheetInit(HWND hwnd,  UINT uMsg,  LPARAM lParam);
 
 private:
 
@@ -73,8 +73,8 @@ public:
 
 private:
 
-	void						_onInitDialog();
-	void						_onKillActive(){};
+	void						_onInitDialog() override;
+	void						_onKillActive() override {};
 
 	AP_Win32Dialog_Options*		m_pParent;
 
@@ -98,9 +98,9 @@ public:
 
 private:
 
-	void						_onInitDialog();
-	void						_onKillActive(){};
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	void						_onInitDialog() override;
+	void						_onKillActive() override {};
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 
 	AP_Win32Dialog_Options*		m_pParent;
 	int							m_nCentered;
@@ -126,9 +126,9 @@ public:
 
 private:
 
-	void						_onInitDialog();
-	void						_onKillActive(){};
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	void						_onInitDialog() override;
+	void						_onKillActive() override {};
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 
 	AP_Win32Dialog_Options*		m_pParent;
 
@@ -149,9 +149,9 @@ public:
 
 private:
 
-	void						_onInitDialog();
-	void						_onKillActive(){};
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	void						_onInitDialog() override;
+	void						_onKillActive() override {};
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 
 	AP_Win32Dialog_Options*		m_pParent;
 
@@ -165,7 +165,7 @@ public:
 	AP_Win32Dialog_Options(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Options(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog * 	static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
@@ -185,11 +185,13 @@ public:
 	BOOL								m_langchanged;
 	HFONT								m_hFont;
 
-	virtual void _controlEnable( tControl id, bool value );
-	virtual void _initEnableControlsPlatformSpecific();
+	virtual void _controlEnable( tControl id, bool value ) override;
+	virtual void _initEnableControlsPlatformSpecific() override;
 
 	// we implement these so the XP dialog can set/grab our data
-#define SET_GATHER(a,t) virtual t _gather##a(void);  \
+#define SET_GATHER(a,t) virtual t _gather##a(void) override;  \
+						virtual void	_set##a(const t) override
+#define SET_GATHER_LOCAL(a,t) virtual t _gather##a(void);  \
 						virtual void	_set##a(const t)
 
 	SET_GATHER			(SpellCheckAsType,	bool );
@@ -207,8 +209,8 @@ public:
  	SET_GATHER			(CustomSmartQuotes,		bool);
 	SET_GATHER			(EnableOverwrite,		bool);
 
-	virtual bool _gatherViewShowToolbar(UT_uint32 /*t*/) { UT_ASSERT(UT_SHOULD_NOT_HAPPEN); return true;}
-	virtual void _setViewShowToolbar(UT_uint32 /*row*/, bool /*b*/) {}
+	virtual bool _gatherViewShowToolbar(UT_uint32 /*t*/)  override { UT_ASSERT(UT_SHOULD_NOT_HAPPEN); return true;}
+	virtual void _setViewShowToolbar(UT_uint32 /*row*/, bool /*b*/)  override {}
 
 
 	// unimplemented UI-wise. We need dummy implementations to satisfy the XP framework, though
@@ -220,18 +222,18 @@ public:
 	SET_GATHER			(ViewAll,				bool);
 	SET_GATHER			(ViewHiddenText,		bool);
 	SET_GATHER			(ViewUnprintable,		bool);
-	SET_GATHER			(EnableSmoothScrolling,	bool);
+	SET_GATHER_LOCAL		(EnableSmoothScrolling,	bool);
 
-	virtual void _gatherAutoSaveFilePeriod(UT_String &stRetVal);
-	virtual void _setAutoSaveFilePeriod(const UT_String &stPeriod);
-	virtual void _gatherAutoSaveFileExt(UT_String &stRetVal);
-	virtual void _setAutoSaveFileExt(const UT_String &stExt);
-	virtual void _gatherUILanguage(UT_String &stRetVal);
-	virtual void _setUILanguage(const UT_String &stExt);
-	virtual gint _gatherOuterQuoteStyle();
-	virtual gint _gatherInnerQuoteStyle();
-	virtual void _setOuterQuoteStyle(const gint index);
-	virtual void _setInnerQuoteStyle(const gint index);
+	virtual void _gatherAutoSaveFilePeriod(UT_String &stRetVal) override;
+	virtual void _setAutoSaveFilePeriod(const UT_String &stPeriod) override;
+	virtual void _gatherAutoSaveFileExt(UT_String &stRetVal) override;
+	virtual void _setAutoSaveFileExt(const UT_String &stExt) override;
+	virtual void _gatherUILanguage(UT_String &stRetVal) override;
+	virtual void _setUILanguage(const UT_String &stExt) override;
+	virtual gint _gatherOuterQuoteStyle() override;
+	virtual gint _gatherInnerQuoteStyle() override;
+	virtual void _setOuterQuoteStyle(const gint index) override;
+	virtual void _setInnerQuoteStyle(const gint index) override;
 
 	SET_GATHER			(NotebookPageNum,	int );
 	SET_GATHER          (LanguageWithKeyboard, bool);
@@ -247,6 +249,7 @@ public:
 	bool			m_boolViewCursorBlink;
 
 #undef SET_GATHER
+#undef SET_GATHER_LOCAL
 
  protected:
 	BOOL						_onNotify(HWND hWnd, LPARAM lParam);

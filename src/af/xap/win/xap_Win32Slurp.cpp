@@ -83,11 +83,12 @@ XAP_Win32Slurp::~XAP_Win32Slurp(void)
 	s_Slurp = nullptr;
 }
 
-static HDDEDATA CALLBACK s_DdeServerCallback(UINT uType, UINT uFmt, HCONV hConv, 
-											 HSZ hsz1, HSZ hsz2, HDDEDATA hData, 
-											 DWORD dwData1, DWORD dwData2)
+static HDDEDATA CALLBACK s_DdeServerCallback(UINT uType, UINT uFmt, HCONV hConv,
+											 HSZ hsz1, HSZ hsz2, HDDEDATA hData,
+											 ULONG_PTR dwData1, ULONG_PTR dwData2)
 {
-	return s_Slurp->doCallback(uType,uFmt,hConv,hsz1,hsz2,hData,dwData1,dwData2);
+	return s_Slurp->doCallback(uType,uFmt,hConv,hsz1,hsz2,hData,
+							   static_cast<DWORD>(dwData1), static_cast<DWORD>(dwData2));
 }
 
 HDDEDATA CALLBACK XAP_Win32Slurp::doCallback(UINT uType, UINT /*uFmt*/, HCONV /*hConv*/,
@@ -137,7 +138,7 @@ bool XAP_Win32Slurp::connectSlurper(void)
 
 	m_idDdeServerInst = 0;
 	UINT nDdeRtnStatus = DdeInitializeW(&m_idDdeServerInst,
-									   (PFNCALLBACK)&s_DdeServerCallback,
+									   s_DdeServerCallback,
 									   (  APPCMD_FILTERINITS
 										| CBF_SKIP_CONNECT_CONFIRMS
 										| CBF_FAIL_SELFCONNECTIONS

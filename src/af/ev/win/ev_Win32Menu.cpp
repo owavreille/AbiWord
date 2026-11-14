@@ -29,7 +29,7 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include "ut_types.h"
-#include "ut_stack.h"
+#include <vector>
 #include "ut_string.h"
 #include "ut_string_class.h"
 #include "ut_debugmsg.h"
@@ -322,7 +322,7 @@ bool EV_Win32Menu::onCommand(AV_View * pView,
 */
 bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 {	
-	UT_DebugOnly<bool> bResult;
+	bool bResult = false;
 	
 	const EV_Menu_ActionSet * pMenuActionSet = m_pWin32App->getMenuActionSet();
 	UT_ASSERT(pMenuActionSet);
@@ -333,8 +333,8 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 	// we keep a stack of the submenus so that we can properly
 	// parent the menu items and deal with nested pull-rights.
 	
-	UT_Stack stack;
-	stack.push(menuRoot);
+	std::vector<HMENU> stack;
+	stack.push_back(menuRoot);
 	//UT_DEBUGMSG(("Menu::synthesize [menuRoot 0x%08lx]\n",menuRoot));
 	
 	for (UT_uint32 k=0; (k < nrLabelItemsInLayout); k++)
@@ -363,8 +363,10 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 			{
 				UT_DEBUGMSG(("menu::synthesize [name %s]\n",szLabelName));
 
-				HMENU m;
-				bResult = stack.viewTop((void **)&m);
+				HMENU m = nullptr;
+				bResult = !stack.empty();
+				if (bResult)
+					m = stack.back();
 				UT_ASSERT(bResult);
 
 				// set standard flags on the item, we'll update the
@@ -382,10 +384,10 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 					HMENU sub = CreateMenu();	// TODO NOTE: Leaking handle!
 					UT_ASSERT(sub);
 
-					UT_DEBUGMSG(("menu::synthesize [name %s][subMenu 0x%08lx] %u\n",szLabelName,u, stack.getDepth()));
+					UT_DEBUGMSG(("menu::synthesize [name %s][subMenu 0x%08lx] %u\n",szLabelName,u, static_cast<unsigned>(stack.size())));
 
 					flags |= MF_POPUP;
-					stack.push(sub);
+					stack.push_back(sub);
 					u = (size_t) sub;					
 					
 					if (szLabelName && *szLabelName)					
@@ -398,7 +400,7 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 						item->szText[G_N_ELEMENTS(item->szText) - 1] = 0;					
 						m_vecItems.addItem(item);
 							
-						if (!m_bTrack && stack.getDepth()==2)
+						if (!m_bTrack && stack.size()==2)
 							AppendMenuW(m, flags,u, szLabelName);
 						else {
 							if (UT_IsWinVista()) {
@@ -437,17 +439,19 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 	
 		case EV_MLF_EndSubMenu:
 			{				
-				HMENU m = nullptr;
-				bResult = stack.pop((void **)&m);
+				bResult = !stack.empty();
+				if (bResult)
+					stack.pop_back();
 				UT_ASSERT(bResult);
-				UT_DEBUGMSG(("menu::synthesize [endSubMenu 0x%08lx]\n",m));
 			}
 			break;
 			
 		case EV_MLF_Separator:
 			{
-				HMENU m;
-				bResult = stack.viewTop((void **)&m);
+				HMENU m = nullptr;
+				bResult = !stack.empty();
+				if (bResult)
+					m = stack.back();
 				UT_ASSERT(bResult);
 				UT_ASSERT(m);
 
@@ -468,7 +472,12 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 
 #ifdef DEBUG
 	HMENU wDbg = nullptr;
-	bResult = stack.pop((void **)&wDbg);
+	bResult = !stack.empty();
+	if (bResult)
+	{
+		wDbg = stack.back();
+		stack.pop_back();
+	}
 	UT_ASSERT(bResult);
 	UT_ASSERT(wDbg == menuRoot);
 #endif
@@ -488,11 +497,11 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 	
 
 	UT_uintptr pos = 0;
-	UT_DebugOnly<bool> bResult;
-	UT_Stack stackPos;
-	stackPos.push((void*)pos);
-	UT_Stack stackMenu;
-	stackMenu.push(hMenuBar);
+	bool bResult = false;
+	std::vector<UT_uintptr> stackPos;
+	stackPos.push_back(pos);
+	std::vector<HMENU> stackMenu;
+	stackMenu.push_back(hMenuBar);
 
 	HMENU mTemp;
 	HMENU m = hMenuBar;
@@ -571,12 +580,12 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 				if (bPresent)			// just update the label on the item.
 				{					
 					// dynamic label has changed
-					XAP_Menu_Id id = MenuIdFromWmCommand(cmd);
+					XAP_Menu_Id labelId = MenuIdFromWmCommand(cmd);
 					EV_Menu_Item*	item;
 					for(UT_sint32 i = 0; i< m_vecItems.getItemCount(); i++)
 					{
 						item = (EV_Menu_Item*)m_vecItems.getNthItem(i);
-						if (id==item->id)
+						if (labelId==item->id)
 						{
 							wcsncpy(item->szText, szLabelName, G_N_ELEMENTS(item->szText) - 1);
 						item->szText[G_N_ELEMENTS(item->szText) - 1] = 0;					
@@ -631,8 +640,8 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 		case EV_MLF_BeginSubMenu:
 			mTemp = m;
 			pos++;
-			stackMenu.push(mTemp);
-			stackPos.push((void*)pos);
+			stackMenu.push_back(mTemp);
+			stackPos.push_back(pos);
 
 			m = GetSubMenu(mTemp, pos-1);
 			//UT_DEBUGMSG(("menu::onInitMenu: [menu 0x%08lx] at [pos %d] has [submenu 0x%08lx]\n",mTemp,pos-1,m));
@@ -641,9 +650,19 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 			break;
 
 		case EV_MLF_EndSubMenu:
-			bResult = stackMenu.pop((void **)&mTemp);
+			bResult = !stackMenu.empty();
+			if (bResult)
+			{
+				mTemp = stackMenu.back();
+				stackMenu.pop_back();
+			}
 			UT_ASSERT(bResult);
-			bResult = stackPos.pop((void **)&pos);
+			bResult = !stackPos.empty();
+			if (bResult)
+			{
+				pos = stackPos.back();
+				stackPos.pop_back();
+			}
 			UT_ASSERT(bResult);
 
 			//UT_DEBUGMSG(("menu::onInitMenu: endSubMenu [popping to menu 0x%08lx pos %d] from 0x%08lx\n",mTemp,pos,m));
@@ -662,7 +681,12 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 
 #ifdef DEBUG
 	HMENU wDbg = nullptr;
-	bResult = stackMenu.pop((void **)&wDbg);
+	bResult = !stackMenu.empty();
+	if (bResult)
+	{
+		wDbg = stackMenu.back();
+		stackMenu.pop_back();
+	}
 	UT_ASSERT(bResult);
 	UT_ASSERT(wDbg == hMenuBar);
 #endif
@@ -765,7 +789,7 @@ void EV_Win32Menu::onMeasureItem(HWND hwnd, WPARAM /*wParam*/, LPARAM lParam)
 	// Retrieve the width and height of the item's string 
 	GetTextExtentPoint32W(hdc, item->szText, lstrlenW(item->szText), &size); 
 		
-	if (size.cy < item->pMenu->m_nBitmapCY)
+	if (size.cy < static_cast<LONG>(item->pMenu->m_nBitmapCY))
 		lpmis->itemHeight = item->pMenu->m_nBitmapCY;
 	else
 		lpmis->itemHeight = size.cy;

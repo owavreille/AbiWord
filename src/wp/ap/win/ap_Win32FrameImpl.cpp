@@ -514,23 +514,23 @@ void AP_Win32FrameImpl::_setXScrollRange(AP_FrameData * pData, AV_View *pView)
  	if (iWidth <= iWindowWidth || tZoom == XAP_Frame::z_PAGEWIDTH || tZoom == XAP_Frame::z_WHOLEPAGE)
 	{	 	
 		if (IsWindowVisible (m_hWndHScroll)) {
-			RECT r;
+			RECT clientRect;
 
 			ShowWindow (m_hWndHScroll, SW_HIDE);
 			ShowWindow (m_hWndGripperHack, SW_HIDE);
-			GetClientRect(m_hwndContainer, &r);
-			_onSize(pData, r.right - r.left, r.bottom - r.top);
+			GetClientRect(m_hwndContainer, &clientRect);
+			_onSize(pData, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 		}
 	}
  	else
 	{	
 		if (!IsWindowVisible (m_hWndHScroll)) {
-			RECT r;
+			RECT clientRect;
 
 			ShowWindow(m_hWndHScroll, SW_NORMAL);
 			ShowWindow (m_hWndGripperHack, SW_NORMAL);
-			GetClientRect(m_hwndContainer, &r);
-			_onSize(pData, r.right - r.left, r.bottom - r.top);
+			GetClientRect(m_hwndContainer, &clientRect);
+			_onSize(pData, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 		}		
 	}
 
@@ -968,7 +968,7 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
  			
 			const int cWheelLines = _getMouseWheelLines();
 
-			if (WHEEL_PAGESCROLL == cWheelLines)
+			if (cWheelLines == static_cast<int>(WHEEL_PAGESCROLL))
 			{
 				WORD wDir = (iDelta < 0) ? SB_PAGEDOWN : SB_PAGEUP;
 				SendMessageW(hwnd,

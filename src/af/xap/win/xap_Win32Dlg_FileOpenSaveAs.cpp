@@ -402,7 +402,7 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 	case XAP_DIALOG_ID_FILE_SAVE_IMAGE:
 		title.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_FOSA_SaveAsTitle));
 		ofn.lpstrTitle = title.c_str();
-		ofn.lpfnHook	   = (LPOFNHOOKPROC) s_hookSaveAsProc;
+		ofn.lpfnHook	   = s_hookSaveAsProc;
 		ofn.Flags |= OFN_OVERWRITEPROMPT;
 		ofn.Flags |= OFN_EXPLORER;
 		ofn.Flags |= OFN_ENABLEHOOK;
@@ -415,7 +415,7 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 		ofn.lpstrTitle = title.c_str();
 		ofn.hInstance	   = pWin32App->getInstance();
 		ofn.lpTemplateName = MAKEINTRESOURCEW(XAP_RID_DIALOG_INSERT_PICTURE);
-		ofn.lpfnHook	   = (LPOFNHOOKPROC) s_hookInsertPicProc;
+		ofn.lpfnHook	   = s_hookInsertPicProc;
 		ofn.nFilterIndex   = g_strv_length((gchar **) m_szDescriptions) + 1;
 		ofn.Flags |= OFN_EXPLORER;
 		ofn.Flags |= OFN_ENABLETEMPLATE;
@@ -442,7 +442,7 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 	case XAP_DIALOG_ID_FILE_EXPORT:
 		title.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_FOSA_ExportTitle));
 		ofn.lpstrTitle = title.c_str();
-		ofn.lpfnHook	   = (LPOFNHOOKPROC) s_hookSaveAsProc;
+		ofn.lpfnHook	   = s_hookSaveAsProc;
 		ofn.Flags |= OFN_OVERWRITEPROMPT;
 		ofn.Flags |= OFN_EXPLORER;
 		ofn.Flags |= OFN_ENABLEHOOK;
@@ -532,7 +532,7 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 
  Static routine
  */
-UINT CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UINT msg, WPARAM /*wParam*/, LPARAM lParam)
+UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UINT msg, WPARAM /*wParam*/, LPARAM lParam)
 {
 	XAP_Win32Dialog_FileOpenSaveAs* pThis;
 	static wchar_t buff[MAX_DLG_INS_PICT_STRING];
@@ -595,7 +595,7 @@ UINT CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UINT m
 
  Static routine
  */
-UINT CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
+UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	XAP_Win32Dialog_FileOpenSaveAs* pThis = (XAP_Win32Dialog_FileOpenSaveAs *) GetWindowLongPtrW(hDlg,GWLP_USERDATA);
 	bool bPreviewImage = ( IsDlgButtonChecked( hDlg, XAP_RID_DIALOG_INSERT_PICTURE_CHECK_ACTIVATE_PREVIEW )

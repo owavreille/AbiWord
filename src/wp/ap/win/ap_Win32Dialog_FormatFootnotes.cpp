@@ -65,7 +65,7 @@ AP_Win32Dialog_FormatFootnotes::~AP_Win32Dialog_FormatFootnotes(void)
  	// raise the dialog
 	XAP_Win32App * pWin32App = static_cast<XAP_Win32App *>(m_pApp);
 	XAP_Win32LabelledSeparator_RegisterClass(pWin32App);
- 	UT_return_if_fail (m_id == AP_DIALOG_ID_FORMAT_FOOTNOTES);
+ 	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_FORMAT_FOOTNOTES));
  
 	createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_FORMATFOOTNOTES));
  }

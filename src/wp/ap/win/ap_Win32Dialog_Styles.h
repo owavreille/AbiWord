@@ -38,15 +38,15 @@ public:
 	AP_Win32Dialog_Styles(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Styles(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
+	virtual void			runModal(XAP_Frame * pFrame) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
 protected:
 
-	virtual const char * getCurrentStyle (void) const;
-	virtual void setDescription (const char * desc) const;
-	virtual void setModifyDescription (const char * desc);
+	virtual const char * getCurrentStyle (void) const override;
+	virtual void setDescription (const char * desc) const override;
+	virtual void setModifyDescription (const char * desc) override;
 
 	XAP_Win32PreviewWidget	* 	m_pParaPreviewWidget;
 	XAP_Win32PreviewWidget	* 	m_pCharPreviewWidget;
@@ -60,10 +60,10 @@ protected:
 	void				eventStyleType();
 
 protected:
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onDeltaPos(NM_UPDOWN * /*pnmud*/){return FALSE;}
-	BOOL					_onDlgMessage(HWND,UINT,WPARAM,LPARAM);
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onDeltaPos(NM_UPDOWN * /*pnmud*/) override {return FALSE;}
+	BOOL					_onDlgMessage(HWND,UINT,WPARAM,LPARAM) override;
 	//static BOOL CALLBACK 	s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam);
 	void					_onDrawButton(LPDRAWITEMSTRUCT lpDrawItemStruct, HWND hWnd);
 

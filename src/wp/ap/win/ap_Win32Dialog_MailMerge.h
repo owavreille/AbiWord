@@ -1,5 +1,5 @@
 /* AbiWord
- * Copyright (C) 2003 Jordi Mas i Hernàdez, jmas@softcatala.org
+ * Copyright (C) 2003 Jordi Mas i Hernï¿½dez, jmas@softcatala.org
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -32,18 +32,18 @@ public:
 	AP_Win32Dialog_MailMerge(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_MailMerge(void);
 
-	virtual void			runModeless(XAP_Frame * pFrame);
-	virtual void            destroy(void);
-	virtual void *			pGetWindowHandle( void ) { return  (void *) m_hDlg; }
+	virtual void			runModeless(XAP_Frame * pFrame) override;
+	virtual void            destroy(void) override;
+	virtual void *			pGetWindowHandle( void )  override { return  (void *) m_hDlg; }
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 
-	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
+	virtual BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	virtual BOOL 			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 
 
 protected:
-	virtual void setFieldList();
+	virtual void setFieldList() override;
 
 };
 

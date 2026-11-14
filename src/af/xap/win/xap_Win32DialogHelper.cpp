@@ -107,7 +107,7 @@ void XAP_Win32DialogHelper::runModal(XAP_Frame * pFrame, XAP_Dialog_Id dialog_id
 
 	UT_DebugOnly<int> result = DialogBoxParamW(pWin32App->getInstance(), lpTemplate,
 								static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
-								(DLGPROC)s_dlgProc, (LPARAM)this);
+								s_dlgProc, (LPARAM)this);
 	UT_ASSERT((result != -1));
 }
 
@@ -128,7 +128,7 @@ void XAP_Win32DialogHelper::runModeless(XAP_Frame * pFrame, XAP_Dialog_Id dialog
 
 	HWND hWndDialog = CreateDialogParamW(pWin32App->getInstance(),lpTemplate,
 								static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
-								(DLGPROC)s_dlgProc,(LPARAM)this);
+								s_dlgProc,(LPARAM)this);
 	ShowWindow(hWndDialog, SW_SHOW);
 	UT_ASSERT((hWndDialog != nullptr));
 
@@ -137,7 +137,7 @@ void XAP_Win32DialogHelper::runModeless(XAP_Frame * pFrame, XAP_Dialog_Id dialog
 }
 
 
-BOOL CALLBACK XAP_Win32DialogHelper::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
+INT_PTR CALLBACK XAP_Win32DialogHelper::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 {
 	// This is a static function.
 

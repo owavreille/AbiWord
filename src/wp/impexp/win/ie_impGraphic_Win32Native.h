@@ -36,7 +36,7 @@ class ABI_EXPORT IE_ImpGraphic_Win32Native : public IE_ImpGraphic
 {
 public:
   virtual UT_Error importGraphic(const UT_ConstByteBufPtr& pBB,
-                                 FG_ConstGraphicPtr &pfg);
+                                 FG_ConstGraphicPtr &pfg) override;
 private:
   UT_Error _convertGraphic(const UT_ConstByteBufPtr& pBB, std::string& mimetype);
   UT_Error Read_BMP_Header(UT_ByteBuf* pBB);
@@ -102,14 +102,14 @@ class ABI_EXPORT IE_ImpGraphicWin32Native_Sniffer : public IE_ImpGraphicSniffer
 {
 public:
 
-    const IE_MimeConfidence * getMimeConfidence ();
-    const IE_SuffixConfidence * getSuffixConfidence ();
+    const IE_MimeConfidence * getMimeConfidence () override;
+    const IE_SuffixConfidence * getSuffixConfidence () override;
     virtual UT_Confidence_t recognizeContents (const char * szBuf,
-                                               UT_uint32 iNumbytes);
+                                               UT_uint32 iNumbytes) override;
     virtual bool getDlgLabels (const char ** pszDesc,
                                const char ** pszSuffixList,
-                               IEGraphicFileType * ft);
-    virtual UT_Error constructImporter (IE_ImpGraphic ** ppieg);
+                               IEGraphicFileType * ft) override;
+    virtual UT_Error constructImporter (IE_ImpGraphic ** ppieg) override;
 };
 
 

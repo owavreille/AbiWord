@@ -2064,6 +2064,7 @@ int IE_Imp_MsWord_97::_specCharProc (wvParseStruct *ps, U16 eachchar, CHP *achp)
 						isTextBox = true;
 						textOff = *cTextBox.textid;
 						UT_DEBUGMSG(("Found a Text box! text offset is.. %d \n",textOff));
+						(void)textOff;
 					}
                     // passing struct to format parameter. WTF?
 					xxx_UT_DEBUGMSG((" clienttextbox %x clientdata %x \n",answer->clienttextbox,answer->clientdata));
@@ -2734,16 +2735,6 @@ int IE_Imp_MsWord_97::_beginPara (wvParseStruct *ps, UT_uint32 /*tag*/,
 	   (ps->currentcp == m_iTextboxesStart - 1 && m_iTextboxesEnd > m_iTextboxesStart))
 	{
 		bDoNotInsertStrux  = true;
-	}
-	bool bInHdrFtr = false;
-	if((ps->currentcp+1 >= m_iHeadersStart) && (ps->currentcp < m_iHeadersEnd))
-	{
-		bInHdrFtr = true;
-	}
-	bool bInTextboxes = false;
-	if((ps->currentcp+1 >= m_iTextboxesStart) && (ps->currentcp < m_iTextboxesEnd))
-	{
-		bInTextboxes = true;
 	}
 	// at the end of each f/enote is a superflous paragraph marker
 	// which we do not want imported

@@ -38,9 +38,12 @@
 
 XAP_Win32DropTarget::XAP_Win32DropTarget()
 {
+#ifdef TEXT
+#undef TEXT
+#endif
 #define TEXT(z) L##z
-	m_uCF_RTF = RegisterClipboardFormatW(CF_RTF);	
-#undef  TEXT
+	m_uCF_RTF = RegisterClipboardFormatW(CF_RTF);
+#undef TEXT
 	m_nCount = 0;
 	
 }

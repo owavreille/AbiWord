@@ -58,7 +58,7 @@ AP_Win32Dialog_Annotation::~AP_Win32Dialog_Annotation(void)
 
 void AP_Win32Dialog_Annotation::runModal(XAP_Frame * pFrame)
 {
-	UT_return_if_fail (m_id == AP_DIALOG_ID_ANNOTATION);
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_ANNOTATION));
 
 	 createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_ANNOTATION));
 }

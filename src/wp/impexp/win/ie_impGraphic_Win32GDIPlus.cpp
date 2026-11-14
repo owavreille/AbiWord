@@ -103,7 +103,7 @@ GdiplusStartup (ULONG_PTR *token,  const GdiplusStartupInput *input,
 	GDIPLUSSTARTUP	proc = nullptr;
 
 	if (gdipluslib)			  
-		proc = (GDIPLUSSTARTUP) GetProcAddress(gdipluslib, "GdiplusStartup");	
+		proc = reinterpret_cast<GDIPLUSSTARTUP>(reinterpret_cast<void *>(GetProcAddress(gdipluslib, "GdiplusStartup")));	
 
 	if (!proc)
 		return -1;
@@ -117,7 +117,7 @@ GdiplusShutdown (ULONG_PTR token)
 	GDIPLUSSHUTDOWN	proc = nullptr;
 
 	if (gdipluslib)			  
-		proc = (GDIPLUSSHUTDOWN) GetProcAddress(gdipluslib, "GdiplusShutdown");	
+		proc = reinterpret_cast<GDIPLUSSHUTDOWN>(reinterpret_cast<void *>(GetProcAddress(gdipluslib, "GdiplusShutdown")));	
 
 	if (!proc)
 		return;
@@ -132,7 +132,7 @@ GdipLoadImageFromStream (IStream* stream, GpImage **image)
 	GDIPLOADIMAGEFROMSTREAM	proc = nullptr;
 
 	if (gdipluslib)			  
-		proc = (GDIPLOADIMAGEFROMSTREAM) GetProcAddress(gdipluslib, "GdipLoadImageFromStream");	
+		proc = reinterpret_cast<GDIPLOADIMAGEFROMSTREAM>(reinterpret_cast<void *>(GetProcAddress(gdipluslib, "GdipLoadImageFromStream")));	
 
 	if (!proc)
 		return -1;
@@ -147,7 +147,7 @@ GdipSaveImageToStream (GpImage *image, IStream* stream,
 	GDIPSAVEIMAGETOSTREAM	proc = nullptr;
 
 	if (gdipluslib)			  
-		proc = (GDIPSAVEIMAGETOSTREAM) GetProcAddress(gdipluslib, "GdipSaveImageToStream");	
+		proc = reinterpret_cast<GDIPSAVEIMAGETOSTREAM>(reinterpret_cast<void *>(GetProcAddress(gdipluslib, "GdipSaveImageToStream")));	
 
 	if (!proc)
 		return -1;
@@ -161,7 +161,7 @@ GdipGetImageRawFormat (GpImage *image, GUID *format)
 	GDIPGETIMAGERRAWFFORMAT	proc = nullptr;
 
 	if (gdipluslib)			  
-		proc = (GDIPGETIMAGERRAWFFORMAT) GetProcAddress(gdipluslib, "GdipGetImageRawFormat");	
+		proc = reinterpret_cast<GDIPGETIMAGERRAWFFORMAT>(reinterpret_cast<void *>(GetProcAddress(gdipluslib, "GdipGetImageRawFormat")));	
 
 	if (!proc)
 		return -1;
@@ -176,7 +176,7 @@ GdipDisposeImage (GpImage *image)
 	GDIPDISPOSEIMAGE	proc = nullptr;
 
 	if (gdipluslib)			  
-		proc = (GDIPDISPOSEIMAGE) GetProcAddress(gdipluslib, "GdipDisposeImage");	
+		proc = reinterpret_cast<GDIPDISPOSEIMAGE>(reinterpret_cast<void *>(GetProcAddress(gdipluslib, "GdipDisposeImage")));	
 
 	if (!proc)
 		return -1;

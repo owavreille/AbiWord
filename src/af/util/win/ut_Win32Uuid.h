@@ -102,12 +102,12 @@ class ABI_EXPORT UT_Win32UUIDGenerator : public UT_UUIDGenerator
 
 	// because the default constructor creates nullptr uuid, we also need
 	// to call makeUUID() with this one
-	virtual UT_UUID * createUUID(){UT_UUID *p=new UT_Win32UUID(); if(p)p->makeUUID(); return p;}
+	virtual UT_UUID * createUUID() override {UT_UUID *p=new UT_Win32UUID(); if(p)p->makeUUID(); return p;}
 
-	virtual UT_UUID * createUUID(const std::string &s){return new UT_Win32UUID(s);}
-	virtual UT_UUID * createUUID(const char *s){return new UT_Win32UUID(s);}
-	virtual UT_UUID * createUUID(const UT_UUID &u){return new UT_Win32UUID(u);}
-	virtual UT_UUID * createUUID(const struct uuid &u){return new UT_Win32UUID(u);}
+	virtual UT_UUID * createUUID(const std::string &s) override {return new UT_Win32UUID(s);}
+	virtual UT_UUID * createUUID(const char *s) override {return new UT_Win32UUID(s);}
+	virtual UT_UUID * createUUID(const UT_UUID &u) override {return new UT_Win32UUID(u);}
+	virtual UT_UUID * createUUID(const struct uuid &u) override {return new UT_Win32UUID(u);}
 };
 
 #endif /* UT_WIN32_UUID_H */

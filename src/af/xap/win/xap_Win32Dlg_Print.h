@@ -33,9 +33,9 @@ public:
 	XAP_Win32Dialog_Print(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~XAP_Win32Dialog_Print(void);
 
-	virtual void			runModal(XAP_Frame * pFrame);
-	virtual GR_Graphics *		getPrinterGraphicsContext(void);
-	virtual void			releasePrinterGraphicsContext(GR_Graphics *);
+	virtual void			runModal(XAP_Frame * pFrame) override;
+	virtual GR_Graphics *		getPrinterGraphicsContext(void) override;
+	virtual void			releasePrinterGraphicsContext(GR_Graphics *) override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 

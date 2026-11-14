@@ -34,28 +34,28 @@ public:
 	AP_Win32Dialog_Lists(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	virtual ~AP_Win32Dialog_Lists(void);
 
-	virtual void			runModal(XAP_Frame* pFrame);
-	virtual void			runModeless(XAP_Frame* pFrame);
-	virtual void			destroy();
-	virtual void			activate();
+	virtual void			runModal(XAP_Frame* pFrame) override;
+	virtual void			runModeless(XAP_Frame* pFrame) override;
+	virtual void			destroy() override;
+	virtual void			activate() override;
 
 	static XAP_Dialog *		static_constructor(XAP_DialogFactory *, XAP_Dialog_Id id);
 	static void				autoupdateLists(UT_Worker * pTimer);
-	virtual void            setFoldLevelInGUI(void);
+	virtual void            setFoldLevelInGUI(void) override;
 	virtual bool            isPageLists(void) const override;
 
 protected:
-	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	BOOL					_onDeltaPos(NM_UPDOWN * pnmud);
+	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL					_onDeltaPos(NM_UPDOWN * pnmud) override;
 
 	void					_enableControls();
 	void					_onApply();
 
 private:
 	// overridden virtual functions
-	virtual void			notifyActiveFrame(XAP_Frame *pFrame);
-	virtual void * 			pGetWindowHandle() { return (void *) m_hThisDlg; }
+	virtual void			notifyActiveFrame(XAP_Frame *pFrame) override;
+	virtual void * 			pGetWindowHandle()  override { return (void *) m_hThisDlg; }
 
 	// current selection of the drop-list combo boxes
 	int						_getTypeComboCurSel() const;

@@ -74,17 +74,17 @@ void AP_Win32Dialog_Spell::runModal(XAP_Frame * pFrame)
 
 	LPCWSTR lpTemplate = nullptr;
 
-	UT_return_if_fail (m_id == AP_DIALOG_ID_SPELL);
+	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_SPELL));
 
 	lpTemplate = MAKEINTRESOURCEW(AP_RID_DIALOG_SPELL);
 
 	UT_DebugOnly<int> result = DialogBoxParamW(pWin32App->getInstance(),lpTemplate,
 						static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
-						(DLGPROC)s_dlgProc,(LPARAM)this);
+						s_dlgProc,(LPARAM)this);
 	UT_ASSERT_HARMLESS((result != -1));
 }
 
-BOOL CALLBACK AP_Win32Dialog_Spell::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
+INT_PTR CALLBACK AP_Win32Dialog_Spell::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 {
 	// This is a static function.
 
@@ -154,7 +154,7 @@ void AP_Win32Dialog_Spell::_toggleChangeButtons(bool bEnable) const
 
 // The iterator hands back a span of iLength characters that is not
 // terminated there. fromUCS4() would read until a later zero.
-static void spellSpanToLocale(UT_Win32LocaleString & str, const UT_UCSChar * text, UT_sint32 length)
+static void spellSpanToLocale(UT_Win32LocaleString & str, const UT_UCS4Char * text, UT_sint32 length)
 {
 	if (!text || length <= 0)
 	{
@@ -176,7 +176,7 @@ void AP_Win32Dialog_Spell::_showMisspelledWord(void)
 	SendMessageW(m_hwndSuggest, LB_RESETCONTENT, 0, 0);
 
 	CHARFORMATW cf;
-	const UT_UCSChar *p;
+	const UT_UCS4Char *p;
 	UT_uint32 len;
 	UT_uint32 sum = 0;
 
@@ -246,7 +246,7 @@ void AP_Win32Dialog_Spell::_showMisspelledWord(void)
 	{
 		for (UT_sint32 i = 0; i < m_Suggestions->getItemCount(); i++)
 		{
-			p = (UT_UCSChar *) m_Suggestions->getNthItem(i);
+			p = (UT_UCS4Char *) m_Suggestions->getNthItem(i);
 			len = UT_UCS4_strlen(p);
 			if (len)
 			{
@@ -299,10 +299,10 @@ void AP_Win32Dialog_Spell::_suggestChange(void)
 }
 
 // returns a pointer which needs to be FREEP'd by the caller
-static UT_UCSChar * s_getUCSText(HWND hwnd)
+static UT_UCS4Char * s_getUCSText(HWND hwnd)
 {
 	char * pBuf = nullptr;
-	UT_UCSChar * pUCS = nullptr;
+	UT_UCS4Char * pUCS = nullptr;
 
 	DWORD len = GetWindowTextLength(hwnd);
 	if (!len)
@@ -329,11 +329,11 @@ FreeMemory:
 
 void AP_Win32Dialog_Spell::_change(void)
 {
-	UT_UCSChar * replace = nullptr;
+	UT_UCS4Char * replace = nullptr;
 
 	if (m_iSelectedRow != -1)
 	{
-		replace = (UT_UCSChar*) m_Suggestions->getNthItem(m_iSelectedRow);
+		replace = (UT_UCS4Char*) m_Suggestions->getNthItem(m_iSelectedRow);
 		changeWordWith(replace);
 	}
 	else
@@ -353,10 +353,10 @@ void AP_Win32Dialog_Spell::_change(void)
 
 void AP_Win32Dialog_Spell::_changeAll(void)
 {
-	UT_UCSChar * replace = nullptr;
+	UT_UCS4Char * replace = nullptr;
 	if (m_iSelectedRow != -1)
 	{
-		replace = (UT_UCSChar*) m_Suggestions->getNthItem(m_iSelectedRow);
+		replace = (UT_UCS4Char*) m_Suggestions->getNthItem(m_iSelectedRow);
 		addChangeAll(replace);
 		changeWordWith(replace);
 	}

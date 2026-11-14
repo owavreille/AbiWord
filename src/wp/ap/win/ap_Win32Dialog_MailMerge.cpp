@@ -56,7 +56,7 @@ AP_Win32Dialog_MailMerge::~AP_Win32Dialog_MailMerge(void)
 void AP_Win32Dialog_MailMerge::runModeless(XAP_Frame * pFrame)
 {
 	UT_return_if_fail (pFrame);
-   	UT_return_if_fail (m_id == AP_DIALOG_ID_MAILMERGE);
+   	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_MAILMERGE));
 	createModeless(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_MAILMERGE));
 
 	// Save dialog the ID number and pointer to the widget
@@ -186,7 +186,7 @@ void AP_Win32Dialog_MailMerge::setFieldList()
 	resetContent(AP_RID_DIALOG_MAILMERGE_LISTBOX);
 		
  	// build a list of all items
-    for (UT_sint32 i = 0; i < m_vecFields.size(); i++)
+    for (UT_sint32 i = 0; i < static_cast<UT_sint32>(m_vecFields.size()); i++)
 	{
 		UT_continue_if_fail(!m_vecFields[i].empty());
 		
