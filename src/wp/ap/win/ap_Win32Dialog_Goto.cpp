@@ -280,11 +280,15 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		if( m_iRow == (short) AP_JUMPTARGET_BOOKMARK )
 		{
 			HWND list = GetDlgItem(hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS);
+			int nCount = SendMessageW(list, LB_GETCOUNT, 0, 0);
 			int nIndex = SendMessageW(list, LB_GETCURSEL, 0, 0);
-			if (nIndex == LB_ERR || nIndex == 0)
-				nIndex = 0;
-			else
-				nIndex = nIndex - 1;
+			if (nCount <= 0)
+				return 1;
+			// Same wrap as AP_Dialog_Goto::performGotoPrev: no selection,
+			// or the first item, moves to the last bookmark.
+			nIndex--;
+			if (nIndex < 0)
+				nIndex = nCount - 1;
 			SendMessageW(list, LB_SETCURSEL, (WPARAM)nIndex, 0);
 			s_takeBookmark(list, nIndex, m_oldvalue);
 			s_showBookmark(hWnd, m_oldvalue);
@@ -306,10 +310,12 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 			int nIndex = SendMessageW(list, LB_GETCURSEL, 0, 0);
 			if (nCount <= 0)
 				return 1;
-			if (nIndex == LB_ERR)
-				nIndex = nCount - 1;
-			else if (nIndex < nCount - 1)
-				nIndex = nIndex + 1;
+			// Same wrap as AP_Dialog_Goto::performGotoNext: no selection,
+			// or the last item, moves to the first bookmark.
+			if (nIndex < 0)
+				nIndex = 0;
+			else if (++nIndex >= nCount)
+				nIndex = 0;
 			SendMessageW(list, LB_SETCURSEL, (WPARAM)nIndex, 0);
 			s_takeBookmark(list, nIndex, m_oldvalue);
 			s_showBookmark(hWnd, m_oldvalue);
