@@ -1,0 +1,14 @@
+The toolbar and menu icons are adapted from the Colibre icon theme,
+the icon theme LibreOffice uses by default on Windows.
+
+Copyright (C) 2018 Andreas Kainz <kainz.a@gmail.com>
+Copyright (c) 2020-2022 Rizal Muttaqin <riz_17_oke@yahoo.co.id>
+
+The Colibre icon theme is released under Creative Commons CC0 1.0.
+You may adapt and use these icons, including for commercial purposes,
+without attribution. A link back to LibreOffice is appreciated.
+
+https://creativecommons.org/publicdomain/zero/1.0/
+
+The column counts, the line-style samples, the border-side marks,
+and the cell merge and split diagrams are original drawings.

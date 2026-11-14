@@ -5,7 +5,7 @@
 ;            -DDIST=/chemin/dist/windows-x86_64 \
 ;            -DOUTFILE=/chemin/dist/AbiWord-3.1-windows-x64-setup.exe \
 ;            -DLICENSE=/chemin/COPYING \
-;            -DFLUENT_LICENSE=/chemin/src/wp/ap/win/ToolbarIcons/LICENSE.fluent.txt \
+;            -DICON_LICENSE=/chemin/src/wp/ap/win/ToolbarIcons/LICENSE.icons.txt \
 ;            -DICON=/chemin/src/wp/ap/win/abiword_app_32.ico \
 ;            packaging/windows/abiword.nsi
 
@@ -30,8 +30,8 @@ ManifestDPIAware true
 !ifndef LICENSE
   !error "Definir LICENSE"
 !endif
-!ifndef FLUENT_LICENSE
-  !define FLUENT_LICENSE "${__FILEDIR__}/../../src/wp/ap/win/ToolbarIcons/LICENSE.fluent.txt"
+!ifndef ICON_LICENSE
+  !define ICON_LICENSE "${__FILEDIR__}/../../src/wp/ap/win/ToolbarIcons/LICENSE.icons.txt"
 !endif
 !ifndef ICON
   !error "Definir ICON"
@@ -60,7 +60,7 @@ BrandingText "AbiWord ${VERSION}"
 
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${LICENSE}"
-!insertmacro MUI_PAGE_LICENSE "${FLUENT_LICENSE}"
+!insertmacro MUI_PAGE_LICENSE "${ICON_LICENSE}"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -110,7 +110,7 @@ Section "AbiWord" SecMain
 
   SetOutPath "$INSTDIR"
   File "${LICENSE}"
-  File "${FLUENT_LICENSE}"
+  File "${ICON_LICENSE}"
   File /r "${DIST}/*.*"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -182,7 +182,7 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\lib"
   RMDir /r "$INSTDIR\share"
   Delete "$INSTDIR\COPYING"
-  Delete "$INSTDIR\LICENSE.fluent.txt"
+  Delete "$INSTDIR\LICENSE.icons.txt"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
 
