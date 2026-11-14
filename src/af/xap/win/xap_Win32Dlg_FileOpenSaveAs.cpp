@@ -233,6 +233,20 @@ BOOL  XAP_Win32Dialog_FileOpenSaveAs::GetSaveFileName_Hooked(OPENFILENAME_WIN50*
 }
 
 
+static bool s_copyW(wchar_t * dest, size_t destChars, const wchar_t * src)
+{
+	if (!dest || destChars == 0)
+		return false;
+	dest[0] = 0;
+	if (!src)
+		return false;
+	const size_t n = wcslen(src);
+	if (n >= destChars)
+		return false;
+	memcpy(dest, src, (n + 1) * sizeof(wchar_t));
+	return true;
+}
+
 /*****************************************************************/
 
 void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
@@ -300,11 +314,13 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 			UT_Win32LocaleString path;
 			path.fromUTF8 (m_persistPathname.c_str());
 
-			wcscpy(szDir,path.c_str());
-			wchar_t * pLastSlash = wcsrchr(szDir, L'/');
-			if (pLastSlash)
-				pLastSlash[1] = 0;
-			ofn.lpstrInitialDir = szDir;
+			if (s_copyW(szDir, G_N_ELEMENTS(szDir), path.c_str()))
+			{
+				wchar_t * pLastSlash = wcsrchr(szDir, L'/');
+				if (pLastSlash)
+					pLastSlash[1] = 0;
+				ofn.lpstrInitialDir = szDir;
+			}
 		}
 		else
 		{
@@ -331,29 +347,35 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 
 		uri.fromUTF8 (szURI);
 
-		wcscpy(szDir,uri.c_str());
-		wchar_t * pLastSlash = wcsrchr(szDir, L'\\');
-		if (!pLastSlash)
-			pLastSlash = wcsrchr(szDir, L'/');
-		if (pLastSlash)
-			pLastSlash[1] = 0;
-		ofn.lpstrInitialDir = szDir;
+		const wchar_t * full = uri.c_str();
+		const wchar_t * slash = nullptr;
+		if (full)
+		{
+			slash = wcsrchr(full, L'\\');
+			if (!slash)
+				slash = wcsrchr(full, L'/');
+		}
+		if (full && s_copyW(szDir, G_N_ELEMENTS(szDir), full))
+		{
+			if (slash)
+				szDir[slash - full + 1] = 0;
+			ofn.lpstrInitialDir = szDir;
+		}
 
 		if (m_bSuggestName)
 		{
-			if (pLastSlash)
-				wcscpy(szFile, uri.c_str() + (pLastSlash-szDir+1));
-			else
-				wcscpy(szFile, uri.c_str());
-
-			// if the file name has an extension, remove it
-			// (if we don't, and the document is of a different
-			// type than the one initially selected in the dialogue
-			// and the user just clicks OK, we get type - extension
-			// mismatch)
-			wchar_t * dot = wcsrchr(szFile, L'.');
-			if(dot)
-				*dot = 0;
+			const wchar_t * name = (full && slash) ? slash + 1 : full;
+			if (s_copyW(szFile, G_N_ELEMENTS(szFile), name))
+			{
+				// if the file name has an extension, remove it
+				// (if we don't, and the document is of a different
+				// type than the one initially selected in the dialogue
+				// and the user just clicks OK, we get type - extension
+				// mismatch)
+				wchar_t * dot = wcsrchr(szFile, L'.');
+				if(dot)
+					*dot = 0;
+			}
 		}
 
 		FREEP(szURI);

@@ -28,6 +28,33 @@
 #include "ut_types.h"
 #include "ut_misc.h"
 #include "ut_assert.h"
+
+/* The file format and the internal strings use a period. A dialog on a
+   French system hands us a comma. When the text has a comma and no period,
+   treat the comma as the decimal mark. A value that already contains a
+   period is left alone. */
+static const char * s_usePeriodDecimal(const char * sz, char * buf, size_t buflen)
+{
+	if (!sz || !buf || buflen < 2)
+		return sz;
+
+	bool hasComma = false;
+	for (const char * p = sz; *p; ++p)
+	{
+		if (*p == '.')
+			return sz;
+		if (*p == ',')
+			hasComma = true;
+	}
+	if (!hasComma)
+		return sz;
+
+	size_t i = 0;
+	for (; sz[i] && i + 1 < buflen; ++i)
+		buf[i] = (sz[i] == ',') ? '.' : sz[i];
+	buf[i] = 0;
+	return buf;
+}
 #include "ut_string.h"
 #include "ut_units.h"
 #include "ut_debugmsg.h"
@@ -69,10 +96,12 @@ const char * UT_dimensionName(UT_Dimension dim)
 UT_Dimension UT_determineDimension(const char * sz, UT_Dimension fallback)
 {
   char * p = nullptr ;
+  char normalized[128];
+  const char * parse = s_usePeriodDecimal(sz, normalized, sizeof(normalized));
 
   {
 	  UT_LocaleTransactor t(LC_NUMERIC, "C");
-	  strtod(sz, &p);
+	  strtod(parse, &p);
   }
 
   // p should now point to the unit
@@ -367,9 +396,11 @@ double UT_convertDimensionless(const char * sz)
 	// in dialogs and etc.
 
 	double f;
+	char normalized[128];
+	const char * parse = s_usePeriodDecimal(sz, normalized, sizeof(normalized));
 	{
 		UT_LocaleTransactor t(LC_NUMERIC, "C");
-		f = atof(sz);
+		f = atof(parse);
 	}
 
 	return f;
@@ -404,10 +435,12 @@ bool UT_hasDimensionComponent(const char * sz)
 		return false;
 
 	char *p = nullptr;
+	char normalized[128];
+	const char * parse = s_usePeriodDecimal(sz, normalized, sizeof(normalized));
 
 	{
 		UT_LocaleTransactor t(LC_NUMERIC, "C");
-		strtod(sz, &p);
+		strtod(parse, &p);
 	}
 
 	// if we landed on non-nullptr, unit component
@@ -530,21 +563,20 @@ bool UT_isValidDimensionString(const char * sz, size_t max_length)
 	// containing the dim specifier is not checked.
 	// This is not perfect, but good enough for most purposes. Feel g_free to improve the test.
 	
-	// FIXME: other locales might want to use another character as a decimal seperator.
-	//        we should be able to handle that too.	
 	UT_LocaleTransactor t(LC_NUMERIC, "C");
-	
+
 	if (max_length > 0 && (strlen(sz) > max_length))
 		return false;
-	
+
 	const gchar* p = sz;
 	bool valid = true;
 	bool seenDecSep = false;
 	int valChars = 0;
 	while (*p && valid)
 	{
-		valid = isdigit(*p) || ((*p == '.') && seenDecSep == false);
-		if (*p == '.') seenDecSep = true;
+		const bool decimal = (*p == '.') || (*p == ',');
+		valid = isdigit(*p) || (decimal && seenDecSep == false);
+		if (decimal) seenDecSep = true;
 		if (valid) valChars++;
 		p++;
 	}

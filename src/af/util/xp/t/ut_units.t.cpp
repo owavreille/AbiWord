@@ -107,3 +107,13 @@ TFTEST_MAIN("UT_formatDimensionString works")
   dim = UT_formatDimensionString(DIM_PERCENT, 1.0, ".0");
   TFPASSEQ(dim, "1%");
 }
+
+TFTEST_MAIN("A comma is accepted as a decimal separator")
+{
+  TFPASSEQ(UT_convertDimensionless("1,5"), 1.5);
+  TFPASSEQ(UT_convertDimensionless("1.5"), 1.5);
+  TFPASSEQ(UT_determineDimension("1,5cm", DIM_none), DIM_CM);
+  TFPASS(UT_isValidDimensionString("1,5cm", 0));
+  auto dim = UT_reformatDimensionString(DIM_CM, "1,5cm");
+  TFPASSEQ(dim, "1.50cm");
+}
