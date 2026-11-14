@@ -66,6 +66,148 @@ static bool xap_Win32QueryDib(HDC hdc, HBITMAP bitmap, XAP_Win32BitmapInfo & inf
 	return info.header.biSizeImage > 0;
 }
 
+static bool xap_IsKeyPixel(const BYTE * pixel)
+{
+	return pixel[0] == TRANSPARENT_B && pixel[1] == TRANSPARENT_G && pixel[2] == TRANSPARENT_R;
+}
+
+static void xap_WriteKeyPixel(BYTE * pixel)
+{
+	pixel[0] = TRANSPARENT_B;
+	pixel[1] = TRANSPARENT_G;
+	pixel[2] = TRANSPARENT_R;
+	pixel[3] = 0;
+}
+
+// LoadImage stretches every resource to the requested rectangle and ignores
+// the aspect ratio, which is why a wide line sample became a square blot.
+// This copies the native pixels into that rectangle, centred, and only
+// scales uniformly. A downscale averages the opaque pixels so the colour
+// key does not bleed into the glyph.
+static bool xap_FitIcon32(BYTE *& pixels, XAP_Win32BitmapInfo & info, LONG dstW, LONG dstH)
+{
+	if (info.header.biBitCount != 32 || dstW <= 0 || dstH <= 0)
+		return true;
+
+	const bool topDown = info.header.biHeight < 0;
+	const LONG srcW = info.header.biWidth;
+	const LONG srcH = topDown ? -info.header.biHeight : info.header.biHeight;
+	if (srcW <= 0 || srcH <= 0)
+		return false;
+	if (srcW == dstW && srcH == dstH && !topDown)
+		return true;
+
+	const DWORD srcStride = ((static_cast<DWORD>(srcW) * 32 + 31) / 32) * 4;
+	const DWORD dstStride = static_cast<DWORD>(dstW) * 4;
+	const DWORD dstSize = dstStride * static_cast<DWORD>(dstH);
+	BYTE * dst = static_cast<BYTE *>(malloc(dstSize));
+	if (!dst)
+		return false;
+
+	for (DWORD offset = 0; offset + 4 <= dstSize; offset += 4)
+		xap_WriteKeyPixel(dst + offset);
+
+	int drawW = dstW;
+	int drawH = dstH;
+	if (srcW * dstH >= srcH * dstW)
+	{
+		drawH = static_cast<int>((static_cast<long long>(srcH) * dstW + srcW / 2) / srcW);
+		if (drawH < 1)
+			drawH = 1;
+		if (drawH > dstH)
+			drawH = dstH;
+	}
+	else
+	{
+		drawW = static_cast<int>((static_cast<long long>(srcW) * dstH + srcH / 2) / srcH);
+		if (drawW < 1)
+			drawW = 1;
+		if (drawW > dstW)
+			drawW = dstW;
+	}
+
+	const int originX = (dstW - drawW) / 2;
+	const int originY = (dstH - drawH) / 2;
+	const bool shrink = drawW < srcW || drawH < srcH;
+
+	for (int y = 0; y < drawH; ++y)
+	{
+		for (int x = 0; x < drawW; ++x)
+		{
+			BYTE * out = dst + static_cast<DWORD>(originY + y) * dstStride
+				+ static_cast<DWORD>(originX + x) * 4;
+			const int x0 = x * srcW / drawW;
+			int x1 = (x + 1) * srcW / drawW;
+			const int y0 = y * srcH / drawH;
+			int y1 = (y + 1) * srcH / drawH;
+			if (x1 <= x0)
+				x1 = x0 + 1;
+			if (y1 <= y0)
+				y1 = y0 + 1;
+			if (x1 > srcW)
+				x1 = srcW;
+			if (y1 > srcH)
+				y1 = srcH;
+
+			if (!shrink)
+			{
+				int sx = x0;
+				int sy = y0;
+				if (sx >= srcW)
+					sx = srcW - 1;
+				if (sy >= srcH)
+					sy = srcH - 1;
+				if (topDown)
+					sy = srcH - 1 - sy;
+				const BYTE * in = pixels + static_cast<DWORD>(sy) * srcStride + static_cast<DWORD>(sx) * 4;
+				out[0] = in[0];
+				out[1] = in[1];
+				out[2] = in[2];
+				out[3] = in[3];
+				continue;
+			}
+
+			unsigned sumB = 0;
+			unsigned sumG = 0;
+			unsigned sumR = 0;
+			unsigned count = 0;
+			for (int sy = y0; sy < y1; ++sy)
+			{
+				int sourceY = topDown ? srcH - 1 - sy : sy;
+				for (int sx = x0; sx < x1; ++sx)
+				{
+					const BYTE * in = pixels + static_cast<DWORD>(sourceY) * srcStride + static_cast<DWORD>(sx) * 4;
+					if (xap_IsKeyPixel(in) || in[3] == 0)
+						continue;
+					sumB += in[0];
+					sumG += in[1];
+					sumR += in[2];
+					++count;
+				}
+			}
+			if (count == 0)
+				continue;
+			out[0] = static_cast<BYTE>(sumB / count);
+			out[1] = static_cast<BYTE>(sumG / count);
+			out[2] = static_cast<BYTE>(sumR / count);
+			out[3] = 255;
+			if (xap_IsKeyPixel(out))
+				out[2] = 0xEF;
+		}
+	}
+
+	free(pixels);
+	pixels = dst;
+	info.header.biWidth = dstW;
+	info.header.biHeight = dstH;
+	info.header.biSizeImage = dstSize;
+	info.header.biCompression = BI_RGB;
+	info.header.biBitCount = 32;
+	info.header.biClrUsed = 0;
+	info.header.biClrImportant = 0;
+	return true;
+}
+
 struct _map_name_id
 {
 	const char*		name;
@@ -344,7 +486,7 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 
 		if (cmp == 0) {
 			dibBitmap = (HBITMAP) LoadImage (hInst, MAKEINTRESOURCE (s_nametoIdTable[middle].id),
-				IMAGE_BITMAP, maxWidth, maxHeight, LR_CREATEDIBSECTION);
+				IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
 			break;
 		}
 
@@ -375,7 +517,7 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 
 			if (cmp == 0) {
 				dibBitmap = (HBITMAP) LoadImage (hInst, MAKEINTRESOURCE (s_nametoIdTable[middle].id), 
-					IMAGE_BITMAP, maxWidth, maxHeight, LR_CREATEDIBSECTION | LR_LOADTRANSPARENT);
+					IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION | LR_LOADTRANSPARENT);
 				break;
 			}
 
@@ -418,6 +560,14 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 	DeleteObject(dibBitmap);
 
 	BYTE* buff = (BYTE *)pBuf;
+	if (!xap_FitIcon32(buff, bmpInfo, static_cast<LONG>(maxWidth), static_cast<LONG>(maxHeight)))
+	{
+		free(buff);
+		ReleaseDC(nullptr, hdc);
+		return false;
+	}
+	pBuf = buff;
+	lines = static_cast<UINT>(bmpInfo.header.biHeight < 0 ? -bmpInfo.header.biHeight : bmpInfo.header.biHeight);
 
 	if (bmpInfo.header.biBitCount == 32)
 	{
@@ -467,7 +617,7 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 
 		if (cmp == 0) {
 			dibBitmap = (HBITMAP) LoadImage (hInst, MAKEINTRESOURCE (s_nametoIdTable[middle].id),
-				IMAGE_BITMAP, maxWidth, maxHeight, LR_CREATEDIBSECTION);
+				IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
 			break;
 		}
 
@@ -498,7 +648,7 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 
 			if (cmp == 0) {
 				dibBitmap = (HBITMAP) LoadImage (hInst, MAKEINTRESOURCE (s_nametoIdTable[middle].id),
-					IMAGE_BITMAP, maxWidth, maxHeight, LR_CREATEDIBSECTION | LR_LOADTRANSPARENT);
+					IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION | LR_LOADTRANSPARENT);
 				break;
 			}
 
@@ -537,6 +687,13 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 	DeleteObject(dibBitmap);
 
 	BYTE* buff = (BYTE *)pBuf;
+	if (!xap_FitIcon32(buff, bmpInfo, static_cast<LONG>(maxWidth), static_cast<LONG>(maxHeight)))
+	{
+		free(buff);
+		ReleaseDC(nullptr, hdc);
+		return false;
+	}
+	pBuf = buff;
 
 	if (bmpInfo.header.biBitCount == 32)
 	{
