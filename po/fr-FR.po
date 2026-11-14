@@ -6838,9 +6838,7 @@ msgstr ""
 #. DLG_PageSetup_ErrBigMargins
 #: po/tmp/ap_String_Id.h
 msgid "The margins selected are too large to fit on the page."
-msgstr ""
-"Les marges sélectionnées sont trop larges pour être contenues à l'intérieur "
-"de la page."
+msgstr "Les marges sélectionnées sont trop grandes pour tenir sur la page."
 
 #. DLG_Options_Prompt_YouMustRestart
 #: po/tmp/ap_String_Id.h
