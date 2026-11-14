@@ -34,6 +34,7 @@
 #include <sstream>
 #include <set>
 #include <iostream>
+#include <cstdlib>
 using std::make_pair;
 
 #ifdef WITH_REDLAND
@@ -65,7 +66,24 @@ std::string tostr( librdf_node* n )
         return s;
     }
     
-    std::string s = (const char*)librdf_node_to_string( n );
+    unsigned char* z = nullptr;
+    raptor_iostream* iostr = raptor_new_iostream_to_string(
+        librdf_world_get_raptor( getWorld() ),
+        (void**)&z, nullptr,
+        (raptor_data_malloc_handler)::malloc );
+    if( !iostr )
+        return "";
+
+    int rc = librdf_node_write( n, iostr );
+    raptor_free_iostream( iostr );
+    if( rc || !z )
+    {
+        free( z );
+        return "";
+    }
+
+    std::string s = (const char*)z;
+    free( z );
     return s;
 }
 

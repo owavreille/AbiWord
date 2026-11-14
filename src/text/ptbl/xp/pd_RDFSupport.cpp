@@ -30,6 +30,7 @@
 #include <sstream>
 #include <set>
 #include <iostream>
+#include <cstdlib>
 using std::cerr;
 using std::endl;
 using std::make_pair;
@@ -286,10 +287,24 @@ std::string toString( librdf_node *node )
             break; // fallthrough
     }
 
-    // fallback
-    z = librdf_node_to_string( node );
+    // fallback: librdf_node_to_string is deprecated; write into a buffer instead.
+    raptor_iostream* iostr = raptor_new_iostream_to_string(
+        librdf_world_get_raptor( getWorld() ),
+        (void**)&z, nullptr,
+        (raptor_data_malloc_handler)::malloc );
+    if( !iostr )
+        return std::string();
+
+    int rc = librdf_node_write( node, iostr );
+    raptor_free_iostream( iostr );
+    if( rc || !z )
+    {
+        free( z );
+        return std::string();
+    }
+
     std::string ret = (const char*)z;
-    free(z);
+    free( z );
     return ret;
 }
 
