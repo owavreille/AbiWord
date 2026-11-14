@@ -74,7 +74,8 @@ jobs:
             --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
             --with-boost=/usr/x86_64-w64-mingw32/sys-root/mingw \
             --enable-plugins="opendocument openxml" \
-            lt_cv_deplibs_check_method=pass_all
+            lt_cv_deplibs_check_method=pass_all \
+            lt_cv_to_host_file_cmd=func_convert_file_noop
           make -j"$(nproc)"
 
       - name: Assembler les fichiers à installer
