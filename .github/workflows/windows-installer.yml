@@ -1,0 +1,136 @@
+# Compile l'installateur Windows x64 sur GitHub.
+# La compilation croisée reprend l'environnement Fedora 42 / MinGW
+# qui produit abiword.exe, libabiword-3.1.dll, OpenDocument, OpenXML
+# et la correction Enchant/Hunspell. NSIS est lancé ensuite sur Ubuntu,
+# où makensis est un programme natif.
+
+name: Installateur Windows
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: windows-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compile:
+    name: Compilation MinGW
+    runs-on: ubuntu-latest
+    container: fedora:42
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Installer les outils de compilation
+        run: |
+          dnf install -y --setopt=install_weak_deps=False \
+            autoconf automake libtool gettext-devel pkgconf-pkg-config \
+            make gcc gcc-c++ \
+            findutils gawk tar gzip which \
+            mingw64-filesystem mingw64-binutils mingw64-gcc mingw64-gcc-c++ \
+            mingw64-winpthreads \
+            mingw64-boost mingw64-glib2 mingw64-enchant2 mingw64-hunspell \
+            mingw64-fribidi mingw64-libgsf mingw64-libxml2 mingw64-libxslt \
+            mingw64-libpng mingw64-libjpeg-turbo mingw64-zlib mingw64-bzip2 \
+            mingw64-icu mingw64-pcre2 mingw64-libgcrypt mingw64-libgpg-error \
+            mingw64-win-iconv mingw64-libffi \
+            hunspell-fr hunspell-en hunspell-en-GB hunspell-en-US \
+            hunspell-de hunspell-es hunspell-it hunspell-pt hunspell-nl \
+            hunspell-pl hunspell-ru hunspell-sv hunspell-da hunspell-ca \
+            hunspell-cs hunspell-el hunspell-hu hunspell-ro
+
+      - name: Compiler wv 1.2.9
+        env:
+          PKG_CONFIG: /usr/bin/x86_64-w64-mingw32-pkg-config
+        run: |
+          curl -fsSL -o /tmp/wv.tar.gz \
+            https://ftp.debian.org/debian/pool/main/w/wv/wv_1.2.9.orig.tar.gz
+          tar -xzf /tmp/wv.tar.gz -C /tmp
+          cd /tmp/wv-1.2.9
+          ./configure \
+            --host=x86_64-w64-mingw32 \
+            --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
+            --disable-static
+          make -j"$(nproc)"
+          make install
+
+      - name: Configurer et compiler AbiWord
+        env:
+          PKG_CONFIG: /usr/bin/x86_64-w64-mingw32-pkg-config
+          WINDRES: x86_64-w64-mingw32-windres
+        run: |
+          NOCONFIGURE=1 ./autogen.sh
+          mkdir -p build
+          cd build
+          ../configure \
+            --host=x86_64-w64-mingw32 \
+            --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
+            --with-boost=/usr/x86_64-w64-mingw32/sys-root/mingw \
+            --enable-plugins="opendocument openxml" \
+            lt_cv_deplibs_check_method=pass_all
+          make -j"$(nproc)"
+
+      - name: Assembler les fichiers à installer
+        run: |
+          chmod +x packaging/windows/stage-dist.sh
+          packaging/windows/stage-dist.sh \
+            "$PWD/build" \
+            "$PWD/dist/windows-x86_64"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-dist
+          path: dist/windows-x86_64
+          retention-days: 1
+
+  installer:
+    name: Installateur NSIS
+    needs: compile
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-dist
+          path: dist/windows-x86_64
+
+      - name: Installer NSIS
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y nsis
+
+      - name: Créer l'installateur
+        run: |
+          major=$(sed -n 's/^m4_define(\[abi_version_major\], \[\([0-9]*\)\]).*/\1/p' configure.ac)
+          minor=$(sed -n 's/^m4_define(\[abi_version_minor\], \[\([0-9]*\)\]).*/\1/p' configure.ac)
+          version="${major}.${minor}"
+          makensis \
+            -DVERSION="$version" \
+            -DDIST="$PWD/dist/windows-x86_64" \
+            -DOUTFILE="$PWD/dist/AbiWord-${version}-windows-x64-setup.exe" \
+            -DLICENSE="$PWD/COPYING" \
+            -DICON="$PWD/src/wp/ap/win/abiword_app_32.ico" \
+            packaging/windows/abiword.nsi
+          echo "SETUP=dist/AbiWord-${version}-windows-x64-setup.exe" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AbiWord-windows-x64-setup
+          path: dist/AbiWord-*-windows-x64-setup.exe
+          retention-days: 30
+
+      - name: Joindre l'installateur à la release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" "$SETUP" --clobber
