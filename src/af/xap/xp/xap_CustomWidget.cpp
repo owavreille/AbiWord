@@ -25,8 +25,9 @@
 
 void XAP_CustomWidget::queueDraw(const UT_Rect *clip)
 {
-	m_drawQueue.push(clip ? std::optional<UT_Rect>(*clip) : std::nullopt);
-	getGraphics()->queueDraw(clip);
+	GR_Graphics * gr = getGraphics();
+	if (gr)
+		gr->queueDraw(clip);
 }
 
 void XAP_CustomWidget::queueDrawLU(const UT_Rect *clip)
@@ -39,16 +40,22 @@ void XAP_CustomWidget::queueDrawLU(const UT_Rect *clip)
 
 	if (clip == nullptr) {
 		queueDraw();
+		return;
 	}
-	else {
-		UT_Rect r(
-				gr->tdu(clip->left),
-				gr->tdu(clip->top),
-				gr->tdu(clip->width),
-				gr->tdu(clip->height)
-			);
-		queueDraw(&r);
-	}
+
+	// GTK invalidates in device pixels. Win32 and Cocoa convert layout
+	// units inside queueDraw, so a second conversion shrinks the area.
+#if defined(TOOLKIT_GTK)
+	UT_Rect r(
+			gr->tdu(clip->left),
+			gr->tdu(clip->top),
+			gr->tdu(clip->width),
+			gr->tdu(clip->height)
+		);
+	queueDraw(&r);
+#else
+	queueDraw(clip);
+#endif
 }
 
 void XAP_CustomWidget::drawImmediate(const UT_Rect* clip)

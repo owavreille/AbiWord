@@ -1103,7 +1103,7 @@ void GR_Win32Graphics::scroll(UT_sint32 x_dest, UT_sint32 y_dest,
 
 	clearScreenClip();
 	ScrollWindowEx(m_hwnd, (x_dest - x_src), (y_dest - y_src),
-				   &r, nullptr, nullptr, nullptr, SW_ERASE);
+				   &r, nullptr, nullptr, nullptr, SW_INVALIDATE | SW_ERASE);
 }
 
 void GR_Win32Graphics::clearArea(UT_sint32 x, UT_sint32 y, UT_sint32 width, UT_sint32 height)

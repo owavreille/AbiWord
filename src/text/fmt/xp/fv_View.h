@@ -28,8 +28,6 @@
 
 #include <memory>
 #include <string>
-#include <optional>
-#include <queue>
 #include <vector>
 
 #include "xap_Features.h"
@@ -1196,6 +1194,4 @@ public:
 	bool unregisterDoubleBufferingObject(FV_ViewDoubleBuffering *obj);
 private:
 	FV_ViewDoubleBuffering *m_pViewDoubleBufferingObject;
-
-	std::queue<std::optional<UT_Rect>> m_drawQueue;
 };

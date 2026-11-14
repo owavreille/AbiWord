@@ -8254,8 +8254,9 @@ void FV_View::drawPage(int page, dg_DrawArgs* da)
 
 void FV_View::queueDraw(const UT_Rect* pClipRect)
 {
-	m_drawQueue.push(pClipRect ? std::optional<UT_Rect>(*pClipRect) : std::nullopt);
-	getGraphics()->queueDraw(pClipRect);
+	GR_Graphics * pG = getGraphics();
+	if (pG)
+		pG->queueDraw(pClipRect);
 }
 /*!
     The rectangle is in device coordinances

@@ -20,9 +20,6 @@
 
 #pragma once
 
-#include <optional>
-#include <queue>
-
 #include "ut_types.h"
 #include "ut_misc.h"
 #include "xap_Drawable.h"
@@ -51,7 +48,6 @@ public:
 protected:
 	XAP_Preview();
 	GR_Graphics* m_gc;
-	std::queue<std::optional<UT_Rect>> m_drawQueue;
 
 private:
 	// TODO :

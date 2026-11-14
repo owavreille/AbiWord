@@ -20,9 +20,6 @@
 
 #pragma once
 
-#include <optional>
-#include <queue>
-
 #include "xap_Drawable.h"
 
 /* utility class for widgets drawing in layout units */
@@ -35,6 +32,4 @@ public:
     virtual void queueDraw(const UT_Rect *clip = nullptr) override;
 
     virtual void drawImmediateLU(const UT_Rect* clip) = 0;
-private:
-    std::queue<std::optional<UT_Rect>> m_drawQueue;
 };

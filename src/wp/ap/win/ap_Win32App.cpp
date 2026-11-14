@@ -767,41 +767,38 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
 	// Convert the color format to a count of bits. 
    	cClrBits = (WORD)(bmp.bmPlanes * bmp.bmBitsPixel); 
     
-	if (cClrBits == 1) 
-		cClrBits = 1; 
-	else if (cClrBits <= 4) 
-		cClrBits = 4; 
-	else if (cClrBits <= 8) 
-		cClrBits = 8; 
-	else if (cClrBits <= 16) 
-		cClrBits = 16; 
-	else if (cClrBits <= 24) 
-		cClrBits = 24; 
-	else cClrBits = 32; 
-	
-	// Allocate memory for the BITMAPINFO structure. (This structure 
-	// contains a BITMAPINFOHEADER structure and an array of RGBQUAD 
-	// data structures.) 
-	
-	if (cClrBits != 24) 
-	 pbmi = (PBITMAPINFO) LocalAlloc(LPTR, 
-	            sizeof(BITMAPINFOHEADER) + 
-	            sizeof(RGBQUAD) * (1<< cClrBits)); 
-	
-	// There is no RGBQUAD array for the 24-bit-per-pixel format. 	
-	else 
-	 pbmi = (PBITMAPINFO) LocalAlloc(LPTR, 
-	            sizeof(BITMAPINFOHEADER)); 
-	
-	// Initialize the fields in the BITMAPINFO structure. 
-	
-	pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER); 
-	pbmi->bmiHeader.biWidth = bmp.bmWidth; 
-	pbmi->bmiHeader.biHeight = bmp.bmHeight; 
-	pbmi->bmiHeader.biPlanes = bmp.bmPlanes; 
-	pbmi->bmiHeader.biBitCount = bmp.bmBitsPixel; 
-	if (cClrBits < 24) 
-	pbmi->bmiHeader.biClrUsed = (1<<cClrBits); 
+	if (cClrBits == 1)
+		cClrBits = 1;
+	else if (cClrBits <= 4)
+		cClrBits = 4;
+	else if (cClrBits <= 8)
+		cClrBits = 8;
+	else if (cClrBits <= 16)
+		cClrBits = 16;
+	else if (cClrBits <= 24)
+		cClrBits = 24;
+	else
+		cClrBits = 32;
+
+	// A 24-bit or 32-bit DIB has no color table. Shifting by 32 is
+	// undefined and would ask for a multi-gigabyte palette.
+	DWORD paletteEntries = 0;
+	if (cClrBits <= 8)
+		paletteEntries = 1u << cClrBits;
+
+	pbmi = (PBITMAPINFO) LocalAlloc(LPTR,
+			sizeof(BITMAPINFOHEADER) + sizeof(RGBQUAD) * paletteEntries);
+	if (!pbmi)
+		return nullptr;
+
+	// Initialize the fields in the BITMAPINFO structure.
+
+	pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	pbmi->bmiHeader.biWidth = bmp.bmWidth;
+	pbmi->bmiHeader.biHeight = bmp.bmHeight;
+	pbmi->bmiHeader.biPlanes = bmp.bmPlanes;
+	pbmi->bmiHeader.biBitCount = bmp.bmBitsPixel;
+	pbmi->bmiHeader.biClrUsed = paletteEntries; 
 	
 	// If the bitmap is not compressed, set the BI_RGB flag. 
 	pbmi->bmiHeader.biCompression = BI_RGB; 
@@ -821,25 +818,29 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
 //
 //
 //
-void CreateBMP(HWND /*hwnd*/, UT_ByteBuf & pBB, PBITMAPINFO pbi, 
-                  HBITMAP hBMP, HDC hDC) 
-{ 
-	BITMAPFILEHEADER hdr;       // bitmap file-header 
-	PBITMAPINFOHEADER pbih;     // bitmap info-header 
-	LPBYTE lpBits;              // memory pointer 	
+bool CreateBMP(HWND /*hwnd*/, UT_ByteBuf & pBB, PBITMAPINFO pbi,
+                  HBITMAP hBMP, HDC hDC)
+{
+	BITMAPFILEHEADER hdr;       // bitmap file-header
+	PBITMAPINFOHEADER pbih;     // bitmap info-header
+	LPBYTE lpBits;              // memory pointer
 
-	if (!hBMP) return;
+	if (!hBMP || !pbi || pbi->bmiHeader.biHeight <= 0 || pbi->bmiHeader.biSizeImage == 0)
+		return false;
 
-	pbih = (PBITMAPINFOHEADER) pbi; 
+	pbih = (PBITMAPINFOHEADER) pbi;
 	lpBits = (LPBYTE) GlobalAlloc(GMEM_FIXED, pbih->biSizeImage);
 
-	if (!lpBits) return;
+	if (!lpBits) return false;
 
-	// Retrieve the color table (RGBQUAD array) and the bits 
-	// (array of palette indices) from the DIB. 
-	if (!GetDIBits(hDC, hBMP, 0, (WORD) pbih->biHeight, lpBits, pbi, 
-		 DIB_RGB_COLORS)) 
-	return;
+	// Retrieve the color table (RGBQUAD array) and the bits
+	// (array of palette indices) from the DIB.
+	if (!GetDIBits(hDC, hBMP, 0, static_cast<UINT>(pbih->biHeight), lpBits, pbi,
+		 DIB_RGB_COLORS))
+	{
+		GlobalFree((HGLOBAL)lpBits);
+		return false;
+	}
 
 	hdr.bfType = 0x4d42;        // 0x42 = "B" 0x4d = "M" 
 	// Compute the size of the entire file. 
@@ -864,6 +865,30 @@ void CreateBMP(HWND /*hwnd*/, UT_ByteBuf & pBB, PBITMAPINFO pbi,
 	pBB.append ((const UT_Byte *)lpBits, (int) pbih->biSizeImage);
 
 	GlobalFree((HGLOBAL)lpBits);
+	return true;
+}
+
+// Length of clipboard text that is actually present in the locked block.
+// strlen and wcslen read past the block when the producer omitted the terminator.
+static UT_uint32 s_clipboardTextBytes(const unsigned char * data, UT_uint32 size, bool wide)
+{
+	if (!data || size == 0)
+		return 0;
+
+	if (wide)
+	{
+		const UT_uint32 chars = size / sizeof(wchar_t);
+		const wchar_t * text = reinterpret_cast<const wchar_t *>(data);
+		UT_uint32 n = 0;
+		while (n < chars && text[n] != L'\0')
+			++n;
+		return n * sizeof(wchar_t);
+	}
+
+	UT_uint32 n = 0;
+	while (n < size && data[n] != 0)
+		++n;
+	return n;
 }
 
 
@@ -941,7 +966,13 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
 
  		// Create a BMP file from a BITMAP
  		bi =  CreateBitmapInfoStruct(hBitmap);
- 		CreateBMP(hWnd, *bBufBMP, bi, hBitmap,hdc);
+ 		const bool haveBitmap = hdc && bi && CreateBMP(hWnd, *bBufBMP, bi, hBitmap, hdc);
+ 		if (hdc)
+ 			ReleaseDC(hWnd, hdc);
+ 		if (bi)
+ 			LocalFree(bi);
+ 		if (!haveBitmap)
+ 			return false;
 
  		// Since we are providing the file type, there is not need to pass the bytebuff filled up
  		errorCode = IE_ImpGraphic::constructImporter(bBufBMP, iegft, &pIEG);
@@ -972,13 +1003,12 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
  	else	
 	{
 		unsigned char * pData = static_cast<unsigned char *>(GlobalLock(hData));
+		if (!pData)
+			return false;
 		UT_DEBUGMSG(("Paste: [fmt %s %s][hdata 0x%08lx][pData 0x%08lx]\n",
 					 szFormat, szType,  hData, pData));
-		UT_uint32 iSize = GlobalSize(hData);
-		UT_uint32 iStrLen = bWide
-			? wcslen(reinterpret_cast<const wchar_t *>(pData)) * 2
-			: strlen(reinterpret_cast<const char *>(pData));
-		UT_uint32 iLen = UT_MIN(iSize,iStrLen);
+		UT_uint32 iSize = static_cast<UT_uint32>(GlobalSize(hData));
+		UT_uint32 iLen = s_clipboardTextBytes(pData, iSize, bWide);
 
 		IE_Imp * pImp = nullptr;
 		IE_Imp::constructImporter(pDocRange->m_pDoc, IE_Imp::fileTypeForSuffix(szType), &pImp, nullptr);
@@ -993,12 +1023,11 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
 			{
 				; // TODO Get code page using CF_LOCALE
 			}
-			pImp->pasteFromBuffer(pDocRange,pData,iLen,szEncoding);
+			bSuccess = (iLen > 0) && pImp->pasteFromBuffer(pDocRange,pData,iLen,szEncoding);
 			delete pImp;
 		}
 
 		GlobalUnlock(hData);
-		bSuccess = true;
 	}
 	return bSuccess;
 }
