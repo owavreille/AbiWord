@@ -110,6 +110,20 @@ void AP_Win32Dialog_Lists::runModeless(XAP_Frame * pFrame)
 #define _DS(c,s)       setDlgItemText(hWnd, AP_RID_DIALOG_##c,pSS->getValue(AP_STRING_ID_##s))
 #define _DSX(c,s)      setDlgItemText(hWnd, AP_RID_DIALOG_##c,pSS->getValue(XAP_STRING_ID_##s))
 
+// The start spin's range is 0..100. Keep its position on the number shown
+// so UDS_SETBUDDYINT does not write 0 over it.
+static void s_parkListStartSpin(HWND dialog, int value)
+{
+	if (!dialog)
+		return;
+	if (value < 0)
+		value = 0;
+	else if (value > 100)
+		value = 100;
+	SendMessageW(GetDlgItem(dialog, AP_RID_DIALOG_LIST_SPIN_START_AT),
+		UDM_SETPOS, 0, MAKELPARAM(static_cast<WORD>(value), 0));
+}
+
 BOOL AP_Win32Dialog_Lists::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*lParam*/)
 {
 	delete m_pPreviewWidget;
@@ -146,6 +160,9 @@ BOOL AP_Win32Dialog_Lists::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*
 			SendMessage(hWndSpin, UDM_SETRANGE, 0L, range);
 		}
 	}
+	// The start spin begins at 0. Park it on the number already shown,
+	// or the first click replaces that number with 0 or 1.
+	s_parkListStartSpin(hWnd, getiStartValue());
 	
 	centerDialog();			
 
@@ -359,6 +376,23 @@ BOOL AP_Win32Dialog_Lists::_onDeltaPos(NM_UPDOWN* pnmud)
 
 	switch (pnmud->hdr.idFrom)
 	{
+		case AP_RID_DIALOG_LIST_SPIN_START_AT:
+		{
+			// Same direction as the alignment spins just below: the up
+			// arrow reports a negative iDelta. Step from the number shown.
+			int next = _win32Dialog.getControlInt(AP_RID_DIALOG_LIST_EDIT_START_AT)
+				- pnmud->iDelta;
+			if (next < 0)
+				next = 0;
+			else if (next > 100)
+				next = 100;
+			_win32Dialog.setControlInt(AP_RID_DIALOG_LIST_EDIT_START_AT, next);
+			s_parkListStartSpin(m_hThisDlg, next);
+			_getDisplayedData(AP_RID_DIALOG_LIST_EDIT_START_AT);
+			_previewExposed();
+			return 1;
+		}
+
 		case AP_RID_DIALOG_LIST_SPIN_LIST_ALIGN:
 			controlID = AP_RID_DIALOG_LIST_EDIT_LIST_ALIGN;
 			break;
@@ -880,6 +914,7 @@ static void updateControlValue(XAP_Win32DialogHelper& helper, UT_sint32 id, LPCS
 void AP_Win32Dialog_Lists::_setDisplayedData()
 {
 	updateControlValue(_win32Dialog, AP_RID_DIALOG_LIST_EDIT_START_AT,getiStartValue());
+	s_parkListStartSpin(m_hThisDlg, getiStartValue());
 	updateControlValue(_win32Dialog, AP_RID_DIALOG_LIST_EDIT_FORMAT	, getDelim().c_str());
 	updateControlValue(_win32Dialog, AP_RID_DIALOG_LIST_EDIT_LEVEL	, getiLevel());
 	updateControlValue(_win32Dialog, AP_RID_DIALOG_LIST_EDIT_DECIMAL, getDecimal().c_str());
