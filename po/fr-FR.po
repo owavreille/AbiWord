@@ -103,16 +103,7 @@ msgid ""
 "\tabiword-dev@abisource.com\n"
 "\n"
 "Otherwise, please be patient."
-msgstr ""
-"%s non implémenté.\n"
-"\n"
-"Si vous êtes programmeur, libre à vous d'écrire le code\n"
-"au fichier %s, à la ligne %d\n"
-"et de nous envoyer vos modifications à:\n"
-"\n"
-"\tabiword-dev@abisource.com\n"
-"\n"
-"Sinon, merci d'être patient."
+msgstr "%s non implémenté.\n\nSi vous êtes programmeur, libre à vous d'écrire le code\nau fichier %s, à la ligne %d\net de nous envoyer vos modifications à :\n\n\tabiword-dev@abisource.com\n\nSinon, merci d'être patient."
 
 #. MENU_LABEL_FILE_RECENT_1
 #. MENU_LABEL_VIEW_TB_1
@@ -732,7 +723,7 @@ msgstr "Saut de &page"
 #. DLG_FormatTOC_PageNumbering
 #: po/tmp/ap_String_Id.h
 msgid "&Page numbering:"
-msgstr "Numérotation des &pages:"
+msgstr "Numérotation des &pages :"
 
 #. MENU_LABEL_FMT_PARAGRAPH
 #: po/tmp/ap_String_Id.h
@@ -1526,17 +1517,17 @@ msgstr "Fusion automatique"
 #. DLG_MailMerge_AvailableFields
 #: po/tmp/ap_String_Id.h
 msgid "Available Fields:"
-msgstr "Champs disponibles:"
+msgstr "Champs disponibles :"
 
 #. DLG_DateTime_AvailableFormats
 #: po/tmp/ap_String_Id.h
 msgid "Available Formats:"
-msgstr "Formats disponibles:"
+msgstr "Formats disponibles :"
 
 #. DLG_Styles_Available
 #: po/tmp/ap_String_Id.h
 msgid "Available Styles:"
-msgstr "Styles disponibles:"
+msgstr "Styles disponibles :"
 
 #. DLG_Para_LabelBy
 #: po/tmp/ap_String_Id.h
@@ -1659,7 +1650,7 @@ msgstr "Signet \"%s\" non trouvé dans ce document."
 #. DLG_BorderShading_Border_Color
 #: po/tmp/ap_String_Id.h
 msgid "Border color:"
-msgstr "Couleur de bordure:"
+msgstr "Couleur de bordure :"
 
 #. DLG_FormatFrame_Borders
 #. DLG_FormatTable_Borders
@@ -1704,7 +1695,7 @@ msgstr "Ligne au-dess&ous"
 #. STYLE_BOXLIST
 #: po/tmp/ap_String_Id.h po/tmp/xap_String_Id.h
 msgid "Box List"
-msgstr "Liste avec boite"
+msgstr "Liste avec boîte"
 
 #. FIELD_Application_BuildId
 #: po/tmp/ap_String_Id.h
@@ -2034,12 +2025,12 @@ msgstr "Aperçu de caractère"
 #. DLG_WordCount_Characters_No
 #: po/tmp/ap_String_Id.h
 msgid "Characters (no spaces):"
-msgstr "Caractères (sans espaces):"
+msgstr "Caractères (sans espaces) :"
 
 #. DLG_WordCount_Characters_Sp
 #: po/tmp/ap_String_Id.h
 msgid "Characters (with spaces):"
-msgstr "Caractères (avec espaces):"
+msgstr "Caractères (avec espaces) :"
 
 #. MENU_LABEL_TOOLS_SPELL
 #: po/tmp/ap_String_Id.h
@@ -2059,7 +2050,7 @@ msgstr "Rechercher les &mises à jour"
 #. MENU_STATUSLINE_HELP_CHECKVER
 #: po/tmp/ap_String_Id.h
 msgid "Check online for newer versions of AbiWord"
-msgstr "Rechercher les nouvelles versions d'Abiword disponibles sur Internet"
+msgstr "Rechercher les nouvelles versions d'AbiWord disponibles sur Internet"
 
 #. DLG_Options_Label_SpellCheckAsType
 #: po/tmp/ap_String_Id.h
@@ -2249,7 +2240,7 @@ msgstr "Contacts"
 #. DLG_RDF_SemanticStylesheets_Contacts
 #: po/tmp/ap_String_Id.h
 msgid "Contacts:"
-msgstr "Contacts:"
+msgstr "Contacts :"
 
 #. TOC_TocHeading
 #: po/tmp/ap_String_Id.h
@@ -2479,7 +2470,7 @@ msgstr "Police actuelle"
 #. DLG_Lists_Current_List_Label
 #: po/tmp/ap_String_Id.h
 msgid "Current List Label"
-msgstr "Etiquette de liste actuelle"
+msgstr "Étiquette de liste actuelle"
 
 #. DLG_Lists_Current_List_Type
 #: po/tmp/ap_String_Id.h
@@ -2881,7 +2872,7 @@ msgstr ""
 #. DLG_FormatTOC_DispStyle
 #: po/tmp/ap_String_Id.h
 msgid "Display style:"
-msgstr "Style d'affichage:"
+msgstr "Style d'affichage :"
 
 #. DLG_Options_Prompt_IgnoreResetAll
 #: po/tmp/ap_String_Id.h
@@ -3086,7 +3077,7 @@ msgstr "Référence pour note en fin de document"
 #. DLG_FormatFootnotes_EndStyle
 #: po/tmp/ap_String_Id.h
 msgid "Endnote style:"
-msgstr "Style de note de fin de document:"
+msgstr "Style de note de fin de document :"
 
 #. DLG_FormatFootnotes_Endnotes
 #: po/tmp/ap_String_Id.h
@@ -3140,7 +3131,7 @@ msgstr "Impossible d'écrire dans le fichier %s"
 #. DLG_RDF_SemanticStylesheets_Events
 #: po/tmp/ap_String_Id.h
 msgid "Events:"
-msgstr "Événements:"
+msgstr "Événements :"
 
 #. TOOLBAR_LABEL_SCRIPT_PLAY
 #: po/tmp/ap_String_Id.h
@@ -3186,7 +3177,7 @@ msgstr "Exécuter un script"
 #. DLG_ListRevisions_Label1
 #: po/tmp/ap_String_Id.h
 msgid "Existing revisions:"
-msgstr "Révisions existantes:"
+msgstr "Révisions existantes :"
 
 #. MENU_LABEL_RDFANCHOR_EXPORTSEMITEM
 #: po/tmp/ap_String_Id.h
@@ -3206,7 +3197,7 @@ msgstr "Extra"
 #. DLG_Field_Parameters
 #: po/tmp/ap_String_Id.h
 msgid "Extra Parameters:"
-msgstr "Paramètres Supplémentaires:"
+msgstr "Paramètres supplémentaires :"
 
 #. DLG_Options_Label_ViewExtraTB
 #: po/tmp/ap_String_Id.h
@@ -3437,7 +3428,7 @@ msgstr "Référence pour note de bas de page"
 #. DLG_FormatFootnotes_FootStyle
 #: po/tmp/ap_String_Id.h
 msgid "Footnote style:"
-msgstr "Style de note de bas de page:"
+msgstr "Style de note de bas de page :"
 
 #. DLG_FormatFootnotes_Footnotes
 #: po/tmp/ap_String_Id.h
@@ -3552,7 +3543,7 @@ msgstr "Format :"
 #. MENU_LABEL_INSERT_EQUATION_FILE
 #: po/tmp/ap_String_Id.h
 msgid "From File (.xml, .mathml)"
-msgstr ""
+msgstr "Depuis un fichier (.xml, .mathml)"
 
 #. MENU_LABEL_INSERT_EQUATION_LATEX
 #: po/tmp/ap_String_Id.h
@@ -3802,17 +3793,17 @@ msgstr "Première lettre en majuscule"
 #. DLG_FormatFootnotes_EndInitialVal
 #: po/tmp/ap_String_Id.h
 msgid "Initial Endnote value:"
-msgstr "Valeur initiale note de fin:"
+msgstr "Valeur initiale de la note de fin :"
 
 #. DLG_FormatFootnotes_FootInitialVal
 #: po/tmp/ap_String_Id.h
 msgid "Initial Footnote value:"
-msgstr "Valeur initiale note de bas de page:"
+msgstr "Valeur initiale de la note de bas de page :"
 
 #. DLG_Options_Label_InnerQuoteStyle
 #: po/tmp/ap_String_Id.h
 msgid "Inner (single) quote style:"
-msgstr "Style des guillemets simples:"
+msgstr "Style des guillemets simples :"
 
 #. InsertModeFieldINS
 #. DLG_Break_Insert
@@ -4180,17 +4171,17 @@ msgstr "Mots-clés :"
 #. DLG_Latex_LatexTitle
 #: po/tmp/ap_String_Id.h
 msgid "LaTeX Equation"
-msgstr "Equation LaTeX"
+msgstr "Équation LaTeX"
 
 #. DLG_Latex_LatexEquation
 #: po/tmp/ap_String_Id.h
 msgid "LaTeX Equation:"
-msgstr "Equation LaTeX:"
+msgstr "Équation LaTeX :"
 
 #. DLG_Lists_Indent
 #: po/tmp/ap_String_Id.h
 msgid "Label Align:"
-msgstr "Aligner les étiquettes:"
+msgstr "Alignement de l'étiquette :"
 
 #. DLG_FormatTOC_DetailsTop
 #: po/tmp/ap_String_Id.h
@@ -4343,12 +4334,12 @@ msgstr "Ligne séparatrice"
 #. DLG_Goto_Target_Line
 #: po/tmp/ap_String_Id.h
 msgid "Line:"
-msgstr "Ligne:"
+msgstr "Ligne :"
 
 #. DLG_WordCount_Lines
 #: po/tmp/ap_String_Id.h
 msgid "Lines:"
-msgstr "Lignes:"
+msgstr "Lignes :"
 
 #. FIELD_Numbers_ListLabel
 #: po/tmp/ap_String_Id.h
@@ -4368,7 +4359,7 @@ msgstr "Style de liste"
 #. DLG_RDF_SemanticStylesheets_Locations
 #: po/tmp/ap_String_Id.h
 msgid "Locations:"
-msgstr "Emplacements:"
+msgstr "Emplacements :"
 
 #. MENU_STATUSLINE_VIEW_LOCK_TB_LAYOUT
 #: po/tmp/ap_String_Id.h
@@ -4446,7 +4437,7 @@ msgstr "Test de Martin"
 #. DLG_Column_Size
 #: po/tmp/ap_String_Id.h
 msgid "Max Column size:"
-msgstr "Taille maximum de colonne:"
+msgstr "Taille maximale de colonne :"
 
 #. TOOLBAR_LABEL_MENU
 #. TOOLBAR_STATUSLINE_MENU
@@ -4741,7 +4732,7 @@ msgstr "Style de note de bas de page"
 #. DLG_Column_Number_Cols
 #: po/tmp/ap_String_Id.h
 msgid "Number of Columns:"
-msgstr "Nombre de colonnes:"
+msgstr "Nombre de colonnes :"
 
 #. FIELD_Numbers_PagesCount
 #: po/tmp/ap_String_Id.h
@@ -4785,7 +4776,7 @@ msgstr "Numérotation"
 #. DLG_FormatFootnotes_FootnoteRestart
 #: po/tmp/ap_String_Id.h
 msgid "Numbering:"
-msgstr "Numérotation:"
+msgstr "Numérotation :"
 
 #. FIELD_Type_Numbers
 #: po/tmp/ap_String_Id.h
@@ -4800,7 +4791,7 @@ msgstr "Objet"
 #. DLG_BorderShading_Offset
 #: po/tmp/ap_String_Id.h
 msgid "Offset:"
-msgstr "Décalage:"
+msgstr "Décalage :"
 
 #. DLG_Column_One
 #: po/tmp/ap_String_Id.h
@@ -4877,7 +4868,7 @@ msgstr "Pas assez de mémoire à la tentative d'ouverture de %s"
 #. DLG_Options_Label_OuterQuoteStyle
 #: po/tmp/ap_String_Id.h
 msgid "Outer (double) quote style:"
-msgstr "Style de guillemets externes:"
+msgstr "Style de guillemets externes :"
 
 #. TOOLBAR_LABEL_FMT_OVERLINE
 #. TOOLBAR_STATUSLINE_FMT_OVERLINE
@@ -4980,7 +4971,7 @@ msgstr "Mise en page"
 #. DLG_Goto_Target_Page
 #: po/tmp/ap_String_Id.h
 msgid "Page:"
-msgstr "Page:"
+msgstr "Page :"
 
 #. PageInfoField
 #: po/tmp/ap_String_Id.h
@@ -4991,7 +4982,7 @@ msgstr "Page : %d/%d"
 #. DLG_WordCount_Pages
 #: po/tmp/ap_String_Id.h
 msgid "Pages:"
-msgstr "Pages:"
+msgstr "Pages :"
 
 #. DLG_Para_LabelPagination
 #: po/tmp/ap_String_Id.h
@@ -5032,7 +5023,7 @@ msgstr "Aperçu de paragraphe"
 #. DLG_WordCount_Paragraphs
 #: po/tmp/ap_String_Id.h
 msgid "Paragraphs:"
-msgstr "Paragraphes:"
+msgstr "Paragraphes :"
 
 #. WORD_PassRequired
 #: po/tmp/ap_String_Id.h
@@ -5074,7 +5065,7 @@ msgstr "Placer à la fin de la section"
 #. DLG_FormatFootnotes_EndPlacement
 #: po/tmp/ap_String_Id.h
 msgid "Placement:"
-msgstr "Emplacement:"
+msgstr "Emplacement :"
 
 #. MENU_LABEL_RDF_ADV_PLAY
 #: po/tmp/ap_String_Id.h
@@ -5242,7 +5233,7 @@ msgstr "Rechercher le RDF à la position du curseur"
 #: po/tmp/ap_String_Id.h
 #, c-format
 msgid "Query RDF: %d of total: %ld"
-msgstr "Rechercher les RDF: %d du total de: %ld"
+msgstr "Rechercher les RDF : %d du total de : %ld"
 
 #. MENU_STATUSLINE_RDF_QUERY_XMLIDS
 #: po/tmp/ap_String_Id.h
@@ -5363,7 +5354,7 @@ msgstr "Enlever l'en-tête"
 #. DLG_Styles_RemoveLab
 #: po/tmp/ap_String_Id.h
 msgid "Remove Property from Style:"
-msgstr "Enlever les propriétés du style:"
+msgstr "Enlever les propriétés du style :"
 
 #. MENU_LABEL_TABLE_HEADING_ROWS_REPEAT_REMOVE
 #: po/tmp/ap_String_Id.h
@@ -5490,7 +5481,7 @@ msgstr "Redémarrer la numérotation sur une nouvelle section"
 #. DLG_RDF_Editor_Restrict
 #: po/tmp/ap_String_Id.h
 msgid "Restrict to RDF Link:"
-msgstr "Limiter aux liens RDF:"
+msgstr "Limiter aux liens RDF :"
 
 #. DLG_Lists_Resume_Previous_List
 #: po/tmp/ap_String_Id.h
@@ -5790,7 +5781,7 @@ msgstr "Sélectionner la boîte de texte"
 #. DLG_InsertHyperlink_Msg
 #: po/tmp/ap_String_Id.h
 msgid "Select a target bookmark from the list:"
-msgstr "Sélectionnez un signet dans la liste:"
+msgstr "Sélectionnez un signet dans la liste :"
 
 #. DLG_FormatFrame_SelectImage
 #. DLG_FormatTable_SelectImage
@@ -6091,7 +6082,7 @@ msgstr "Ombrage"
 #. DLG_BorderShading_Shading_Color
 #: po/tmp/ap_String_Id.h
 msgid "Shading color:"
-msgstr "Couleur d'ombrage:"
+msgstr "Couleur d'ombrage :"
 
 #. FIELD_Application_ShortFilename
 #: po/tmp/ap_String_Id.h
@@ -6317,19 +6308,19 @@ msgstr "Source :"
 #. DLG_Column_Space_After
 #: po/tmp/ap_String_Id.h
 msgid "Space after Column:"
-msgstr "Espace après la colonne:"
+msgstr "Espace après la colonne :"
 
 #. TOOLBAR_STATUSLINE_PARA_12BEFORE
 #. TOOLBAR_TOOLTIP_PARA_12BEFORE
 #: po/tmp/ap_String_Id.h
 msgid "Space before: 12 pt"
-msgstr "Espacement avant: 12 pt"
+msgstr "Espacement avant : 12 pt"
 
 #. TOOLBAR_STATUSLINE_PARA_0BEFORE
 #. TOOLBAR_TOOLTIP_PARA_0BEFORE
 #: po/tmp/ap_String_Id.h
 msgid "Space before: None"
-msgstr "Espacement avant: aucun"
+msgstr "Espacement avant : aucun"
 
 #. DLG_Para_LabelSpacing
 #: po/tmp/ap_String_Id.h
@@ -6568,12 +6559,12 @@ msgstr "Nom du style :"
 #. DLG_Styles_ModifyType
 #: po/tmp/ap_String_Id.h
 msgid "Style Type:"
-msgstr "Type de style:"
+msgstr "Type de style :"
 
 #. DLG_Styles_ModifyFollowing
 #: po/tmp/ap_String_Id.h
 msgid "Style for following paragraph:"
-msgstr "Style pour le paragraphe suivant:"
+msgstr "Style pour le paragraphe suivant :"
 
 #. DLG_Styles_ErrBlankName
 #: po/tmp/ap_String_Id.h
@@ -6596,7 +6587,7 @@ msgstr "Styles"
 #. MENU_STATUSLINE_RDF_SEMITEM_STYLESHEET
 #: po/tmp/ap_String_Id.h
 msgid "Stylesheet"
-msgstr "Feuille de style:"
+msgstr "Feuille de style"
 
 #. DLG_Stylist_Title
 #: po/tmp/ap_String_Id.h
@@ -6788,7 +6779,7 @@ msgstr "Texte a&vant :"
 #. DLG_Lists_Align
 #: po/tmp/ap_String_Id.h
 msgid "Text Align:"
-msgstr "Align. liste :"
+msgstr "Alignement du texte :"
 
 #. MENU_LABEL_INSERT_TEXTBOX
 #. MENU_LABEL_FMT_FRAME
@@ -6820,7 +6811,7 @@ msgstr "Habillage du texte"
 #. DLG_Options_Label_Both
 #: po/tmp/ap_String_Id.h
 msgid "Text and Icon"
-msgstr "Texte et Icônes"
+msgstr "Texte et icônes"
 
 #. COMMAND_LINE_PRINTING_DEPRECATED
 #: po/tmp/ap_String_Id.h
@@ -6829,11 +6820,7 @@ msgid ""
 "desired behavior using AbiWord's command-line conversion tools and then "
 "piping the output to a print spooler. Eg: 'abiword --to=ps --to-name=fd://1 "
 "myfile.txt | lpr'"
-msgstr ""
-"L'option '--print' n'exxiste plus depuis Abiword 2.8. Vous pouvez obtenir le "
-"résultat désiré en utilisant les outils de conversion d'Abiword et ensuite "
-"transmettre la sortie à un getionnaire d'impression, i.e.: 'abiword --to=ps "
-"--to-name=fd://1 myfile.txt | lpr'"
+msgstr "L'option '--print' n'existe plus depuis AbiWord 2.8. Vous pouvez obtenir le résultat désiré en utilisant les outils de conversion d'AbiWord et ensuite transmettre la sortie à un gestionnaire d'impression, par exemple : 'abiword --to=ps --to-name=fd://1 myfile.txt | lpr'"
 
 #. DLG_PageSetup_ErrBigMargins
 #: po/tmp/ap_String_Id.h
@@ -6872,7 +6859,7 @@ msgstr "Jour de la semaine"
 #. DLG_BorderShading_Thickness
 #: po/tmp/ap_String_Id.h
 msgid "Thickness:"
-msgstr "Epaisseur:"
+msgstr "Épaisseur :"
 
 #. MSG_XMLIDAlreadyExists
 #: po/tmp/ap_String_Id.h
@@ -6999,7 +6986,7 @@ msgstr "Ligne au-dess&us"
 #: po/tmp/ap_String_Id.h
 #, c-format
 msgid "Total RDF: %d"
-msgstr "Total RDF: %d"
+msgstr "Total RDF : %d"
 
 #. DLG_Lists_Triangle_List
 #. STYLE_TRIANGLELIST
@@ -7020,17 +7007,17 @@ msgstr "Catégorie"
 #. DLG_InsertXMLID_Msg
 #: po/tmp/ap_String_Id.h
 msgid "Type a name for the RDF link:"
-msgstr "Entrez un nom pour le lien RDF:"
+msgstr "Entrez un nom pour le lien RDF :"
 
 #. DLG_InsertBookmark_Msg
 #: po/tmp/ap_String_Id.h
 msgid "Type a name for the bookmark, or select an existing from the list:"
-msgstr "Entrez un nom de signet ou sélectionnez-le dans la liste:"
+msgstr "Entrez un nom de signet ou sélectionnez-le dans la liste :"
 
 #. DLG_InsertHyperlink_TitleLabel
 #: po/tmp/ap_String_Id.h
 msgid "Type a title for the hyperlink"
-msgstr ""
+msgstr "Saisissez un titre pour l'hyperlien"
 
 #. DLG_Lists_Type
 #: po/tmp/ap_String_Id.h
@@ -7231,7 +7218,7 @@ msgstr "Traitement de texte"
 #. DLG_WordCount_Words_No_Notes
 #: po/tmp/ap_String_Id.h
 msgid "Words (no footnotes/endnotes):"
-msgstr "Mots (sans les notes de bas de page ni de fin):"
+msgstr "Mots (sans les notes de bas de page ni de fin) :"
 
 #. DLG_Options_Label_SpellUppercase
 #: po/tmp/ap_String_Id.h
@@ -7246,7 +7233,7 @@ msgstr "Ignorer les &nombres"
 #. DLG_WordCount_Words
 #: po/tmp/ap_String_Id.h
 msgid "Words:"
-msgstr "Mots:"
+msgstr "Mots :"
 
 #. MSG_SaveFailedWrite
 #: po/tmp/ap_String_Id.h
@@ -7662,12 +7649,12 @@ msgstr "Révision auto."
 #. DLG_MW_AvailableDocuments
 #: po/tmp/xap_String_Id.h
 msgid "Available Documents:"
-msgstr "Documents disponibles:"
+msgstr "Documents disponibles :"
 
 #. DLG_ULANG_AvailableLanguages
 #: po/tmp/xap_String_Id.h
 msgid "Available Languages:"
-msgstr "Langues disponibles:"
+msgstr "Langues disponibles :"
 
 #. LANG_AYM_BO
 #: po/tmp/xap_String_Id.h
@@ -7753,12 +7740,12 @@ msgstr "Breton"
 #: po/tmp/xap_String_Id.h
 #, c-format
 msgid "Build options: %s"
-msgstr "Options de compilation: %s"
+msgstr "Options de compilation : %s"
 
 #. MSG_BuildingDoc
 #: po/tmp/xap_String_Id.h
 msgid "Building Document:"
-msgstr "Construction de document:"
+msgstr "Construction de document :"
 
 #. LANG_BG_BG
 #: po/tmp/xap_String_Id.h
@@ -8064,7 +8051,7 @@ msgstr "Langue par défaut : "
 #. LANG_DV_MV
 #: po/tmp/xap_String_Id.h
 msgid "Dhivehi"
-msgstr ""
+msgstr "Divehi"
 
 #. DLG_Remove_Icon
 #: po/tmp/xap_String_Id.h
@@ -8109,7 +8096,7 @@ msgstr "Date de modification :"
 #. DLG_UFS_EffectsFrameLabel
 #: po/tmp/xap_String_Id.h
 msgid "Effects:"
-msgstr "Effets:"
+msgstr "Effets :"
 
 #. DLG_HTMLOPT_ExpEmbedCSS
 #: po/tmp/xap_String_Id.h
@@ -8164,7 +8151,7 @@ msgstr "Anglais (Canada)"
 #. LANG_EN_IN
 #: po/tmp/xap_String_Id.h
 msgid "English (India)"
-msgstr ""
+msgstr "Anglais (Inde)"
 
 #. LANG_EN_IE
 #: po/tmp/xap_String_Id.h
@@ -8285,7 +8272,7 @@ msgstr "Texte de bas de page"
 #. DLG_ABOUT_URL
 #: po/tmp/xap_String_Id.h
 msgid "For more information: http://www.abisource.com/"
-msgstr "Pour plus d'information: http://www.abisource.com/"
+msgstr "Pour plus d'informations : http://www.abisource.com/"
 
 #. LANG_FR_BE
 #: po/tmp/xap_String_Id.h
@@ -8555,7 +8542,7 @@ msgstr "Insérer un objet incorporable"
 #. DLG_FOSA_FileInsertObject
 #: po/tmp/xap_String_Id.h
 msgid "Insert Embeddable Object file:"
-msgstr "Insérer un fichier d'objet imbriquable:"
+msgstr "Insérer un fichier d'objet imbriquable :"
 
 #. DLG_FOSA_InsertTitle
 #: po/tmp/xap_String_Id.h
@@ -8860,7 +8847,7 @@ msgstr "Ouverture"
 #. DLG_FOSA_FileOpenTypeLabel
 #: po/tmp/xap_String_Id.h
 msgid "Open file as &type:"
-msgstr "Ouvrez le fichier en tant que &type:"
+msgstr "Ouvrir le fichier en tant que &type :"
 
 #. DLG_LISTDOCS_Title
 #: po/tmp/xap_String_Id.h
@@ -9105,7 +9092,7 @@ msgstr "Enregistrer"
 #. DLG_FOSA_FileSaveTypeLabel
 #: po/tmp/xap_String_Id.h
 msgid "Save file as &type:"
-msgstr "Enregistrer le fichier en tant que le &type:"
+msgstr "Enregistrer le fichier en tant que &type :"
 
 #. DLG_UFS_ScriptLabel
 #: po/tmp/xap_String_Id.h
@@ -9135,7 +9122,7 @@ msgstr "Sélectionner les options d'exportation HTML :"
 #. DLG_ULANG_LangLabel
 #: po/tmp/xap_String_Id.h
 msgid "Select Language:"
-msgstr "Sélectionnez une langue:"
+msgstr "Sélectionnez une langue :"
 
 #. LANG_SR
 #: po/tmp/xap_String_Id.h
