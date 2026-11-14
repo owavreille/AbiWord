@@ -6487,7 +6487,7 @@ msgstr "Liste avec étoile"
 #. DLG_Lists_Start
 #: po/tmp/ap_String_Id.h
 msgid "Start At:"
-msgstr "Débuter une nouvelle liste:"
+msgstr "Commencer à :"
 
 #. DLG_Lists_Start_New_List
 #. DLG_Lists_Start_New
