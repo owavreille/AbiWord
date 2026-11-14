@@ -6639,12 +6639,12 @@ msgstr "Somme de ligne"
 #. FIELD_Numbers_TableSumRows
 #: po/tmp/ap_String_Id.h
 msgid "Sum a Table Column"
-msgstr "Somme d'une ligne de tableau"
+msgstr "Somme d'une colonne de tableau"
 
 #. FIELD_Numbers_TableSumCols
 #: po/tmp/ap_String_Id.h
 msgid "Sum a Table Row"
-msgstr "Somme d'une colonne de tableau"
+msgstr "Somme d'une ligne de tableau"
 
 #. DLG_MetaData_TAB_Summary
 #. MENU_LABEL_RDF_SEMITEM_STYLESHEET_EVENT_SUMMARY
