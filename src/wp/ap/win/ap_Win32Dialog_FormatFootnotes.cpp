@@ -71,11 +71,24 @@ AP_Win32Dialog_FormatFootnotes::~AP_Win32Dialog_FormatFootnotes(void)
  }
 
 
+static void s_initNoteSpin(HWND dialog, int spinId, int editId, int value)
+{
+	if (value < 0)
+		value = 0;
+	else if (value > 9999)
+		value = 9999;
+	HWND spin = GetDlgItem(dialog, spinId);
+	// Same range as the list dialog: the up arrow raises the number.
+	SendMessageW(spin, UDM_SETRANGE, 0, MAKELPARAM(9999, 0));
+	SendMessageW(GetDlgItem(dialog, editId), EM_LIMITTEXT, 4, 0);
+	// The control starts at 0. Put it on the value already shown.
+	SendMessageW(spin, UDM_SETPOS, 0, MAKELPARAM(static_cast<WORD>(value), 0));
+}
+
 // This handles the WM_INITDIALOG message for the top-level dialog.
 BOOL AP_Win32Dialog_FormatFootnotes::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*lParam*/)
 {	
-	const XAP_StringSet * pSS = m_pApp->getStringSet();	
-	wchar_t szText[16];	
+	const XAP_StringSet * pSS = m_pApp->getStringSet();
 				
 	/* localize controls  */
 	_DSX(BTN_OK,			DLG_OK);
@@ -137,17 +150,10 @@ BOOL AP_Win32Dialog_FormatFootnotes::_onInitDialog(HWND hWnd, WPARAM /*wParam*/,
 	CheckRadioButton(hWnd, AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_ENDDOC, AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_ENDSEC,
 		 getPlaceAtDocEnd() ? AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_ENDDOC: AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_ENDSEC);                                                                              		
 				
-	/* Set Footnotes Spin*/ 
-	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_FORMATFOOTNOTES_SPIN_FSTYLE),UDM_SETRANGE,(WPARAM)1,(WPARAM)9999);	
-	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_FSTYLE),EM_LIMITTEXT,(WPARAM)4,(WPARAM)0);	
-	swprintf (szText, L"%u", getFootnoteVal());	
-	SetDlgItemTextW(hWnd, AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_FSTYLE, szText);
-	
-	/* Set Endnotes Spin*/ 
-	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_FORMATFOOTNOTES_SPIN_ESTYLE),UDM_SETRANGE,(WPARAM)1,(WPARAM)9999);	
-	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_ESTYLE),EM_LIMITTEXT,(WPARAM)4,(WPARAM)0);		
-	swprintf (szText, L"%u", getEndnoteVal());	
-	SetDlgItemTextW(hWnd, AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_ESTYLE, szText);
+	s_initNoteSpin(hWnd, AP_RID_DIALOG_FORMATFOOTNOTES_SPIN_FSTYLE,
+		AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_FSTYLE, getFootnoteVal());
+	s_initNoteSpin(hWnd, AP_RID_DIALOG_FORMATFOOTNOTES_SPIN_ESTYLE,
+		AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_ESTYLE, getEndnoteVal());
 	
 	
 	CheckDlgButton(hWnd, AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_ERSTSEC, getRestartEndnoteOnSection());
@@ -291,5 +297,28 @@ BOOL AP_Win32Dialog_FormatFootnotes::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
 	}
 
 	return 0;
+}
+
+BOOL AP_Win32Dialog_FormatFootnotes::_onDeltaPos(NM_UPDOWN * pnmud)
+{
+	int editId = 0;
+	if (pnmud->hdr.idFrom == AP_RID_DIALOG_FORMATFOOTNOTES_SPIN_FSTYLE)
+		editId = AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_FSTYLE;
+	else if (pnmud->hdr.idFrom == AP_RID_DIALOG_FORMATFOOTNOTES_SPIN_ESTYLE)
+		editId = AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_ESTYLE;
+	else
+		return FALSE;
+
+	wchar_t text[16];
+	text[0] = 0;
+	GetDlgItemTextW(m_hDlg, editId, text, 16);
+	int next = _wtoi(text) + pnmud->iDelta;
+	if (next < 0)
+		next = 0;
+	else if (next > 9999)
+		next = 9999;
+	// The arrows follow the number in the field, including one the user just typed.
+	pnmud->iDelta = next - pnmud->iPos;
+	return FALSE;
 }
 

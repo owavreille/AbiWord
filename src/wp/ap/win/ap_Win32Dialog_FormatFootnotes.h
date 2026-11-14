@@ -39,6 +39,7 @@ public:
 protected:
 	BOOL			_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 	BOOL			_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	BOOL			_onDeltaPos(NM_UPDOWN * pnmud) override;
 
 };
 
