@@ -134,8 +134,18 @@ BOOL XAP_Win32Dialog_Zoom::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*
 	m_bEditPctEnabled = ((XAP_RID_DIALOG_ZOOM_RADIO_200 + m_zoomType) == XAP_RID_DIALOG_ZOOM_RADIO_PCT);
 	enableControl(XAP_RID_DIALOG_ZOOM_EDIT_PCT ,m_bEditPctEnabled);
 	
-	SendMessageW(GetDlgItem(hWnd,XAP_RID_DIALOG_ZOOM_SPIN_PCT),UDM_SETRANGE,
-				(WPARAM)0,(LPARAM)MAKELONG(XAP_DLG_ZOOM_MAXIMUM_ZOOM,XAP_DLG_ZOOM_MINIMUM_ZOOM));
+	HWND spin = GetDlgItem(hWnd, XAP_RID_DIALOG_ZOOM_SPIN_PCT);
+	int value = static_cast<int>(m_zoomPercent);
+	if (value < XAP_DLG_ZOOM_MINIMUM_ZOOM)
+		value = XAP_DLG_ZOOM_MINIMUM_ZOOM;
+	else if (value > XAP_DLG_ZOOM_MAXIMUM_ZOOM)
+		value = XAP_DLG_ZOOM_MAXIMUM_ZOOM;
+	// Ascending range: the up arrow raises the position. The control
+	// starts at 0, which is below the minimum, so the first click
+	// replaces the shown percentage with 20. Park it on that number.
+	SendMessageW(spin, UDM_SETRANGE, 0,
+		(LPARAM)MAKELONG(XAP_DLG_ZOOM_MAXIMUM_ZOOM, XAP_DLG_ZOOM_MINIMUM_ZOOM));
+	SendMessageW(spin, UDM_SETPOS, 0, MAKELPARAM(static_cast<WORD>(value), 0));
 		
 	_updatePreviewZoomPercent(getZoomPercent());
 	
@@ -227,29 +237,18 @@ BOOL XAP_Win32Dialog_Zoom::_onDeltaPos(NM_UPDOWN * pnmud)
 	// we may alter the change by changing the fields in pnmud.
 
 	UT_ASSERT(pnmud->hdr.idFrom == XAP_RID_DIALOG_ZOOM_SPIN_PCT);
-	UT_DEBUGMSG(("onDeltaPos: [idFrom %d][iPos %d][iDelta %d]\n",
-				 pnmud->hdr.idFrom,pnmud->iPos,pnmud->iDelta));
-	int iNew = pnmud->iPos + pnmud->iDelta;
-	
-	if ((pnmud->iPos < XAP_DLG_ZOOM_MINIMUM_ZOOM) || (iNew < XAP_DLG_ZOOM_MINIMUM_ZOOM))
-	{
-		// bogus current position or bogus delta, force it back to minimum.
-		pnmud->iDelta = XAP_DLG_ZOOM_MINIMUM_ZOOM - pnmud->iPos;
-		return FALSE;
-	}
-	
-	if ((pnmud->iPos > XAP_DLG_ZOOM_MAXIMUM_ZOOM) || (iNew > XAP_DLG_ZOOM_MAXIMUM_ZOOM))
-	{
-		// arbitrary upper limit (XAP_DLG_ZOOM_MAXIMUM_ZOOM)
-		// i did this because massive scaling of fonts
-		// causes problems for virtual memory (when they
-		// get rendered at huge sizes).
-		// MSWORD97 also applies this limit.
 
-		pnmud->iDelta = XAP_DLG_ZOOM_MAXIMUM_ZOOM - pnmud->iPos;
-		return FALSE;
-	}
+	// iDelta is the control's own step: positive raises the number.
+	// Read the field so a typed percentage is not replaced by the old position.
+	int shown = getControlInt(XAP_RID_DIALOG_ZOOM_EDIT_PCT);
+	int next = shown + pnmud->iDelta;
+	if (next < XAP_DLG_ZOOM_MINIMUM_ZOOM)
+		next = XAP_DLG_ZOOM_MINIMUM_ZOOM;
+	else if (next > XAP_DLG_ZOOM_MAXIMUM_ZOOM)
+		next = XAP_DLG_ZOOM_MAXIMUM_ZOOM;
 
+	pnmud->iDelta = next - pnmud->iPos;
+	m_zoomPercent = static_cast<UT_uint32>(next);
 	return FALSE;
 }
 
