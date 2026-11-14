@@ -6414,12 +6414,12 @@ msgstr "Diviser la partie du haut"
 #. MENU_LABEL_TABLE_TEXTTOTABLE_COMMAS
 #: po/tmp/ap_String_Id.h
 msgid "Split text at commas"
-msgstr ""
+msgstr "Scinder au niveau des virgules"
 
 #. MENU_LABEL_TABLE_TEXTTOTABLE_SPACES
 #: po/tmp/ap_String_Id.h
 msgid "Split text at spaces"
-msgstr ""
+msgstr "Scinder au niveau des espaces"
 
 #. MENU_LABEL_TABLE_TEXTTOTABLE_ALL
 #: po/tmp/ap_String_Id.h
@@ -6429,27 +6429,27 @@ msgstr "Scinder au niveau des espaces, virgules ou tabulations"
 #. MENU_LABEL_TABLE_TEXTTOTABLE_TABS
 #: po/tmp/ap_String_Id.h
 msgid "Split text at tabs"
-msgstr ""
+msgstr "Scinder au niveau des tabulations"
 
 #. MENU_STATUSLINE_TABLE_TEXTTOTABLE_COMMAS
 #: po/tmp/ap_String_Id.h
 msgid "Split text with commas as delimiters"
-msgstr ""
+msgstr "Scinder le texte en utilisant les virgules comme séparateurs"
 
 #. MENU_STATUSLINE_TABLE_TEXTTOTABLE_ALL
 #: po/tmp/ap_String_Id.h
 msgid "Split text with commas, tabs or spaces as delimiters"
-msgstr ""
+msgstr "Scinder le texte en utilisant les virgules, les tabulations ou les espaces comme séparateurs"
 
 #. MENU_STATUSLINE_TABLE_TEXTTOTABLE_SPACES
 #: po/tmp/ap_String_Id.h
 msgid "Split text with spaces as delimiters"
-msgstr ""
+msgstr "Scinder le texte en utilisant les espaces comme séparateurs"
 
 #. MENU_STATUSLINE_TABLE_TEXTTOTABLE_TABS
 #: po/tmp/ap_String_Id.h
 msgid "Split text with tabs as delimiters"
-msgstr ""
+msgstr "Scinder le texte en utilisant les tabulations comme séparateurs"
 
 #. TOOLBAR_STATUSLINE_SPLIT_CELLS
 #. TOOLBAR_TOOLTIP_SPLIT_CELLS
