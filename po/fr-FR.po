@@ -2685,7 +2685,7 @@ msgstr "Efface des cellules"
 #. MENU_LABEL_TABLE_DELETECOLUMN
 #: po/tmp/ap_String_Id.h
 msgid "Delete Co&lumn"
-msgstr "Colonnes"
+msgstr "Effacer une col&onne"
 
 #. MENU_STATUSLINE_TABLE_DELETE_COLUMNS
 #. MENU_STATUSLINE_TABLE_DELETECOLUMN
@@ -2711,7 +2711,7 @@ msgstr "Supprimer l'objet"
 #. MENU_LABEL_TABLE_DELETEROW
 #: po/tmp/ap_String_Id.h
 msgid "Delete Ro&w"
-msgstr "Lignes"
+msgstr "Effacer une &ligne"
 
 #. MENU_STATUSLINE_TABLE_DELETE_ROWS
 #. MENU_STATUSLINE_TABLE_DELETEROW
@@ -2722,7 +2722,7 @@ msgstr "Efface des lignes"
 #. MENU_LABEL_TABLE_DELETETABLE
 #: po/tmp/ap_String_Id.h
 msgid "Delete Tabl&e"
-msgstr "Tableau"
+msgstr "Effacer le ta&bleau"
 
 #. MENU_STATUSLINE_TABLE_DELETE_TABLE
 #. MENU_STATUSLINE_TABLE_DELETETABLE
@@ -3825,17 +3825,17 @@ msgstr "Insérer"
 #. MENU_LABEL_TABLE_INSERTCOLUMN
 #: po/tmp/ap_String_Id.h
 msgid "Insert &Columns"
-msgstr "Colonnes"
+msgstr "Insérer des colo&nnes"
 
 #. MENU_LABEL_TABLE_INSERTROW
 #: po/tmp/ap_String_Id.h
 msgid "Insert &Rows"
-msgstr "Lignes"
+msgstr "Insérer des li&gnes"
 
 #. MENU_LABEL_TABLE_INSERTTABLE
 #: po/tmp/ap_String_Id.h
 msgid "Insert &Table"
-msgstr "Tableau"
+msgstr "Insérer un &tableau"
 
 #. DLG_InsertBookmark_Title
 #. TOOLBAR_LABEL_FMT_BOOKMARK
