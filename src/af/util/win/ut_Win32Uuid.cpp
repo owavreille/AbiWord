@@ -34,7 +34,10 @@ UT_Win32UUID::~UT_Win32UUID ()
 	
 	if(s_iInstCount <= 0 && s_hProv)
 	{
-		CryptReleaseContext(s_hProv,0);		
+		CryptReleaseContext(s_hProv,0);
+		// The handle is invalid after CryptReleaseContext. Leaving it set makes the
+		// next UUID call CryptGenRandom on a released provider.
+		s_hProv = 0;
 	}
 }
 
@@ -44,27 +47,35 @@ UT_Win32UUID::~UT_Win32UUID ()
  */
 bool UT_Win32UUID::_getRandomBytes(void *buf, UT_sint32 nbytes)
 {
-	if(s_hProv || CryptAcquireContext(&s_hProv,nullptr,nullptr,PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
+	if (nbytes > 0 && buf)
 	{
-		if(CryptGenRandom(s_hProv, nbytes,(BYTE *)buf))
+		if (!s_hProv &&
+			!CryptAcquireContextW(&s_hProv, nullptr, nullptr, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
 		{
-			return true;
+			// Failure does not yield a usable provider handle.
+			s_hProv = 0;
 		}
+		if (s_hProv && CryptGenRandom(s_hProv, static_cast<DWORD>(nbytes), static_cast<BYTE *>(buf)))
+			return true;
 	}
 
 #ifdef DEBUG
-	LPVOID lpMsgBuf;
+	wchar_t * wide = nullptr;
+	char narrow[256];
+	narrow[0] = '\0';
 	DWORD ecode = GetLastError();
-	FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
+	if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
 				  nullptr, ecode,
-				  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-				  (LPWSTR) &lpMsgBuf, 0, nullptr);
+				  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+				  (LPWSTR) &wide, 0, nullptr) != 0 && wide)
+	{
+		WideCharToMultiByte(CP_UTF8, 0, wide, -1, narrow, static_cast<int>(sizeof(narrow)), nullptr, nullptr);
+		narrow[sizeof(narrow) - 1] = '\0';
+		LocalFree(wide);
+	}
 
-	UT_DEBUGMSG(("UT_Win32UUID::_getRandomBytes: no Cryptographic services (0x%x; %s)\n",
-				 ecode, lpMsgBuf));
-
-	// Free the buffer.
-	LocalFree( lpMsgBuf );
+	UT_DEBUGMSG(("UT_Win32UUID::_getRandomBytes: no Cryptographic services (0x%08lx; %s)\n",
+				 static_cast<unsigned long>(ecode), narrow));
 #endif
 	return UT_UUID::_getRandomBytes(buf, nbytes);
 }

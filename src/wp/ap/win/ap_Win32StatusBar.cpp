@@ -206,7 +206,12 @@ void ap_usb_ProgressListener::notify()
 		if(m_isMARQUEEState || styledMarquee)
 		{
 			if (styledMarquee)
+			{
 				SetWindowLong(m_ProgressWND, GWL_STYLE, style & ~PBS_MARQUEE);
+				// SetWindowLong caches frame and control styles until SetWindowPos.
+				SetWindowPos(m_ProgressWND, nullptr, 0, 0, 0, 0,
+					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+			}
 			SendMessage(m_ProgressWND, PBM_SETMARQUEE, FALSE, 0);
 			m_isMARQUEEState=false;
 		}
@@ -219,7 +224,11 @@ void ap_usb_ProgressListener::notify()
 		if(!m_isMARQUEEState || !styledMarquee)
 		{
 			if (!styledMarquee)
+			{
 				SetWindowLong(m_ProgressWND, GWL_STYLE, style | PBS_MARQUEE);
+				SetWindowPos(m_ProgressWND, nullptr, 0, 0, 0, 0,
+					SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+			}
 			SendMessage(m_ProgressWND,PBM_SETMARQUEE,TRUE,100);
 			m_isMARQUEEState=true;
 		}				
@@ -379,7 +388,11 @@ void   AP_Win32StatusBar::hideProgressBar(void)
    ShowWindow(m_hwndProgressBar,SW_HIDE);
    const LONG style = GetWindowLong(m_hwndProgressBar, GWL_STYLE);
    if (style & PBS_MARQUEE)
+   {
 	   SetWindowLong(m_hwndProgressBar, GWL_STYLE, style & ~PBS_MARQUEE);
+	   SetWindowPos(m_hwndProgressBar, nullptr, 0, 0, 0, 0,
+		   SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
+   }
    SendMessage(m_hwndProgressBar,PBM_SETMARQUEE,FALSE,0);
    SendMessage(m_hwndProgressBar,PBM_SETPOS,0,0); //hide and set to zero
 }

@@ -702,31 +702,45 @@ void GR_Win32USPGraphics::_setupFontOnDC(GR_Win32USPFont *pFont, bool bZoomMe)
 		UT_Win32TraceF("font-select hdc=%p font=%p px=%u", (void*)hdc, (void*)hFont, (unsigned)pixels);
 		if(nullptr == SelectObject(hdc, hFont))
 		{
+			// FormatMessageW allocates only when it returns non-zero. On failure the
+			// output pointer is left untouched, so it must start null and be freed
+			// only after a successful call. IGNORE_INSERTS is required because no
+			// insert arguments are supplied. The message is UTF-16; the log macro
+			// prints its first string as a narrow %s.
 			DWORD e = GetLastError();
-			LPVOID lpMsgBuf;
- 
-			FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-						  nullptr,
-						  e,
-						  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-						  (LPWSTR) &lpMsgBuf,
-						  0,
-						  nullptr);
+			wchar_t * wide = nullptr;
+			char narrow[256];
+			narrow[0] = '\0';
+			if (FormatMessageW(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+							  nullptr,
+							  e,
+							  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+							  (LPWSTR) &wide,
+							  0,
+							  nullptr) != 0 && wide)
+			{
+				WideCharToMultiByte(CP_UTF8, 0, wide, -1, narrow, static_cast<int>(sizeof(narrow)), nullptr, nullptr);
+				narrow[sizeof(narrow) - 1] = '\0';
+				LocalFree(wide);
+			}
+			if (narrow[0] == '\0')
+			{
+				UT_String fallback;
+				UT_String_sprintf(fallback, "SelectObject failed (0x%08lx)", static_cast<unsigned long>(e));
+				strncpy(narrow, fallback.c_str(), sizeof(narrow) - 1);
+				narrow[sizeof(narrow) - 1] = '\0';
+			}
 
 			UT_ASSERT_HARMLESS( UT_SHOULD_NOT_HAPPEN );
 			LOGFONTW lf;
 			if(GetObjectW(hFont, sizeof(LOGFONTW), &lf))
 			{
-				// this assumes that the lfFaceName is a char string; it could be wchar in
-				// fact but it seems to work elsewhere in the win32 graphics class
-				LOG_USP_EXCPT_SX((char*)lpMsgBuf, lf.lfFaceName, lf.lfHeight)
+				LOG_USP_EXCPT_SX(narrow, lf.lfFaceName, lf.lfHeight)
 			}
 			else
 			{
-				LOG_USP_EXCPT("Could not select font into DC")
+				LOG_USP_EXCPT(narrow)
 			}
-
-			LocalFree(lpMsgBuf );
 		}
 		else
 			UT_Win32TraceHeap("font-select");

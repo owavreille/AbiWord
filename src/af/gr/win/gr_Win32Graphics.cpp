@@ -1179,6 +1179,9 @@ bool GR_Win32Graphics::startPage(const char * /*szPageLabel*/, UT_uint32 /*pageN
 	if (m_bStartPage)
 	{
 		EndPage(m_hdc);
+		// EndPage has closed the page. A later failure must not leave the flag set,
+		// or endPrint() calls EndPage a second time.
+		m_bStartPage = false;
 	}
 
 	// Correct for Portrait vs Lanscape mode
@@ -2916,13 +2919,22 @@ GR_Graphics * GR_Win32Graphics::getPrinterGraphics(const wchar_t * pPrinterName,
 	_test_and_cleanup( OpenPrinterW(pPN, &hPrinter, nullptr));
 		
 	// first, get the size of the buffer needed for the document mode
+	// DocumentPropertiesW returns the byte count, or a negative value on failure.
+	// A non-zero test would treat that failure as a size and pass it to GlobalAlloc.
 	iBuffSize = DocumentPropertiesW(nullptr, hPrinter,	pPN, nullptr, nullptr, 0);
-	_test_and_cleanup( iBuffSize );
+	_test_and_cleanup( iBuffSize > 0 );
 
-	// must be global movable memory
-	hDM = GlobalAlloc(GHND, iBuffSize);
-	pDM = (PDEVMODEW)GlobalLock(hDM);
-	_test_and_cleanup(hDM && 0<DocumentPropertiesW(nullptr, hPrinter, pPN, pDM, nullptr, DM_OUT_BUFFER));
+	// must be global movable memory. Unlock before any failure jump: GlobalFree
+	// fails while the lock count is non-zero.
+	hDM = GlobalAlloc(GHND, static_cast<SIZE_T>(iBuffSize));
+	pDM = hDM ? (PDEVMODEW)GlobalLock(hDM) : nullptr;
+	if (!pDM || DocumentPropertiesW(nullptr, hPrinter, pPN, pDM, nullptr, DM_OUT_BUFFER) <= 0)
+	{
+		if (pDM)
+			GlobalUnlock(hDM);
+		UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+		goto cleanup;
+	}
 	GlobalUnlock(hDM);
 
 	// we have all we need to fill in the doc info structure ...
