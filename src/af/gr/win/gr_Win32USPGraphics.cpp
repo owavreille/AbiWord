@@ -366,22 +366,25 @@ bool GR_Win32USPGraphics::_constructorCommonCode()
 		
 #if 1 //def DEBUG
 		wchar_t FileName[250];
-		if(GetModuleFileNameW(s_hUniscribe,&FileName[0],250))
+		const DWORD nameChars = GetModuleFileNameW(s_hUniscribe, FileName, 250);
+		if (nameChars > 0 && nameChars < 250)
 		{
-			DWORD dummy;
+			DWORD dummy = 0;
 			DWORD iSize = GetFileVersionInfoSizeW(FileName,&dummy);
 
 			if(iSize)
 			{
 				char * pBuff = (char*)g_try_malloc(iSize);
-				if(pBuff && GetFileVersionInfoW(FileName, 0, iSize, pBuff))
+				if (pBuff && GetFileVersionInfoW(FileName, 0, iSize, pBuff))
 				{
-					LPVOID buff2;
-					UINT   buff2size;
+					LPVOID buff2 = nullptr;
+					UINT   buff2size = 0;
 					
 					if(VerQueryValueW(pBuff,L"\\",
 									 &buff2,
-									 &buff2size))
+									 &buff2size)
+					   && buff2
+					   && buff2size >= sizeof(VS_FIXEDFILEINFO))
 					{
 						VS_FIXEDFILEINFO * pFix = (VS_FIXEDFILEINFO *) buff2;
 						UT_uint32 iV1 = (pFix->dwFileVersionMS & 0xffff0000) >> 16;
