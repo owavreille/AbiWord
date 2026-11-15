@@ -125,7 +125,12 @@ HWND AP_Win32TopRuler::createWindow(HWND hwndContainer,
 	pG->init3dColors();
 
 	RECT rSize;
-	GetClientRect(m_hwndTopRuler,&rSize);
+	memset(&rSize, 0, sizeof(rSize));
+	if (!GetClientRect(m_hwndTopRuler, &rSize))
+	{
+		rSize.right = static_cast<LONG>(width);
+		rSize.bottom = s_iFixedHeight;
+	}
 	setHeight(rSize.bottom);
 	setWidth(rSize.right);
 
