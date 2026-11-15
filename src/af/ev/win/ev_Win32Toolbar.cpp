@@ -322,6 +322,15 @@ LRESULT CALLBACK EV_Win32Toolbar::_ToolBarWndProc (HWND hWnd, UINT uMessage, WPA
 		}
 	}
 
+	// An owner-drawn combo asks its parent to paint each row. The
+	// handler lives on the combo, so the font list stayed black.
+	if (uMessage == WM_DRAWITEM && lParam)
+	{
+		const DRAWITEMSTRUCT * dis = reinterpret_cast<const DRAWITEMSTRUCT *>(lParam);
+		if (dis->CtlType == ODT_COMBOBOX && dis->hwndItem)
+			return _ComboWndProc(dis->hwndItem, uMessage, wParam, lParam);
+	}
+
 	if (uMessage == WM_CTLCOLORSTATIC) {
 		if(SetBkColor((HDC) wParam, GetSysColor(COLOR_WINDOW)) == CLR_INVALID)
 		{

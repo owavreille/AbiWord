@@ -2585,8 +2585,8 @@ fl_BlockLayout* FL_DocLayout::findBlockAtPosition(PT_DocPosition pos, bool bLook
 	if (!pMyC) {
 		UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
 	}
-	if (pMyC && (pMyC->getContainerType() == FL_CONTAINER_HDRFTR)
-	      || (pMyC->getContainerType() == FL_CONTAINER_SHADOW))
+	if (pMyC && ((pMyC->getContainerType() == FL_CONTAINER_HDRFTR)
+	      || (pMyC->getContainerType() == FL_CONTAINER_SHADOW)))
 	{
 		fl_HdrFtrShadow * pShadow = nullptr;
 		FV_View * pView = getView();
@@ -2595,9 +2595,11 @@ fl_BlockLayout* FL_DocLayout::findBlockAtPosition(PT_DocPosition pos, bool bLook
 			pShadow = pView->getEditShadow();
 //
 // We might actually be in the other HdrFtr is the point got here from an undo!
-// Check for this.
+// Check for this. A shadow left by a header that was not created yet has no
+// section, and calling isPointInHere on it aborts the character insertion.
 //
-			if(!pShadow->getHdrFtrSectionLayout()->isPointInHere(pos))
+			fl_HdrFtrSectionLayout * pEditHF = pShadow ? pShadow->getHdrFtrSectionLayout() : nullptr;
+			if(pEditHF && !pEditHF->isPointInHere(pos))
 			{
 			        fl_ContainerLayout * pCL = static_cast<fl_ContainerLayout *>(pBL->getSectionLayout());
 				while(pCL && pCL->getContainerType() != FL_CONTAINER_HDRFTR && pCL->getContainerType() != FL_CONTAINER_DOCSECTION)
@@ -2630,7 +2632,7 @@ fl_BlockLayout* FL_DocLayout::findBlockAtPosition(PT_DocPosition pos, bool bLook
 				}
 				// Ok, we're really confused now, point is nowhere to be found.
 				// It might be OK if pos-1 is in here, though...
-				if (pShadow && !pShadow->getHdrFtrSectionLayout()->isPointInHere(pos-1))
+				if (pEditHF && !pEditHF->isPointInHere(pos-1))
 				{
 					//			UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
 				}
@@ -2740,20 +2742,24 @@ fl_BlockLayout* FL_DocLayout::findBlockAtPositionReverse(PT_DocPosition pos) con
 // We might actually be in the other HdrFtr is the point got here from an undo!
 // Check for this.
 //
-			if(!pShadow->getHdrFtrSectionLayout()->isPointInHere(pos))
+			fl_HdrFtrSectionLayout * pEditHF = pShadow ? pShadow->getHdrFtrSectionLayout() : nullptr;
+			if(pEditHF && !pEditHF->isPointInHere(pos))
 			{
 				fl_HdrFtrSectionLayout * pHF = (fl_HdrFtrSectionLayout *) pBL->getSectionLayout();
-				if(pHF->isPointInHere(pos))
+				if(pHF && pHF->isPointInHere(pos))
 				{
 					pShadow = pHF->getFirstShadow();
-					pView->clearHdrFtrEdit();
-					pView->setHdrFtrEdit(pShadow);
-					pBL = (fl_BlockLayout *) pShadow->findBlockAtPosition(pos);
-					return pBL;
+					if(pShadow)
+					{
+						pView->clearHdrFtrEdit();
+						pView->setHdrFtrEdit(pShadow);
+						pBL = (fl_BlockLayout *) pShadow->findBlockAtPosition(pos);
+						return pBL;
+					}
 				}
 				// Ok, we're really confused now, point is nowhere to be found.
 				// It might be OK if pos-1 is in here, though...
-				if (!pShadow->getHdrFtrSectionLayout()->isPointInHere(pos-1))
+				if (pEditHF && !pEditHF->isPointInHere(pos-1))
 				{
 					UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
 				}

@@ -12027,6 +12027,7 @@ void FV_View::insertHeaderFooter(HdrFtrType hfType)
 	fp_Page * pPage = m_pLayout->getNthPage(iPageNo);
 	fl_HdrFtrShadow * pShadow = nullptr;
 	fp_ShadowContainer * pHFCon = nullptr;
+	UT_return_if_fail(pPage);
 	if(hfType >= FL_HDRFTR_FOOTER)
 		pHFCon = pPage->getHdrFtrP(FL_HDRFTR_FOOTER);
 	else if (hfType < FL_HDRFTR_FOOTER)
@@ -12037,7 +12038,8 @@ void FV_View::insertHeaderFooter(HdrFtrType hfType)
 	}
 	UT_return_if_fail(pHFCon);
 	pShadow = pHFCon->getShadow();
-	UT_ASSERT(pShadow);
+	UT_return_if_fail(pShadow);
+	UT_return_if_fail(pShadow->getHdrFtrSectionLayout());
 //
 // Set Header/footer mode and we're done! Easy :-)
 //

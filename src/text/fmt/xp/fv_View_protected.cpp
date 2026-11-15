@@ -6121,6 +6121,8 @@ void FV_View::_cmdEditHdrFtr(HdrFtrType hfType)
 // Put the insertion point at the beginning of the header
 //
 	fl_BlockLayout * pBL = pShadow->getNextBlockInDocument();
+	if (!pBL)
+		return;
 	if (!isSelectionEmpty())
 		_clearSelection();
 
