@@ -289,9 +289,19 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 										hwndFrame, nullptr, app->getInstance(),nullptr);
 	static HFONT statusFont = nullptr;
 	if (!statusFont)
-		statusFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
-			DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
-			CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+	{
+		// lfStatusFont is the font Windows keeps for status bars, including
+		// the face the user chose and the current logical size.
+		NONCLIENTMETRICSW metrics;
+		memset(&metrics, 0, sizeof(metrics));
+		metrics.cbSize = sizeof(metrics);
+		if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
+			statusFont = CreateFontIndirectW(&metrics.lfStatusFont);
+		if (!statusFont)
+			statusFont = CreateFontW(-12, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+				CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+	}
 	if (statusFont)
 		SendMessageW(m_hwndStatusBar, WM_SETFONT, (WPARAM)statusFont, FALSE);
 	// add progress bar and hide it 
