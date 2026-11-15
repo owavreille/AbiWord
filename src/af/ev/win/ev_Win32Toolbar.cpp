@@ -2117,9 +2117,11 @@ void EV_Win32Toolbar::showChevron(POINT screen)
 	}
 
 	HWND frame = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl())->getTopLevelWindow();
+	SetForegroundWindow(frame);
 	const UINT cmd = (UINT)TrackPopupMenu(menu,
 		TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON,
 		screen.x, screen.y, 0, frame, nullptr);
+	PostMessageW(frame, WM_NULL, 0, 0);
 	DestroyMenu(menu);
 	if (cmd)
 		SendMessageW(frame, WM_COMMAND, MAKEWPARAM(cmd, 0), (LPARAM)m_hwnd);

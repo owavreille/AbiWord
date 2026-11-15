@@ -731,14 +731,19 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 
 	    // Menu creation
 	    hMenu =  CreatePopupMenu();
+		if (!hMenu)
+			return 1;
 		for (int i=0; i<5; i++) {
 			str.fromUTF8(pSS->getValue(menu_items[i]));
 			AppendMenuW(hMenu, MF_ENABLED|MF_STRING, i+1, (LPCWSTR)str.c_str());
 		}
 
-	    // show and track the menu
+	    // The dialog owns the menu. A child button does not stay foreground,
+	    // so a click outside can leave the popup open.
+		SetForegroundWindow(hWnd);
     	m_selectToggle = TrackPopupMenu(hMenu, TPM_LEFTALIGN|TPM_LEFTBUTTON|TPM_NONOTIFY|TPM_RETURNCMD,
-						x,y,0, hWndButton,  nullptr);
+						x,y,0, hWnd,  nullptr);
+		PostMessageW(hWnd, WM_NULL, 0, 0);
 
 	    switch(m_selectToggle)
 		{

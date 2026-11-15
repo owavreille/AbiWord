@@ -336,11 +336,14 @@ void AP_Win32Dialog_New::_setFileName( UT_sint32 nIndex )
 	HWND hControl = GetDlgItem(m_hThisDlg, AP_RID_DIALOG_NEW_LBX_TEMPLATE);
 	if( nIndex != LB_ERR )
 	{
-		WCHAR buf[PATH_MAX];
-		int l = SendMessageW(hControl, LB_GETTEXTLEN, nIndex, 0);
-		UT_return_if_fail(l<PATH_MAX);
+		// LB_GETTEXTLEN returns LB_ERR, which is negative, when the item is gone.
+		const LRESULT l = SendMessageW(hControl, LB_GETTEXTLEN, nIndex, 0);
+		if (l < 0 || l >= PATH_MAX)
+			return;
 
-		_win32Dialog.getListText( AP_RID_DIALOG_NEW_LBX_TEMPLATE, nIndex, (char*)buf );
+		WCHAR buf[PATH_MAX];
+		if (SendMessageW(hControl, LB_GETTEXT, nIndex, (LPARAM)buf) <= 0)
+			return;
 		UT_String templateName; 
 		switch ( SendMessageW( hControl, LB_GETITEMDATA, nIndex, 0 ) )
 		{
