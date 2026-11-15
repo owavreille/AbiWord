@@ -71,6 +71,8 @@ void AP_Win32Preview_Annotation::_createToolTip(HWND hwndParent)
         CW_USEDEFAULT, CW_USEDEFAULT,
         CW_USEDEFAULT, CW_USEDEFAULT,
         hwndParent, nullptr, hinst, nullptr);
+	if (!m_hToolTip)
+		return;
 
     SetWindowPos(m_hToolTip, HWND_TOPMOST,
         0, 0, 0, 0,
@@ -83,14 +85,15 @@ void AP_Win32Preview_Annotation::_createToolTip(HWND hwndParent)
 
 	UT_Win32LocaleString str;
 	str.fromUTF8(getDescription().c_str());
+	m_tipText = (str.c_str() && str.c_str()[0]) ? str.c_str() : L"";
 
     TOOLINFOW ti;
     memset(&ti, 0, sizeof(ti));
-    ti.cbSize = sizeof(TOOLINFOW);
+    ti.cbSize = sizeof(ti);
     ti.uFlags = TTF_SUBCLASS;
     ti.hwnd = hwndParent;
     ti.hinst = hinst;
-    ti.lpszText = (LPWSTR) str.c_str();
+    ti.lpszText = const_cast<wchar_t *>(m_tipText.c_str());
     GetClientRect (hwndParent, &ti.rect);
     SendMessageW(m_hToolTip, TTM_ADDTOOLW, 0, (LPARAM) &ti);
 
@@ -125,8 +128,11 @@ void AP_Win32Preview_Annotation::_createToolTip(HWND hwndParent)
 		}
 
 		str.fromUTF8(title.c_str());
+		m_tipTitle = str.c_str() ? str.c_str() : L"";
+		if (m_tipTitle.size() > 99)
+			m_tipTitle.resize(99);
 
-		SendMessageW(m_hToolTip, TTM_SETTITLEW, (WPARAM)TTI_NONE, (LPARAM) str.c_str());
+		SendMessageW(m_hToolTip, TTM_SETTITLEW, (WPARAM)TTI_NONE, (LPARAM) m_tipTitle.c_str());
 	}
 
 	// We don't want to auto-hide the popup after is has been shown, but the maximum popup

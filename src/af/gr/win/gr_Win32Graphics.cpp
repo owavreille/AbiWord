@@ -497,9 +497,9 @@ void GR_Win32Graphics::drawChar(UT_UCS4Char Char, UT_sint32 xoff, UT_sint32 yoff
 	// Reference Microsoft knowledge base:
 	// Q145754 - PRB ExtTextOutW or TextOutW Unicode Text Output Is Blank
 	LOGFONTW lf;
-	UT_DebugOnly<int> iRes = GetObjectW(m_pFont->getFontHandle(), sizeof(LOGFONTW), &lf);
-	UT_ASSERT(iRes);
-	if (UT_IsWinNT() == false && lf.lfCharSet == SYMBOL_CHARSET)
+	memset(&lf, 0, sizeof(lf));
+	if (GetObjectW(m_pFont->getFontHandle(), sizeof(lf), &lf) == sizeof(lf)
+		&& UT_IsWinNT() == false && lf.lfCharSet == SYMBOL_CHARSET)
 	{
 		// Symbol character handling for Win9x
 		char str[sizeof(UT_UCS2Char)];
@@ -507,7 +507,8 @@ void GR_Win32Graphics::drawChar(UT_UCS4Char Char, UT_sint32 xoff, UT_sint32 yoff
 		int iConverted = WideCharToMultiByte(CP_ACP, 0,
 			(LPCWSTR) &aChar, 1,
 			str, sizeof(str), nullptr, nullptr);
-		ExtTextOutA(m_hdc, xoff, yoff, 0, nullptr, str, iConverted, nullptr);
+		if (iConverted > 0)
+			ExtTextOutA(m_hdc, xoff, yoff, 0, nullptr, str, iConverted, nullptr);
 	}
 	else
 	{
@@ -590,18 +591,22 @@ void GR_Win32Graphics::drawChars(const UT_UCS4Char* pChars,
 	// Reference Microsoft knowledge base:
 	// Q145754 - PRB ExtTextOutW or TextOutW Unicode Text Output Is Blank
 	LOGFONTW lf;
-	UT_DebugOnly<int> iRes = GetObjectW(hFont, sizeof(LOGFONTW), &lf);
-	UT_ASSERT(iRes);
+	memset(&lf, 0, sizeof(lf));
 
-	if (UT_IsWinNT() == false && lf.lfCharSet == SYMBOL_CHARSET)
+	if (iLength > 0
+		&& GetObjectW(hFont, sizeof(lf), &lf) == sizeof(lf)
+		&& UT_IsWinNT() == false && lf.lfCharSet == SYMBOL_CHARSET)
 	{
-		// Symbol character handling for Win9x
-		char* str = new char[iLength * sizeof(UT_UCS2Char)];
+		// Symbol character handling for Win9x. cbMultiByte is the
+		// allocated byte count, not a wider guess.
+		const int bytes = iLength * static_cast<int>(sizeof(UT_UCS2Char));
+		char* str = new char[bytes];
 		int iConverted = WideCharToMultiByte(CP_ACP, 0,
 			(LPCWSTR) currentChars, iLength,
-			str, iLength * sizeof(UT_UCS4Char), nullptr, nullptr);
+			str, bytes, nullptr, nullptr);
 
-		ExtTextOutA(m_hdc, xoff, yoff, 0, nullptr, str, iConverted, nullptr);
+		if (iConverted > 0)
+			ExtTextOutA(m_hdc, xoff, yoff, 0, nullptr, str, iConverted, nullptr);
 		delete [] str;
 	}
 	else

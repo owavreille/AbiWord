@@ -144,9 +144,10 @@ BOOL XAP_Win32Dialog_ListDocuments::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 					item.iItem = ListView_GetSelectionMark(h);
 					item.mask = LVIF_PARAM;
 
-					SendMessageW(h, LVM_GETITEMW, 0, (LPARAM)&item);
-
-					_setSelDocumentIndx(item.lParam);
+					if (SendMessageW(h, LVM_GETITEMW, 0, (LPARAM)&item))
+						_setSelDocumentIndx(item.lParam);
+					else
+						_setSelDocumentIndx(-1);
 				}
 				else
 					_setSelDocumentIndx(-1);
