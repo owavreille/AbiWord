@@ -3138,9 +3138,16 @@ HDC GR_Win32Graphics::createbestmetafilehdc()
 
 void GR_Win32Graphics::getWidthAndHeightFromHWND(HWND h, int &width, int &height)
 {
+	// GetClientRect leaves the RECT untouched when it fails.
 	RECT clientRect;
-	GetClientRect(h, &clientRect);
-	
+	memset(&clientRect, 0, sizeof(clientRect));
+	if (!h || !GetClientRect(h, &clientRect))
+	{
+		width = 0;
+		height = 0;
+		return;
+	}
+
 	width = clientRect.right - clientRect.left;
 	height = clientRect.bottom - clientRect.top;
 

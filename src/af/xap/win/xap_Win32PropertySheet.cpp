@@ -69,8 +69,10 @@ INT_PTR CALLBACK XAP_Win32PropertyPage::s_pageWndProc(HWND hWnd, UINT msg, WPARA
 	switch(msg) 
 	{
 		case WM_INITDIALOG:
-		{	
-			PROPSHEETPAGEW*	pStruct = (PROPSHEETPAGEW*)lParam;  		
+		{
+			PROPSHEETPAGEW*	pStruct = (PROPSHEETPAGEW*)lParam;
+			if (!pStruct || !pStruct->lParam)
+				return FALSE;
 			XAP_Win32PropertyPage *pThis = (XAP_Win32PropertyPage *)pStruct->lParam;
 			SetWindowLongPtrW(hWnd,DWLP_USER,pStruct->lParam);
 			pThis->m_hDlg = hWnd;
@@ -81,17 +83,17 @@ INT_PTR CALLBACK XAP_Win32PropertyPage::s_pageWndProc(HWND hWnd, UINT msg, WPARA
 
 		case WM_NOTIFY:
 		{
+			pNMHDR = (NMHDR*)lParam;
+			if (!pNMHDR)
+				break;
+
 			XAP_Win32PropertyPage *pThis = (XAP_Win32PropertyPage *)GetWindowLongPtrW(hWnd,DWLP_USER);
 
 			if (pThis)
-				pThis->_onNotify((LPNMHDR) lParam, wParam); 
-			
-			pNMHDR = (NMHDR*)lParam;					
-			if (pNMHDR->code==PSN_KILLACTIVE)
-			{
-				pThis = (XAP_Win32PropertyPage *)GetWindowLongPtrW(hWnd,DWLP_USER);
+				pThis->_onNotify(pNMHDR, wParam);
+
+			if (pNMHDR->code==PSN_KILLACTIVE && pThis)
 				pThis->_onKillActive();
-			}
 			break;
 		}		
 		
@@ -109,7 +111,9 @@ INT_PTR CALLBACK XAP_Win32PropertyPage::s_pageWndProc(HWND hWnd, UINT msg, WPARA
 			break;
 	}  
         
-	return DefWindowProcW(hWnd, msg, wParam, lParam);
+	// A dialog procedure returns FALSE for a message it does not handle.
+	// DefWindowProc would bypass the dialog manager.
+	return FALSE;
 }
 
 
@@ -156,6 +160,7 @@ XAP_Win32PropertySheet::XAP_Win32PropertySheet()
 	setOkButton(false);
 	setApplyButton(true);
 	setCancelButton(true);
+	m_hWnd = nullptr;
 	m_lpfnDefSheet = nullptr;
 	m_pfnDlgProc = s_sheetWndProc;	
 	m_pCallback = nullptr;
@@ -170,7 +175,9 @@ XAP_Win32PropertySheet::XAP_Win32PropertySheet()
 */
 INT_PTR CALLBACK XAP_Win32PropertySheet::s_sheetWndProc(HWND hWnd, UINT msg, WPARAM wParam,  LPARAM lParam)
 {			
-	XAP_Win32PropertySheet *pThis = (XAP_Win32PropertySheet*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);			
+	XAP_Win32PropertySheet *pThis = (XAP_Win32PropertySheet*)GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+	if (!pThis)
+		return DefWindowProcW(hWnd, msg, wParam, lParam);
 	
 	switch(msg) 
 	{			
@@ -195,13 +202,20 @@ INT_PTR CALLBACK XAP_Win32PropertySheet::s_sheetWndProc(HWND hWnd, UINT msg, WPA
 			
 		
 		case WM_DESTROY:
-		{		
-			if (!pThis->m_modeless)
+		{
+			// The property sheet's own procedure frees its pages and fonts.
+			// Swallowing WM_DESTROY left that work undone.
+			WHICHPROC defProc = pThis->m_lpfnDefSheet;
+			const bool modeless = pThis->m_modeless;
+			const LRESULT result = defProc
+				? CallWindowProcW(defProc, hWnd, msg, wParam, lParam)
+				: DefWindowProcW(hWnd, msg, wParam, lParam);
+
+			if (!modeless)
 				PostQuitMessage(0);
 
-			pThis->cleanup ();
-
-			return 0;
+			pThis->cleanup();
+			return result;
 		} 
 
 		case WM_COMMAND:
@@ -326,25 +340,47 @@ int XAP_Win32PropertySheet::runModal(XAP_Win32App* pWin32App, XAP_Frame * pFrame
 	/*
 		
 	*/
-	m_psh.dwFlags |= PSH_MODELESS;	
-	m_hWnd = (HWND)::PropertySheetW(&m_psh);	
+	m_psh.dwFlags |= PSH_MODELESS;
+	// PropertySheetW with PSH_MODELESS returns the sheet HWND, or NULL.
+	// A failed sheet must not disable the parent: destroy() only re-enables
+	// a window that IsWindow() still recognizes.
+	m_hWnd = (HWND)::PropertySheetW(&m_psh);
+	if (!m_hWnd)
+	{
+		cleanup();
+		return m_nRslt;
+	}
+
 	EnableWindow(m_psh.hwndParent, FALSE);
 
 	/* Subclassing */
 	m_lpfnDefSheet = (WHICHPROC)GetWindowLongPtrW(m_hWnd, GWLP_WNDPROC);
+	if (!m_lpfnDefSheet)
+	{
+		destroy();
+		return m_nRslt;
+	}
 	SetWindowLongPtrW(m_hWnd, GWLP_USERDATA, (LONG_PTR)this);	
 	SetWindowLongPtrW(m_hWnd, GWLP_WNDPROC, (LONG_PTR)m_pfnDlgProc);
 		
-	_onInitDialog(m_hWnd);		
+	_onInitDialog(m_hWnd);
 
-	while (GetMessageW(&msg, nullptr, 0, 0))
-	{				
-		if(m_hWnd && PropSheet_IsDialogMessage(m_hWnd, &msg))
-			continue;				
-					
+	// GetMessageW returns 0 for the WM_QUIT this sheet posts from WM_DESTROY,
+	// and -1 when the queue cannot be read. Either value ends the nested loop.
+	// Reposting that WM_QUIT would quit the application, because the sheet
+	// posted it only to leave this loop.
+	for (;;)
+	{
+		const BOOL got = GetMessageW(&msg, nullptr, 0, 0);
+		if (got == 0 || got == -1)
+			break;
+
+		if (m_hWnd && PropSheet_IsDialogMessage(m_hWnd, &msg))
+			continue;
+
 		TranslateMessage(&msg);
-		DispatchMessageW(&msg);		
-	}	
+		DispatchMessageW(&msg);
+	}
 	
 	destroy();	
 	return m_nRslt;
@@ -389,7 +425,12 @@ int XAP_Win32PropertySheet::runModeless (XAP_Win32App* pWin32App, XAP_Frame * pF
 
 	
 	m_psh.dwFlags |= PSH_MODELESS;	
-	m_hWnd = (HWND)::PropertySheetW(&m_psh);		
+	m_hWnd = (HWND)::PropertySheetW(&m_psh);
+	if (!m_hWnd)
+	{
+		cleanup();
+		return 0;
+	}
 
 	if (m_bApplyButton) {		
 		XAP_Win32DialogBase::setDlgItemText (m_hWnd, ID_APPLY, pSS->getValue(XAP_STRING_ID_DLG_Apply));	
@@ -399,6 +440,11 @@ int XAP_Win32PropertySheet::runModeless (XAP_Win32App* pWin32App, XAP_Frame * pF
 	/* Subclassing */
 
 	m_lpfnDefSheet = (WHICHPROC)GetWindowLongPtrW(m_hWnd, GWLP_WNDPROC);
+	if (!m_lpfnDefSheet)
+	{
+		destroy();
+		return 0;
+	}
 	SetWindowLongPtrW(m_hWnd, GWLP_USERDATA, (LONG_PTR)this);	
 	SetWindowLongPtrW(m_hWnd, GWLP_WNDPROC, (LONG_PTR)m_pfnDlgProc);
 		
