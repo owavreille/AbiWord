@@ -2543,33 +2543,42 @@ void GR_Win32Graphics::saveRectangle(UT_Rect & r, UT_uint32 iIndx)
 		x,y, iWidth, iHeight));	
 	#endif
 
-	BITMAPINFO bmi;
+	HDC hMemDC = CreateCompatibleDC(m_hdc);
+	if (!hMemDC)
+		return;
 
-	BYTE *imagedata;
-	HDC	hMemDC = CreateCompatibleDC(m_hdc);
-		
-	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER); 	
+	BITMAPINFO bmi;
+	memset(&bmi, 0, sizeof(bmi));
+	bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	bmi.bmiHeader.biWidth = iWidth;
 	bmi.bmiHeader.biHeight = iHeight;
-	bmi.bmiHeader.biPlanes = 1; 
+	bmi.bmiHeader.biPlanes = 1;
 	bmi.bmiHeader.biBitCount = 24; // as we want true-color
 	bmi.bmiHeader.biCompression = BI_RGB; // no compression
-	bmi.bmiHeader.biSizeImage = (((iWidth * bmi.bmiHeader.biBitCount + 31) & ~31) >> 3) * iHeight; 
-	bmi.bmiHeader.biXPelsPerMeter = 0;
-	bmi.bmiHeader.biYPelsPerMeter = 0; 
-	bmi.bmiHeader.biClrImportant = 0;
-	bmi.bmiHeader.biClrUsed = 0; // we are not using palette
+	bmi.bmiHeader.biSizeImage = (((iWidth * bmi.bmiHeader.biBitCount + 31) & ~31) >> 3) * iHeight;
 
+	BYTE *imagedata = nullptr;
 	HBITMAP hBit = CreateDIBSection(hMemDC, &bmi, DIB_RGB_COLORS, (void**)&imagedata, nullptr, 0);
+	if (!hBit || !imagedata)
+	{
+		if (hBit)
+			DeleteObject(hBit);
+		DeleteDC(hMemDC);
+		return;
+	}
 	GdiFlush();
 
-	HBITMAP hOld = (HBITMAP) SelectObject(hMemDC, hBit);
+	HGDIOBJ hOld = SelectObject(hMemDC, hBit);
 	BitBlt(hMemDC, 0, 0, iWidth, iHeight, m_hdc, x, y, SRCCOPY);
-	hBit =  (HBITMAP)SelectObject(hMemDC, hOld);
+	// DeleteDC destroys the bitmap still selected in a memory DC.
+	if (hOld)
+		SelectObject(hMemDC, hOld);
 	DeleteDC(hMemDC);
 
-	m_vSaveRectBuf.setNthItem(iIndx, (void*) hBit, (const void**)&hOld);
-	DeleteObject(hOld);
+	HBITMAP hPrev = nullptr;
+	m_vSaveRectBuf.setNthItem(iIndx, (void*) hBit, (const void**)&hPrev);
+	if (hPrev)
+		DeleteObject(hPrev);
 }
 
 void GR_Win32Graphics::restoreRectangle(UT_uint32 iIndx) 
@@ -2600,12 +2609,19 @@ void GR_Win32Graphics::restoreRectangle(UT_uint32 iIndx)
 		x,y, iWidth, iHeight));	
 	#endif	
 
-	HDC		hMemDC = CreateCompatibleDC(m_hdc);
-	HBITMAP hOld = (HBITMAP) SelectObject(hMemDC, hBit);
-	
+	HDC hMemDC = CreateCompatibleDC(m_hdc);
+	if (!hMemDC)
+		return;
+	HGDIOBJ hOld = SelectObject(hMemDC, hBit);
+	if (!hOld)
+	{
+		DeleteDC(hMemDC);
+		return;
+	}
+
 	BitBlt(m_hdc, x, y, iWidth, iHeight, hMemDC, 0, 0, SRCCOPY);
 	SelectObject(hMemDC, hOld);
-	DeleteDC(hMemDC);		
+	DeleteDC(hMemDC);
 }
 
 void GR_Win32Graphics::flush(void)
@@ -2630,10 +2646,14 @@ BITMAPINFO * GR_Win32Graphics::ConvertDDBToDIB(HBITMAP bitmap, HPALETTE hPal, DW
 		return nullptr;
 
 	if (hPal == nullptr)
-		hPal = (HPALETTE)GetStockObject(DEFAULT_PALETTE);	
-		
-	// Get bitmap information
-	::GetObjectW(bitmap, sizeof(bm),(LPSTR)&bm);	
+		hPal = (HPALETTE)GetStockObject(DEFAULT_PALETTE);
+
+	// Get bitmap information. A failed call leaves bm uninitialized.
+	memset(&bm, 0, sizeof(bm));
+	if (!bitmap || ::GetObjectW(bitmap, sizeof(bm), &bm) == 0)
+		return nullptr;
+	if (bm.bmWidth <= 0 || bm.bmHeight <= 0)
+		return nullptr;	
 	
 	// Initialize the bitmapinfoheader
 	bi.biSize			= sizeof(BITMAPINFOHEADER);	
@@ -2655,9 +2675,11 @@ BITMAPINFO * GR_Win32Graphics::ConvertDDBToDIB(HBITMAP bitmap, HPALETTE hPal, DW
 		nColors = 1 << bi.biBitCount;
 	dwLen  = bi.biSize + nColors * sizeof(RGBQUAD);
 	
-	// We need a device context to get the DIB from	
+	// We need a device context to get the DIB from
 	hDC = CreateCompatibleDC(m_hdc);
-	hPal = SelectPalette(hDC, hPal, TRUE);	
+	if (!hDC)
+		return nullptr;
+	hPal = SelectPalette(hDC, hPal, TRUE);
 	RealizePalette(hDC);
 	
 	// Allocate enough memory to hold bitmapinfoheader and color table

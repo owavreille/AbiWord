@@ -23,6 +23,7 @@
 #include "ut_types.h"
 #include "ut_assert.h"
 #include "ut_Win32OS.h"
+#include "ut_misc.h"
 #include "gr_Win32Graphics.h"
 #include "xap_Win32PreviewWidget.h"
 
@@ -141,7 +142,10 @@ LRESULT CALLBACK XAP_Win32PreviewWidget::_wndProc(HWND hwnd, UINT iMsg, WPARAM w
 		return pThis->onPaint(hwnd);
 	
 	case WM_LBUTTONDOWN:
-		return pThis->onLeftButtonDown(LOWORD(lParam), HIWORD(lParam)); 
+		// LOWORD/HIWORD treat a coordinate above 32767, or a negative one
+		// on a multi-monitor desktop, as the wrong unsigned value.
+		// https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-lbuttondown
+		return pThis->onLeftButtonDown(signedLoWord(lParam), signedHiWord(lParam)); 
 
 	case WM_LBUTTONDBLCLK:
 		if( pThis->m_pInsertSymbol )

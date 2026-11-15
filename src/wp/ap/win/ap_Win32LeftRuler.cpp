@@ -28,6 +28,7 @@
 #include "xap_Win32App.h"
 #include "ap_Win32Frame.h"
 #include "ut_Win32LocaleString.h"
+#include "ut_misc.h"
 
 /*****************************************************************/
 
@@ -158,7 +159,7 @@ LRESULT CALLBACK AP_Win32LeftRuler::_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPAR
 
 	case WM_LBUTTONDOWN:
 		SetCapture(hwnd);
-		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON1,pG->tlu(LOWORD(lParam)), pG->tlu(HIWORD(lParam)));
+		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON1,pG->tlu(signedLoWord(lParam)), pG->tlu(signedHiWord(lParam)));
 		{
 			pG->handleSetCursorMessage();
 		}
@@ -166,7 +167,7 @@ LRESULT CALLBACK AP_Win32LeftRuler::_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPAR
 		
 	case WM_MBUTTONDOWN:
 		SetCapture(hwnd);
-		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON2,pG->tlu(LOWORD(lParam)),pG->tlu(HIWORD(lParam)));
+		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON2,pG->tlu(signedLoWord(lParam)),pG->tlu(signedHiWord(lParam)));
 		{
 			pG->handleSetCursorMessage();
 		}
@@ -174,7 +175,7 @@ LRESULT CALLBACK AP_Win32LeftRuler::_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPAR
 		
 	case WM_RBUTTONDOWN:
 		SetCapture(hwnd);
-		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON3,pG->tlu(LOWORD(lParam)),pG->tlu(HIWORD(lParam)));
+		pRuler->mousePress(s_GetEMS(wParam),EV_EMB_BUTTON3,pG->tlu(signedLoWord(lParam)),pG->tlu(signedHiWord(lParam)));
 		{
 			pG->handleSetCursorMessage();
 		}
