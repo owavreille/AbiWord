@@ -63,7 +63,8 @@ static UINT_PTR CALLBACK s_PrintHookProc(
 
 		// remember the original printer selected; we use this to decide if upon closure
 		// we should notify associated views to rebuild to reflect the new font metrics
-		UT_uint32 iPrinter = SendDlgItemMessageW(hdlg, cmb4, CB_GETCURSEL, 0, 0);
+		const LRESULT printer = SendDlgItemMessageW(hdlg, cmb4, CB_GETCURSEL, 0, 0);
+		const UT_uint32 iPrinter = (printer == CB_ERR) ? 0 : static_cast<UT_uint32>(printer);
 		pThis->setOrigPrinter(iPrinter);
 		pThis->setNewPrinter(iPrinter);
 	}
@@ -81,7 +82,10 @@ static UINT_PTR CALLBACK s_PrintHookProc(
 		// button to Close; make sure we have valid this pointer.
 		if((int)LOWORD(wParam) == cmb4 && HIWORD(wParam) == CBN_SELCHANGE)
 		{
-			pThis->setNewPrinter(SendDlgItemMessageW(hdlg, cmb4, CB_GETCURSEL, 0, 0));
+			const LRESULT printer = SendDlgItemMessageW(hdlg, cmb4, CB_GETCURSEL, 0, 0);
+			if (printer == CB_ERR)
+				return 0;
+			pThis->setNewPrinter(static_cast<UT_uint32>(printer));
 
 			XAP_App*                    pApp      = XAP_App::getApp();
 			const XAP_StringSet*  pSS         = pApp->getStringSet();

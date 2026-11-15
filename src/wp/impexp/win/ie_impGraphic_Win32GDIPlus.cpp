@@ -211,7 +211,10 @@ initGDIPlus ()
 	input.DebugEventCallback = nullptr;
 	input.SuppressBackgroundThread = input.SuppressExternalCodecs = FALSE;
 
-	GdiplusStartup (&gdiplusToken, &input, nullptr);
+	// Ok is 0. A failed startup must not leave a token that later calls treat
+	// as a live GDI+.
+	if (GdiplusStartup (&gdiplusToken, &input, nullptr) != 0)
+		gdiplusToken = 0;
 }
 
 
@@ -233,7 +236,10 @@ isGDIPlusAvailable()
 void 
 shutDownGDIPlus()
 {
+	if (gdiplusToken == 0)
+		return;
 	GdiplusShutdown(gdiplusToken);
+	gdiplusToken = 0;
 }
 
 

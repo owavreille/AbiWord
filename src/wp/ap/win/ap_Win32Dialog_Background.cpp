@@ -18,6 +18,7 @@
  */
 
 #include <windows.h>
+#include <string.h>
 
 #include "ut_string.h"
 #include "ut_assert.h"
@@ -125,33 +126,42 @@ void AP_Win32Dialog_Background::_centerDialog()
 {
 	UT_return_if_fail (IsWindow(m_hDlg));
 	
-	RECT 	rc, rcParent;
-	int 	nWidth, nHeight;
-	POINT 	pt;
-	
-    GetWindowRect(m_hDlg, &rc);
-    
-   	if (!GetParent(m_hDlg))
-	  GetWindowRect (GetDesktopWindow(), &rcParent);
-	else
-	  GetClientRect (GetParent(m_hDlg), &rcParent);	  
-	  
-	nWidth = rc.right - rc.left;
-	nHeight = rc.bottom - rc.top;
-	
+	RECT rc, rcParent;
+	memset(&rc, 0, sizeof(rc));
+	memset(&rcParent, 0, sizeof(rcParent));
+	if (!GetWindowRect(m_hDlg, &rc))
+		return;
+
+	HWND parent = GetParent(m_hDlg);
+	if (!parent)
+	{
+		if (!GetWindowRect(GetDesktopWindow(), &rcParent))
+			return;
+	}
+	else if (!GetClientRect(parent, &rcParent))
+		return;
+
+	const int nWidth = rc.right - rc.left;
+	const int nHeight = rc.bottom - rc.top;
+	if (nWidth <= 0 || nHeight <= 0)
+		return;
+
+	POINT pt;
 	pt.x = (rcParent.right - rcParent.left) / 2;
 	pt.y = (rcParent.bottom - rcParent.top) / 2;
-	
-	if (!GetParent(m_hDlg))
-	  ClientToScreen (GetDesktopWindow(), &pt);
-	else
-	  ClientToScreen (GetParent(m_hDlg), &pt);
+
+	if (!parent)
+	{
+		if (!ClientToScreen(GetDesktopWindow(), &pt))
+			return;
+	}
+	else if (!ClientToScreen(parent, &pt))
+		return;
 
 	pt.x -= nWidth / 2;
 	pt.y -= nHeight / 2;
 
-	// Move your arse...
-	MoveWindow (m_hDlg, pt.x, pt.y, nWidth, nHeight, TRUE);		
+	MoveWindow(m_hDlg, pt.x, pt.y, nWidth, nHeight, TRUE);		
 }
 
 extern bool helpLocalizeAndOpenURL(const char* pathBeforeLang, const char* pathAfterLang, const char *remoteURLbase);

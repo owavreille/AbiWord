@@ -119,11 +119,13 @@ static PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
   PBITMAPINFO 	pbmi; 
   WORD    	cClrBits; 
   
-  // Retrieve the bitmap's color format, width, and height. 
-  if (!GetObject(hBmp, sizeof(BITMAP), (LPSTR)&bmp)) 
+  // GetObject writes the BITMAP only when it returns that many bytes.
+  if (GetObject(hBmp, sizeof(BITMAP), &bmp) != sizeof(BITMAP))
     return nullptr;
-  
-  if (bmp.bmBitsPixel==16) 
+  if (bmp.bmWidth <= 0 || bmp.bmHeight <= 0 || bmp.bmPlanes <= 0 || bmp.bmBitsPixel <= 0)
+    return nullptr;
+
+  if (bmp.bmBitsPixel==16)
     bmp.bmBitsPixel = 24;	// 16 bit BMPs are not supported by all programs
   
   // Convert the color format to a count of bits. 
@@ -161,16 +163,22 @@ static PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
   // If the bitmap is not compressed, set the BI_RGB flag. 
   pbmi->bmiHeader.biCompression = BI_RGB; 
   
-  // Compute the number of bytes in the array of color 
-  // indices and store the result in biSizeImage. 
-  // For Windows NT/2000, the width must be DWORD aligned unless 
-  // the bitmap is RLE compressed.
-  pbmi->bmiHeader.biSizeImage = ((pbmi->bmiHeader.biWidth * cClrBits +31) & ~31) /8
-    * pbmi->bmiHeader.biHeight; 
-  // Set biClrImportant to 0, indicating that all of the 
-  // device colors are important. 
-  pbmi->bmiHeader.biClrImportant = 0; 
-  return pbmi; 
+  // biSizeImage is the byte count GetDIBits will write. A wrapped
+  // DWORD would make GlobalAlloc too small for that write.
+  const unsigned long long rowBytes =
+	  ((static_cast<unsigned long long>(bmp.bmWidth) * cClrBits + 31ull) & ~31ull) / 8ull;
+  if (rowBytes == 0 ||
+	  rowBytes > 0xffffffffull / static_cast<unsigned long long>(bmp.bmHeight))
+  {
+	  LocalFree(pbmi);
+	  return nullptr;
+  }
+  pbmi->bmiHeader.biSizeImage =
+	  static_cast<DWORD>(rowBytes * static_cast<unsigned long long>(bmp.bmHeight));
+  // Set biClrImportant to 0, indicating that all of the
+  // device colors are important.
+  pbmi->bmiHeader.biClrImportant = 0;
+  return pbmi;
 } 
 
 //  This actually creates our FG_Graphic object for a PNG
@@ -213,7 +221,7 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
     IPicture* pPicture = nullptr;
     IStream* stream;	
     HGLOBAL hG;		
-    HBITMAP hBitmap;
+    HBITMAP hBitmap = nullptr;
     OLE_HANDLE hB = 0;
     PBITMAPINFO	bi;
     UT_ByteBuf bBufBMP;
@@ -258,12 +266,17 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
 
     // get_Handle writes a 32-bit OLE_HANDLE. On x64 that value has to be
     // sign-extended into a HANDLE; the address of a pointer is not one.
-    pPicture->get_Handle(&hB);
-    // LR_COPYRETURNORG hands back the picture's own bitmap when the copy
-    // fails. Only a distinct handle belongs to this function.
-    const HANDLE oleBitmap = LongToHandle(hB);
-    hBitmap = static_cast<HBITMAP>(CopyImage(oleBitmap, IMAGE_BITMAP, 0, 0, LR_COPYRETURNORG));
-    const bool ownBitmap = hBitmap && reinterpret_cast<HANDLE>(hBitmap) != oleBitmap;
+    // A failed call leaves hB alone, so the bitmap path is skipped and the
+    // metafile render below still runs.
+    bool ownBitmap = false;
+    if (SUCCEEDED(pPicture->get_Handle(&hB)))
+    {
+        // LR_COPYRETURNORG hands back the picture's own bitmap when the copy
+        // fails. Only a distinct handle belongs to this function.
+        const HANDLE oleBitmap = LongToHandle(hB);
+        hBitmap = static_cast<HBITMAP>(CopyImage(oleBitmap, IMAGE_BITMAP, 0, 0, LR_COPYRETURNORG));
+        ownBitmap = hBitmap && reinterpret_cast<HANDLE>(hBitmap) != oleBitmap;
+    }
     
     HWND hWnd = GetDesktopWindow();
 
@@ -363,7 +376,8 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
 
 		
 		DeleteDC(hMemDC);
-		ReleaseDC(hWnd, hWndDC);
+		if (hWndDC)
+			ReleaseDC(hWnd, hWndDC);
 		DeleteObject(hBit);	  
     
 		err = Read_BMP_Header(&bBufBMP);
@@ -643,8 +657,8 @@ UT_Error IE_ImpGraphic_Win32Native::Convert_BMP(UT_ByteBuf* pBB)
 		}	
 		break;			
 	default:
+		delete [] row_transformed_data;
 		return UT_IE_BOGUSDOCUMENT;
-		break;
 	}
     delete [] row_transformed_data;
     
