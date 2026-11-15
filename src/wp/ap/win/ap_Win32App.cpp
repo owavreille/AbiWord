@@ -1283,9 +1283,24 @@ int AP_Win32App::WinMain(const char * szAppName, HINSTANCE hInstance,
 
 	// OLE Stuff
 	if (SUCCEEDED(OleInitialize(nullptr)))
-            bInitialized = TRUE;                    
-  
-	
+            bInitialized = TRUE;
+
+	// Windowless exits and the crash catch return before the loop cleanup.
+	// OleInitialize and LoadLibrary both require a matching release.
+	auto releaseProcessRuntime = [&]()
+	{
+		if (bInitialized)
+		{
+			OleUninitialize();
+			bInitialized = FALSE;
+		}
+		if (hinstRich)
+		{
+			FreeLibrary(hinstRich);
+			hinstRich = nullptr;
+		}
+	};
+
 // We put this in a block to force the destruction of Args in the stack
 {
 	UT_Win32LocaleString scnv;
@@ -1313,6 +1328,7 @@ int AP_Win32App::WinMain(const char * szAppName, HINSTANCE hInstance,
 	{
 		pMyWin32App->shutdown();	// properly shutdown the app 1st
 		delete pMyWin32App;
+		releaseProcessRuntime();
 		return (windowlessArgsWereSuccessful ? 0 : -1);
 	}
 
@@ -1325,6 +1341,7 @@ int AP_Win32App::WinMain(const char * szAppName, HINSTANCE hInstance,
 	{
 		pMyWin32App->shutdown();	// properly shutdown the app 1st
 		delete pMyWin32App;
+		releaseProcessRuntime();
 		return 0;
 	}
 }
@@ -1394,11 +1411,7 @@ try
 		abi_win32_note("quit");
 	}
 	
-	// Un-init OLE		               
-        if (bInitialized)
-                OleUninitialize();
-
-	FreeLibrary(hinstRich);
+	releaseProcessRuntime();
 
 	// unload all loaded plugins (remove some of the memory leaks shown at shutdown :-)
 	XAP_ModuleManager::instance().unloadAllPlugins();
@@ -1416,6 +1429,7 @@ try
 //
 catch (...)
 {
+	releaseProcessRuntime();
 #ifdef DEBUG
 	throw;
 #endif

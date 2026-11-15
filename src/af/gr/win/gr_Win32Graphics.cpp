@@ -3001,31 +3001,45 @@ bool GR_Win32Graphics::fixDevMode(HGLOBAL hDevMode)
 {
 	DEVMODEW * pDM = (DEVMODEW*)GlobalLock(hDevMode);
 	UT_return_val_if_fail( pDM, false );
-	
+
+	// dmDeviceName is CCHDEVICENAME characters and is not NUL-terminated when
+	// the friendly name fills the field. OpenPrinterW would then read past it.
+	wchar_t printerName[CCHDEVICENAME + 1];
+	memcpy(printerName, pDM->dmDeviceName, CCHDEVICENAME * sizeof(wchar_t));
+	printerName[CCHDEVICENAME] = L'\0';
+
+	char printerUtf8[(CCHDEVICENAME + 1) * 4];
+	printerUtf8[0] = '\0';
+	WideCharToMultiByte(CP_UTF8, 0, printerName, -1, printerUtf8,
+						 static_cast<int>(sizeof(printerUtf8)), nullptr, nullptr);
+	printerUtf8[sizeof(printerUtf8) - 1] = '\0';
+
 	// find out how big structure this particular printer really needs
-	HANDLE      hPrinter;
-	DWORD       dwNeeded, dwRet;
+	HANDLE      hPrinter = nullptr;
 
 	//Start by opening the printer
-	if(!OpenPrinterW((wchar_t*)& pDM->dmDeviceName, &hPrinter, nullptr))
+	if(!OpenPrinterW(printerName, &hPrinter, nullptr))
 	{
 		UT_String msg;
-		UT_String_sprintf(msg,"Unable to open printer [%s]", (char*)& pDM->dmDeviceName);
+		UT_String_sprintf(msg,"Unable to open printer [%s]", printerUtf8);
 		LOG_WIN32_EXCPT(msg.c_str());
 		GlobalUnlock(hDevMode);
 		UT_ASSERT_HARMLESS( UT_SHOULD_NOT_HAPPEN );
 		return false;
 	}
-	
-	dwNeeded = DocumentPropertiesW(nullptr,hPrinter, (wchar_t*)& pDM->dmDeviceName, nullptr, nullptr, 0);
 
-	if( (int) dwNeeded > pDM->dmSize + pDM->dmDriverExtra )
+	// A failure is a negative LONG. Storing it in a DWORD turns it into a
+	// huge size, and casting that back to int hides the failure.
+	const LONG needed = DocumentPropertiesW(nullptr, hPrinter, printerName, nullptr, nullptr, 0);
+	const LONG have = static_cast<LONG>(pDM->dmSize) + static_cast<LONG>(pDM->dmDriverExtra);
+
+	if( needed <= 0 || needed > have )
 	{
 		// we are knees deep in crap here ... log it into the users profile, so we have
 		// some debug info to go on
 		UT_String msg;
 		UT_String_sprintf(msg,"DEVMODE too small [%s, needs %ld, got %d + %d]",
-						  (char*)& pDM->dmDeviceName, dwNeeded, pDM->dmSize, pDM->dmDriverExtra);
+						  printerUtf8, static_cast<long>(needed), pDM->dmSize, pDM->dmDriverExtra);
 		LOG_WIN32_EXCPT(msg.c_str());
 		ClosePrinter(hPrinter);
 		GlobalUnlock(hDevMode);
@@ -3034,7 +3048,7 @@ bool GR_Win32Graphics::fixDevMode(HGLOBAL hDevMode)
 	}
 	
 	// now get the printer driver to merge the data in the public section into its private part
-	dwRet = DocumentPropertiesW(nullptr,hPrinter, (wchar_t*)& pDM->dmDeviceName, pDM, pDM, DM_OUT_BUFFER | DM_IN_BUFFER);
+	const LONG dwRet = DocumentPropertiesW(nullptr, hPrinter, printerName, pDM, pDM, DM_OUT_BUFFER | DM_IN_BUFFER);
 
 	// g_free what needs be ...
 	ClosePrinter(hPrinter);
