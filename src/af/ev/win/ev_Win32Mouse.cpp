@@ -51,6 +51,14 @@ void EV_Win32Mouse::reset(void)
 	m_iCaptureCount = 0;
 }
 
+void EV_Win32Mouse::onCaptureLost(HWND hwnd)
+{
+	if (GetCapture() == hwnd)
+		return;
+	m_iCaptureCount = 0;
+	m_embCaptured = 0;
+}
+
 void EV_Win32Mouse::onButtonDown(AV_View * pView,
 								 HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos)
 {

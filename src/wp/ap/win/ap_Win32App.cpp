@@ -1017,7 +1017,7 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
 			const char * szEncoding = nullptr;
 			if (bWide)
 			{
-				szEncoding = XAP_EncodingManager::get_instance()->getUCS2LEName();
+				szEncoding = "UTF-16LE";
 			}
 			else
 			{

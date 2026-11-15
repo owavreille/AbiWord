@@ -144,6 +144,7 @@ enum EncoderValue
 typedef DWORD ARGB;
 
 typedef GpStatus (WINGDIPAPI* GdiplusStartupFunc) (gpointer, const gpointer, gpointer);
+typedef void (WINGDIPAPI* GdiplusShutdownFunc) (ULONG_PTR);
 typedef GpStatus (WINGDIPAPI* GdipDisposeImageFunc) (GpImage*);
 typedef GpStatus (WINGDIPAPI* GdipSaveImageToFileFunc) (GpImage *image, GDIPCONST WCHAR* filename, 
 							GDIPCONST CLSID* clsidEncoder, 
@@ -169,6 +170,9 @@ typedef GpStatus (WINGDIPAPI* GdipGetImageHorizontalResolutionFunc) (GpImage *im
 typedef GpStatus (WINGDIPAPI* GdipGetImageVerticalResolutionFunc) (GpImage *image, float *resolution);
 
 static GdiplusStartupFunc GdiplusStartup = nullptr;
+static GdiplusShutdownFunc GdiplusShutdown = nullptr;
+static ULONG_PTR gdiplusToken = 0;
+static bool gdiplusStarted = false;
 static GdipDisposeImageFunc GdipDisposeImage = nullptr;
 static GdipSaveImageToFileFunc GdipSaveImageToFile = nullptr;
 static GdipLoadImageFromFileFunc GdipLoadImageFromFile = nullptr;
@@ -198,31 +202,65 @@ static GDIPCONST GUID EncoderSaveFlag = { 0x292266FC, 0xac40, 0x47bf, { 0x8c, 0x
 #define d(x) G_STMT_START { } G_STMT_END
 #endif
 
+static HINSTANCE gdipluslib = nullptr;
+
+static void
+gdip_drop_library (void)
+{
+  if (gdipluslib)
+    FreeLibrary (gdipluslib);
+  gdipluslib = nullptr;
+}
+
+static void
+s_remove_utf16_file (gunichar2 * & name)
+{
+  if (!name)
+    return;
+  gchar * utf8 = g_utf16_to_utf8 (name, -1, nullptr, nullptr, nullptr);
+  if (utf8)
+    {
+      g_unlink (utf8);
+      g_free (utf8);
+    }
+  g_free (name);
+  name = nullptr;
+}
+
+static void
+gdip_shutdown (void)
+{
+  if (gdiplusStarted && GdiplusShutdown)
+    GdiplusShutdown (gdiplusToken);
+  gdiplusToken = 0;
+  gdiplusStarted = false;
+}
+
 static GpStatus
 gdip_init (void)
 {
   GdiplusStartupInput input;
-  ULONG_PTR gdiplusToken = 0;
-  static HINSTANCE gdipluslib = nullptr;
+
+  if (gdiplusStarted)
+    return 0;
 
   if (!gdipluslib)
     gdipluslib = LoadLibraryW (L"gdiplus.dll");
-  else
-    return 0; /* gdip_init() is idempotent */
-
   if (!gdipluslib)
-    return 18; // GdiplusNotInitialized 
+    return 18; // GdiplusNotInitialized
 
 #define LOOKUP(func) \
   G_STMT_START { \
     func = reinterpret_cast<func##Func>(reinterpret_cast<void *>(GetProcAddress (gdipluslib, #func))); \
     if (!func) {\
       g_warning ("Couldn't load function: %s\n", #func); \
+      gdip_drop_library (); \
       return 18; \
     } \
   } G_STMT_END
 
   LOOKUP (GdiplusStartup);
+  LOOKUP (GdiplusShutdown);
   LOOKUP (GdipDisposeImage);
   LOOKUP (GdipSaveImageToFile);
   LOOKUP (GdipLoadImageFromFile);
@@ -248,8 +286,16 @@ gdip_init (void)
   input.GdiplusVersion = 1;
   input.DebugEventCallback = nullptr;
   input.SuppressBackgroundThread = input.SuppressExternalCodecs = FALSE;
-  
-  return GdiplusStartup (&gdiplusToken, &input, nullptr);
+
+  GpStatus status = GdiplusStartup (&gdiplusToken, &input, nullptr);
+  if (status != 0)
+    {
+      gdip_drop_library ();
+      gdiplusToken = 0;
+      return status;
+    }
+  gdiplusStarted = true;
+  return 0;
 }
 
 #define ASSERT_GDIP_SUCCESS(status, func) \
@@ -292,7 +338,8 @@ public:
     d (g_print ("~GR_Win32PrintPreviewGraphics()\n"));
 	if (m_multiPageTiff)
       GdipDisposeImage (m_multiPageTiff);
-    g_free(m_tiffFilename);
+    s_remove_utf16_file (m_tiffFilename);
+    gdip_shutdown ();
 
     // todo: delete DC and docInfo
   }
@@ -490,6 +537,7 @@ public:
 
   virtual bool startPrint(void)
    override {
+    s_remove_utf16_file (m_tiffFilename);
     std::string sName = UT_createTmpFile("pr", ".tif");
 
     d (g_print ("saving to %s\n", sName.c_str()));

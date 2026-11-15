@@ -63,7 +63,7 @@ UT_UCS2Char * UT_UCS2_strcpy_char(UT_UCS2Char * dest, char * src)
 	unsigned char * s	= (unsigned char *)(src);
 
 	//static UT_UCS2_mbtowc m(XAP_EncodingManager::get_instance()->getNative8BitEncodingName());
-	static UT_UCS2_mbtowc m( "UCS-2LE");
+	static UT_UCS2_mbtowc m( "UTF-16LE");
 	UT_UCS2Char wc;
 
 	while (*s != 0)
@@ -307,7 +307,7 @@ UT_UTF8String UT_Win32LocaleString::utf8_str() const
 {
 	char * pText = UT_convert ((const char *) ucs2_str(),
 							  size () * sizeof (wchar_t),
-							  "UCS-2LE",
+							  "UTF-16LE",
 							  "UTF-8",
 							  nullptr, nullptr);
 
@@ -320,7 +320,7 @@ UT_UCS4String UT_Win32LocaleString::ucs4_str() const
 {
 	UT_UCS4Char * pText = (UT_UCS4Char *) UT_convert ((const char *) c_str(),
 							  (size()+1) * sizeof (wchar_t),
-							  "UCS-2LE",
+							  "UTF-16LE",
 							  "UCS-4LE",
 							  nullptr, nullptr);
 
@@ -346,7 +346,7 @@ void UT_Win32LocaleString::fromUCS4 (const UT_UCS4Char* usc4_in)
 	UT_UCS2Char * pText = (UT_UCS2Char *) UT_convert ((const char*) usc4_in,
 							  (UT_UCS4_strlen(usc4_in)+1) * 4,
 							  "UCS-4LE",
-							  "UCS-2LE",
+							  "UTF-16LE",
 							  nullptr, nullptr);
 	if (!pText || !*pText) {
     	pimpl->clear ();
@@ -366,7 +366,7 @@ void UT_Win32LocaleString::fromUTF8 (const char* utf8str)
 	UT_UCS2Char * pText = (UT_UCS2Char *) UT_convert (utf8str,
 							  strlen(utf8str)+1,
 							  "UTF-8",
-							  "UCS-2LE",
+							  "UTF-16LE",
 							  nullptr, nullptr);
 
 	if (!pText || !*pText) {
@@ -392,7 +392,7 @@ void UT_Win32LocaleString::fromASCII (const char* szASCII, size_t sz)
 		p_str++;
 	}
 	pimpl->assign(src, len);
-	delete src;
+	delete [] src;
 }
 
 void UT_Win32LocaleString::fromLocale (const wchar_t* szLocale)
@@ -418,7 +418,7 @@ void UT_Win32LocaleString::appendASCII (const char* szASCII)
 		p_str++;
 	}
 	pimpl->append(src, len);
-	delete src;
+	delete [] src;
 }
 
 UT_Win32LocaleString UT_Win32LocaleString::substr(size_t iStart, size_t nChars) const

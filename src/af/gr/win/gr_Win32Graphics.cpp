@@ -347,15 +347,31 @@ GR_Font* GR_Win32Graphics::getGUIFont(void)
 }
 
 extern "C"
+struct win32FontCharset
+{
+	BYTE value;
+	int rank;
+};
+
 int CALLBACK
 win32Internal_fontEnumProcedure(ENUMLOGFONTW* pLogFont,
 								NEWTEXTMETRICEXW* /*pTextMetric*/,
 								int /*Font_type*/,
 								LPARAM lParam)
 {
-	LOGFONTW *lf = (LOGFONTW*)lParam;
-	lf->lfCharSet = pLogFont->elfLogFont.lfCharSet;
-	return 0;
+	win32FontCharset *choice = reinterpret_cast<win32FontCharset *>(lParam);
+	const BYTE charset = pLogFont->elfLogFont.lfCharSet;
+	int rank = 1;
+	if (charset == ANSI_CHARSET)
+		rank = 2;
+	if (charset == DEFAULT_CHARSET)
+		rank = 3;
+	if (rank > choice->rank)
+	{
+		choice->rank = rank;
+		choice->value = charset;
+	}
+	return 1;
 }
 
 GR_Font* GR_Win32Graphics::_findFont(const char* pszFontFamily,
@@ -431,8 +447,10 @@ GR_Font* GR_Win32Graphics::_findFont(const char* pszFontFamily,
 
 	enumlf.lfCharSet = DEFAULT_CHARSET;
 	wcscpy(enumlf.lfFaceName, lf.lfFaceName);
+	win32FontCharset charset = { DEFAULT_CHARSET, 0 };
 	EnumFontFamiliesExW(m_hdc, &enumlf,
-		(FONTENUMPROCW)win32Internal_fontEnumProcedure, (LPARAM)&lf, 0);
+		(FONTENUMPROCW)win32Internal_fontEnumProcedure, (LPARAM)&charset, 0);
+	lf.lfCharSet = charset.rank ? charset.value : DEFAULT_CHARSET;
 
 	lf.lfOutPrecision = OUT_TT_ONLY_PRECIS;		// Choose only True Type fonts.
 	lf.lfQuality = PROOF_QUALITY;
@@ -1638,13 +1656,17 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 
 	if(!iRes)
 	{
-		SetStretchBltMode(m_hdc, COLORONCOLOR);
+		const int previousMode = SetStretchBltMode(m_hdc, HALFTONE);
+		POINT previousOrg;
+		SetBrushOrgEx(m_hdc, 0, 0, &previousOrg);
 		iRes = StretchDIBits(m_hdc,
 							 xDest, yDest,
 							 pImg->getDisplayWidth(), pImg->getDisplayHeight(),
 							 0, 0,
 							 pDIB->bmiHeader.biWidth, pDIB->bmiHeader.biHeight,
 							 pBits, pDIB, DIB_RGB_COLORS, SRCCOPY);
+		SetBrushOrgEx(m_hdc, previousOrg.x, previousOrg.y, nullptr);
+		SetStretchBltMode(m_hdc, previousMode);
 	}
 	
 	if (iRes == static_cast<int>(GDI_ERROR))
@@ -2067,12 +2089,11 @@ GR_Win32Font::~GR_Win32Font()
 	  {
 		  allocFont *p = (allocFont *)m_allocFonts.getNthItem(i);
 
-		  if(m_hdc) 
+		  if(m_hdc && p->hFont)
 		  {
-			  if (!bIsDC || p->hFont != (HFONT)::GetCurrentObject(m_hdc, OBJ_FONT))
-			  {
-				  DeleteObject(p->hFont);
-			  }
+			  if (bIsDC && p->hFont == (HFONT)::GetCurrentObject(m_hdc, OBJ_FONT))
+				  SelectObject(m_hdc, GetStockObject(SYSTEM_FONT));
+			  DeleteObject(p->hFont);
 		  }
 
 		  delete p;

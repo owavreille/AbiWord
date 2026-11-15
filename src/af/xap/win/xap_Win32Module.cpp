@@ -52,8 +52,13 @@ public:
 		}
 
 		WCHAR szName[512];
-
-		MultiByteToWideChar(CP_UTF8,0,name,-1,szName,512);
+		szName[0] = 0;
+		const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, name, -1, szName, 512);
+		if (written <= 0)
+		{
+			m_pszErr = szErrNoDllFound;
+			return false;
+		}
 
 		m_hMod = LoadLibraryW(szName);
 		if (!m_hMod)

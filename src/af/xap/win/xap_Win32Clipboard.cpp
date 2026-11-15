@@ -90,9 +90,13 @@ bool XAP_Win32Clipboard::addData(const char * format, void* pData, UT_sint32 iNu
 	memcpy(p, pData, iNumBytes);
 	GlobalUnlock(hData);
 
-	return (SetClipboardData(iFormat, hData) != nullptr);
-
-	// TODO if SetClipboardData() fails, do we need to GlobalFree(hData) ??
+	// SetClipboardData takes ownership only when it succeeds.
+	if (SetClipboardData(iFormat, hData) == nullptr)
+	{
+		GlobalFree(hData);
+		return false;
+	}
+	return true;
 }
 
 // Caller should release using GlobalUnlock the memory handle returned 

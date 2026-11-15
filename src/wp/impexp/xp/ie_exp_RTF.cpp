@@ -3251,12 +3251,26 @@ bool IE_Exp_RTF::s_escapeString(UT_UTF8String &sOutStr,
 				sOutStr += "?";
 			continue;
 		}
-		// TODO: Strictly speaking we should be using the UTF-16 encoding,
-		// since we ought to represent unicode values above 0xffff as surrogate
-		// pairs. However, the abi util classes lack a UT_UCS2String class.
-		// We could use UT_convert() to convert to UCS-2, but that's rather messy.
-		// In any case, unicode points above 0xffff are rather rare, so for the time
-		// being we just assert and replace such code points with a "?".
+		// RTF stores a supplementary character as a UTF-16 surrogate pair.
+		// Each \u value is a signed 16-bit code unit.
+		if (sInStr[i] <= 0x10FFFF)
+		{
+			bRetVal = true;
+			const UT_UCS4Char value = sInStr[i] - 0x10000;
+			const signed short high = static_cast<signed short>(0xD800 + (value >> 10));
+			const signed short low = static_cast<signed short>(0xDC00 + (value & 0x3FF));
+			sOutStr += UT_UTF8String_sprintf("\\u%d", high);
+			if (iAltChars)
+				sOutStr += " ";
+			for (UT_uint32 j = 0; j < iAltChars; j++)
+				sOutStr += "?";
+			sOutStr += UT_UTF8String_sprintf("\\u%d", low);
+			if (iAltChars)
+				sOutStr += " ";
+			for (UT_uint32 j = 0; j < iAltChars; j++)
+				sOutStr += "?";
+			continue;
+		}
 		UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED);
 		sOutStr += "?";
 	}

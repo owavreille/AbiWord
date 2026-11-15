@@ -440,11 +440,15 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 			UT_Byte * pBits = ((unsigned char *) pDIB) + pDIB->bmiHeader.biSize
 				+ pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
 			int y = (r.bottom - imageHeight) / 2;
-			SetStretchBltMode(hdc, COLORONCOLOR);
+			const int previousMode = SetStretchBltMode(hdc, HALFTONE);
+			POINT previousOrg;
+			SetBrushOrgEx(hdc, 0, 0, &previousOrg);
 			StretchDIBits(hdc,
 						  0, y, imageWidth, imageHeight,
 						  0, 0, pDIB->bmiHeader.biWidth, pDIB->bmiHeader.biHeight,
 						  pBits, pDIB, DIB_RGB_COLORS, SRCCOPY);
+			SetBrushOrgEx(hdc, previousOrg.x, previousOrg.y, nullptr);
+			SetStretchBltMode(hdc, previousMode);
 		}
 
 		EndPaint(hWnd,&ps);

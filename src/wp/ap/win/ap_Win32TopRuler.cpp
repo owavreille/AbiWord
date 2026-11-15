@@ -159,6 +159,11 @@ LRESULT CALLBACK AP_Win32TopRuler::_TopRulerWndProc(HWND hwnd, UINT iMsg, WPARAM
 		
 	switch (iMsg)
 	{
+	case WM_CAPTURECHANGED:
+		if (reinterpret_cast<HWND>(lParam) != hwnd)
+			pRuler->mouseRelease(0, EV_EMB_BUTTON1, 0, 0);
+		return 0;
+
 	case WM_LBUTTONDOWN:
 		SetCapture(hwnd);
 		

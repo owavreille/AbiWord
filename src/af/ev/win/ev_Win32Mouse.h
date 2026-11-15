@@ -40,6 +40,7 @@ public:
 	EV_Win32Mouse(EV_EditEventMapper * pEEM);
 
 	void reset(void);
+	void onCaptureLost(HWND hwnd);
 
 	void onButtonDown(AV_View * pView, HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos);
 	void onButtonUp  (AV_View * pView, HWND hWnd, EV_EditMouseButton emb, WPARAM fwKeys, UT_sint32 xPos, UT_sint32 yPos);

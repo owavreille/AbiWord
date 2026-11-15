@@ -19,6 +19,9 @@
 
 
 #include <stdio.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 
 #include "ut_path.h"
@@ -47,7 +50,18 @@ std::string UT_createTmpFile(const std::string& prefix, const std::string& exten
 	sName += rand.utf8_str();
 	sName += extension;
 
+#ifdef _WIN32
+	const int needed = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, sName.c_str(), -1, nullptr, 0);
+	if (needed <= 0)
+		return "";
+	WCHAR * wide = new WCHAR[needed];
+	FILE * f = nullptr;
+	if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, sName.c_str(), -1, wide, needed) > 0)
+		f = _wfopen(wide, L"w+b");
+	delete [] wide;
+#else
 	FILE* f = fopen (sName.c_str(), "w+b");
+#endif
 	if (!f)
 		return "";
 

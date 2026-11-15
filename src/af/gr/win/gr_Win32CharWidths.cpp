@@ -59,6 +59,16 @@ void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Ch
 			{
 				setWidth(k,GR_CW_ABSENT);
 			}
+			else if (k > 0xFFFF)
+			{
+				wchar_t units[2];
+				units[0] = static_cast<wchar_t>(0xD800 + ((k - 0x10000) >> 10));
+				units[1] = static_cast<wchar_t>(0xDC00 + ((k - 0x10000) & 0x3FF));
+				SIZE Size;
+				GetTextExtentPoint32W(hdc, units, 2, &Size);
+				setWidth(k, Size.cx);
+				continue;
+			}
 			else
 			{
 				GetCharWidth32W(hdc,k,k,&w);
@@ -143,13 +153,21 @@ void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Ch
 				else
 				{
 					SIZE Size;
-					wchar_t sz1[2];
-					sz1[0] = k;
-					
-					GetTextExtentPoint32W(hdc, sz1, 1, &Size);
+					wchar_t units[2];
+					int unitCount = 1;
+					if (k > 0xFFFF)
+					{
+						units[0] = static_cast<wchar_t>(0xD800 + ((k - 0x10000) >> 10));
+						units[1] = static_cast<wchar_t>(0xDC00 + ((k - 0x10000) & 0x3FF));
+						unitCount = 2;
+					}
+					else
+						units[0] = static_cast<wchar_t>(k);
+
+					GetTextExtentPoint32W(hdc, units, unitCount, &Size);
 					// handle overstriking chars here
 					UT_uint32 iOver = UT_isOverstrikingChar(k);
-					if(!Size.cx ||  iOver != UT_NOT_OVERSTRIKING)
+					if(k <= 0xFFFF && (!Size.cx ||  iOver != UT_NOT_OVERSTRIKING))
 					{
 						iOver &= UT_OVERSTRIKING_TYPE;
 
@@ -251,6 +269,12 @@ bool GR_Win32CharWidths::_doesGlyphExist(UT_UCS4Char g)
 #define DO_BE2LE32(x)
 #endif
 
+struct CmapSpan
+{
+	UT_uint32 start;
+	UT_uint32 end;
+};
+
 void GR_Win32CharWidths::_retrieveFontInfo(HDC hdc)
 {
 	// retrieve CMAP table for this font
@@ -258,6 +282,8 @@ void GR_Win32CharWidths::_retrieveFontInfo(HDC hdc)
 	DWORD iTableSize = GetFontData(hdc, CMAP, 0, nullptr, 0);
 	UT_Win32TraceF("cmap-size %lu", (unsigned long)iTableSize);
 	char * buff = nullptr, * p = nullptr, * tableEnd = nullptr;
+	CmapSpan * supplementary = nullptr;
+	UT_uint32 supplementaryCount = 0;
 	UT_uint16 i, j, k;
 	UT_uint16 iTCount;
 	UT_uint32 iOffset;
@@ -277,6 +303,57 @@ void GR_Win32CharWidths::_retrieveFontInfo(HDC hdc)
 	// the loop below byte-swaps the segment arrays in place.
 	if (iTableSize < 4)
 		goto end_processing;
+
+	{
+		const unsigned char * base = reinterpret_cast<const unsigned char *>(buff);
+		const UT_uint16 tableCount = static_cast<UT_uint16>((base[2] << 8) | base[3]);
+		for (UT_uint16 table = 0; table < tableCount; ++table)
+		{
+			const unsigned char * rec = base + 4 + table * 8;
+			if (rec + 8 > base + iTableSize)
+				break;
+			const UT_uint16 platform = static_cast<UT_uint16>((rec[0] << 8) | rec[1]);
+			const UT_uint16 encoding = static_cast<UT_uint16>((rec[2] << 8) | rec[3]);
+			const UT_uint32 offset = (static_cast<UT_uint32>(rec[4]) << 24)
+				| (static_cast<UT_uint32>(rec[5]) << 16)
+				| (static_cast<UT_uint32>(rec[6]) << 8)
+				| rec[7];
+			if (platform != 3 || encoding != 10)
+				continue;
+			if (offset > iTableSize || iTableSize - offset < 16)
+				continue;
+			const unsigned char * sub = base + offset;
+			const UT_uint16 format = static_cast<UT_uint16>((sub[0] << 8) | sub[1]);
+			if (format != 12)
+				continue;
+			UT_uint32 groups = (static_cast<UT_uint32>(sub[12]) << 24)
+				| (static_cast<UT_uint32>(sub[13]) << 16)
+				| (static_cast<UT_uint32>(sub[14]) << 8)
+				| sub[15];
+			if (groups > (iTableSize - offset - 16) / 12)
+				groups = (iTableSize - offset - 16) / 12;
+			supplementary = new CmapSpan[groups ? groups : 1];
+			for (UT_uint32 group = 0; group < groups; ++group)
+			{
+				const unsigned char * g = sub + 16 + group * 12;
+				const UT_uint32 start = (static_cast<UT_uint32>(g[0]) << 24)
+					| (static_cast<UT_uint32>(g[1]) << 16)
+					| (static_cast<UT_uint32>(g[2]) << 8)
+					| g[3];
+				const UT_uint32 end = (static_cast<UT_uint32>(g[4]) << 24)
+					| (static_cast<UT_uint32>(g[5]) << 16)
+					| (static_cast<UT_uint32>(g[6]) << 8)
+					| g[7];
+				if (start <= end)
+				{
+					supplementary[supplementaryCount].start = start;
+					supplementary[supplementaryCount].end = end;
+					++supplementaryCount;
+				}
+			}
+			break;
+		}
+	}
 
 	// now process the data in the table ...
 	p = buff;
@@ -424,12 +501,20 @@ void GR_Win32CharWidths::_retrieveFontInfo(HDC hdc)
 
 	}
 
+	for (UT_uint32 span = 0; span < supplementaryCount; ++span)
+	{
+		m_vRanges.addItem(static_cast<UT_sint32>(supplementary[span].start));
+		m_vRanges.addItem(static_cast<UT_sint32>(supplementary[span].end));
+	}
+
 	// g_free the table data
 	UT_Win32Trace("cmap-free");
 	delete [] buff;
 	UT_Win32TraceHeap("cmap-free");
 
- end_processing:	
+ end_processing:
+	delete [] supplementary;
+	supplementary = nullptr;
 	UT_Win32TraceF("cmap-end ranges=%d", (int)m_vRanges.getItemCount());
 	// sanity check
 	if(m_vRanges.getItemCount() == 0)

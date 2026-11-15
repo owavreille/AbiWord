@@ -26,6 +26,7 @@
 
 #ifdef TOOLKIT_WIN
 #include <io.h>
+#include <windows.h>
 #else
 // this ansi header is not available on Windows.
 // needed for close()
@@ -3053,13 +3054,38 @@ Defun1(fileSaveEmbed)
 	return true;
 }
 
+#ifdef TOOLKIT_WIN
+static void s_removePreviousPreview(const std::string & path)
+{
+	if (path.empty())
+		return;
+	const int needed = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), -1, nullptr, 0);
+	if (needed <= 0)
+		return;
+	WCHAR * wide = new WCHAR[needed];
+	if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, path.c_str(), -1, wide, needed) > 0)
+		_wunlink(wide);
+	delete [] wide;
+}
+#endif
+
 Defun1(filePreviewWeb)
 {
 	CHECK_FRAME;
 	UT_return_val_if_fail (pAV_View, false);
 	XAP_Frame * pFrame = static_cast<XAP_Frame *>(pAV_View->getParentData());
-	
+
+#ifdef TOOLKIT_WIN
+	static std::string s_previousWebPreview;
+	s_removePreviousPreview(s_previousWebPreview);
+	s_previousWebPreview.clear();
+#endif
+
 	std::string file = UT_createTmpFile("web", ".html");
+#ifdef TOOLKIT_WIN
+	if (!file.empty())
+		s_previousWebPreview = file;
+#endif
 
 	UT_Error errSaved = UT_OK;
 

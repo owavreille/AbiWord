@@ -62,6 +62,7 @@ protected:
 	UT_iconv_t			m_iconv; /* Selected translation to Unicode */
 	bool				m_bIsUnicodeInput;
 	bool				m_bWasAnAbiCommand;
+	UT_uint32			m_utf16Lead;
 };
 
 #endif /* EV_WIN32KEYBOARD_H */

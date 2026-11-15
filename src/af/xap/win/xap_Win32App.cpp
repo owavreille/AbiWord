@@ -245,15 +245,23 @@ const char * XAP_Win32App::getUserPrivateDirectory(void) const
 	memset(buf,0,sizeof(buf));
 
 	DWORD len, len1, len2;
+	wbuf[0] = 0;
 
 	UT_Win32LocaleString str;
 	UT_UTF8String utf8;
 
+	// GetEnvironmentVariableW returns the required size, including the null,
+	// when the buffer is too small, and then leaves the buffer undefined.
+	auto envFits = [](LPCWSTR name, WCHAR * dest, DWORD capacity) -> bool
+	{
+		const DWORD n = GetEnvironmentVariableW(name, dest, capacity);
+		return n > 0 && n < capacity;
+	};
+
 	// On W2K and later, APPDATA seems to be set to the directory containing per-user
 	// information.
 
-	len = GetEnvironmentVariableW(L"APPDATA",wbuf,PATH_MAX);
-	if (len)
+	if (envFits(L"APPDATA", wbuf, PATH_MAX))
 	{
 		if (isWriteable(wbuf)) path_ok=true;
 #ifdef DEBUG
@@ -267,8 +275,7 @@ const char * XAP_Win32App::getUserPrivateDirectory(void) const
 	{
 		// On NT, USERPROFILE seems to be modern equivalent of $HOME
 
-		len = GetEnvironmentVariableW(L"USERPROFILE",wbuf,PATH_MAX);
-		if (len)
+		if (envFits(L"USERPROFILE", wbuf, PATH_MAX))
 		{
 			if (isWriteable(wbuf)) path_ok=true;
 #ifdef DEBUG
@@ -285,16 +292,21 @@ const char * XAP_Win32App::getUserPrivateDirectory(void) const
 		// is mentioned in the GetWindowsDirectory() documentation at least.
 		// These may be set if the SysAdmin did so in the Admin tool....
 
-		len1 = GetEnvironmentVariableW(L"HOMEDRIVE",wbuf,PATH_MAX);
-		len2 = GetEnvironmentVariableW(L"HOMEPATH",&wbuf[len1],PATH_MAX-len1);
-		if (len1 && len2)
+		if (envFits(L"HOMEDRIVE", wbuf, PATH_MAX))
 		{
-			if (isWriteable(wbuf)) path_ok=true;
+			len1 = lstrlenW(wbuf);
+			len2 = (len1 < PATH_MAX)
+				? GetEnvironmentVariableW(L"HOMEPATH", &wbuf[len1], PATH_MAX - len1)
+				: 0;
+			if (len2 > 0 && len2 < PATH_MAX - len1 && isWriteable(wbuf))
+			{
+				path_ok=true;
 #ifdef DEBUG
-			str.fromLocale(wbuf);
-			utf8=str.utf8_str();
-			UT_DEBUGMSG(("Getting preferences directory from HOMEDRIVE and HOMEPATH [%s].\n",utf8.utf8_str()));
+				str.fromLocale(wbuf);
+				utf8=str.utf8_str();
+				UT_DEBUGMSG(("Getting preferences directory from HOMEDRIVE and HOMEPATH [%s].\n",utf8.utf8_str()));
 #endif
+			}
 		}
 	}
 
@@ -303,7 +315,7 @@ const char * XAP_Win32App::getUserPrivateDirectory(void) const
 		// If that doesn't work, let's just stick it in the WINDOWS directory.
 
 		len = GetWindowsDirectoryW(wbuf,PATH_MAX);
-		if (len)
+		if (len > 0 && len < PATH_MAX)
 		{
 			if (isWriteable(wbuf)) path_ok=true;
 #ifdef DEBUG
@@ -327,8 +339,8 @@ const char * XAP_Win32App::getUserPrivateDirectory(void) const
 	{
 		// As penultimate resort try to use temporary dir
 
-		len = GetTempPathW(MAX_PATH,wbuf);
-		if (len)
+		len = GetTempPathW(PATH_MAX,wbuf);
+		if (len > 0 && len < PATH_MAX)
 		{
 			if (isWriteable(wbuf)) path_ok=true;
 #ifdef DEBUG
@@ -343,8 +355,7 @@ const char * XAP_Win32App::getUserPrivateDirectory(void) const
 	{
 		// As last resort trying to use TMP dir
 
-		len = GetEnvironmentVariableW(L"TMP",wbuf,PATH_MAX);
-		if (len)
+		if (envFits(L"TMP", wbuf, PATH_MAX))
 		{
 			if (isWriteable(wbuf)) path_ok=true;
 #ifdef DEBUG
@@ -355,7 +366,8 @@ const char * XAP_Win32App::getUserPrivateDirectory(void) const
 		}
 	}
 
-	UT_ASSERT(path_ok=true)
+	if (!path_ok || wbuf[0] == 0)
+		return nullptr;
 
 	if (lstrlenW(wbuf)+lstrlenW(szAbiDir)+2 >= PATH_MAX)
 		return nullptr;
@@ -381,8 +393,10 @@ void XAP_Win32App::_setAbiSuiteLibDir(void)
 	WCHAR buf[PATH_MAX];
 
 	// see if ABIWORD_DATADIR was set in the environment
-	if (GetEnvironmentVariableW(L"ABIWORD_DATADIR", buf, PATH_MAX) > 0)
 	{
+		const DWORD datadirLen = GetEnvironmentVariableW(L"ABIWORD_DATADIR", buf, PATH_MAX);
+		if (datadirLen > 0 && datadirLen < PATH_MAX)
+		{
 		utf8 = (char*) getUTF8String(buf);
 		char * p = utf8;
 		int len = strlen(p);
@@ -397,6 +411,7 @@ void XAP_Win32App::_setAbiSuiteLibDir(void)
 			p[len-1] = 0;
 		XAP_App::_setAbiSuiteLibDir(p);
 		return;
+		}
 	}
 
 	if (_getExeDir(buf, PATH_MAX) > 0)

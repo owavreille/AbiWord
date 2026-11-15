@@ -1187,6 +1187,11 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 			return 1;
 		}
 
+		case WM_CAPTURECHANGED:
+			if (pMouse && reinterpret_cast<HWND>(lParam) != hwnd)
+				pMouse->onCaptureLost(hwnd);
+			return 0;
+
 		case WM_LBUTTONDOWN:
 			if(GetFocus() != hwnd)
 			{

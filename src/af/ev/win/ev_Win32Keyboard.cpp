@@ -78,7 +78,8 @@ ev_Win32Keyboard::ev_Win32Keyboard(EV_EditEventMapper * pEEM)
 	  m_hKeyboardLayout(nullptr),
 	  m_iconv(UT_ICONV_INVALID),
 	  m_bIsUnicodeInput(false),
-	  m_bWasAnAbiCommand(false)
+	  m_bWasAnAbiCommand(false),
+	  m_utf16Lead(0)
 {
 	HINSTANCE hInstUser = LoadLibraryW(L"USER32.DLL");
 	if (hInstUser)
@@ -284,8 +285,34 @@ void ev_Win32Keyboard::_emitChar(AV_View * pView,
 	// do the dirty work of pumping this character thru the state machine.
 
 	UT_UCS4Char charData[2];
+	charData[0] = 0;
+	charData[1] = 0;
 	size_t ret;
-	if( m_iconv != UT_ICONV_INVALID )
+
+	// WM_CHAR delivers one UTF-16 unit. A character outside the BMP arrives
+	// as a high surrogate followed by a low surrogate. UCS-2 iconv rejects both.
+	if (m_bIsUnicodeInput && iMsg != WM_UNICHAR)
+	{
+		const UT_uint32 unit = b & 0xFFFF;
+		if (unit >= 0xD800 && unit <= 0xDBFF)
+		{
+			m_utf16Lead = unit;
+			return;
+		}
+		if (unit >= 0xDC00 && unit <= 0xDFFF)
+		{
+			if (!m_utf16Lead)
+				return;
+			charData[0] = 0x10000 + (((m_utf16Lead - 0xD800) << 10) | (unit - 0xDC00));
+			m_utf16Lead = 0;
+		}
+		else
+		{
+			m_utf16Lead = 0;
+			charData[0] = unit;
+		}
+	}
+	else if( m_iconv != UT_ICONV_INVALID )
 	{
 		// convert to 8bit string and null terminate
 		size_t len_in, len_out;
@@ -306,6 +333,7 @@ void ev_Win32Keyboard::_emitChar(AV_View * pView,
 		if ((ret = UT_iconv( m_iconv, &In, &len_in, &Out, &len_out )) == static_cast<size_t>(-1))
 		{
 			UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+			return;
 		}
 		if (Out == (char *)charData)
 		{

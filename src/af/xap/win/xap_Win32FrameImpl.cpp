@@ -605,7 +605,7 @@ void XAP_Win32FrameImpl::_setFullScreen(bool isFullScreen)
 		
 	}
 
-	// Add or remove title-bar and border
+	// Add or remove title-bar and border. SWP_FRAMECHANGED applies the style.
 	SetWindowLongPtrW(hwndFrame, GWL_STYLE, isFullScreen ? hStyle & ~WS_CAPTION : hStyle | WS_CAPTION);
 
 	// We hide the window before maximizing
@@ -615,30 +615,22 @@ void XAP_Win32FrameImpl::_setFullScreen(bool isFullScreen)
 
 	ShowWindow(hwndFrame, isFullScreen ? SW_SHOWMAXIMIZED : m_iWindowStateBeforeFS);
 
-	// TODO: does the following code work well with multiple monitors?
 	if(isFullScreen)
 	{
-		int width = GetSystemMetrics(SM_CXSCREEN);
-		int height = GetSystemMetrics(SM_CYSCREEN);
-
-		if((height > 0) && (width > 0))
+		HMONITOR monitor = MonitorFromWindow(hwndFrame, MONITOR_DEFAULTTONEAREST);
+		MONITORINFO info;
+		info.cbSize = sizeof(info);
+		if (GetMonitorInfoW(monitor, &info))
 		{
-			if(!SetWindowPos(hwndFrame, nullptr, 0, 0, width, height, 0))
-			{
-				UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
-			}
-		}
-		else
-		{
-			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+			const RECT & rc = info.rcMonitor;
+			SetWindowPos(hwndFrame, nullptr, rc.left, rc.top,
+						 rc.right - rc.left, rc.bottom - rc.top,
+						 SWP_NOZORDER | SWP_FRAMECHANGED);
 		}
 	}
 	else
 	{
-		if(!SetWindowPos(hwndFrame, nullptr, m_iWindowXBeforeFS, m_iWindowYBeforeFS, m_iWindowWidthBeforeFS, m_iWindowHeightBeforeFS, 0))
-		{
-			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
-		}
+		SetWindowPos(hwndFrame, nullptr, m_iWindowXBeforeFS, m_iWindowYBeforeFS, m_iWindowWidthBeforeFS, m_iWindowHeightBeforeFS, SWP_NOZORDER | SWP_FRAMECHANGED);
 	}
 
 	UpdateWindow(hwndFrame);
@@ -654,8 +646,14 @@ void XAP_Win32FrameImpl::_nullUpdate (void) const
 	{
 		if( PeekMessageW( &msg, (HWND) nullptr, 0, 0, PM_REMOVE) )
 		{
-			DispatchMessageW(&msg); 
-		} 
+			if (msg.message == WM_QUIT)
+			{
+				PostQuitMessage(static_cast<int>(msg.wParam));
+				break;
+			}
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
+		}
 	}
 }
 

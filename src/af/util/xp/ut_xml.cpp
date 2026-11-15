@@ -49,8 +49,9 @@ bool DefaultReader::openFile (const char * szFilename)
 {
 #ifdef _WIN32
 	WCHAR wFilename[MAX_PATH];
-	MultiByteToWideChar(CP_UTF8,0,szFilename,-1,wFilename,MAX_PATH);
-	in = _wfopen (wFilename, L"r");
+	wFilename[0] = 0;
+	const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, szFilename, -1, wFilename, MAX_PATH);
+	in = (written > 0) ? _wfopen (wFilename, L"r") : nullptr;
 #else
 	in = fopen (szFilename, "r");
 #endif

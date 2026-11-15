@@ -48,13 +48,23 @@ const char* UT_basename(const char* path)
 	return str;
 }
 
+static bool s_utf8ToWide(const char * src, WCHAR * dest, int destChars)
+{
+	if (!src || !dest || destChars < 1)
+		return false;
+	dest[0] = 0;
+	const int written = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, src, -1, dest, destChars);
+	return written > 0;
+}
+
 bool UT_directoryExists(const char* dir)
 {
 	struct _stat buf;
 
 #ifdef _WIN32
 	WCHAR wFilename[MAX_PATH];
-	MultiByteToWideChar(CP_UTF8,0,dir,-1,wFilename,MAX_PATH);
+	if (!s_utf8ToWide(dir, wFilename, MAX_PATH))
+		return false;
 	if( _wstat( wFilename , &buf ) != -1 ) 
 #else
 	if( _stat( dir , &buf ) != -1 ) 
@@ -71,7 +81,8 @@ bool UT_isRegularFile(const char* filename)
 
 #ifdef _WIN32
 	WCHAR wFilename[MAX_PATH];
-	MultiByteToWideChar(CP_UTF8,0,filename,-1,wFilename,MAX_PATH);
+	if (!s_utf8ToWide(filename, wFilename, MAX_PATH))
+		return false;
 	if( _wstat( wFilename , &buf ) != -1 ) 
 #else
 	if( _stat( filename , &buf ) != -1 ) 

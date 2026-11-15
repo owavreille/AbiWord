@@ -76,7 +76,8 @@ void  XAP_Win32EncodingManager::initialize()
 	// TODO Does NT use UCS-2BE internally on non-Intel CPUs?
 	// TODO Windows 2000 and XP use UTF-16 but on 2000 it may involve a
 	// TODO  registry setting
-	NativeUnicodeEncodingName = getUCS2LEName();
+	// CF_UNICODETEXT and WM_CHAR are UTF-16. UCS-2LE rejects supplementary characters.
+	NativeUnicodeEncodingName = "UTF-16LE";
 
 	// Encodings
 	// User Encoding (Set via Region/Locale; does not require reboot)

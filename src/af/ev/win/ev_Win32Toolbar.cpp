@@ -27,6 +27,8 @@
 
 #include <windows.h>
 #include <commctrl.h>   // includes the common control header
+#include <map>
+#include <string>
 
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
@@ -924,29 +926,43 @@ bool EV_Win32Toolbar::synthesize(void)
 
 					if (bIcons)
 					{
-						HBITMAP hBitmap;
-						UT_DebugOnly<bool> bFoundIcon =
-							XAP_Win32Toolbar_Icons::getBitmapForIcon(m_hwnd,
-																	MY_MAXIMUM_BITMAP_X,
-																	MY_MAXIMUM_BITMAP_Y,
-																	&backgroundColor,
-																	pLabel->getIconName(),
-																	&hBitmap);
-						UT_ASSERT(bFoundIcon);
+						// TB_ADDBITMAP copies the bits. One bitmap per icon is enough
+						// for every window; the container deletes that copy at exit.
+						static std::map<std::string, HBITMAP> sharedIcons;
+						const char * iconName = pLabel->getIconName();
+						const std::string iconKey = iconName ? iconName : "";
+						std::map<std::string, HBITMAP>::iterator found = sharedIcons.find(iconKey);
+						HBITMAP hBitmap = nullptr;
+						if (found != sharedIcons.end())
+							hBitmap = found->second;
+						else
+						{
+							UT_DebugOnly<bool> bFoundIcon =
+								XAP_Win32Toolbar_Icons::getBitmapForIcon(m_hwnd,
+																		MY_MAXIMUM_BITMAP_X,
+																		MY_MAXIMUM_BITMAP_Y,
+																		&backgroundColor,
+																		iconName,
+																		&hBitmap);
+							UT_ASSERT(bFoundIcon);
+							if (hBitmap)
+							{
+								sharedIcons.insert(std::make_pair(iconKey, hBitmap));
+								foo_Bitmap_container::instance().addBitmap(hBitmap);
+							}
+						}
 
-						// TMN: I know, this is really, really bad, but it's
-						// currently the only thing we have at our disposal to
-						// release these bitmaps at program termination.
-						foo_Bitmap_container::instance().addBitmap(hBitmap);
+						if (hBitmap)
+						{
+							TBADDBITMAP ab;
+							ab.hInst = nullptr;
+							ab.nID = (LPARAM)hBitmap;
 
-						TBADDBITMAP ab;
-						ab.hInst = nullptr;
-						ab.nID = (LPARAM)hBitmap;						
-						
-						LRESULT iAddedAt = SendMessageW(m_hwnd,TB_ADDBITMAP,1,(LPARAM)&ab);
-						UT_ASSERT(iAddedAt != -1);
+							LRESULT iAddedAt = SendMessageW(m_hwnd,TB_ADDBITMAP,1,(LPARAM)&ab);
+							UT_ASSERT(iAddedAt != -1);
 
-						tbb.iBitmap = iAddedAt;
+							tbb.iBitmap = iAddedAt;
+						}
 					}
 					
 					if (bText)

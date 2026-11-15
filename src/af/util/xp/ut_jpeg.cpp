@@ -163,10 +163,13 @@ bool UT_JPEG_getDimensions(const UT_ConstByteBufPtr & pBB, UT_sint32& iImageWidt
 	/* set the data source */
 	_JPEG_ByteBufSrc (&cinfo, pBB);
 
-	jpeg_read_header(&cinfo, static_cast<boolean>(TRUE));
-	jpeg_start_decompress(&cinfo);
-	iImageWidth = cinfo.output_width;
-	iImageHeight = cinfo.output_height;
+	if (jpeg_read_header(&cinfo, static_cast<boolean>(TRUE)) != JPEG_HEADER_OK)
+	{
+		_JPEG_destroy_decompress(&cinfo);
+		return false;
+	}
+	iImageWidth = cinfo.image_width;
+	iImageHeight = cinfo.image_height;
 
 	/* This is an important step since it will release a good deal of memory. */
 	_JPEG_destroy_decompress(&cinfo);
