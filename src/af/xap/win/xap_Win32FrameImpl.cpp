@@ -575,9 +575,13 @@ bool XAP_Win32FrameImpl::_runModalContextMenu(AV_View * pView, const char * szMe
 		
 		_translateDocumentToScreen(x,y);
 
+		// The owner must be the foreground window, or a click outside leaves
+		// the menu open. WM_NULL lets the menu finish dismissing.
+		SetForegroundWindow(m_hwndFrame);
 		TrackPopupMenu(m_pWin32Popup->getMenuHandle(),
 					    TPM_TOPALIGN | TPM_RIGHTBUTTON,
 					   x,y,0,m_hwndFrame,nullptr);
+		PostMessageW(m_hwndFrame, WM_NULL, 0, 0);
 
 		// the popup steals our capture, so we need to reset our counter.
 		EV_Win32Mouse *pWin32Mouse = static_cast<EV_Win32Mouse *>(m_pMouse);

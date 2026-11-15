@@ -124,7 +124,14 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
 	if (!m_sFontSize.empty())
 	{
 		UT_ASSERT(sizeof(char) == sizeof(gchar));
-		lf.lfHeight = (long) -(UT_convertToPoints(m_sFontSize.c_str()))*4/3;
+		// ChooseFont maps lfHeight through the screen DC. *4/3 assumes 96 DPI.
+		// The same conversion is used when the document creates the font.
+		HDC screen = GetDC(nullptr);
+		const int dpiY = screen ? GetDeviceCaps(screen, LOGPIXELSY) : 96;
+		if (screen)
+			ReleaseDC(nullptr, screen);
+		const double points = UT_convertToPoints(m_sFontSize.c_str());
+		lf.lfHeight = (dpiY > 0) ? static_cast<LONG>(-points * dpiY / 72.0) : 0;
 	}
 	else
 		cf.Flags |= CF_NOSIZESEL;
