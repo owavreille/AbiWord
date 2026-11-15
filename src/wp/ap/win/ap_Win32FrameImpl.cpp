@@ -867,29 +867,42 @@ void AP_Win32FrameImpl::_track(UT_sint32 /*x*/, UT_sint32 y)
 	if (!GetScrollInfo(m_hWndVScroll, SB_CTL, &si))
 		return;
 
+	// The thumb cannot pass nMax - (nPage - 1). SetScrollInfo clamps a
+	// larger value, so the view must read the position Windows kept.
+	int limit = si.nMax;
+	if (si.nPage > 1 && si.nMax - static_cast<int>(si.nPage) + 1 > si.nMin)
+		limit = si.nMax - static_cast<int>(si.nPage) + 1;
+
 	int iNewPosition;
 	if(Delta < 0)
 	{
 		const int span = m_startMouseWheelY - rect.top;
 		if (span <= 0)
 			return;
-		iNewPosition = si.nMin + (m_startScrollPosition - si.nMin) * (y - rect.top) / span;
+		iNewPosition = static_cast<int>(si.nMin
+			+ (static_cast<long long>(m_startScrollPosition) - si.nMin)
+			* (y - rect.top) / span);
 	}
 	else
 	{
 		const int span = rect.bottom - m_startMouseWheelY;
 		if (span <= 0)
 			return;
-		iNewPosition = m_startScrollPosition + (si.nMax - m_startScrollPosition) * (y - m_startMouseWheelY) / span;
+		iNewPosition = static_cast<int>(m_startScrollPosition
+			+ (static_cast<long long>(limit) - m_startScrollPosition)
+			* (y - m_startMouseWheelY) / span);
 	}
 	if (iNewPosition < si.nMin)
 		iNewPosition = si.nMin;
-	if (iNewPosition > si.nMax)
-		iNewPosition = si.nMax;
+	if (iNewPosition > limit)
+		iNewPosition = limit;
 
 	si.fMask = SIF_POS;
 	si.nPos = iNewPosition;
 	SetScrollInfo(m_hWndVScroll, SB_CTL, &si, TRUE);
+	si.fMask = SIF_ALL;
+	if (!GetScrollInfo(m_hWndVScroll, SB_CTL, &si))
+		si.nPos = iNewPosition;
 	AV_View * pView = getFrame()->getCurrentView();
 	if (pView && pView->getGraphics())
 		pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos));
