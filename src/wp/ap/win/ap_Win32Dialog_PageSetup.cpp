@@ -278,7 +278,9 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 		if( wNotifyCode == CBN_SELCHANGE )
 		{
 			UT_sint32 previous = (UT_sint32) fp_PageSize::NameToPredefined( m_pParent->m_PageSize.getPredefinedName()  );
-			UT_sint32 selected = SendMessage( hWndCtrl, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0 );
+			const LRESULT selected = SendMessage( hWndCtrl, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0 );
+			if (selected < 0 || selected >= static_cast<LRESULT>(fp_PageSize::_last_predefined_pagesize_dont_use_))
+				return TRUE;
 			if( selected != previous )
 			{
 				m_pParent->m_PageSize.Set( (fp_PageSize::Predefined)selected );
@@ -299,7 +301,10 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 	case AP_RID_DIALOG_PAGE_SETUP_LBX_UNITS:
 		if( wNotifyCode == CBN_SELCHANGE )
 		{
-			UT_Dimension unit = (UT_Dimension)SendMessage( hWndCtrl, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0 );
+			const LRESULT selected = SendMessage( hWndCtrl, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0 );
+			if (selected < static_cast<LRESULT>(DIM_IN) || selected > static_cast<LRESULT>(DIM_MM))
+				return TRUE;
+			const UT_Dimension unit = static_cast<UT_Dimension>(selected);
 			if( unit != m_pParent->getPageUnits() )
 			{
 				m_pParent->applyPageUnit( unit );
@@ -314,7 +319,9 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( atof(buf) >= 0.0 && atof(buf) != m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()) )
 			{
 				m_pParent->m_PageSize.Set( (m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? atof(buf) : m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()),
@@ -332,7 +339,9 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( atof(buf) >= 0.0 && atof(buf) != m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()) )
 			{
 				m_pParent->m_PageSize.Set( (m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()) : atof(buf), 
@@ -349,7 +358,9 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( (atoi(buf) >= 1) && (atoi(buf) <= 1000) && (atoi(buf) != m_pParent->getPageScale()) )
 			{
 				m_pParent->setPageScale( atoi(buf) );
@@ -559,8 +570,12 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 	case AP_RID_DIALOG_PAGE_SETUP_LBX_MARGINUNITS:
 		if( wNotifyCode == CBN_SELCHANGE )
 		{
-			UT_sint32 selected = SendMessage( hWndCtrl, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0 );
-			if( m_pParent->getMarginUnits() != (UT_Dimension) selected )
+			const LRESULT selected = SendMessage( hWndCtrl, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0 );
+			const UT_Dimension current = m_pParent->getMarginUnits();
+			if (selected < static_cast<LRESULT>(DIM_IN) || selected > static_cast<LRESULT>(DIM_MM)
+				|| current > DIM_MM)
+				return TRUE;
+			if( current != static_cast<UT_Dimension>(selected) )
 			{
 				m_pParent->setMarginTop(    m_pParent->getMarginTop()   * mScale[m_pParent->getMarginUnits()] / mScale[selected] );
 				m_pParent->setMarginBottom( m_pParent->getMarginBottom()* mScale[m_pParent->getMarginUnits()] / mScale[selected] );
@@ -579,7 +594,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginTop()) > EPSILON ) )
 			{
 				m_pParent->setMarginTop( (float) atof(buf) );
@@ -593,7 +610,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginBottom()) > EPSILON ) )
 			{
 				m_pParent->setMarginBottom( (float) atof(buf) );
@@ -607,7 +626,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginLeft()) > EPSILON ) )
 			{
 				m_pParent->setMarginLeft( (float) atof(buf) );
@@ -621,7 +642,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginRight()) > EPSILON ) )
 			{
 				m_pParent->setMarginRight( (float) atof(buf) );
@@ -635,7 +658,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginHeader()) > EPSILON ) )
 			{
 				m_pParent->setMarginHeader( (float) atof(buf) );
@@ -649,7 +674,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		if( wNotifyCode == EN_KILLFOCUS )
 		{
 			char buf[BUFSIZE];
+			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
+			buf[BUFSIZE - 1] = 0;
 			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginFooter()) > EPSILON ) )
 			{
 				m_pParent->setMarginFooter( (float) atof(buf) );

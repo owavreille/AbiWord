@@ -438,7 +438,12 @@ void XAP_Win32DialogBase::setControlInt(UT_sint32 controlId, int value)
 int XAP_Win32DialogBase::getControlInt(UT_sint32 controlId) const
 {
 	UT_return_val_if_fail(IsWindow(m_hDlg), 0);
-	return GetDlgItemInt(m_hDlg, controlId, nullptr, FALSE);
+	// A null translated pointer makes a failed conversion and the value 0
+	// indistinguishable. Failure stays 0, which the callers already treat
+	// as empty.
+	BOOL translated = FALSE;
+	const int value = GetDlgItemInt(m_hDlg, controlId, &translated, FALSE);
+	return translated ? value : 0;
 }
 
 void XAP_Win32DialogBase::selectControlText(UT_sint32 controlId, UT_sint32 start, UT_sint32 end)
@@ -500,33 +505,44 @@ bool XAP_Win32DialogBase::isControlVisible(UT_sint32 controlId) const
 void XAP_Win32DialogBase::centerDialog()
 {
 	UT_return_if_fail(IsWindow(m_hDlg));
-	
-	RECT 	rc, rcParent;
-	int 	nWidth, nHeight;
-	POINT 	pt;
-	
-    GetWindowRect(m_hDlg, &rc);
-    
-   	if (!GetParent(m_hDlg))
-	  GetWindowRect (GetDesktopWindow(), &rcParent);
-	else
-	  GetClientRect (GetParent(m_hDlg), &rcParent);	  
-	  
-	nWidth = rc.right - rc.left;
-	nHeight = rc.bottom - rc.top;
-	
+
+	RECT rc, rcParent;
+	memset(&rc, 0, sizeof(rc));
+	memset(&rcParent, 0, sizeof(rcParent));
+	// GetWindowRect and GetClientRect leave the rectangle untouched on failure.
+	if (!GetWindowRect(m_hDlg, &rc))
+		return;
+
+	HWND parent = GetParent(m_hDlg);
+	if (!parent)
+	{
+		if (!GetWindowRect(GetDesktopWindow(), &rcParent))
+			return;
+	}
+	else if (!GetClientRect(parent, &rcParent))
+		return;
+
+	const int nWidth = rc.right - rc.left;
+	const int nHeight = rc.bottom - rc.top;
+	if (nWidth <= 0 || nHeight <= 0)
+		return;
+
+	POINT pt;
 	pt.x = (rcParent.right - rcParent.left) / 2;
 	pt.y = (rcParent.bottom - rcParent.top) / 2;
-	
-	if (!GetParent(m_hDlg))
-	  ClientToScreen (GetDesktopWindow(), &pt);
-	else
-	  ClientToScreen (GetParent(m_hDlg), &pt);
+
+	if (!parent)
+	{
+		if (!ClientToScreen(GetDesktopWindow(), &pt))
+			return;
+	}
+	else if (!ClientToScreen(parent, &pt))
+		return;
 
 	pt.x -= nWidth / 2;
 	pt.y -= nHeight / 2;
 
-	MoveWindow (m_hDlg, pt.x, pt.y, nWidth, nHeight, TRUE);
+	MoveWindow(m_hDlg, pt.x, pt.y, nWidth, nHeight, TRUE);
 }
 
 

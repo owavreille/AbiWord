@@ -335,7 +335,9 @@ void XAP_Win32DialogHelper::setControlInt(UT_sint32 controlId, int value)
 int XAP_Win32DialogHelper::getControlInt(UT_sint32 controlId) const
 {
 	_assertValidDlgHandle(m_hDlg);
-	return GetDlgItemInt(m_hDlg, controlId, nullptr, FALSE);
+	BOOL translated = FALSE;
+	const int value = GetDlgItemInt(m_hDlg, controlId, &translated, FALSE);
+	return translated ? value : 0;
 }
 
 void XAP_Win32DialogHelper::selectControlText(UT_sint32 controlId, UT_sint32 start, UT_sint32 end)
@@ -412,33 +414,45 @@ void XAP_Win32DialogHelper::centerDialog()
 
 void XAP_Win32DialogHelper::s_centerDialog(HWND hWnd)
 {
-	RECT 	rc, rcParent;
-	int 	nWidth, nHeight;
-	POINT 	pt;
-	
-    GetWindowRect(hWnd, &rc);
-    
-   	if (!GetParent(hWnd))
-	  GetWindowRect (GetDesktopWindow(), &rcParent);
-	else
-	  GetClientRect (GetParent(hWnd), &rcParent);	  
-	  
-	nWidth = rc.right - rc.left;
-	nHeight = rc.bottom - rc.top;
-	
+	if (!hWnd || !IsWindow(hWnd))
+		return;
+
+	RECT rc, rcParent;
+	memset(&rc, 0, sizeof(rc));
+	memset(&rcParent, 0, sizeof(rcParent));
+	if (!GetWindowRect(hWnd, &rc))
+		return;
+
+	HWND parent = GetParent(hWnd);
+	if (!parent)
+	{
+		if (!GetWindowRect(GetDesktopWindow(), &rcParent))
+			return;
+	}
+	else if (!GetClientRect(parent, &rcParent))
+		return;
+
+	const int nWidth = rc.right - rc.left;
+	const int nHeight = rc.bottom - rc.top;
+	if (nWidth <= 0 || nHeight <= 0)
+		return;
+
+	POINT pt;
 	pt.x = (rcParent.right - rcParent.left) / 2;
 	pt.y = (rcParent.bottom - rcParent.top) / 2;
-	
-	if (!GetParent(hWnd))
-	  ClientToScreen (GetDesktopWindow(), &pt);
-	else
-	  ClientToScreen (GetParent(hWnd), &pt);
+
+	if (!parent)
+	{
+		if (!ClientToScreen(GetDesktopWindow(), &pt))
+			return;
+	}
+	else if (!ClientToScreen(parent, &pt))
+		return;
 
 	pt.x -= nWidth / 2;
 	pt.y -= nHeight / 2;
 
-	// Move your arse...
-	MoveWindow (hWnd, pt.x, pt.y, nWidth, nHeight, TRUE);
+	MoveWindow(hWnd, pt.x, pt.y, nWidth, nHeight, TRUE);
 }
 
 HBITMAP XAP_Win32DialogHelper::s_loadBitmap(HWND hWnd, UINT nId,

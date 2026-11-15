@@ -18,6 +18,7 @@
  */
 
 #include <windows.h>
+#include <string.h>
 
 #include "ut_string.h"
 #include "ut_assert.h"
@@ -118,9 +119,14 @@ BOOL AP_Win32Dialog_Columns::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM 
 
 	// Do Bitmaps
 	RECT rect;
-	GetClientRect(GetDlgItem(hWnd, AP_RID_DIALOG_COLUMN_RADIO_ONE), &rect);
+	memset(&rect, 0, sizeof(rect));
+	HWND icon = GetDlgItem(hWnd, AP_RID_DIALOG_COLUMN_RADIO_ONE);
+	if (!icon || !GetClientRect(icon, &rect))
+		return false;
 	int iWidth = rect.right - rect.left;
 	int iHeight = rect.bottom - rect.top;
+	if (iWidth <= 0 || iHeight <= 0)
+		return false;
 
 	HBITMAP hBitmap;
 	XAP_Win32Toolbar_Icons Icons;
@@ -184,7 +190,7 @@ BOOL AP_Win32Dialog_Columns::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lPara
 {
 	WORD wNotifyCode = HIWORD(wParam);
 	WORD wId = LOWORD(wParam);
-	wchar_t buf[BUFSIZE];
+	wchar_t buf[BUFSIZE] = {};
     UT_Win32LocaleString str;
     
 	switch (wId)

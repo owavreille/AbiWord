@@ -18,6 +18,7 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <windows.h>
 
 #include "ut_png.h"
@@ -742,12 +743,19 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 	UT_sint32	scaled_width,scaled_height;
 	UT_sint32	iImageWidth,iImageHeight;
 	RECT		r;
-
-	GetClientRect (hThumbnail, &r);
-	InvalidateRect(hThumbnail, &r, true);
+	memset(&r, 0, sizeof(r));
+	// GetClientRect leaves the rectangle untouched when it fails.
+	if (!hThumbnail || !GetClientRect(hThumbnail, &r))
+		return false;
+	const int clientW = r.right - r.left;
+	const int clientH = r.bottom - r.top;
+	if (clientW <= 0 || clientH <= 0)
+		return false;
 
     iImageWidth = pfg->getWidth();
     iImageHeight = pfg->getHeight();
+	if (iImageWidth <= 0 || iImageHeight <= 0)
+		return false;
 
 	// Update Height and Width Strings
     str.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_IP_Height_Label));
@@ -765,11 +773,11 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 					buf );
 
 	// Reset String for Height and Width
-	if (r.right >= iImageWidth && r.bottom >= iImageHeight)
+	if (clientW >= iImageWidth && clientH >= iImageHeight)
 		scale_factor = 1.0;
 	else
-		scale_factor = UT_MIN( (double) r.right/iImageWidth,
-							(double) r.bottom/iImageHeight );
+		scale_factor = UT_MIN( (double) clientW/iImageWidth,
+							(double) clientH/iImageHeight );
 
 	scaled_width  = (int) (scale_factor * iImageWidth);
 	scaled_height = (int) (scale_factor * iImageHeight);
@@ -777,11 +785,11 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 	GR_Win32Image* pImage = new GR_Win32Image(nullptr);
 	pImage->convertFromBuffer(pfg->getBuffer(), pfg->getMimeType(), scaled_width, scaled_height);
 
-	PAINTSTRUCT ps;
-	HDC hdc = BeginPaint(hThumbnail, &ps);
+	// BeginPaint belongs to this window's WM_PAINT. The call arrives from
+	// CDN_SELCHANGE and from the hook dialog, so GetDC is the DC to use.
+	HDC hdc = GetDC(hThumbnail);
 	if (!hdc)
 	{
-		EndPaint(hThumbnail, &ps);
 		DELETEP(pImage);
 		return false;
 	}
@@ -791,18 +799,19 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 	GR_Win32Graphics *pGr = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
 	if (!pGr)
 	{
-		EndPaint(hThumbnail, &ps);
+		ReleaseDC(hThumbnail, hdc);
 		DELETEP(pImage);
 		return false;
 	}
 	
 	pGr->drawImage(pImage,
-				   pGr->tlu((r.right	- scaled_width ) / 2),
-				   pGr->tlu((r.bottom - scaled_height) / 2));
-	EndPaint(hThumbnail,&ps);
+				   pGr->tlu((clientW - scaled_width ) / 2),
+				   pGr->tlu((clientH - scaled_height) / 2));
 
 	DELETEP(pImage);
 	DELETEP(pGr);
+	ReleaseDC(hThumbnail, hdc);
+	ValidateRect(hThumbnail, nullptr);
 
 	return true;
 }

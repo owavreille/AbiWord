@@ -532,7 +532,11 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 			WCHAR stylename[MAX_EBX_LENGTH+1];
 			// Verfiy a name value for the style
 			// TODO - Verify unique name value
+			// GetDlgItemTextW returns 0 for an empty field and for a failed
+			// call. The buffer is cleared first so a failure is an empty name.
+			stylename[0] = 0;
 			GetDlgItemTextW(hWnd,AP_RID_DIALOG_STYLES_NEWMODIFY_EBX_NAME,stylename,G_N_ELEMENTS(stylename));
+			stylename[MAX_EBX_LENGTH] = 0;
 			UT_Win32LocaleString wideName;
 			wideName.fromLocale(stylename);
 			UT_UTF8String str(wideName.utf8_str());

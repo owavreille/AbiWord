@@ -365,7 +365,12 @@ void AP_Win32Dialog_Options::_setAutoSaveFileExt(const UT_String &stExt)
 
 void AP_Win32Dialog_Options::_gatherAutoSaveFilePeriod(UT_String &stRetVal)
 {
-	int iValue = GetDlgItemInt((HWND)getPage(PG_DOCUMENT), AP_RID_DIALOG_OPTIONS_TXT_AutoSavePeriod, nullptr, FALSE );
+	BOOL translated = FALSE;
+	int iValue = GetDlgItemInt((HWND)getPage(PG_DOCUMENT), AP_RID_DIALOG_OPTIONS_TXT_AutoSavePeriod, &translated, FALSE);
+	if (!translated || iValue < MINAUTOSAVEPERIOD)
+		iValue = MINAUTOSAVEPERIOD;
+	else if (iValue > MAXAUTOSAVEPERIOD)
+		iValue = MAXAUTOSAVEPERIOD;
 	char szTemp[10];
 
 	snprintf( szTemp, 10, "%d", iValue );
@@ -929,11 +934,12 @@ void AP_Win32Dialog_Options_Document::_onInitDialog()
 
 bool AP_Win32Dialog_Options_Document::isAutoSaveInRange()
 {
-	int iValue = GetDlgItemInt(getHandle(), AP_RID_DIALOG_OPTIONS_TXT_AutoSavePeriod, nullptr, FALSE);
+	BOOL translated = FALSE;
+	int iValue = GetDlgItemInt(getHandle(), AP_RID_DIALOG_OPTIONS_TXT_AutoSavePeriod, &translated, FALSE);
 	char szTemp[10];
 	snprintf( szTemp, 10, "%d", iValue);	
 	
-	if (iValue<MINAUTOSAVEPERIOD || iValue>MAXAUTOSAVEPERIOD)
+	if (!translated || iValue<MINAUTOSAVEPERIOD || iValue>MAXAUTOSAVEPERIOD)
 	{				
 		UT_Win32LocaleString str;			
 			const XAP_StringSet * pSS = getApp()->getStringSet();

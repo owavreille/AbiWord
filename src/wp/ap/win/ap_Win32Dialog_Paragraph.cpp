@@ -19,6 +19,7 @@
 
 #include <windows.h>
 #include <commctrl.h>
+#include <string.h>
 
 #include "ut_string.h"
 #include "ut_assert.h"
@@ -319,9 +320,12 @@ BOOL AP_Win32Dialog_Paragraph::_onInitTab(HWND hWnd, WPARAM /*wParam*/, LPARAM l
 	// position ourselves w.r.t. containing tab
 
 	RECT r;
-	GetClientRect(m_hwndTab, &r);
-	TabCtrl_AdjustRect(m_hwndTab, FALSE, &r);
-	SetWindowPos(hWnd, HWND_TOP, r.left, r.top, 0, 0, SWP_NOSIZE);
+	memset(&r, 0, sizeof(r));
+	if (m_hwndTab && GetClientRect(m_hwndTab, &r))
+	{
+		TabCtrl_AdjustRect(m_hwndTab, FALSE, &r);
+		SetWindowPos(hWnd, HWND_TOP, r.left, r.top, 0, 0, SWP_NOSIZE);
+	}
 
 	// remember which window is which tab
 
@@ -497,6 +501,7 @@ BOOL AP_Win32Dialog_Paragraph::_onInitTab(HWND hWnd, WPARAM /*wParam*/, LPARAM l
 								\
 			case EN_KILLFOCUS:	\
 				char buf[SPIN_BUF_TEXT_SIZE];	\
+				buf[0] = 0;	\
 				GetWindowText(hWndCtrl,buf,SPIN_BUF_TEXT_SIZE);		\
 				_setSpinItemValue(i,buf);		\
 				_syncControls(i);				\
@@ -586,7 +591,7 @@ BOOL AP_Win32Dialog_Paragraph::_onDeltaPos(NM_UPDOWN * pnmud)
 	UT_DEBUGMSG(("onDeltaPos: [idFrom %d][iPos %d][iDelta %d]\n",
 				 pnmud->hdr.idFrom,pnmud->iPos,pnmud->iDelta));
 
-	char buf[SPIN_BUF_TEXT_SIZE];
+	char buf[SPIN_BUF_TEXT_SIZE] = {};
 
 	switch(pnmud->hdr.idFrom)
 	{
