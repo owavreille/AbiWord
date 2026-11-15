@@ -134,17 +134,16 @@ XAP_Win32App::XAP_Win32App(HINSTANCE hInstance, const char * szAppName)
 			{
 				pGF->registerAsDefault(GR_Win32USPGraphics::s_getClassId(), true);
 				pGF->registerAsDefault(GR_Win32USPGraphics::s_getClassId(), false);
-			
-				// now g_free the library (GR_Win32USPGraphics will load it
-				// on its own behalf
-			
-				FreeLibrary(hUniscribe);
 			}
 		}
-		else
+		else if (!hUniscribe)
 		{
 			UT_DEBUGMSG(("XAP_Win32App: could not load Uniscribe library"));
 		}
+
+		// This load only probes the DLL. Uniscribe graphics loads its own copy.
+		if (hUniscribe)
+			FreeLibrary(hUniscribe);
 	}
 }
 

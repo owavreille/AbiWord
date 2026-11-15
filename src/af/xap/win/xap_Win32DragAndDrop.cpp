@@ -107,7 +107,9 @@ static bool s_dropTextFormat(IDataObject * dataObj, CLIPFORMAT format, bool wide
 	if (!locked)
 	{
 		ReleaseStgMedium(&medium);
-		return true;
+		// The format was advertised but not readable. Let the caller try
+		// the next clipboard format.
+		return false;
 	}
 
 	const UT_uint32 len = s_dropTextBytes(locked, GlobalSize(medium.hGlobal), wide);
