@@ -423,7 +423,8 @@ UT_Error UT_XML::parse (const char * szFilename)
 		return UT_errnoToUTError ();
     }
 
-	CoInitialize(nullptr);
+	// S_OK and S_FALSE both increment the COM count and need CoUninitialize.
+	const bool comReady = SUCCEEDED(CoInitialize(nullptr));
 	ISAXXMLReader* pRdr = nullptr;
 
 	HRESULT hr = CoCreateInstance(
@@ -437,6 +438,8 @@ UT_Error UT_XML::parse (const char * szFilename)
 	{
       	UT_DEBUGMSG (("Unable to create parser!\n"));
      	reader->closeFile ();
+		if (comReady)
+			CoUninitialize();
       	return UT_ERROR;
 	}
 
@@ -454,27 +457,39 @@ UT_Error UT_XML::parse (const char * szFilename)
 		size_t length = reader->readBytes (buffer, sizeof (buffer));
 		done = (length < sizeof (buffer));
 
-		// Transfer bytes read into a SAFEARRAY 
-		SAFEARRAY* psa = nullptr;
-        psa = SafeArrayCreateVector( VT_UI1, 0, length );
-		void * pDest;
-		SafeArrayAccessData(psa, &pDest);
-		memcpy(pDest, buffer, length); // Copy into array
-		SafeArrayUnaccessData(psa);		
+		// Transfer bytes read into a SAFEARRAY. A failed parse used to
+		// leave the array allocated, and a failed create was then locked.
+		SAFEARRAY* psa = SafeArrayCreateVector( VT_UI1, 0, static_cast<ULONG>(length) );
+		if (!psa)
+		{
+			ret = UT_ERROR;
+			break;
+		}
+		if (length > 0)
+		{
+			void * pDest = nullptr;
+			if (FAILED(SafeArrayAccessData(psa, &pDest)) || !pDest)
+			{
+				SafeArrayDestroy(psa);
+				ret = UT_ERROR;
+				break;
+			}
+			memcpy(pDest, buffer, length);
+			SafeArrayUnaccessData(psa);
+		}
 		VARIANT pV;
 		pV.vt = VT_ARRAY | VT_UI1;
         pV.parray = psa;
 
 		// PARSE IT	
 		hr = pRdr->parse( pV );
+		SafeArrayDestroy( psa );
 		if( FAILED(hr) ) 
 		{
     	  	UT_DEBUGMSG (("XML parsing error!\n"));
 	      	ret = UT_IE_IMPORTERROR;
 			break;
 		}
-		// DELETE SAFEARRAY
-		SafeArrayDestroy( psa );
     }
 
 /*	size_t length = strlen( szFilename );
@@ -494,7 +509,8 @@ UT_Error UT_XML::parse (const char * szFilename)
 	pRdr->Release();
 	DELETEP(pHandler);
 	DELETEP(pEc);
-	CoUninitialize();
+	if (comReady)
+		CoUninitialize();
 	reader->closeFile ();
 
 	return ret;
@@ -508,7 +524,7 @@ UT_Error UT_XML::parse (const char * buffer, UT_uint32 length)
 
 	UT_Error ret = UT_OK;
 
-	CoInitialize(nullptr);
+	const bool comReady = SUCCEEDED(CoInitialize(nullptr));
 	ISAXXMLReader* pRdr = nullptr;
 
 	HRESULT hr = CoCreateInstance(
@@ -521,6 +537,8 @@ UT_Error UT_XML::parse (const char * buffer, UT_uint32 length)
 	if( FAILED(hr) )
 	{
       	UT_DEBUGMSG (("Unable to create parser!\n"));
+		if (comReady)
+			CoUninitialize();
       	return UT_ERROR;
 	}
 
@@ -530,12 +548,32 @@ UT_Error UT_XML::parse (const char * buffer, UT_uint32 length)
 	hr = pRdr->putErrorHandler(pEc);
 
 	// Transfer bytes read into a SAFEARRAY 
-	SAFEARRAY* psa = nullptr;
-	psa = SafeArrayCreateVector( VT_UI1, 0, length );
-	void * pDest;
-	SafeArrayAccessData(psa, &pDest);
-	memcpy(pDest, buffer, length); // Copy into array
-	SafeArrayUnaccessData(psa);		
+	SAFEARRAY* psa = SafeArrayCreateVector( VT_UI1, 0, length );
+	if (!psa)
+	{
+		pRdr->Release();
+		DELETEP(pHandler);
+		DELETEP(pEc);
+		if (comReady)
+			CoUninitialize();
+		return UT_ERROR;
+	}
+	if (length > 0)
+	{
+		void * pDest = nullptr;
+		if (FAILED(SafeArrayAccessData(psa, &pDest)) || !pDest)
+		{
+			SafeArrayDestroy(psa);
+			pRdr->Release();
+			DELETEP(pHandler);
+			DELETEP(pEc);
+			if (comReady)
+				CoUninitialize();
+			return UT_ERROR;
+		}
+		memcpy(pDest, buffer, length);
+		SafeArrayUnaccessData(psa);
+	}
 	VARIANT pV;
 	pV.vt = VT_ARRAY | VT_UI1;
 	pV.parray = psa;
@@ -555,7 +593,8 @@ UT_Error UT_XML::parse (const char * buffer, UT_uint32 length)
 	pRdr->Release();
 	DELETEP(pHandler);
 	DELETEP(pEc);
-	CoUninitialize();
+	if (comReady)
+		CoUninitialize();
 
 	return ret;
 }
