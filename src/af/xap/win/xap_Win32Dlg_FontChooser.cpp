@@ -382,7 +382,7 @@ BOOL XAP_Win32Dialog_FontChooser::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LP
 		// of the list
 
 		// we have no name for this color, so left it empty
-		SendDlgItemMessageW(hWnd, 1139, CB_ADDSTRING, 0, (LPARAM)(LPCSTR)"");
+		SendDlgItemMessageW(hWnd, 1139, CB_ADDSTRING, 0, (LPARAM)L"");
 
 		// set the color for the entry
 		UT_RGBColor c;

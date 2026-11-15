@@ -214,7 +214,7 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
     IStream* stream;	
     HGLOBAL hG;		
     HBITMAP hBitmap;
-    OLE_HANDLE* hB;
+    OLE_HANDLE hB = 0;
     PBITMAPINFO	bi;
     UT_ByteBuf bBufBMP;
     UT_Error err;	
@@ -256,9 +256,10 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
 		return UT_IE_UNKNOWNTYPE;
 	}
 
-    pPicture->get_Handle((unsigned int*)&hB);
-    
-    hBitmap = (HBITMAP)CopyImage(hB,IMAGE_BITMAP,0,0,LR_COPYRETURNORG);
+    // get_Handle writes a 32-bit OLE_HANDLE. On x64 that value has to be
+    // sign-extended into a HANDLE; the address of a pointer is not one.
+    pPicture->get_Handle(&hB);
+    hBitmap = (HBITMAP)CopyImage(LongToHandle(hB), IMAGE_BITMAP, 0, 0, LR_COPYRETURNORG);
     
     HWND hWnd = GetDesktopWindow();
 
@@ -322,9 +323,9 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
 
 
 		rect.left = 0;
-        rect.top = nScaleToHeight;
+        rect.top = 0;
         rect.right = nScaleToWidth;
-        rect.bottom = 0;
+        rect.bottom = nScaleToHeight;
 
 		FillRect(hMemDC, &rect,  hBrush);
 		pPicture->Render(hMemDC, 0,0,  nScaleToWidth,	nScaleToHeight, 0,  nHeight, 

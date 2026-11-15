@@ -37,6 +37,86 @@
 #include "xap_Win32DragAndDrop.h"
 #include "fl_DocLayout.h"
 
+// OLE text need not be null-terminated. GlobalSize is the only bound,
+// the same rule the clipboard paste path already applies.
+static UT_uint32 s_dropTextBytes(const void * data, SIZE_T size, bool wide)
+{
+	if (!data || size == 0)
+		return 0;
+	if (size > 0xffffffffu)
+		size = 0xffffffffu;
+	const UT_uint32 bytes = static_cast<UT_uint32>(size);
+
+	if (wide)
+	{
+		const UT_uint32 chars = bytes / sizeof(wchar_t);
+		const wchar_t * text = static_cast<const wchar_t *>(data);
+		UT_uint32 n = 0;
+		while (n < chars && text[n] != L'\0')
+			++n;
+		return n * sizeof(wchar_t);
+	}
+
+	const unsigned char * text = static_cast<const unsigned char *>(data);
+	UT_uint32 n = 0;
+	while (n < bytes && text[n] != 0)
+		++n;
+	return n;
+}
+
+static void s_pasteDrop(XAP_Frame * frame, const unsigned char * data, UT_uint32 len,
+			 const char * suffix, const char * encoding)
+{
+	if (!frame || !data || !len)
+		return;
+
+	AP_FrameData * pFrameData = static_cast<AP_FrameData *>(frame->getFrameData());
+	if (!pFrameData || !pFrameData->m_pDocLayout)
+		return;
+	FV_View * pView = pFrameData->m_pDocLayout->getView();
+	if (!pView || !pView->getDocument())
+		return;
+
+	PD_DocumentRange dr(pView->getDocument(), pView->getPoint(), pView->getPoint());
+	IE_Imp * pImp = nullptr;
+	IE_Imp::constructImporter(dr.m_pDoc, IE_Imp::fileTypeForSuffix(suffix), &pImp, nullptr);
+	if (!pImp)
+		return;
+
+	pImp->pasteFromBuffer(&dr, data, len, encoding);
+	delete pImp;
+	pView->_generalUpdate();
+}
+
+static bool s_dropTextFormat(IDataObject * dataObj, CLIPFORMAT format, bool wide,
+			     const char * suffix, const char * encoding, XAP_Frame * frame)
+{
+	FORMATETC formatetc;
+	memset(&formatetc, 0, sizeof(formatetc));
+	formatetc.cfFormat = format;
+	formatetc.dwAspect = DVASPECT_CONTENT;
+	formatetc.lindex = -1;
+	formatetc.tymed = TYMED_HGLOBAL;
+
+	STGMEDIUM medium;
+	memset(&medium, 0, sizeof(medium));
+	if (!SUCCEEDED(dataObj->GetData(&formatetc, &medium)))
+		return false;
+
+	void * locked = GlobalLock(medium.hGlobal);
+	if (!locked)
+	{
+		ReleaseStgMedium(&medium);
+		return true;
+	}
+
+	const UT_uint32 len = s_dropTextBytes(locked, GlobalSize(medium.hGlobal), wide);
+	s_pasteDrop(frame, static_cast<const unsigned char *>(locked), len, suffix, encoding);
+	GlobalUnlock(medium.hGlobal);
+	ReleaseStgMedium(&medium);
+	return true;
+}
+
 XAP_Win32DropTarget::XAP_Win32DropTarget()
 {
 #ifdef TEXT
@@ -98,6 +178,11 @@ STDMETHODIMP XAP_Win32DropTarget::DragEnter (LPDATAOBJECT pDataObj, DWORD /*grfK
 	
 	if (NOERROR == pDataObj->QueryGetData(&fmte))	
 		m_bSupportedFormat = true;
+
+	// Plain text uses the same clipboard format as paste.
+	fmte.cfFormat = CF_UNICODETEXT;
+	if (NOERROR == pDataObj->QueryGetData(&fmte))
+		m_bSupportedFormat = true;
 	
 	*pdwEffect = (m_bSupportedFormat) ? DROPEFFECT_COPY : DROPEFFECT_NONE;
 		
@@ -152,19 +237,12 @@ STDMETHODIMP XAP_Win32DropTarget::DragLeave()
 //
 STDMETHODIMP XAP_Win32DropTarget::Drop (LPDATAOBJECT pDataObj, DWORD /*grfKeyState*/, POINTL /*pointl*/, LPDWORD /*pdwEffect*/)
 {
-        
-	FORMATETC  	formatetc;
-	STGMEDIUM	medium;
-	char*		pData;
-	UT_uint32 	iStrLen;
-	IE_Imp* 	pImp = nullptr;
-	const char * 	szEncoding = nullptr;
-	int 		count = 0;
-
+	int count = 0;
+	STGMEDIUM medium;
 	memset(&medium, 0, sizeof(medium));
-	
+
 	FORMATETC fmte = {CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
-	
+
 	//
 	// Is the user dropping files?
 	// lParam 1 tells the frame that this HDROP belongs to the OLE medium,
@@ -181,49 +259,14 @@ STDMETHODIMP XAP_Win32DropTarget::Drop (LPDATAOBJECT pDataObj, DWORD /*grfKeySta
 		}
 		return S_OK;
 	}
-	
 
-	//
-	// Is the user dropping RTF text?
-	//				
-	formatetc.cfFormat = m_uCF_RTF;
-	formatetc.ptd = nullptr;
-	formatetc.dwAspect  = DVASPECT_CONTENT;
-	formatetc.lindex  = -1;
-	formatetc.tymed = TYMED_HGLOBAL;
+	// RTF first, then the same plain-text format paste already accepts.
+	const char * encoding = XAP_EncodingManager::get_instance()->getNative8BitEncodingName();
+	if (s_dropTextFormat(pDataObj, static_cast<CLIPFORMAT>(m_uCF_RTF), false, ".rtf", encoding, m_pFrame))
+		return S_OK;
 
-	medium.hGlobal = nullptr;
-	medium.pUnkForRelease = nullptr;
-
-      	// Does not support RTF
-        if (!SUCCEEDED(pDataObj->GetData(&formatetc, &medium)))
-	       	return S_OK;
-
-	pData = (char *) GlobalLock (medium.hGlobal);
-	iStrLen =  strlen(pData);
-
-	// Get document range
-	AP_FrameData* pFrameData = (AP_FrameData*) m_pFrame->getFrameData();
-	FL_DocLayout *pDocLy =	pFrameData->m_pDocLayout;
-	FV_View * pView =  pDocLy->getView();
-	PD_DocumentRange dr(pView->getDocument(),pView->getPoint(),pView->getPoint());
-
-	// Import RTF
-	IE_Imp::constructImporter(dr.m_pDoc, IE_Imp::fileTypeForSuffix(".rtf"), &pImp, nullptr);
-	if (pImp)
-	{
-		szEncoding = XAP_EncodingManager::get_instance()->getNative8BitEncodingName();
-
-		pImp->pasteFromBuffer(&dr, (unsigned char *)pData, iStrLen,szEncoding);
-
-		delete pImp;
-		pView->_generalUpdate();
-	}
-
-	GlobalUnlock(medium.hGlobal);
-	ReleaseStgMedium(&medium);
-
-        return S_OK;
+	s_dropTextFormat(pDataObj, CF_UNICODETEXT, true, ".txt", "UTF-16LE", m_pFrame);
+	return S_OK;
 }
 
 

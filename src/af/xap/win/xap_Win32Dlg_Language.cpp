@@ -186,8 +186,10 @@ BOOL XAP_Win32Dialog_Language::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARA
    	XAP_Win32Toolbar_Icons::getBitmapForIcon(hWnd, 20,20, &Color, "TRANSPARENTLANG",  &hBitmapTrans);       		
 	
 	/* Setup tree images */
-	ImageList_Add(m_hNormIml,hBitmapTrans, nullptr);		
-	ImageList_Add(m_hNormIml, hBitmap, nullptr);		
+	ImageList_Add(m_hNormIml,hBitmapTrans, nullptr);
+	ImageList_Add(m_hNormIml, hBitmap, nullptr);
+	// ImageList_Add copies the bits. Both originals stay ours to free.
+	DeleteObject(hBitmapTrans);
 	DeleteObject(hBitmap);
 	
 	SendMessageW(hTree, TVM_SETIMAGELIST, TVSIL_NORMAL, (LPARAM)m_hNormIml);		

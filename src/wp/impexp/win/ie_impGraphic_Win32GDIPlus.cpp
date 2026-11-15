@@ -20,6 +20,7 @@
  */
 
 #include <windows.h>
+#include <new>
 #include <stdlib.h>
 #include "ut_string.h"
 #include "ut_bytebuf.h"
@@ -40,12 +41,15 @@ typedef ULONG_PTR EncoderParameters;
 class GpImage {};
 
 
+// x64 layout is 24 bytes: version, 4 bytes of padding, then the callback
+// pointer. A DWORD callback makes GdiplusStartup read the two flags past
+// the object.
 struct GdiplusStartupInput
 {
-    UINT32 GdiplusVersion;  
-    DWORD DebugEventCallback;
+    UINT32 GdiplusVersion;
+    void * DebugEventCallback;
     BOOL SuppressBackgroundThread;
-    BOOL SuppressExternalCodecs;  
+    BOOL SuppressExternalCodecs;
 
 };
  
@@ -204,7 +208,7 @@ initGDIPlus ()
 		return;
 
 	input.GdiplusVersion = 1;
-	input.DebugEventCallback = 0;
+	input.DebugEventCallback = nullptr;
 	input.SuppressBackgroundThread = input.SuppressExternalCodecs = FALSE;
 
 	GdiplusStartup (&gdiplusToken, &input, nullptr);
@@ -237,89 +241,102 @@ shutDownGDIPlus()
 UT_Error 
 GDIconvertGraphic(const UT_ConstByteBufPtr& pBB, const UT_ByteBufPtr& pBBOut, std::string& mimetype)
 {
-	IStream *stream, *streamOut = nullptr;	
-	HGLOBAL hG;		
+	IStream *stream = nullptr;
+	IStream *streamOut = nullptr;
+	HGLOBAL hG = nullptr;
 	GpImage *image = nullptr;
 	Status status;
 	HRESULT hr;
-	HGLOBAL phglobal = nullptr;
 	LARGE_INTEGER ulnSize;
 	LARGE_INTEGER lnOffset;
-	ULONG ulBytesRead;
+	ULONG ulBytesRead = 0;
+	char *pBuff = nullptr;
+	GUID format;
+	UT_Error result = UT_ERROR;
 	lnOffset.QuadPart = 0;
-	
-    // We need to store the incoming bytebuffer in a Windows global heap	
-    size_t nBlockLen = pBB->getLength();   	
-    hG = GlobalAlloc (GPTR, nBlockLen);
+	ulnSize.QuadPart = 0;
 
-    if (!hG) 
-      return UT_IE_NOMEMORY;	
+	// CreateStreamOnHGlobal(hG, FALSE) does not free hG. Every return
+	// below has to release both streams, dispose a loaded image, and
+	// GlobalFree the source block.
+	size_t nBlockLen = pBB->getLength();
+	hG = GlobalAlloc (GPTR, nBlockLen);
 
-	CopyMemory (hG, pBB->getPointer(0), nBlockLen);   	
-	
-    // Create the in stream from heap
-    hr = CreateStreamOnHGlobal (hG, FALSE ,&stream);
-    if (!SUCCEEDED (hr) || !stream)
+	if (!hG)
+		return UT_IE_NOMEMORY;
+
+	CopyMemory (hG, pBB->getPointer(0), nBlockLen);
+
+	hr = CreateStreamOnHGlobal (hG, FALSE ,&stream);
+	if (!SUCCEEDED (hr) || !stream)
 	{
 		GlobalFree (hG);
 		return UT_IE_NOMEMORY;
 	}
 
-	 // Create the OUT stream and let GDI+ allocated it
-    hr = CreateStreamOnHGlobal (nullptr, TRUE, &streamOut);
-	
+	hr = CreateStreamOnHGlobal (nullptr, TRUE, &streamOut);
+	if (!SUCCEEDED (hr) || !streamOut)
+		goto cleanup;
+
 	status =  GdipLoadImageFromStream (stream, &image);
 	if (status != 0)
-		return UT_ERROR;
-	
-	GUID format;
+		goto cleanup;
+
 	status = GdipGetImageRawFormat (image, &format);
 	if (status != 0)
-		return UT_ERROR;
+		goto cleanup;
 
 	if (format != gdip_jpeg_guid)
 	{
-		// convert the image data to PNG if the input data is not JPEG
 		status = GdipSaveImageToStream (image, streamOut, &gdip_png_encoder_guid, nullptr);
 		if (status != 0)
-			return UT_ERROR;
+			goto cleanup;
 		mimetype = "image/png";
 	}
 	else
 	{
-		// we can handle native JPEG data, no need to convert
 		status = GdipSaveImageToStream (image, streamOut, &gdip_jpeg_encoder_guid, nullptr);
 		if (status != 0)
-			return UT_ERROR;
+			goto cleanup;
 		mimetype = "image/jpeg";
 	}
 
 	GdipDisposeImage (image);
-	
-	GetHGlobalFromStream (streamOut, &phglobal);
+	image = nullptr;
 
-	// get the size of the stream	
 	if(streamOut->Seek (lnOffset, STREAM_SEEK_END, (union _ULARGE_INTEGER *) &ulnSize) != S_OK)
-		return UT_ERROR;    
-	
+		goto cleanup;
+
 	if(streamOut->Seek (lnOffset, STREAM_SEEK_SET, nullptr) != S_OK)
-		return UT_ERROR;
+		goto cleanup;
 
-	DWORD sz = (DWORD)ulnSize.QuadPart;
-	char *pBuff = new char [sz];
+	if (ulnSize.QuadPart <= 0 || ulnSize.QuadPart > 0xffffffffu)
+		goto cleanup;
 
-	// Read the stream directly into the buffer
-    
-    streamOut->Read (pBuff, (ULONG) ulnSize.QuadPart, (ULONG *) &ulBytesRead);
-    
-	pBBOut->append ((const unsigned char*)pBuff, ulBytesRead);
+	{
+		const DWORD sz = static_cast<DWORD>(ulnSize.QuadPart);
+		pBuff = new(std::nothrow) char [sz];
+		if (!pBuff)
+			goto cleanup;
+		if (streamOut->Read (pBuff, sz, &ulBytesRead) != S_OK)
+			goto cleanup;
+		if (ulBytesRead > sz)
+			ulBytesRead = sz;
+		pBBOut->append ((const unsigned char*)pBuff, ulBytesRead);
+	}
 
+	result = UT_OK;
+
+cleanup:
 	delete [] pBuff;
-	
-	streamOut->Release ();
-	stream->Release ();
-    GlobalFree (hG);   
-	
-	return UT_OK;
+	if (image)
+		GdipDisposeImage (image);
+	if (streamOut)
+		streamOut->Release ();
+	if (stream)
+		stream->Release ();
+	if (hG)
+		GlobalFree (hG);
+	return result;
 }
 

@@ -19,6 +19,7 @@
 
 #include "gr_Win32USPGraphics.h"
 #include "ut_debugmsg.h"
+#include <new>
 #include <string.h>
 #include "xap_App.h"
 #include "xap_Prefs.h"
@@ -1852,23 +1853,46 @@ bool GR_Win32USPGraphics::_scriptBreak(GR_Win32USPRenderInfo &ri)
 
 		UT_uint32 iLen = UT_MIN(iPosEnd - iPosStart + 1, (UT_uint32)ri.m_iLength); // including iPosEnd
 
-		ri.s_pOwnerChar = &ri;
-		
 		if(ri.s_iAdvancesSize < iLen)
 		{
 			UT_return_val_if_fail( ri.allocStaticBuffers(iLen),false);
 		}
-		
-		for(UT_uint32 i = 0; i < iLen; ++i, ++(*(ri.m_pText)))
-		{
-			ri.s_pChars[i] = (WCHAR)ri.m_pText->getChar();
-		}
 
-		// restore the iterrator to the initial position
+		// ScriptBreak takes UTF-16 and returns one SCRIPT_LOGATTR per
+		// code unit. Callers index s_pLogAttr by UCS-4 offset, so a
+		// supplementary character is shaped as a pair and then folded
+		// back onto its first unit.
+		WCHAR * utf16 = new(std::nothrow) WCHAR[static_cast<size_t>(iLen) * 2];
+		SCRIPT_LOGATTR * attrs = utf16 ? new(std::nothrow) SCRIPT_LOGATTR[static_cast<size_t>(iLen) * 2] : nullptr;
+		if (!utf16 || !attrs)
+		{
+			delete [] attrs;
+			delete [] utf16;
+			return false;
+		}
+		UT_uint32 nUtf16 = 0;
+		for(UT_uint32 i = 0; i < iLen; ++i, ++(*(ri.m_pText)))
+			s_storeUtf16(utf16, nUtf16, ri.m_pText->getChar());
+
 		*(ri.m_pText) -= iLen;
-		
+
 		GR_Win32USPItem &I = (GR_Win32USPItem &)*ri.m_pItem;
-		HRESULT hRes = fScriptBreak(ri.s_pChars, iLen, &I.m_si.a, ri.s_pLogAttr);
+		HRESULT hRes = fScriptBreak(utf16, static_cast<int>(nUtf16), &I.m_si.a, attrs);
+		if (!hRes)
+		{
+			memset(ri.s_pLogAttr, 0, iLen * sizeof(SCRIPT_LOGATTR));
+			UT_uint32 unit = 0;
+			for (UT_uint32 i = 0; i < iLen && unit < nUtf16; ++i)
+			{
+				ri.s_pLogAttr[i] = attrs[unit];
+				const bool pair = (utf16[unit] >= 0xD800 && utf16[unit] <= 0xDBFF
+						   && unit + 1 < nUtf16);
+				unit += pair ? 2u : 1u;
+			}
+			ri.s_pOwnerChar = &ri;
+		}
+		delete [] attrs;
+		delete [] utf16;
 
 		UT_return_val_if_fail(!hRes,false);
 	}
