@@ -210,25 +210,26 @@ void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Ch
 #ifdef DEBUG
 					if(iErrorCode)
 					{
-						LPVOID lpMsgBuf;
-						FormatMessageW( 
-									  FORMAT_MESSAGE_ALLOCATE_BUFFER | 
-									  FORMAT_MESSAGE_FROM_SYSTEM | 
+						// FormatMessageW leaves the pointer unchanged when it returns 0.
+						wchar_t * wide = nullptr;
+						char narrow[256];
+						narrow[0] = '\0';
+						if (FormatMessageW(
+									  FORMAT_MESSAGE_ALLOCATE_BUFFER |
+									  FORMAT_MESSAGE_FROM_SYSTEM |
 									  FORMAT_MESSAGE_IGNORE_INSERTS,
 									  nullptr,
 									  iErrorCode,
-									  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-									  (LPWSTR) &lpMsgBuf,
+									  MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+									  (LPWSTR) &wide,
 									  0,
-									  nullptr 
-									  );
-						// Process any inserts in lpMsgBuf.
-						// ...
-						// Display the string.
-						//MessageBox( nullptr, (LPCTSTR)lpMsgBuf, "Error", MB_OK | MB_ICONINFORMATION );
-						UT_DEBUGMSG(("char width error: %s\n", lpMsgBuf));
-						// Free the buffer.
-						LocalFree( lpMsgBuf );
+									  nullptr) != 0 && wide)
+						{
+							WideCharToMultiByte(CP_UTF8, 0, wide, -1, narrow, static_cast<int>(sizeof(narrow)), nullptr, nullptr);
+							narrow[sizeof(narrow) - 1] = '\0';
+							LocalFree(wide);
+						}
+						UT_DEBUGMSG(("char width error: 0x%08lx %s\n", static_cast<unsigned long>(iErrorCode), narrow));
 					}
 #endif
 					setWidth(k,Size.cx);
