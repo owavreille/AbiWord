@@ -477,7 +477,12 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				/* The name stays in the interface font. The sample follows it
 				   and must not repaint the whole row, or the name disappears. */
 				hfontSave = (HFONT) SelectObject (dis->hDC, hUIFont);
-				GetTextExtentPoint32W(dis->hDC, str.c_str(), (int)str.size(), &size);
+				memset(&size, 0, sizeof(size));
+				if (!GetTextExtentPoint32W(dis->hDC, str.c_str(), (int)str.size(), &size))
+				{
+					size.cx = 0;
+					size.cy = 0;
+				}
 
 				RECT nameRect = dis->rcItem;
 				nameRect.left += 2;
@@ -509,17 +514,23 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 			// relay mouse messages from the combo box to get tool tips to work
 			// TODO: similar relay needed from edit control, too??
 			// ALT:  tell tooltip control to subclass for these events
+			// TTM_RELAYEVENT reads hwnd, message, wParam, lParam, time and pt.
+			// https://learn.microsoft.com/en-us/windows/win32/controls/ttm-relayevent
 			MSG msg;
-			HWND hWndTT;
-			msg.lParam = lParam;
-			msg.wParam = wParam;
-			msg.message = uMessage;
+			memset(&msg, 0, sizeof(msg));
 			msg.hwnd = hWnd;
+			msg.message = uMessage;
+			msg.wParam = wParam;
+			msg.lParam = lParam;
+			msg.time = GetMessageTime();
+			const DWORD pos = GetMessagePos();
+			msg.pt.x = static_cast<SHORT>(LOWORD(pos));
+			msg.pt.y = static_cast<SHORT>(HIWORD(pos));
 
 			HWND hwndToolbar = GetParent(hWnd);
-
-			hWndTT = (HWND)SendMessageW(hwndToolbar, TB_GETTOOLTIPS, 0,0);
-			SendMessageW(hWndTT, TTM_RELAYEVENT, 0, (LPARAM)(LPMSG)&msg);
+			HWND hWndTT = hwndToolbar ? (HWND)SendMessageW(hwndToolbar, TB_GETTOOLTIPS, 0, 0) : nullptr;
+			if (hWndTT)
+				SendMessageW(hWndTT, TTM_RELAYEVENT, 0, (LPARAM)(LPMSG)&msg);
 			break;
 		}
 

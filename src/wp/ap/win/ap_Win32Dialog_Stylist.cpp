@@ -341,39 +341,49 @@ LRESULT CALLBACK AP_Win32Dialog_Stylist::s_treeProc(HWND hWnd, UINT msg, WPARAM 
 BOOL AP_Win32Dialog_Stylist::_styleClicked(void)
 {
 
-	UT_sint32 row, col;
+	UT_sint32 row = 0;
+	UT_sint32 col = 0;
 	TVITEMW tvi;
+	memset(&tvi, 0, sizeof(tvi));
 
 	HWND hTree = GetDlgItem(m_hDlg, AP_RID_DIALOG_STYLIST_TREE_STYLIST);
+	if (!hTree)
+		return FALSE;
 
 	// Selected item
 	tvi.hItem =  TreeView_GetSelection(hTree);
 			
 	if (!tvi.hItem)
-		return 0;
+		return FALSE;
 
-	// Associated data
-	tvi.mask = TVIF_HANDLE | TVIF_CHILDREN;
-	TreeView_GetItem(hTree, &tvi);
+	// The items were inserted with TVM_INSERTITEMW and TVIF_PARAM.
+	// TVM_GETITEMW leaves lParam untouched unless TVIF_PARAM is requested
+	// and the call succeeds.
+	// https://learn.microsoft.com/en-us/windows/win32/controls/tvm-getitem
+	tvi.mask = TVIF_HANDLE | TVIF_CHILDREN | TVIF_PARAM;
+	if (!SendMessageW(hTree, TVM_GETITEMW, 0, (LPARAM)&tvi))
+		return FALSE;
 
 	// Retrieve the row/column information from the treeview
 	// This maps back to the pStyleList's row&column identifiers
 	if (TreeView_GetParent(hTree, tvi.hItem) == nullptr)
 	{
 		if (tvi.cChildren >= 1)
-			return 0; // we've clicked on a style category, not a style
+			return FALSE; // we've clicked on a style category, not a style
 
-		row = tvi.lParam;
+		row = static_cast<UT_sint32>(tvi.lParam);
 		col = 0;
 	}
 	else
 	{
-		col = tvi.lParam;
+		col = static_cast<UT_sint32>(tvi.lParam);
 		// Get parent node for row information
-		tvi.mask = TVIF_HANDLE;
+		tvi.mask = TVIF_HANDLE | TVIF_PARAM;
 		tvi.hItem = TreeView_GetParent(hTree, tvi.hItem);
-		TreeView_GetItem(hTree, &tvi);
-		row = tvi.lParam;
+		memset(&tvi.lParam, 0, sizeof(tvi.lParam));
+		if (!tvi.hItem || !SendMessageW(hTree, TVM_GETITEMW, 0, (LPARAM)&tvi))
+			return FALSE;
+		row = static_cast<UT_sint32>(tvi.lParam);
 	}
 
 	std::string sStyle;

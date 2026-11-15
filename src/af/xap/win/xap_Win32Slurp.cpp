@@ -336,6 +336,25 @@ static XX_Status _fetchKey(HKEY k1, const char * szSubKey, HKEY * pkNew)
 	}
 }
 
+// RegQueryValueEx copies the stored bytes. A REG_SZ value is not required
+// to end with a NUL, and a value that fills the buffer leaves no room to add one.
+// https://learn.microsoft.com/en-us/windows/win32/api/winreg/nf-winreg-regqueryvalueexw
+static bool _terminateRegSzA(char *buf, DWORD cap, DWORD len)
+{
+	if (!buf || len >= cap)
+		return false;
+	buf[len] = '\0';
+	return true;
+}
+
+static bool _terminateRegSzW(void *buf, DWORD cap, DWORD len)
+{
+	if (!buf || (len % sizeof(wchar_t)) != 0 || len >= cap)
+		return false;
+	static_cast<wchar_t *>(buf)[len / sizeof(wchar_t)] = L'\0';
+	return true;
+}
+
 void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 								   const char * szApplicationName,
 								   LPCWSTR szExePathname,
@@ -388,16 +407,23 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 	HKEY hKeyApplication = nullptr;
 	HKEY hKeyTopic = nullptr;
 	HKEY hKeyDefaultIcon = nullptr;
-	
-	sprintf(bufOurFoo,"AbiSuite.%s",szApplicationName);
-	strtok(bufOurFoo," ");				// trim key at first whitespace
-
-	const gchar *pStr = "%s Document";
 	UT_Win32LocaleString tmpl;
 	char tdbuf[512];
-	sprintf(tdbuf,pStr,szApplicationName);
+	int written = 0;
+
+	if (!szApplicationName)
+		goto CleanupMess;
+	written = snprintf(bufOurFoo, sizeof(bufOurFoo), "AbiSuite.%s", szApplicationName);
+	if (written < 0 || static_cast<size_t>(written) >= sizeof(bufOurFoo))
+		goto CleanupMess;
+	strtok(bufOurFoo," ");				// trim key at first whitespace
+
+	written = snprintf(tdbuf, sizeof(tdbuf), "%s Document", szApplicationName);
+	if (written < 0 || static_cast<size_t>(written) >= sizeof(tdbuf))
+		goto CleanupMess;
 	tmpl.fromUTF8(tdbuf);
-	wcscpy(bufOurFooValue,tmpl.c_str());
+	wcsncpy(bufOurFooValue, tmpl.c_str() ? tmpl.c_str() : L"", G_N_ELEMENTS(bufOurFooValue) - 1);
+	bufOurFooValue[G_N_ELEMENTS(bufOurFooValue) - 1] = 0;
 	
 	///////////////////////////////////////////////////////////////////
 	// See if someone has claimed this suffix.
@@ -420,10 +446,11 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 			// was already present.  Verify the value.
 			///////////////////////////////////////////////////////////////////
 
-			len = G_N_ELEMENTS(buf);
+			len = sizeof(buf);
 			eResult = RegQueryValueEx(hKeySuffix,nullptr,nullptr,&dType,(LPBYTE)buf,&len);
 
-			if ((eResult != ERROR_SUCCESS) || (dType != REG_SZ) || (len==0))
+			if ((eResult != ERROR_SUCCESS) || (dType != REG_SZ) || (len==0)
+			    || !_terminateRegSzA(buf, sizeof(buf), len))
 				break;					// bogus data, overwrite it.
 			
 			UT_DEBUGMSG(("Registry: suffix [HKEY_CLASSES_ROOT\\%s] --> [%s]\n",
@@ -463,9 +490,9 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 	///////////////////////////////////////////////////////////////////
 
 	bUpdateContentType = true;
-	len = G_N_ELEMENTS(buf);
+	len = sizeof(buf);
 	eResult = RegQueryValueEx(hKeySuffix,CONTENT_TYPE_KEY,nullptr,&dType,(LPBYTE)buf,&len);
-	if ((eResult == ERROR_SUCCESS) && (dType == REG_SZ))
+	if ((eResult == ERROR_SUCCESS) && (dType == REG_SZ) && _terminateRegSzA(buf, sizeof(buf), len))
 	{
 		UT_DEBUGMSG(("Registry: Existing ContentType [%s]\n",buf));
 		if (g_ascii_strcasecmp(buf,szContentType) == 0)
@@ -503,9 +530,9 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 
 	case X_ExistingKey:
 		UT_ASSERT(hKeyFoo);
-		len = G_N_ELEMENTS(buf);
+		len = sizeof(buf);
 		eResult = RegQueryValueExW(hKeyFoo, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
-		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && (lstrcmpiW((LPCWSTR)buf,bufOurFooValue)==0))
+		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && _terminateRegSzW(buf, sizeof(buf), len) && (lstrcmpiW((LPCWSTR)buf,bufOurFooValue)==0))
 			break;					// already has correct value, no need to overwrite.
 
 		/* otherwise, replace the value */
@@ -543,7 +570,7 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 		UT_ASSERT(hKeyCommand);
 		len = sizeof(buf);
 		eResult = RegQueryValueExW(hKeyCommand, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
-		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ))
+		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && _terminateRegSzW(buf, sizeof(buf), len))
 		{
 			if (lstrcmpiW((LPCWSTR)buf,commandPathWithParam) == 0)
 				break;					// already has correct value, no need to overwrite.
@@ -586,9 +613,9 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 
 	case X_ExistingKey:	
 		UT_ASSERT(hKeyDdeExec);
-		len = G_N_ELEMENTS(buf);
+		len = sizeof(buf);
 		eResult = RegQueryValueEx(hKeyDdeExec, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
-		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && (g_ascii_strcasecmp(buf,VALUE_DDEEXEC_OPEN)==0))
+		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && _terminateRegSzA(buf, sizeof(buf), len) && (g_ascii_strcasecmp(buf,VALUE_DDEEXEC_OPEN)==0))
 			break;						// already has correct value, no need to overwrite.
 
 		/* otherwise, replace the value */
@@ -614,9 +641,9 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 
 	case X_ExistingKey:	
 		UT_ASSERT(hKeyApplication);
-		len = G_N_ELEMENTS(buf);
+		len = sizeof(buf);
 		eResult = RegQueryValueEx(hKeyApplication, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
-		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && (g_ascii_strcasecmp(buf,szApplicationName)==0))
+		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && _terminateRegSzA(buf, sizeof(buf), len) && (g_ascii_strcasecmp(buf,szApplicationName)==0))
 			break;						// already has correct value, no need to overwrite.
 
 		/* otherwise, replace the value */
@@ -644,7 +671,7 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 		UT_ASSERT(hKeyTopic);
 		len = sizeof(buf);
 		eResult = RegQueryValueExW(hKeyTopic, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
-		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && (wcsicmp((LPWSTR)buf,MY_DDE_TOPICNAME)==0))
+		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && _terminateRegSzW(buf, sizeof(buf), len) && (wcsicmp((LPWSTR)buf,MY_DDE_TOPICNAME)==0))
 			break;						// already has correct value, no need to overwrite.
 
 		/* otherwise, replace the value */
@@ -675,7 +702,7 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 		UT_ASSERT(hKeyDefaultIcon);
 		len = sizeof(buf);
 		eResult = RegQueryValueExW(hKeyDefaultIcon, nullptr, nullptr, &dType, (LPBYTE)buf, &len);
-		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && (lstrcmpiW((LPWSTR)buf,bufDefaultIconValue)==0))
+		if ((eResult==ERROR_SUCCESS) && (dType==REG_SZ) && _terminateRegSzW(buf, sizeof(buf), len) && (lstrcmpiW((LPWSTR)buf,bufDefaultIconValue)==0))
 			break;						// already has correct value, no need to overwrite.
 
 		/* otherwise, replace the value */

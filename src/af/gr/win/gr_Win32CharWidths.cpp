@@ -65,7 +65,9 @@ void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Ch
 				units[0] = static_cast<wchar_t>(0xD800 + ((k - 0x10000) >> 10));
 				units[1] = static_cast<wchar_t>(0xDC00 + ((k - 0x10000) & 0x3FF));
 				SIZE Size;
-				GetTextExtentPoint32W(hdc, units, 2, &Size);
+				memset(&Size, 0, sizeof(Size));
+				if (!GetTextExtentPoint32W(hdc, units, 2, &Size))
+					Size.cx = 0;
 				setWidth(k, Size.cx);
 				continue;
 			}
@@ -131,10 +133,12 @@ void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Ch
 				else
 				{
 					SIZE Size;
+					memset(&Size, 0, sizeof(Size));
 					char str[sizeof(UT_UCS4Char)];
 					int iConverted = WideCharToMultiByte(CP_ACP, 0, (LPCWSTR) &k, 1,
 														 str, sizeof(str), nullptr, nullptr);
-					GetTextExtentPoint32A(hdc, str, iConverted, &Size);
+					if (iConverted > 0 && !GetTextExtentPoint32A(hdc, str, iConverted, &Size))
+						Size.cx = 0;
 					setWidth(k, Size.cx);
 				}
 			}
@@ -164,7 +168,9 @@ void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Ch
 					else
 						units[0] = static_cast<wchar_t>(k);
 
-					GetTextExtentPoint32W(hdc, units, unitCount, &Size);
+					memset(&Size, 0, sizeof(Size));
+					if (!GetTextExtentPoint32W(hdc, units, unitCount, &Size))
+						Size.cx = 0;
 					// handle overstriking chars here
 					UT_uint32 iOver = UT_isOverstrikingChar(k);
 					if(k <= 0xFFFF && (!Size.cx ||  iOver != UT_NOT_OVERSTRIKING))
