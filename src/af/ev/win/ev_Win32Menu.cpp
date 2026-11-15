@@ -784,6 +784,7 @@ bool EV_Win32Menu::_isAMenuBar(XAP_Menu_Id id, HMENU hMenu)
 void EV_Win32Menu::onMeasureItem(HWND hwnd, WPARAM /*wParam*/, LPARAM lParam)
 {
 	SIZE size;
+	memset(&size, 0, sizeof(size));
 	LPMEASUREITEMSTRUCT lpmis = (LPMEASUREITEMSTRUCT) lParam;
 	if (!lpmis)
 		return;
@@ -800,7 +801,11 @@ void EV_Win32Menu::onMeasureItem(HWND hwnd, WPARAM /*wParam*/, LPARAM lParam)
 	HFONT hfontOld = m_hFont ? (HFONT) SelectObject(hdc, m_hFont) : nullptr;
 
 	// Retrieve the width and height of the item's string 
-	GetTextExtentPoint32W(hdc, item->szText, lstrlenW(item->szText), &size); 
+	if (!GetTextExtentPoint32W(hdc, item->szText, lstrlenW(item->szText), &size))
+	{
+		size.cx = 0;
+		size.cy = 0;
+	} 
 		
 	if (size.cy < static_cast<LONG>(item->pMenu->m_nBitmapCY))
 		lpmis->itemHeight = item->pMenu->m_nBitmapCY;

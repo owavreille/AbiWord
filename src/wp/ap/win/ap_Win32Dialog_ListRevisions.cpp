@@ -170,6 +170,7 @@ BOOL AP_Win32Dialog_ListRevisions::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /
 				if(iSelCount)
 				{
 					LVITEMW item;
+					memset(&item, 0, sizeof(item));
 
 					item.iSubItem = 0;
 					item.iItem = ListView_GetSelectionMark(h);
@@ -177,9 +178,12 @@ BOOL AP_Win32Dialog_ListRevisions::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /
 					item.pszText = nullptr;
 					item.cchTextMax = 0;
 
-					ListView_GetItem(h,&item);
-
-					m_iId = item.lParam;
+					// LVM_GETITEMW writes lParam only when it returns TRUE.
+					// https://learn.microsoft.com/en-us/windows/win32/controls/lvm-getitem
+					if (item.iItem >= 0 && SendMessageW(h, LVM_GETITEMW, 0, (LPARAM)&item))
+						m_iId = static_cast<UT_uint32>(item.lParam);
+					else
+						m_iId = 0;
 				}
 				else
 					m_iId = 0;

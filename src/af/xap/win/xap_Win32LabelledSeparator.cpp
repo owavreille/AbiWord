@@ -84,8 +84,10 @@ static void AdaptSeparatorLength(HWND hwnd, const wchar_t* text, HFONT hFont)
 
 	// Modifiy separator line length
 	RECT controlRect;
+	memset(&controlRect, 0, sizeof(controlRect));
 	HWND hLine = GetDlgItem(hwnd, IDC_LINE_SEPARATOR);
-	GetClientRect(hwnd, &controlRect);
+	if (!hLine || !GetClientRect(hwnd, &controlRect))
+		return;
 	if(textSize.cx > 0)
 	{
 		textSize.cx += TEXT_LINE_SPACING;

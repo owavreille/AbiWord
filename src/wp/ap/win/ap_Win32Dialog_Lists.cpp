@@ -744,11 +744,12 @@ void AP_Win32Dialog_Lists::_fillStyleList(int iType)
 		if (hDC)
 		{
 			SIZE size;
+			memset(&size, 0, sizeof(size));
 			UT_Win32LocaleString label;
 			label.fromUTF8(psz ? psz : "");
 			const wchar_t * wide = label.c_str();
-			::GetTextExtentPoint32W(hDC, wide ? wide : L"", wide ? lstrlenW(wide) : 0, &size);
-			if (size.cx > nMaxWidth)
+			if (::GetTextExtentPoint32W(hDC, wide ? wide : L"", wide ? lstrlenW(wide) : 0, &size)
+			    && size.cx > nMaxWidth)
 			{
 				nMaxWidth = size.cx;
 			}
