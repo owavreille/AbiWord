@@ -2055,12 +2055,20 @@ void EV_Win32Toolbar::showChevron(POINT screen)
 		if (btn.fsStyle & TBSTYLE_SEP)
 			continue;
 
+		// TB_GETITEMRECT refuses a button in the TBSTATE_HIDDEN state.
+		// HIDECLIPPEDBUTTONS sets that state on every button that does
+		// not fit, so those commands have to be taken from TB_GETBUTTON.
+		const bool hidden = (btn.fsState & TBSTATE_HIDDEN) != 0;
 		RECT item;
-		if (!SendMessageW(m_hwnd, TB_GETITEMRECT, i, (LPARAM)&item))
-			continue;
-		if (item.left >= bar.left && item.right <= bar.right
-		    && item.top >= bar.top && item.bottom <= bar.bottom)
-			continue;
+		const BOOL haveRect = (BOOL)SendMessageW(m_hwnd, TB_GETITEMRECT, i, (LPARAM)&item);
+		if (!hidden)
+		{
+			if (!haveRect)
+				continue;
+			if (item.left >= bar.left && item.right <= bar.right
+			    && item.top >= bar.top && item.bottom <= bar.bottom)
+				continue;
+		}
 
 		XAP_Toolbar_Id id = ItemIdFromWmCommand(btn.idCommand);
 		EV_Toolbar_Label * pLabel = m_pToolbarLabelSet->getLabel(id);
@@ -2075,8 +2083,7 @@ void EV_Win32Toolbar::showChevron(POINT screen)
 		UT_Win32LocaleString text;
 		text.fromUTF8(utf8);
 		UINT flags = MF_STRING;
-		const LRESULT state = SendMessageW(m_hwnd, TB_GETSTATE, btn.idCommand, 0);
-		if (!(state & TBSTATE_ENABLED))
+		if (!(btn.fsState & TBSTATE_ENABLED))
 			flags |= MF_GRAYED;
 		if (AppendMenuW(menu, flags, btn.idCommand, text.c_str()))
 			++added;
