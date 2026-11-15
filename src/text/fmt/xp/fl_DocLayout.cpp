@@ -2754,7 +2754,23 @@ fl_BlockLayout* FL_DocLayout::findBlockAtPositionReverse(PT_DocPosition pos) con
 			fl_HdrFtrSectionLayout * pEditHF = pShadow ? pShadow->getHdrFtrSectionLayout() : nullptr;
 			if(pEditHF && !pEditHF->isPointInHere(pos))
 			{
-				fl_HdrFtrSectionLayout * pHF = (fl_HdrFtrSectionLayout *) pBL->getSectionLayout();
+				// Mirror the forward finder: walk containers until the
+				// header/footer section, so nested layouts do not cast
+				// the wrong type and crash on isPointInHere.
+				fl_ContainerLayout * pCL = static_cast<fl_ContainerLayout *>(pBL->getSectionLayout());
+				while(pCL && pCL->getContainerType() != FL_CONTAINER_HDRFTR && pCL->getContainerType() != FL_CONTAINER_DOCSECTION)
+				{
+					if(pCL == pCL->myContainingLayout())
+					{
+						break;
+					}
+					pCL = pCL->myContainingLayout();
+				}
+				fl_HdrFtrSectionLayout * pHF = nullptr;
+				if(pCL && pCL->getContainerType() == FL_CONTAINER_HDRFTR)
+				{
+					pHF = static_cast<fl_HdrFtrSectionLayout *>(pCL);
+				}
 				if(pHF && pHF->isPointInHere(pos))
 				{
 					pShadow = pHF->getFirstShadow();
@@ -2764,6 +2780,10 @@ fl_BlockLayout* FL_DocLayout::findBlockAtPositionReverse(PT_DocPosition pos) con
 						pView->setHdrFtrEdit(pShadow);
 						pBL = (fl_BlockLayout *) pShadow->findBlockAtPosition(pos);
 						return pBL;
+					}
+					else
+					{
+						return nullptr;
 					}
 				}
 				// Ok, we're really confused now, point is nowhere to be found.

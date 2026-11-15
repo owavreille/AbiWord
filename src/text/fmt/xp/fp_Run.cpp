@@ -532,10 +532,13 @@ fp_Run*
 fp_Run::_findPrevPropertyRun(void) const
 {
 	fp_Run* pRun = getPrevRun();
-	// An image is as tall as its bitmap. A line break that copied that
-	// height stayed tall after the image was removed, and the following
-	// lines each kept a page of their own.
-	while (pRun && (!pRun->hasLayoutProperties() || pRun->isHidden() || (pRun->getType() == FPRUN_IMAGE)))
+	// Images, math and embeds are as tall as their object. A line break
+	// that copied that height stayed tall after the object was removed,
+	// and the following lines each kept a page of their own.
+	while (pRun && (!pRun->hasLayoutProperties() || pRun->isHidden()
+			|| (pRun->getType() == FPRUN_IMAGE)
+			|| (pRun->getType() == FPRUN_MATH)
+			|| (pRun->getType() == FPRUN_EMBED)))
 	    pRun = pRun->getPrevRun();
 	return pRun;
 }

@@ -4524,6 +4524,9 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		}
 		m_pViewDoubleBufferingObject->recordViewDrawCall(x, y, width, height, bDirtyRunsOnly, bClip);
 		m_pG->setClipRect(nullptr);
+		// The forced full redraw is now in the recorded call; leave the
+		// sticky flag set and every later draw keeps clearing forever.
+		m_bClearPageBackground = false;
 		return;
 	}
 

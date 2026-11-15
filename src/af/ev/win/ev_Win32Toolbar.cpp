@@ -348,6 +348,9 @@ LRESULT CALLBACK EV_Win32Toolbar::_ToolBarWndProc (HWND hWnd, UINT uMessage, WPA
 
 static HFONT s_fontSample(const wchar_t * face)
 {
+	// Bound the cache: opening the font list once can touch hundreds of
+	// faces, and each HFONT lives until process exit without a cap.
+	static const size_t kMaxFontSamples = 64;
 	static std::map<std::wstring, HFONT> cache;
 	if (!face || !face[0])
 		return nullptr;
@@ -368,8 +371,17 @@ static HFONT s_fontSample(const wchar_t * face)
 	lf.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
 	lstrcpynW(lf.lfFaceName, face, LF_FACESIZE);
 	HFONT font = CreateFontIndirectW(&lf);
-	if (font)
-		cache.insert(std::make_pair(key, font));
+	if (!font)
+		return nullptr;
+
+	if (cache.size() >= kMaxFontSamples)
+	{
+		std::map<std::wstring, HFONT>::iterator drop = cache.begin();
+		if (drop->second)
+			DeleteObject(drop->second);
+		cache.erase(drop);
+	}
+	cache.insert(std::make_pair(key, font));
 	return font;
 }
 

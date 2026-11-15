@@ -514,8 +514,7 @@ UT_uint32 GR_Win32USPGraphics::getFontHeight(GR_Font * fnt)
 	setFont(fnt);
 	
 	UT_uint32 i = getFontHeight();
-	if(pOldFont)
-		setFont(pOldFont);
+	setFont(pOldFont);
 	return i;
 }
 
@@ -534,8 +533,7 @@ UT_uint32 GR_Win32USPGraphics::getFontAscent(GR_Font* fnt)
 	setFont(fnt);
 	
 	UT_uint32 i = getFontAscent();
-	if(pOldFont)
-		setFont(pOldFont);
+	setFont(pOldFont);
 	return i;
 }
 
@@ -554,8 +552,7 @@ UT_uint32 GR_Win32USPGraphics::getFontDescent(GR_Font* fnt)
 	setFont(fnt);
 	
 	UT_uint32 i = getFontDescent();
-	if(pOldFont)
-		setFont(pOldFont);
+	setFont(pOldFont);
 	return i;
 }
 
@@ -613,11 +610,21 @@ void GR_Win32USPGraphics::_prepareFontYMetrics()
 		m_pFont->fetchFont(pixels);
 		hFont = m_pFont->getFontFromCache(pixels, false, 100);
 	}
-	if (hFont && m_hdc)
+	if (!hFont || !m_hdc)
+		return;
+
+	HFONT hCurrent = (HFONT)GetCurrentObject(m_hdc, OBJ_FONT);
+	if (hCurrent != hFont)
+	{
 		SelectObject(m_hdc, hFont);
+		// Width shaping leaves the scaled face selected on the screen
+		// DC; any Y cache tied to that DC was measured from it.
+		if (m_pFont->getYHDC() == m_hdc)
+			m_pFont->setYHDC(nullptr);
+	}
 
 	const UT_uint32 expect = (UT_uint32)(m_pFont->getPointSize() * (double)getResolution() / 72.0 + 0.5);
-	if (expect > 0 && m_pFont->getTextMetric().tmHeight > expect * 2)
+	if (expect > 0 && m_pFont->getYHDC() && m_pFont->getTextMetric().tmHeight > expect * 2)
 		m_pFont->setYHDC(nullptr);
 }
 
@@ -1448,6 +1455,13 @@ void GR_Win32USPGraphics::renderChars(GR_RenderInfo & ri)
 	}
 	else
 	{
+		// Layout ascent must not come from the GR_WIN32_USP_FONT_SCALING
+		// face that width measurement may have left selected.
+		_prepareFontYMetrics();
+		UT_sint32 iAscentPrint = (UT_sint32)pFont->getAscent(m_hdc, getPrintDC());
+		// Drawing and screen-ascent sampling use the zoomed face.
+		_setupFontOnDC(pFont, true);
+
 		UT_sint32 iAscentScreen = pFont->getScreenAscent();
 
 		if(!iAscentScreen)
@@ -1462,7 +1476,6 @@ void GR_Win32USPGraphics::renderChars(GR_RenderInfo & ri)
 			pFont->setScreenAscent(iAscentScreen);
 		}
 
-		UT_sint32 iAscentPrint = pFont->getTextMetric().tmAscent;
 		yoff = _tduY(RI.m_yoff + iAscentPrint - iAscentScreen);
 	}
 	

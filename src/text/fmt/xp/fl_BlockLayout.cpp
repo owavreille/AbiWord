@@ -9089,6 +9089,14 @@ bool fl_BlockLayout::doclistener_deleteObject(const PX_ChangeRecord_Object * pcr
 			UT_DEBUGMSG(("Edit:DeleteObject:Math:\n"));
 			blockOffset = pcro->getBlockOffset();
 			_delete(blockOffset, 1);
+			// Same as images: breaks that shared the object's line keep
+			// its height until they are measured again from the font.
+			collapse();
+			for (fp_Run * pRun = m_pFirstRun; pRun; pRun = pRun->getNextRun())
+			{
+				pRun->updateVerticalMetric();
+				pRun->lookupProperties();
+			}
 			break;
 		}
 		case PTO_Embed:
@@ -9096,6 +9104,12 @@ bool fl_BlockLayout::doclistener_deleteObject(const PX_ChangeRecord_Object * pcr
 			UT_DEBUGMSG(("Edit:DeleteObject:Embed:\n"));
 			blockOffset = pcro->getBlockOffset();
 			_delete(blockOffset, 1);
+			collapse();
+			for (fp_Run * pRun = m_pFirstRun; pRun; pRun = pRun->getNextRun())
+			{
+				pRun->updateVerticalMetric();
+				pRun->lookupProperties();
+			}
 			break;
 		}
 
