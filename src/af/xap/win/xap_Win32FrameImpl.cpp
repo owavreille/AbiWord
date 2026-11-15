@@ -208,7 +208,7 @@ void XAP_Win32FrameImpl::_initialize(void)
 
 void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 {
-	RECT r;
+	RECT r = {};
 	UT_uint32 iHeight, iWidth;
 	UT_sint32 iPosX, iPosY;
 	static bool firstWindow = true;	/* position only 1st window! */
@@ -363,10 +363,18 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 
 	_createToolbars();
 
-	// figure out how much room is left for the child
-	GetClientRect(m_hwndFrame, &r);
-	iHeight = r.bottom - r.top;
-	iWidth = r.right - r.left;
+	// figure out how much room is left for the child.
+	// GetClientRect leaves the rectangle untouched on failure.
+	if (!m_hwndFrame || !GetClientRect(m_hwndFrame, &r))
+	{
+		iHeight = 0;
+		iWidth = 0;
+	}
+	else
+	{
+		iHeight = r.bottom - r.top;
+		iWidth = r.right - r.left;
+	}
 
 	m_iSizeWidth = iWidth;
 	m_iSizeHeight = iHeight;
@@ -380,8 +388,11 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 		int barHeight = (int)SendMessageW(m_hwndRebar, RB_GETBARHEIGHT, 0, 0);
 		if (barHeight <= 0)
 		{
-			GetClientRect(m_hwndRebar, &r);
-			barHeight = r.bottom - r.top;
+			RECT barRect = {};
+			if (GetClientRect(m_hwndRebar, &barRect) && barRect.bottom > barRect.top)
+				barHeight = barRect.bottom - barRect.top;
+			else
+				barHeight = 0;
 		}
 		if (barHeight > static_cast<int>(iHeight))
 			barHeight = static_cast<int>(iHeight);
@@ -402,8 +413,13 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 	// so that it will appear outside of the scrollbars.
 
 	m_hwndStatusBar = _createStatusBarWindow(getFrame(), m_hwndFrame,0,m_iBarHeight+iHeight,iWidth);
-	GetClientRect(m_hwndStatusBar,&r);
-	m_iStatusBarHeight = r.bottom;
+	m_iStatusBarHeight = 0;
+	if (m_hwndStatusBar)
+	{
+		RECT statusRect = {};
+		if (GetClientRect(m_hwndStatusBar, &statusRect) && statusRect.bottom > 0)
+			m_iStatusBarHeight = statusRect.bottom;
+	}
 
 	
 	// Register drag and drop data and files
@@ -484,11 +500,9 @@ EV_Toolbar * XAP_Win32FrameImpl::_newToolbar(XAP_Frame *frame, const char *szLay
 	if (!hwndBar) 
 		return result;
 
-	RECT rcClient;
-	GetClientRect(hwndBar, &rcClient);
-	const UT_uint32 iHeight = rcClient.bottom - rcClient.top;
-	
-	m_iBarHeight += iHeight;
+	RECT rcClient = {};
+	if (GetClientRect(hwndBar, &rcClient) && rcClient.bottom > rcClient.top)
+		m_iBarHeight += static_cast<UT_uint32>(rcClient.bottom - rcClient.top);
 
 	return result;
 }
@@ -980,8 +994,9 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 				if (s_FrameSizing || s_LayingOutBars)
 					break;
 
-				RECT r;
-				GetClientRect(fimpl->m_hwndFrame, &r);
+				RECT r = {};
+				if (!GetClientRect(fimpl->m_hwndFrame, &r))
+					break;
 				fimpl->_layoutRebar(r.right - r.left, r.bottom - r.top);
 				f->queue_resize();
 			}
@@ -1013,19 +1028,28 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 							HWND  hWndChild = FindWindowExW( pNMcd->hdr.hwndFrom, nullptr, nullptr, nullptr );
 							while( hWndChild != nullptr )
 							{
-								RECT   rcChild;
+								RECT   rcChild = {};
 								POINT  pt;
-								GetWindowRect( hWndChild, &rcChild );
-								pt.x = rcChild.left;
-								pt.y = rcChild.top;
-								ScreenToClient( pNMcd->hdr.hwndFrom, &pt );
-								rc.left = pt.x;
-								pt.x = rcChild.right;
-								pt.y = rcChild.bottom;
-								ScreenToClient( pNMcd->hdr.hwndFrom, &pt );
-								rc.right = pt.x;
-								FillRect( pNMcd->hdc, &rc, hBr );
-								hWndChild = FindWindowExW( pNMcd->hdr.hwndFrom, hWndChild, nullptr, nullptr );
+								HWND nextChild = FindWindowExW( pNMcd->hdr.hwndFrom, hWndChild, nullptr, nullptr );
+								// GetWindowRect and ScreenToClient leave their
+								// outputs untouched when they fail.
+								if (GetWindowRect(hWndChild, &rcChild))
+								{
+									pt.x = rcChild.left;
+									pt.y = rcChild.top;
+									if (ScreenToClient(pNMcd->hdr.hwndFrom, &pt))
+									{
+										rc.left = pt.x;
+										pt.x = rcChild.right;
+										pt.y = rcChild.bottom;
+										if (ScreenToClient(pNMcd->hdr.hwndFrom, &pt))
+										{
+											rc.right = pt.x;
+											FillRect(pNMcd->hdc, &rc, hBr);
+										}
+									}
+								}
+								hWndChild = nextChild;
 							}
 
 							/* Don't delete hBr since it was obtained using GetSysColorBrush, so System owned */

@@ -440,16 +440,20 @@ BOOL AP_Win32Dialog_Paragraph::_onInitTab(HWND hWnd, WPARAM /*wParam*/, LPARAM l
 		HWND hwndChild = GetDlgItem(hWnd, AP_RID_DIALOG_PARA_PREVIEW);
 		HWND hwndFloater = GetDlgItem(m_hwndDlg, AP_RID_DIALOG_PARA_PREVIEW);
 
-		RECT r2;
-		GetWindowRect(hwndChild, &r2);
-
-		POINT pt;
-		pt.x = r2.left;
-		pt.y = r2.top;
-		ScreenToClient(m_hwndDlg, &pt);
-
-		SetWindowPos(hwndFloater, HWND_TOP, pt.x, pt.y,
-					 r2.right - r2.left, r2.bottom - r2.top, SWP_NOREDRAW);
+		RECT r2 = {};
+		if (hwndChild && hwndFloater && GetWindowRect(hwndChild, &r2))
+		{
+			POINT pt;
+			pt.x = r2.left;
+			pt.y = r2.top;
+			const int width = r2.right - r2.left;
+			const int height = r2.bottom - r2.top;
+			if (width > 0 && height > 0 && ScreenToClient(m_hwndDlg, &pt))
+			{
+				SetWindowPos(hwndFloater, HWND_TOP, pt.x, pt.y,
+							 width, height, SWP_NOREDRAW);
+			}
+		}
 
 		// use this floater window as a parent to the widget that we create
 		// here and thus have complete control of.

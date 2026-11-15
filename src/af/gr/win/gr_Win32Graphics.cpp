@@ -332,13 +332,15 @@ GR_Font* GR_Win32Graphics::getGUIFont(void)
 {
 	if (!m_pFontGUI)
 	{
-		// lazily grab this (once)
-		HFONT f = (HFONT) GetStockObject(DEFAULT_GUI_FONT);
+		// DEFAULT_GUI_FONT is a stock object. GetObjectW copies its
+		// LOGFONT; DeleteObject must not be called on the stock handle.
+		// A short or failed GetObjectW leaves the structure unwritten.
+		HFONT stock = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
 		LOGFONTW lf;
-		/*int iRes =*/ GetObjectW(f, sizeof(LOGFONTW), &lf);
-		m_pFontGUI = _newFont(lf, 0, m_hdc, m_hdc);
+		memset(&lf, 0, sizeof(lf));
+		if (stock && GetObjectW(stock, sizeof(lf), &lf) == sizeof(lf))
+			m_pFontGUI = _newFont(lf, 0, m_hdc, m_hdc);
 		UT_ASSERT(m_pFontGUI);
-		DeleteObject(f);
 	}
 	if(m_pFontGUI)
 		m_pFontGUI->markGUIFont();
@@ -1119,10 +1121,15 @@ static void s_showPrintAbort(GR_Win32Graphics * graphics, HWND owner)
 	int y = CW_USEDEFAULT;
 	if (owner)
 	{
+		// GetWindowRect leaves the rectangle untouched on failure.
+		// Keep CW_USEDEFAULT so Windows places the popup itself.
 		RECT frame;
-		GetWindowRect(owner, &frame);
-		x = frame.left + ((frame.right - frame.left) - width) / 2;
-		y = frame.top + ((frame.bottom - frame.top) - height) / 2;
+		memset(&frame, 0, sizeof(frame));
+		if (GetWindowRect(owner, &frame))
+		{
+			x = frame.left + ((frame.right - frame.left) - width) / 2;
+			y = frame.top + ((frame.bottom - frame.top) - height) / 2;
+		}
 	}
 
 	s_printAbortWnd = CreateWindowExW(WS_EX_DLGMODALFRAME, L"AbiWordPrintAbort", title.c_str(),
@@ -2401,13 +2408,18 @@ void GR_Win32Font::insertFontInCache(UT_uint32 pixelsize, HFONT pFont) const
 void GR_Win32Font::fetchFont(UT_uint32 pixelsize) const
 {
 	LOGFONTW lf;
+	memset(&lf, 0, sizeof(lf));
+	// GetObjectW writes the LOGFONT only when it returns the full size.
+	if (!m_layoutFont || GetObjectW(m_layoutFont, sizeof(lf), &lf) != sizeof(lf))
+		return;
 
-	GetObjectW(m_layoutFont, sizeof(LOGFONTW), &lf);
 	lf.lfHeight = pixelsize;
 
 	if (lf.lfHeight>0) lf.lfHeight = - lf.lfHeight;
 
 	HFONT pFont = CreateFontIndirectW(&lf);
+	if (!pFont)
+		return;
 
 	insertFontInCache(pixelsize, pFont);
 }

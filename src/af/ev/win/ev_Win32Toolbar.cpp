@@ -1509,10 +1509,13 @@ void EV_Win32Toolbar::_addToRebar()
 	// Get the height of the toolbar.
 	DWORD dwBtnSize = SendMessageW(m_hwnd, TB_GETBUTTONSIZE, 0,0);
 
-	RECT rc;
-	GetWindowRect(m_hwnd, &rc);
-//	UINT iWidth = rc.right + 13;
-	UINT iWidth = rc.right - rc.left + 13;
+	RECT rc = {};
+	// GetWindowRect leaves the rectangle untouched on failure.
+	// The button size is the width Windows already reported.
+	UINT iWidth = LOWORD(dwBtnSize);
+	if (GetWindowRect(m_hwnd, &rc) && rc.right > rc.left)
+		iWidth = static_cast<UINT>(rc.right - rc.left);
+	iWidth += 13;
 
 	// add this bar to the rebar
 	REBARBANDINFOW rbbi;

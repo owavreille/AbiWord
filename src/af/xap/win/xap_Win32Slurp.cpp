@@ -203,7 +203,13 @@ void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 		return;
 	}
 
-	DdeGetData(hData,(LPBYTE)pBuf,bufSize+99,0);
+	// A zero result means the copy failed. The buffer stays zero-filled,
+	// but there is no command to interpret.
+	if (DdeGetData(hData,(LPBYTE)pBuf,bufSize+99,0) == 0)
+	{
+		FREEP(pBuf);
+		return;
+	}
 	UT_Win32LocaleString wstr;
 	UT_UTF8String astr;
 	wstr.fromLocale((LPCWSTR)pBuf);
