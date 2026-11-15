@@ -259,7 +259,11 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
     // get_Handle writes a 32-bit OLE_HANDLE. On x64 that value has to be
     // sign-extended into a HANDLE; the address of a pointer is not one.
     pPicture->get_Handle(&hB);
-    hBitmap = (HBITMAP)CopyImage(LongToHandle(hB), IMAGE_BITMAP, 0, 0, LR_COPYRETURNORG);
+    // LR_COPYRETURNORG hands back the picture's own bitmap when the copy
+    // fails. Only a distinct handle belongs to this function.
+    const HANDLE oleBitmap = LongToHandle(hB);
+    hBitmap = static_cast<HBITMAP>(CopyImage(oleBitmap, IMAGE_BITMAP, 0, 0, LR_COPYRETURNORG));
+    const bool ownBitmap = hBitmap && reinterpret_cast<HANDLE>(hBitmap) != oleBitmap;
     
     HWND hWnd = GetDesktopWindow();
 
@@ -272,6 +276,8 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
       ReleaseDC(hWnd, hdc);
     if (bi)
       LocalFree(bi);
+    if (ownBitmap)
+      DeleteObject(hBitmap);
     
     InitializePrivateClassData();
     
@@ -294,13 +300,20 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
         long nHeight = 0;
 		long nScaleToWidth= 500;
 		long nScaleToHeight= 500;		
-		RECT rc, rect;				
+		RECT rect;				
 		BYTE *imagedata;
 		HBITMAP hBit;
 		HBITMAP hOld;
 		BITMAPINFO bmi; 		
 		HDC hWndDC = GetDC(hWnd);
-		HDC	hMemDC = CreateCompatibleDC(hWndDC);
+		HDC	hMemDC = CreateCompatibleDC(hWndDC ? hWndDC : nullptr);
+		if (!hMemDC)
+		{
+			if (hWndDC)
+				ReleaseDC(hWnd, hWndDC);
+			pPicture->Release();
+			return UT_IE_NOMEMORY;
+		}
 		HBRUSH hBrush = (HBRUSH)GetCurrentObject(hMemDC, OBJ_BRUSH);
 		
 		pPicture->get_Width (&nWidth);
@@ -319,7 +332,17 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
 		bmi.bmiHeader.biClrUsed = 0; // we are not using palette
 
 		hBit = CreateDIBSection(hMemDC, &bmi, DIB_RGB_COLORS, (void**)&imagedata, nullptr, 0);
-		hOld = (HBITMAP) SelectObject(hMemDC, hBit);
+		hOld = hBit ? (HBITMAP) SelectObject(hMemDC, hBit) : nullptr;
+		if (!hBit || !hOld)
+		{
+			if (hBit)
+				DeleteObject(hBit);
+			DeleteDC(hMemDC);
+			if (hWndDC)
+				ReleaseDC(hWnd, hWndDC);
+			pPicture->Release();
+			return UT_IE_NOMEMORY;
+		}
 
 
 		rect.left = 0;
@@ -328,8 +351,9 @@ UT_Error IE_ImpGraphic_Win32Native::_convertGraphic(const UT_ConstByteBufPtr& pB
         rect.bottom = nScaleToHeight;
 
 		FillRect(hMemDC, &rect,  hBrush);
+		// lprcWBounds is ignored unless the DC is a metafile.
 		pPicture->Render(hMemDC, 0,0,  nScaleToWidth,	nScaleToHeight, 0,  nHeight, 
-						 nWidth, -nHeight, &rc);	
+						 nWidth, -nHeight, nullptr);
 		
 		hBit =  (HBITMAP)SelectObject(hMemDC, hOld);
 		
