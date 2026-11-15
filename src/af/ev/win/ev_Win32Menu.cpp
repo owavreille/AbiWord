@@ -233,12 +233,16 @@ EV_Win32Menu::EV_Win32Menu(XAP_Win32App * pWin32App,
 	m_iDIR(0)
 {
 		    
-	NONCLIENTMETRICSA ncm;
-	ncm.cbSize = sizeof (NONCLIENTMETRICSA);
+	NONCLIENTMETRICSW ncm;
+	memset(&ncm, 0, sizeof(ncm));
+	ncm.cbSize = sizeof(ncm);
 	m_bTrack = false;
 
-    SystemParametersInfoA(SPI_GETNONCLIENTMETRICS, sizeof(NONCLIENTMETRICSA), &ncm, 0);
-	m_hFont = CreateFontIndirectA(&ncm.lfMenuFont);	
+	// The A metrics pass the face name through the ANSI code page.
+	// A failed call leaves the structure empty, so it must not become a font.
+	m_hFont = nullptr;
+	if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0))
+		m_hFont = CreateFontIndirectW(&ncm.lfMenuFont);	
 
 	m_nBitmapCX = BITMAP_WITDH + 2;
 	m_nBitmapCY = BITMAP_HEIGHT + 2;
@@ -780,11 +784,20 @@ bool EV_Win32Menu::_isAMenuBar(XAP_Menu_Id id, HMENU hMenu)
 void EV_Win32Menu::onMeasureItem(HWND hwnd, WPARAM /*wParam*/, LPARAM lParam)
 {
 	SIZE size;
-	LPMEASUREITEMSTRUCT lpmis = (LPMEASUREITEMSTRUCT) lParam; 
-	HDC hdc = GetDC(hwnd); 
-	
-	EV_Menu_Item*	item = (EV_Menu_Item *) lpmis->itemData;            	
-	HFONT hfontOld = (HFONT) SelectObject(hdc, m_hFont); 
+	LPMEASUREITEMSTRUCT lpmis = (LPMEASUREITEMSTRUCT) lParam;
+	if (!lpmis)
+		return;
+	HDC hdc = GetDC(hwnd);
+	if (!hdc)
+		return;
+
+	EV_Menu_Item*	item = (EV_Menu_Item *) lpmis->itemData;
+	if (!item || !item->szText)
+	{
+		ReleaseDC(hwnd, hdc);
+		return;
+	}
+	HFONT hfontOld = m_hFont ? (HFONT) SelectObject(hdc, m_hFont) : nullptr;
 
 	// Retrieve the width and height of the item's string 
 	GetTextExtentPoint32W(hdc, item->szText, lstrlenW(item->szText), &size); 
@@ -796,7 +809,8 @@ void EV_Win32Menu::onMeasureItem(HWND hwnd, WPARAM /*wParam*/, LPARAM lParam)
 
 	lpmis->itemWidth =  size.cx + item->pMenu->m_nBitmapCX + SPACE_ICONTEXT;
 
-	SelectObject(hdc, hfontOld); 
+	if (hfontOld)
+		SelectObject(hdc, hfontOld);
 	ReleaseDC(hwnd, hdc); 
 }
 
@@ -840,8 +854,12 @@ LPARAM EV_Win32Menu::onMenuChar(HWND /*hwnd*/, WPARAM wParam, LPARAM lParam)
 void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 {
 
-	LPDRAWITEMSTRUCT lpdis = (LPDRAWITEMSTRUCT) lParam;  
-	EV_Menu_Item*	item = (EV_Menu_Item *) lpdis->itemData;            			           	
+	LPDRAWITEMSTRUCT lpdis = (LPDRAWITEMSTRUCT) lParam;
+	if (!lpdis)
+		return;
+	EV_Menu_Item*	item = (EV_Menu_Item *) lpdis->itemData;
+	if (!item || !item->szText)
+		return;
     COLORREF crText;    
     COLORREF crBkgnd = 0;
 	DWORD dwColor;
@@ -902,7 +920,9 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 	
 	// Select the font associated with the item into the 
     // item's device context, and then draw the string.  
-    HFONT hfontOld = (HFONT) SelectObject(lpdis->hDC, item->pMenu->m_hFont); 
+    HFONT hfontOld = item->pMenu->m_hFont
+		? (HFONT) SelectObject(lpdis->hDC, item->pMenu->m_hFont)
+		: nullptr; 
 
 	
 	/* 
@@ -913,13 +933,18 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 	if (pTabPos)
 	{
 		wchar_t szTmp[255];
-		wchar_t* pTmp;
-		
-		wcsncpy (szTmp, item->szText, pTabPos-item->szText);
-		pTmp = szTmp; pTmp+=pTabPos-item->szText; *pTmp=0;
+		const ptrdiff_t leftCount = pTabPos - item->szText;
+		const size_t leftLen = leftCount > 0 ? static_cast<size_t>(leftCount) : 0;
+		const size_t leftCopy = leftLen < 254 ? leftLen : 254;
+		memcpy(szTmp, item->szText, leftCopy * sizeof(wchar_t));
+		szTmp[leftCopy] = 0;
 		sTextLeft.fromLocale (szTmp);
-		
-		wcscpy (szTmp, pTabPos+1);
+
+		const wchar_t * right = pTabPos + 1;
+		const size_t rightLen = wcslen(right);
+		const size_t rightCopy = rightLen < 254 ? rightLen : 254;
+		memcpy(szTmp, right, rightCopy * sizeof(wchar_t));
+		szTmp[rightCopy] = 0;
 		sTextRight.fromLocale (szTmp);
 		sTextRight.appendASCII ("  ");
 	}
@@ -1004,7 +1029,8 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 				DeleteObject(bm);
 		}	
 
-    SelectObject(lpdis->hDC, hfontOld); 
+    if (hfontOld)
+		SelectObject(lpdis->hDC, hfontOld); 
     SetTextColor(lpdis->hDC, crText); 	
 	if (hBitmap)
 		DeleteObject(hBitmap);	

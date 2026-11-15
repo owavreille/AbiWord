@@ -311,17 +311,25 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	memset(&lf, 0, sizeof(lf));
 
 	wcscpy(lf.lfFaceName, L"MS Shell Dlg 2");
-	
-	lf.lfHeight = 13;
+
+	// These heights are cell sizes at 96 DPI. A positive lfHeight is pixels
+	// in MM_TEXT, so it has to follow LOGPIXELSY.
+	HDC screen = GetDC(nullptr);
+	const int dpiY = screen ? GetDeviceCaps(screen, LOGPIXELSY) : 96;
+	if (screen)
+		ReleaseDC(nullptr, screen);
+	const int scale = dpiY > 0 ? dpiY : 96;
+
+	lf.lfHeight = MulDiv(13, scale, 96);
 	lf.lfWeight = 0;
 	HFONT hfontPrimary = CreateFontIndirectW(&lf);
 
-	lf.lfHeight = 12;
+	lf.lfHeight = MulDiv(12, scale, 96);
 	lf.lfWeight = 0;
 	HFONT hfontSmall = CreateFontIndirectW(&lf);
 
 	wcscpy(lf.lfFaceName, L"Arial");
-	lf.lfHeight = 36;
+	lf.lfHeight = MulDiv(36, scale, 96);
 	lf.lfWeight = FW_BOLD; 
 	HFONT hfontHeading = CreateFontIndirectW(&lf);
 	
