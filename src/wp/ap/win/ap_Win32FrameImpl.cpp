@@ -1055,9 +1055,15 @@ static void s_placeImeWindow(HWND hwnd, AV_View * pView)
 	if (!pG)
 		return;
 
+	// GetModuleHandle does not take a reference. LoadLibrary does, and
+	// every exit must FreeLibrary that extra reference.
 	HMODULE imm = GetModuleHandleW(L"imm32.dll");
+	HMODULE loadedHere = nullptr;
 	if (!imm)
-		imm = LoadLibraryW(L"imm32.dll");
+	{
+		loadedHere = LoadLibraryW(L"imm32.dll");
+		imm = loadedHere;
+	}
 	if (!imm)
 		return;
 
@@ -1068,11 +1074,19 @@ static void s_placeImeWindow(HWND hwnd, AV_View * pView)
 	SetComp setComp = reinterpret_cast<SetComp>(reinterpret_cast<void *>(GetProcAddress(imm, "ImmSetCompositionWindow")));
 	RelCtx relCtx = reinterpret_cast<RelCtx>(reinterpret_cast<void *>(GetProcAddress(imm, "ImmReleaseContext")));
 	if (!getCtx || !setComp || !relCtx)
+	{
+		if (loadedHere)
+			FreeLibrary(loadedHere);
 		return;
+	}
 
 	HIMC himc = getCtx(hwnd);
 	if (!himc)
+	{
+		if (loadedHere)
+			FreeLibrary(loadedHere);
 		return;
+	}
 
 	COMPOSITIONFORM cf;
 	memset(&cf, 0, sizeof(cf));
@@ -1090,6 +1104,8 @@ static void s_placeImeWindow(HWND hwnd, AV_View * pView)
 	}
 	setComp(himc, &cf);
 	relCtx(hwnd, himc);
+	if (loadedHere)
+		FreeLibrary(loadedHere);
 }
 
 LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)

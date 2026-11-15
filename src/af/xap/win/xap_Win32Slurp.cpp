@@ -191,6 +191,10 @@ bool XAP_Win32Slurp::disconnectSlurper(void)
 void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 {
 	DWORD bufSize = DdeGetData(hData,nullptr,0,0);
+	// A zero result is a failed call or an empty execute. Either way there
+	// is no command to read, and the callback must not free hData.
+	if (bufSize == 0)
+		return;
 
 	char * pBuf = (char *)UT_calloc(sizeof(char),bufSize+100);
 	if (!pBuf)
