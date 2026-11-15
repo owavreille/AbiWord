@@ -92,6 +92,16 @@ UT_sint32 UT_Win32Timer::set(UT_uint32 iMilliseconds)
 	// made to work with "Windows 3.1" ! Theses drivers filter out bits
 	// higher than 16.
 	
+	// A second set() used to replace the id and leave the previous
+	// timer running. KillTimer can only see the id we still hold.
+	if (m_bStarted)
+		stop();
+
+	if (iMilliseconds == 0)
+		return -1;
+	if (iMilliseconds > USER_TIMER_MAXIMUM)
+		iMilliseconds = USER_TIMER_MAXIMUM;
+
 	m_win32ID = SetTimer(nullptr, 0, iMilliseconds,
 						 (TIMERPROC) Global_Win32TimerProc);
 	
