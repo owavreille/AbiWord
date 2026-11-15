@@ -520,6 +520,7 @@ public:
 
 	fl_BlockLayout* getBlockAtPosition(PT_DocPosition pos) const {return _findBlockAtPosition(pos);};
 	virtual void updateScreen(bool bDirtyRunsOnly) override;
+	void			forgetDeletedPage(const fp_Page * pPage);
 	bool            isInDocSection(PT_DocPosition pos = 0) const;
 
 //---------
@@ -1095,6 +1096,7 @@ private:
 	ViewMode			 m_viewMode;
 	PreViewMode 		 m_previewMode;
 	bool				 m_bDontUpdateScreenOnGeneralUpdate;
+	bool				 m_bClearPageBackground;
 	//#TF had to change the whole logic of storing PT state, since
 	//the earlier implementation did not work with nested calls to
 	//_saveAndNotifyPieceTableChange();

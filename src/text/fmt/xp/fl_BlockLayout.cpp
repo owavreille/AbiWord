@@ -9073,6 +9073,15 @@ bool fl_BlockLayout::doclistener_deleteObject(const PX_ChangeRecord_Object * pcr
 			UT_DEBUGMSG(("Edit:DeleteObject:Image:\n"));
 			blockOffset = pcro->getBlockOffset();
 			_delete(blockOffset, 1);
+			// Runs that sat on the image's line still carry its height,
+			// so each following line kept a page. Measure them again
+			// from the font, then build fresh lines.
+			collapse();
+			for (fp_Run * pRun = m_pFirstRun; pRun; pRun = pRun->getNextRun())
+			{
+				pRun->updateVerticalMetric();
+				pRun->lookupProperties();
+			}
 			break;
 		}
 		case PTO_Math:

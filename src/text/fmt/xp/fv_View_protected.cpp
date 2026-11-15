@@ -4512,6 +4512,8 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 					 "\t\twith [yScrollOffset %d][windowHeight %d][bDirtyRunsOnly %d]\n",
 					 x,y,width,height,bClip,
 					 m_yScrollOffset,getWindowHeight(),bDirtyRunsOnly));
+	if (m_bClearPageBackground)
+		bDirtyRunsOnly = false;
 	if(m_pViewDoubleBufferingObject != nullptr && m_pViewDoubleBufferingObject->getCallDrawOnlyAtTheEnd())
 	{
 		// record this call's arguments and return
@@ -4547,6 +4549,9 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		UT_DEBUGMSG(("fv_View::draw() called with zero width or height expose.\n"));
 		return;
 	}
+
+	if (m_bClearPageBackground)
+		m_bClearPageBackground = false;
 
 	painter.beginDoubleBuffering();
 

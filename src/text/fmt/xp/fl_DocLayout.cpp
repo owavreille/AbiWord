@@ -2425,6 +2425,15 @@ void FL_DocLayout::deletePage(fp_Page* pPage, bool bDontNotify /* default false 
 	UT_sint32 ndx = m_vecPages.findItem(pPage);
 	UT_ASSERT(ndx >= 0);
 
+	// While the page is still in the list, ask the view to cover the
+	// rectangle it occupies. A later dirty-only update would leave it
+	// on screen after the text has flowed back.
+	if ((ndx >= 0) && m_pView && !isLayoutFilling() && !isLayoutDeleting()
+		&& (m_pView->getPoint() > 0))
+	{
+		m_pView->forgetDeletedPage(pPage);
+	}
+
 	if (pPage->getPrev())
 	{
 		pPage->getPrev()->setNext(pPage->getNext());

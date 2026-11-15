@@ -523,11 +523,7 @@ UT_uint32 GR_Win32USPGraphics::getFontHeight()
 {
 	UT_return_val_if_fail( m_pFont, 0 );
 
-	if(getPrintDC() != m_pFont->getYHDC())
-	{
-		_setupFontOnDC((GR_Win32USPFont*)m_pFont, false);
-	}
-	
+	_prepareFontYMetrics();
 	return (UT_uint32)(m_pFont->getHeight(m_hdc, getPrintDC()));
 }
 
@@ -547,11 +543,7 @@ UT_uint32 GR_Win32USPGraphics::getFontAscent()
 {
 	UT_return_val_if_fail( m_pFont, 0 );
 
-	if(getPrintDC() != m_pFont->getYHDC())
-	{
-		_setupFontOnDC((GR_Win32USPFont*)m_pFont, false);
-	}
-	
+	_prepareFontYMetrics();
 	return (UT_uint32)(m_pFont->getAscent(m_hdc, getPrintDC()));
 }
 
@@ -571,11 +563,7 @@ UT_uint32 GR_Win32USPGraphics::getFontDescent()
 {
 	UT_return_val_if_fail( m_pFont, 0 );
 
-	if(getPrintDC() != m_pFont->getYHDC())
-	{
-		_setupFontOnDC((GR_Win32USPFont*)m_pFont, false);
-	}
-	
+	_prepareFontYMetrics();
 	return (UT_uint32)(m_pFont->getDescent(m_hdc, getPrintDC()));
 }
 
@@ -599,6 +587,39 @@ void GR_Win32USPGraphics::setFont(const GR_Font* pFont)
 		m_iFontAllocNo = 0;
 }
 
+
+void GR_Win32USPGraphics::_prepareFontYMetrics()
+{
+	if (!m_pFont)
+		return;
+
+	// A printer DC is measured with the printer-sized font. Without one,
+	// _setupFontOnDC() selects a font GR_WIN32_USP_FONT_SCALING times
+	// taller so that glyph widths escape hinting. GetTextMetrics on that
+	// font, scaled as a normal face, makes every line as tall as a large
+	// image. Measure the real screen font instead, and drop a cache that
+	// already came from the enlarged face.
+	if (getPrintDC())
+	{
+		if (getPrintDC() != m_pFont->getYHDC())
+			_setupFontOnDC(static_cast<GR_Win32USPFont *>(m_pFont), false);
+		return;
+	}
+
+	const UT_uint32 pixels = m_pFont->getUnscaledHeight();
+	HFONT hFont = m_pFont->getFontFromCache(pixels, false, 100);
+	if (!hFont)
+	{
+		m_pFont->fetchFont(pixels);
+		hFont = m_pFont->getFontFromCache(pixels, false, 100);
+	}
+	if (hFont && m_hdc)
+		SelectObject(m_hdc, hFont);
+
+	const UT_uint32 expect = (UT_uint32)(m_pFont->getPointSize() * (double)getResolution() / 72.0 + 0.5);
+	if (expect > 0 && m_pFont->getTextMetric().tmHeight > expect * 2)
+		m_pFont->setYHDC(nullptr);
+}
 
 void GR_Win32USPGraphics::_setupFontOnDC(GR_Win32USPFont *pFont, bool bZoomMe)
 {

@@ -269,6 +269,7 @@ FV_View::FV_View(XAP_App * pApp, void* pParentData, FL_DocLayout* pLayout)
 #endif
 		m_previewMode(PREVIEW_NONE),
 		m_bDontUpdateScreenOnGeneralUpdate(false),
+		m_bClearPageBackground(false),
 		m_iPieceTableState(0),
 		m_iMouseX(0),
 		m_iMouseY(0),
@@ -8328,6 +8329,40 @@ void FV_View::drawImmediate(const UT_Rect* pClipRect)
 void FV_View::updateScreen(bool bDirtyRunsOnly)
 {
 	_draw(0,0,getWindowWidth(),getWindowHeight(),bDirtyRunsOnly,false);
+}
+
+void FV_View::forgetDeletedPage(const fp_Page * pPage)
+{
+	// The page is about to leave the layout. Its paper, border and
+	// shadow stay in the retained bitmap unless the next draw fills
+	// the margin behind it.
+	if (!pPage || !m_pG || !m_pG->queryProperties(GR_Graphics::DGP_SCREEN))
+		return;
+	if ((getWindowWidth() <= 0) || (getWindowHeight() <= 0))
+		return;
+
+	UT_sint32 xoff = 0;
+	UT_sint32 yoff = 0;
+	getPageScreenOffsets(pPage, xoff, yoff);
+	const UT_sint32 pad = m_pG->tlu(4);
+	UT_sint32 left = xoff - pad;
+	UT_sint32 top = yoff - pad;
+	UT_sint32 right = xoff + pPage->getWidth() + pad;
+	UT_sint32 bottom = yoff + pPage->getHeight() + pad;
+	if (left < 0)
+		left = 0;
+	if (top < 0)
+		top = 0;
+	if (right > getWindowWidth())
+		right = getWindowWidth();
+	if (bottom > getWindowHeight())
+		bottom = getWindowHeight();
+	if ((right <= left) || (bottom <= top))
+		return;
+
+	m_bClearPageBackground = true;
+	UT_Rect r(left, top, right - left, bottom - top);
+	queueDraw(&r);
 }
 
 /*!

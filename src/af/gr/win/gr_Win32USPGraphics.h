@@ -151,6 +151,7 @@ public:
 	virtual GR_Win32Font * _newFont(LOGFONTW & lf, double fPoints, HDC hdc, HDC printHDC) override;
 
 	void   _setupFontOnDC(GR_Win32USPFont *pFont, bool bZoomMe);
+	void   _prepareFontYMetrics();
 
 	void   _drawChars(const UT_UCS4Char* pChars,
 					  int iCharOffset, int iLength,
