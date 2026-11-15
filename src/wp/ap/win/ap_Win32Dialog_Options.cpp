@@ -873,11 +873,11 @@ void AP_Win32Dialog_Options_Document::_onNotify(LPNMHDR hdr, int /*iCtrlID*/)
 	if (!translated)
 		value = MINAUTOSAVEPERIOD;
 
-	// The up arrow reports a negative iDelta. Step from the number shown,
+	// The up arrow reports a positive iDelta. Step from the number shown,
 	// including one the user just typed. The page proc lets the control
 	// apply iDelta, so point that step at the new number: UDS_SETBUDDYINT
 	// would otherwise write the old position back over the field.
-	int next = value - up->iDelta;
+	int next = value + up->iDelta;
 	if (next < MINAUTOSAVEPERIOD)
 		next = MINAUTOSAVEPERIOD;
 	else if (next > MAXAUTOSAVEPERIOD)

@@ -163,7 +163,12 @@ INT_PTR CALLBACK XAP_Win32DialogHelper::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 		pThis = (XAP_Win32DialogHelper *)GetWindowLongPtrW(hWnd,DWLP_USER);
 		switch (((LPNMHDR)lParam)->code)
 		{
-			case UDN_DELTAPOS:		return pThis->m_pDialog->_onDeltaPos((NM_UPDOWN *)lParam);
+			case UDN_DELTAPOS:
+			{
+				const BOOL prevent = pThis->m_pDialog->_onDeltaPos((NM_UPDOWN *)lParam);
+				SetWindowLongPtrW(hWnd, DWLP_MSGRESULT, prevent ? TRUE : FALSE);
+				return TRUE;
+			}
 			default:				return 0;
 		}
 

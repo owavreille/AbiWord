@@ -1216,9 +1216,11 @@ int AP_Win32App::WinMain(const char * szAppName, HINSTANCE hInstance,
 	// TODO: fix Spell dlg so we don't rely on this
 	// ALT:  make it a Preview widget instead
 
-	HINSTANCE hinstRich = LoadLibraryW(L"riched32.dll");
-	if (!hinstRich)
-		hinstRich = LoadLibraryW(L"riched20.dll");
+	// The spell dialog's sentence control is class RICHEDIT20W.
+	// riched32.dll only registers the Rich Edit 1.0 class "RichEdit",
+	// and it still loads on current Windows, so the 2.0 library was
+	// never loaded and the control was created empty.
+	HINSTANCE hinstRich = LoadLibraryW(L"riched20.dll");
 	UT_return_val_if_fail (hinstRich, 1);
 	
 	AP_Win32App * pMyWin32App;
@@ -1311,10 +1313,14 @@ try
 
 		// do dispatch loop
 		abi_win32_note("loop");
-		while(UT_GetMessage(&msg, nullptr, 0, 0))
+		for (;;)
 	    {
-   	      	// TranslateMessage is not called because AbiWord
-	      	// has its own way of decoding keyboard accelerators
+			// GetMessage returns 0 for WM_QUIT and -1 on failure.
+			// Treating either as a message spins or dispatches an empty MSG.
+			const BOOL got = UT_GetMessage(&msg, nullptr, 0, 0);
+			if (got == 0 || got == -1)
+				break;
+
 	      	if (pMyWin32App->handleModelessDialogMessage(&msg)) 
 				continue;
 

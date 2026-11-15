@@ -222,8 +222,10 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 
 	// get window width & height from preferences
 	UT_uint32 t_flag;		// dummy variable
-	if ( !(XAP_App::getApp()->getGeometry(&iPosX,&iPosY,&iWidth,&iHeight,&t_flag)) ||
-           !((iWidth > 0) && (iHeight > 0)) )
+	const bool savedGeometry =
+		XAP_App::getApp()->getGeometry(&iPosX,&iPosY,&iWidth,&iHeight,&t_flag)
+		&& (iWidth > 0) && (iHeight > 0);
+	if (!savedGeometry)
 	{
 		UT_DEBUGMSG(("Unable to obtain saved geometry, using window defaults!\n"));
 		iWidth = CW_USEDEFAULT;
@@ -263,12 +265,22 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 		if (iPosY < rcDesktop.top)  iPosY=rcDesktop.top;
 	}
 	/* let Windows(R) place the Window for all but 1st one, for stairstep effect */
-	if (!firstWindow)
+	// GetWindowPlacement stores workspace coordinates. CreateWindowEx
+	// expects screen coordinates, so a top or left taskbar would shift
+	// the restored window. The saved rectangle is applied afterwards
+	// with SetWindowPlacement, which is the call that understands them.
+	const bool restorePlacement = firstWindow && savedGeometry;
+	const UT_sint32 placeX = iPosX;
+	const UT_sint32 placeY = iPosY;
+	const UT_uint32 placeW = iWidth;
+	const UT_uint32 placeH = iHeight;
+	if (!firstWindow || restorePlacement)
 	{
 		iPosX = CW_USEDEFAULT;
 		iPosY = CW_USEDEFAULT;
 	}
-	else firstWindow = false;
+	if (firstWindow)
+		firstWindow = false;
 
 	UT_DEBUGMSG(("KJD: Window Frame should be %d x %d [width x height]\n", iWidth, iHeight));
 
@@ -290,6 +302,23 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 	// WARNING: We assume in many places this refers to a XAP_Frame or descendant!!!
 	//SetWindowLongPtrW(m_hwndFrame, GWLP_USERDATA,(LONG_PTR)this);
 	SetWindowLongPtrW(m_hwndFrame, GWLP_USERDATA,(LONG_PTR)getFrame());
+
+	if (restorePlacement)
+	{
+		WINDOWPLACEMENT wp;
+		wp.length = sizeof(wp);
+		if (!GetWindowPlacement(m_hwndFrame, &wp))
+		{
+			memset(&wp, 0, sizeof(wp));
+			wp.length = sizeof(wp);
+		}
+		wp.showCmd = SW_HIDE;
+		wp.rcNormalPosition.left = placeX;
+		wp.rcNormalPosition.top = placeY;
+		wp.rcNormalPosition.right = placeX + static_cast<UT_sint32>(placeW);
+		wp.rcNormalPosition.bottom = placeY + static_cast<UT_sint32>(placeH);
+		SetWindowPlacement(m_hwndFrame, &wp);
+	}
 
 #ifndef UNICODE
 	// remove this when we are a true unicode app
@@ -915,6 +944,25 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 					EV_Win32Toolbar * t = (EV_Win32Toolbar *)fimpl->m_vecToolbars.getNthItem(k);
 					if (t->getToolTip(lParam))
 						break;
+				}
+			}
+			break;
+
+		case RBN_CHEVRONPUSHED:
+			{
+				NMREBARCHEVRON * chev = (NMREBARCHEVRON *) lParam;
+				REBARBANDINFOW info;
+				memset(&info, 0, sizeof(info));
+				info.cbSize = sizeof(info);
+				info.fMask = RBBIM_CHILD;
+				if (SendMessageW(fimpl->m_hwndRebar, RB_GETBANDINFO, chev->uBand, (LPARAM)&info)
+				    && info.hwndChild)
+				{
+					EV_Win32Toolbar * t = (EV_Win32Toolbar *)GetWindowLongPtrW(info.hwndChild, GWLP_USERDATA);
+					POINT pt = { chev->rc.left, chev->rc.bottom };
+					ClientToScreen(fimpl->m_hwndRebar, &pt);
+					if (t)
+						t->showChevron(pt);
 				}
 			}
 			break;

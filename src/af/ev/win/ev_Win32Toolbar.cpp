@@ -337,6 +337,33 @@ LRESULT CALLBACK EV_Win32Toolbar::_ToolBarWndProc (HWND hWnd, UINT uMessage, WPA
 	return (CallWindowProcW(s_lpfnDefToolBar, hWnd, uMessage, wParam, lParam));
 }
 
+static HFONT s_fontSample(const wchar_t * face)
+{
+	static std::map<std::wstring, HFONT> cache;
+	if (!face || !face[0])
+		return nullptr;
+
+	const std::wstring key(face);
+	std::map<std::wstring, HFONT>::iterator found = cache.find(key);
+	if (found != cache.end())
+		return found->second;
+
+	LOGFONTW lf;
+	memset(&lf, 0, sizeof(lf));
+	lf.lfHeight = 16;
+	lf.lfWeight = FW_NORMAL;
+	lf.lfCharSet = DEFAULT_CHARSET;
+	lf.lfOutPrecision = OUT_DEFAULT_PRECIS;
+	lf.lfClipPrecision = CLIP_DEFAULT_PRECIS;
+	lf.lfQuality = DEFAULT_QUALITY;
+	lf.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
+	lstrcpynW(lf.lfFaceName, face, LF_FACESIZE);
+	HFONT font = CreateFontIndirectW(&lf);
+	if (font)
+		cache.insert(std::make_pair(key, font));
+	return font;
+}
+
 LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARAM wParam, LPARAM lParam)
 {
 	switch (uMessage)
@@ -377,7 +404,6 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 			}
 
 			HFONT hFont, hUIFont;
-			LOGFONTW logfont;
 			SIZE size;
 			HFONT hfontSave;
             UT_Win32LocaleString str;
@@ -409,24 +435,10 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 			}
 			else
 			{
-				memset (&logfont, 0, sizeof (logfont));
-
-				/* Create current font */
-				logfont.lfHeight = 16;
-				logfont.lfWidth = 0;
-				logfont.lfEscapement = 0;
-				logfont.lfOrientation = 0;
-				logfont.lfWeight = FW_NORMAL;
-				logfont.lfItalic = FALSE;
-				logfont.lfUnderline = FALSE;
-				logfont.lfStrikeOut = FALSE;
-				logfont.lfCharSet = DEFAULT_CHARSET;
-				logfont.lfOutPrecision = OUT_DEFAULT_PRECIS;
-				logfont.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-				logfont.lfQuality = DEFAULT_QUALITY;
-				logfont.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
-				lstrcpynW(logfont.lfFaceName, str.c_str(), LF_FACESIZE);
-				hFont = CreateFontIndirectW (&logfont);
+				// One HFONT per face. Creating and deleting it on every
+				// WM_DRAWITEM exhausts the GDI handle table while the
+				// dropdown is open.
+				hFont = s_fontSample(str.c_str());
 
 				if(dis->itemState & ODS_SELECTED) /* HighLight the selected text*/
 				{
@@ -464,8 +476,6 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 								ETO_CLIPPED, &sampleRect, szSample, (UINT)wcslen(szSample), nullptr);
 				}
 				SelectObject (dis->hDC, hfontSave);
-				if (hFont)
-					DeleteObject(hFont);
 			}
 
 			return TRUE;
@@ -1472,17 +1482,23 @@ void EV_Win32Toolbar::_addToRebar()
 					RBBIM_CHILD		|	// hwndChild is valid
 					RBBIM_CHILDSIZE	|	// cxMinChild and cyMinChild are valid
 					RBBIM_SIZE		|	// cx is valid
+					RBBIM_IDEALSIZE	|	// cxIdeal is valid
 					RBBIM_STYLE;		// fStyle is valid
 	rbbi.clrFore = GetSysColor(COLOR_BTNTEXT);
 	rbbi.clrBack = GetSysColor(COLOR_BTNFACE);
 	// NOT using RBBS_CHILDEDGE for fStyle gives us a slimmer look,
 	// better with the flat button style.
+	// HIDECLIPPEDBUTTONS drops buttons that do not fit. The chevron is
+	// the documented way to reach them once the band is narrower than
+	// cxIdeal. The frame handles RBN_CHEVRONPUSHED.
 	rbbi.fStyle =	RBBS_NOVERT			|	// do not display in vertical orientation
-					RBBS_BREAK;
+					RBBS_BREAK			|
+					RBBS_USECHEVRON;
 	rbbi.hwndChild = m_hwnd;
 	rbbi.cxMinChild = LOWORD(dwBtnSize);
 	rbbi.cyMinChild = HIWORD(dwBtnSize);
 	rbbi.cx = iWidth;
+	rbbi.cxIdeal = iWidth;
 
 	HWND hRebar = static_cast<XAP_Win32FrameImpl*>(m_pWin32Frame->getFrameImpl())->getToolbarWindow();
 	// Add it at the the end
@@ -2017,6 +2033,70 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 	The arrow next to the text and highlight colour buttons opens this
 	swatch menu. The button itself still applies the current colour.
 */
+void EV_Win32Toolbar::showChevron(POINT screen)
+{
+	if (!m_hwnd || !m_pWin32Frame || !m_pToolbarLabelSet)
+		return;
+
+	RECT bar;
+	GetClientRect(m_hwnd, &bar);
+	const int count = (int)SendMessageW(m_hwnd, TB_BUTTONCOUNT, 0, 0);
+	HMENU menu = CreatePopupMenu();
+	if (!menu)
+		return;
+
+	int added = 0;
+	for (int i = 0; i < count; ++i)
+	{
+		TBBUTTON btn;
+		memset(&btn, 0, sizeof(btn));
+		if (!SendMessageW(m_hwnd, TB_GETBUTTON, i, (LPARAM)&btn))
+			continue;
+		if (btn.fsStyle & TBSTYLE_SEP)
+			continue;
+
+		RECT item;
+		if (!SendMessageW(m_hwnd, TB_GETITEMRECT, i, (LPARAM)&item))
+			continue;
+		if (item.left >= bar.left && item.right <= bar.right
+		    && item.top >= bar.top && item.bottom <= bar.bottom)
+			continue;
+
+		XAP_Toolbar_Id id = ItemIdFromWmCommand(btn.idCommand);
+		EV_Toolbar_Label * pLabel = m_pToolbarLabelSet->getLabel(id);
+		if (!pLabel)
+			continue;
+		const char * utf8 = pLabel->getToolbarLabel();
+		if (!utf8 || !*utf8)
+			utf8 = pLabel->getToolTip();
+		if (!utf8 || !*utf8)
+			continue;
+
+		UT_Win32LocaleString text;
+		text.fromUTF8(utf8);
+		UINT flags = MF_STRING;
+		const LRESULT state = SendMessageW(m_hwnd, TB_GETSTATE, btn.idCommand, 0);
+		if (!(state & TBSTATE_ENABLED))
+			flags |= MF_GRAYED;
+		if (AppendMenuW(menu, flags, btn.idCommand, text.c_str()))
+			++added;
+	}
+
+	if (!added)
+	{
+		DestroyMenu(menu);
+		return;
+	}
+
+	HWND frame = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl())->getTopLevelWindow();
+	const UINT cmd = (UINT)TrackPopupMenu(menu,
+		TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RETURNCMD | TPM_NONOTIFY | TPM_RIGHTBUTTON,
+		screen.x, screen.y, 0, frame, nullptr);
+	DestroyMenu(menu);
+	if (cmd)
+		SendMessageW(frame, WM_COMMAND, MAKEWPARAM(cmd, 0), (LPARAM)m_hwnd);
+}
+
 void	EV_Win32Toolbar::onDropArrow(UINT cmd)
 {
 	if (!m_pWin32Frame)

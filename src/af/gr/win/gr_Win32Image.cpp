@@ -65,10 +65,25 @@ struct _bb
 static void _png_read(png_structp png_ptr, png_bytep data, png_size_t length)
 {
 	struct _bb* p = (struct _bb*) png_get_io_ptr(png_ptr);
-	const UT_Byte* pBytes = p->pBB->getPointer(0);
+	if (!p || !p->pBB)
+	{
+		png_error(png_ptr, "PNG read failed");
+		return;
+	}
 
+	const UT_uint32 size = p->pBB->getLength();
+	if (p->iCurPos > size || length > (png_size_t)(size - p->iCurPos))
+	{
+		// libpng requires the callback to longjmp when it cannot supply
+		// the requested bytes. Reading past a truncated buffer faults
+		// before the setjmp handler in _convertFromPNG can run.
+		png_error(png_ptr, "PNG truncated");
+		return;
+	}
+
+	const UT_Byte* pBytes = p->pBB->getPointer(0);
 	memcpy(data, pBytes + p->iCurPos, length);
-	p->iCurPos += length;
+	p->iCurPos += (UT_uint32)length;
 }
 
 

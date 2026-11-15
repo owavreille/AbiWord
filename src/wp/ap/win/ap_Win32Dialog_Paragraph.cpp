@@ -213,7 +213,12 @@ INT_PTR CALLBACK AP_Win32Dialog_Paragraph::s_tabProc(HWND hWnd,UINT msg,WPARAM w
 		pThis = GWL(hWnd);
 		switch (((LPNMHDR)lParam)->code)
 		{
-		case UDN_DELTAPOS:		return pThis->_onDeltaPos((NM_UPDOWN *)lParam);
+		case UDN_DELTAPOS:
+		{
+			const BOOL prevent = pThis->_onDeltaPos((NM_UPDOWN *)lParam);
+			SetWindowLongPtrW(hWnd, DWLP_MSGRESULT, prevent ? TRUE : FALSE);
+			return TRUE;
+		}
 		default:				return 0;
 		}
 
@@ -568,7 +573,7 @@ BOOL AP_Win32Dialog_Paragraph::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lPara
 			_setSpinItemValue(i,buf);	\
 			m_bEditChanged = false;	\
 		}								\
-		_doSpin(i, (0 - (UT_sint32) pnmud->iDelta));	\
+		_doSpin(i, (UT_sint32) pnmud->iDelta);	\
 		break;							\
 
 BOOL AP_Win32Dialog_Paragraph::_onDeltaPos(NM_UPDOWN * pnmud)

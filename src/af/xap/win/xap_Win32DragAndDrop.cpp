@@ -30,6 +30,7 @@
 #include "xav_View.h"
 #include "xad_Document.h"
 #include "ap_FrameData.h"
+#include "ap_Win32FrameImpl.h"
 #include "ie_impexp_Register.h"
 #include "ie_imp.h"
 #include "xap_EncodingManager.h"
@@ -110,21 +111,31 @@ STDMETHODIMP XAP_Win32DropTarget::DragOver(DWORD /*grfKeyState*/, POINTL pointl,
 	if (!m_bSupportedFormat || !m_pFrame)
 		return S_OK;
 
-	HWND hwnd = static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow();
+	// The frame client starts at the rebar and ends at the status bar,
+	// so a 24px band there never covers the page. Measure the document.
+	AP_Win32FrameImpl * impl = static_cast<AP_Win32FrameImpl *>(m_pFrame->getFrameImpl());
+	HWND doc = impl->getHwndDocument();
+	if (!doc)
+		return S_OK;
+
 	POINT client;
 	client.x = pointl.x;
 	client.y = pointl.y;
-	ScreenToClient(hwnd, &client);
+	ScreenToClient(doc, &client);
 	RECT rc;
-	GetClientRect(hwnd, &rc);
+	GetClientRect(doc, &rc);
+	if (client.x < rc.left || client.x >= rc.right
+	    || client.y < rc.top || client.y >= rc.bottom)
+		return S_OK;
+
 	const int edge = 24;
 	WPARAM code = 0;
-	if (client.y < edge)
+	if (client.y < rc.top + edge)
 		code = SB_LINEUP;
 	else if (client.y > rc.bottom - edge)
 		code = SB_LINEDOWN;
 	if (code)
-		SendMessageW(hwnd, WM_VSCROLL, code, 0);
+		SendMessageW(impl->getTopLevelWindow(), WM_VSCROLL, code, 0);
 
 	return S_OK;
 }

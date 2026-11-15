@@ -378,10 +378,10 @@ BOOL AP_Win32Dialog_Lists::_onDeltaPos(NM_UPDOWN* pnmud)
 	{
 		case AP_RID_DIALOG_LIST_SPIN_START_AT:
 		{
-			// Same direction as the alignment spins just below: the up
-			// arrow reports a negative iDelta. Step from the number shown.
+			// The up arrow reports a positive iDelta. Step from the number
+			// shown, then keep the control from applying that step again.
 			int next = _win32Dialog.getControlInt(AP_RID_DIALOG_LIST_EDIT_START_AT)
-				- pnmud->iDelta;
+				+ pnmud->iDelta;
 			if (next < 0)
 				next = 0;
 			else if (next > 100)
@@ -408,9 +408,8 @@ BOOL AP_Win32Dialog_Lists::_onDeltaPos(NM_UPDOWN* pnmud)
 	const UT_sint32 len = (UT_sint32)sizeof(szTmp);
 
 	_win32Dialog.getControlText(controlID, szTmp, len);
-	// iDelta is negative when the up arrow is clicked. The other spin
-	// buttons subtract it so that up increases the value.
-	float fVal = (float)UT_convertDimensionless(szTmp) - 0.10f * pnmud->iDelta;
+	// The up arrow reports a positive iDelta.
+	float fVal = (float)UT_convertDimensionless(szTmp) + 0.10f * pnmud->iDelta;
 	_win32Dialog.setControlText(controlID,
 								UT_convertToDimensionlessString(fVal, ".2"));
 

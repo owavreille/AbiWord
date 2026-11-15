@@ -169,9 +169,14 @@ INT_PTR CALLBACK XAP_Win32DialogBase::s_dlgProc(HWND hWnd, UINT msg, WPARAM wPar
 	case WM_NOTIFY:
 		switch (((LPNMHDR)lParam)->code)
 		{
-			case UDN_DELTAPOS:		
-				return pThis->_onDeltaPos((NM_UPDOWN *)lParam);
-				break;
+			case UDN_DELTAPOS:
+			{
+				// Returning TRUE without DWLP_MSGRESULT leaves the result
+				// at 0, so the up-down still applies iDelta.
+				const BOOL prevent = pThis->_onDeltaPos((NM_UPDOWN *)lParam);
+				SetWindowLongPtrW(hWnd, DWLP_MSGRESULT, prevent ? TRUE : FALSE);
+				return TRUE;
+			}
 				
 			default:				
 				break;

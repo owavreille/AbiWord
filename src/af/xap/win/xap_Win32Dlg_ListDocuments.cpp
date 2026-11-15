@@ -23,6 +23,7 @@
 #include "ut_string.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
+#include "ut_Win32LocaleString.h"
 
 #include "xap_App.h"
 #include "xap_Win32App.h"
@@ -87,25 +88,32 @@ BOOL XAP_Win32Dialog_ListDocuments::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, 
 	RECT r;
 	GetWindowRect(h, &r);
 	
-	LVCOLUMN col;
-	col.mask = LVCF_SUBITEM | LVCF_WIDTH;
-
+	// The dialog is Unicode. LVM_INSERTITEMA would recode the UTF-8
+	// filename through the ANSI code page.
+	LVCOLUMNW col;
+	memset(&col, 0, sizeof(col));
+	col.mask = LVCF_TEXT | LVCF_SUBITEM | LVCF_WIDTH;
 	col.iSubItem = 0;
 	col.cx = r.right - r.left - 5;
-
-	//col.pszText = const_cast<char*>(getColumn1Label());
-	ListView_InsertColumn(h,0,&col); // TODO: to Unicode, names instead of URLs
+	UT_Win32LocaleString heading;
+	heading.fromUTF8(_getHeading() ? _getHeading() : "");
+	col.pszText = const_cast<wchar_t *>(heading.c_str());
+	SendMessageW(h, LVM_INSERTCOLUMNW, 0, (LPARAM)&col);
 
 	ListView_SetItemCount(h, _getDocumentCount());
-	LVITEM item;
 	for(UT_sint32 i = 0; i < _getDocumentCount(); i++)
 	{
-		item.pszText = (char *)_getNthDocumentName(i);
+		LVITEMW item;
+		memset(&item, 0, sizeof(item));
+		const char * utf8 = _getNthDocumentName(i);
+		UT_Win32LocaleString name;
+		name.fromUTF8(utf8 ? utf8 : "");
+		item.pszText = const_cast<wchar_t *>(name.c_str());
 		item.iItem = i;
 		item.iSubItem = 0;
 		item.lParam = i;
 		item.mask = LVIF_TEXT | LVIF_PARAM;
-		ListView_InsertItem(h, &item);
+		SendMessageW(h, LVM_INSERTITEMW, 0, (LPARAM)&item);
 	}
 
 	centerDialog();
@@ -130,15 +138,13 @@ BOOL XAP_Win32Dialog_ListDocuments::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 				_setAnswer(a_OK);
 				if(iSelCount)
 				{
-					LVITEM item;
-
+					LVITEMW item;
+					memset(&item, 0, sizeof(item));
 					item.iSubItem = 0;
 					item.iItem = ListView_GetSelectionMark(h);
 					item.mask = LVIF_PARAM;
-					item.pszText = nullptr;
-					item.cchTextMax = 0;
 
-					ListView_GetItem(h,&item);
+					SendMessageW(h, LVM_GETITEMW, 0, (LPARAM)&item);
 
 					_setSelDocumentIndx(item.lParam);
 				}

@@ -19,6 +19,7 @@
  */
 
 #include <windows.h>
+#include <commctrl.h>
 #include <stdio.h>
 #include "ut_types.h"
 #include "ut_assert.h"
@@ -195,14 +196,18 @@ void ap_usb_ProgressListener::notify()
 	UT_return_if_fail (m_ProgressWND);
 
 	AP_StatusBarField_ProgressBar * pProgress = ((AP_StatusBarField_ProgressBar *)m_pStatusBarField);
+	const LONG style = GetWindowLong(m_ProgressWND, GWL_STYLE);
+	const bool styledMarquee = (style & PBS_MARQUEE) != 0;
 	if(pProgress->isDefinate())
 	{
-		if(m_isMARQUEEState)
+		// PBM_SETPOS is ignored while marquee mode is on. Clearing the
+		// style is not enough: the timer stops only when PBM_SETMARQUEE
+		// is sent with wParam FALSE.
+		if(m_isMARQUEEState || styledMarquee)
 		{
-			DWORD dwStyle;
-			dwStyle=GetWindowLong(m_ProgressWND, GWL_STYLE);
-			dwStyle&=~PBS_MARQUEE;
-			SetWindowLong(m_ProgressWND, GWL_STYLE, dwStyle );
+			if (styledMarquee)
+				SetWindowLong(m_ProgressWND, GWL_STYLE, style & ~PBS_MARQUEE);
+			SendMessage(m_ProgressWND, PBM_SETMARQUEE, FALSE, 0);
 			m_isMARQUEEState=false;
 		}
 		double fraction = pProgress->getFraction();
@@ -211,13 +216,11 @@ void ap_usb_ProgressListener::notify()
 	else
 	{   //here pulse process bar
 		//gtk_progress_bar_pulse(GTK_PROGRESS_BAR(m_wProgress));
-		if(!m_isMARQUEEState)
+		if(!m_isMARQUEEState || !styledMarquee)
 		{
-			DWORD dwStyle;
-			dwStyle=GetWindowLong(m_ProgressWND, GWL_STYLE);
-			dwStyle|=PBS_MARQUEE;
-			SetWindowLong(m_ProgressWND, GWL_STYLE, dwStyle );
-			SendMessage(m_ProgressWND,PBM_SETMARQUEE,1,100);
+			if (!styledMarquee)
+				SetWindowLong(m_ProgressWND, GWL_STYLE, style | PBS_MARQUEE);
+			SendMessage(m_ProgressWND,PBM_SETMARQUEE,TRUE,100);
 			m_isMARQUEEState=true;
 		}				
 	}
@@ -272,7 +275,7 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 	
 	*/
 	m_hwndStatusBar = UT_CreateWindowEx(0, STATUSCLASSNAMEW, nullptr,
-										WS_CHILD | WS_VISIBLE | SBS_SIZEGRIP,
+										WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
 										0, 0, 0, 0,
 										hwndFrame, nullptr, app->getInstance(),nullptr);
 	static HFONT statusFont = nullptr;
@@ -285,7 +288,7 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 	// add progress bar and hide it 
 	//  set the color and range 
 	m_hwndProgressBar= UT_CreateWindowEx(0, PROGRESS_CLASSW, nullptr,
-			WS_CHILD | PBS_MARQUEE,
+			WS_CHILD,
 			0, 0, 0, 0,
 			m_hwndStatusBar, nullptr, app->getInstance(),nullptr);
 	SendMessage(m_hwndProgressBar,PBM_SETRANGE,0,MAKELONG(0,100));
@@ -374,5 +377,9 @@ void   AP_Win32StatusBar::showProgressBar(void)
 void   AP_Win32StatusBar::hideProgressBar(void) 
 {
    ShowWindow(m_hwndProgressBar,SW_HIDE);
+   const LONG style = GetWindowLong(m_hwndProgressBar, GWL_STYLE);
+   if (style & PBS_MARQUEE)
+	   SetWindowLong(m_hwndProgressBar, GWL_STYLE, style & ~PBS_MARQUEE);
+   SendMessage(m_hwndProgressBar,PBM_SETMARQUEE,FALSE,0);
    SendMessage(m_hwndProgressBar,PBM_SETPOS,0,0); //hide and set to zero
 }

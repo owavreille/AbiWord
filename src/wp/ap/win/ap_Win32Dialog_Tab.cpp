@@ -195,7 +195,7 @@ BOOL AP_Win32Dialog_Tab::_onDeltaPos(NM_UPDOWN * pnmud)
 	UT_DEBUGMSG(("onDeltaPos: [idFrom %d][iPos %d][iDelta %d]\n",
 				 pnmud->hdr.idFrom,pnmud->iPos,pnmud->iDelta));
 
-	_doSpin(id_SPIN_DEFAULT_TAB_STOP, (0 - (UT_sint32) pnmud->iDelta));
+	_doSpin(id_SPIN_DEFAULT_TAB_STOP, (UT_sint32) pnmud->iDelta);
 				
 	return 1;
 }

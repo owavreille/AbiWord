@@ -134,7 +134,8 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	HWND hWndFrame = static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow();
 
 	RECT rcScreen;
-	rcScreen.left=rcScreen.right=0;
+	bool haveWorkArea = false;
+	rcScreen.left = rcScreen.top = rcScreen.right = rcScreen.bottom = 0;
 
 #if (_WIN32_WINNT >= 0x0500 )
 	if (GetSystemMetrics(SM_CMONITORS) > 1) {
@@ -142,16 +143,22 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 		if (m) {
 			MONITORINFO mi;
 			mi.cbSize=sizeof(MONITORINFO);
-			if (GetMonitorInfoW(m,&mi))
+			if (GetMonitorInfoW(m,&mi)) {
 				rcScreen = mi.rcWork;
+				haveWorkArea = true;
+			}
 		}
-	} else 
+	}
 #endif
-		SystemParametersInfoW(SPI_GETWORKAREA,0,&rcScreen,0);
-
-	if (rcScreen.left == rcScreen.top)
-		SetRect(&rcScreen,0,0,GetSystemMetrics(SM_CXFULLSCREEN),
-				GetSystemMetrics(SM_CYFULLSCREEN));
+	// A primary work area of (0, 0) is valid. Comparing left with top
+	// discarded it and replaced it with SM_CXFULLSCREEN, which is the
+	// client of a maximized window and still overlaps the taskbar.
+	if (!haveWorkArea)
+	{
+		if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcScreen, 0))
+			SetRect(&rcScreen, 0, 0, GetSystemMetrics(SM_CXSCREEN),
+			        GetSystemMetrics(SM_CYSCREEN));
+	}
 
 	const int iScreenWidth  = rcScreen.right - rcScreen.left;
 	const int iScreenHeight = rcScreen.bottom - rcScreen.top;
@@ -344,18 +351,21 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	
 		while (!s_bEventLoopDone)
 		{
-			if (GetMessageW(&msg, nullptr, 0, 0))
+			const BOOL got = GetMessageW(&msg, nullptr, 0, 0);
+			if (got == 0)
 			{
-				if( hwndAbout && IsDialogMessageW( hwndAbout, &msg ) )
-					continue;
-
-				TranslateMessage(&msg);
-				DispatchMessageW(&msg);
-			}
-			else
-			{
+				// A nested loop must hand WM_QUIT back to the outer loop.
+				PostQuitMessage(static_cast<int>(msg.wParam));
 				break;
 			}
+			if (got == -1)
+				break;
+
+			if( hwndAbout && IsDialogMessageW( hwndAbout, &msg ) )
+				continue;
+
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
 		}
 	}
 

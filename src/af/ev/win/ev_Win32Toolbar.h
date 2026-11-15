@@ -68,6 +68,7 @@ public:
 	XAP_Frame * getFrame(void);
 
 	void	onDropArrow(UINT cmd);
+	void	showChevron(POINT screen);
 
 	/*
 		Note that the namespaces for toolbar and menu command ids

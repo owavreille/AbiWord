@@ -277,7 +277,7 @@ BOOL AP_Win32Dialog_Columns::_onDeltaPos(NM_UPDOWN * pnmud)
 	switch( pnmud->hdr.idFrom )
 	{
 	case AP_RID_DIALOG_COLUMN_SPIN_NUMCOLUMNS:
-		if( pnmud->iDelta < 0 )
+		if( pnmud->iDelta > 0 )
 		{
 			setColumns( getColumns() + 1 );
 		}
@@ -295,7 +295,7 @@ BOOL AP_Win32Dialog_Columns::_onDeltaPos(NM_UPDOWN * pnmud)
 		return 1;
 
 	case AP_RID_DIALOG_COLUMN_SPIN_SPACEAFTER:
-		if( pnmud->iDelta < 0 )
+		if( pnmud->iDelta > 0 )
 		{
 			incrementSpaceAfter( true );
 		}
@@ -308,7 +308,7 @@ BOOL AP_Win32Dialog_Columns::_onDeltaPos(NM_UPDOWN * pnmud)
 		return 1;
 
 	case AP_RID_DIALOG_COLUMN_SPIN_MAXSIZE:
-		if( pnmud->iDelta < 0 )
+		if( pnmud->iDelta > 0 )
 		{
 			incrementMaxHeight( true );
 		}

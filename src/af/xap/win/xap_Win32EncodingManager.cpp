@@ -117,9 +117,12 @@ void  XAP_Win32EncodingManager::initialize()
 		}
 	}
 
-    m_bIsUnicodeLocale = true;
-	NativeEncodingName = "UCS-2LE";	
-	NativeSystemEncodingName = "UCS-2LE";
+	// UCS-2LE cannot represent characters above U+FFFF, so plain-text
+	// import and export turned them into '?'. UTF-16LE is the same byte
+	// layout for the BMP, so existing .txt files still load.
+	m_bIsUnicodeLocale = true;
+	NativeEncodingName = NativeUnicodeEncodingName;
+	NativeSystemEncodingName = NativeUnicodeEncodingName;
 
 	if (UT_getISO639Language(szLanguage))
 	{

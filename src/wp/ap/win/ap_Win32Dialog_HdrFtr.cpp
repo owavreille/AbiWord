@@ -180,7 +180,7 @@ BOOL AP_Win32Dialog_HdrFtr::_onDeltaPos(NM_UPDOWN * pnmud)
 	case AP_RID_DIALOG_HDRFTR_SPN_SECTION:
 		{
 			UT_sint32 value = _win32Dialog.getControlInt(AP_RID_DIALOG_HDRFTR_EBX_SECTION);
-			value -= pnmud->iDelta;
+			value += pnmud->iDelta;
 			if( value < 0 ) value = 0;
 			_win32Dialog.setControlInt(AP_RID_DIALOG_HDRFTR_EBX_SECTION, value );
 			return 1;

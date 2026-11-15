@@ -201,7 +201,7 @@ INT_PTR CALLBACK AP_Win32Dialog_PageSetup_Page::s_pageWndProc(HWND hWnd, UINT ms
 
 		if ( lpnmud->hdr.code == UDN_DELTAPOS )
 		{
-			pThis->doSpinControl(lpnmud->hdr.idFrom, -lpnmud->iDelta);
+			pThis->doSpinControl(lpnmud->hdr.idFrom, lpnmud->iDelta);
 		}
 
 		if (pHdr->code==PSN_SETACTIVE)			
@@ -687,7 +687,7 @@ INT_PTR CALLBACK AP_Win32Dialog_PageSetup_Margin::s_pageWndProc(HWND hWnd, UINT 
 
 		if ( lpnmud->hdr.code == UDN_DELTAPOS )
 		{
-			pThis->doSpinControl(lpnmud->hdr.idFrom, -lpnmud->iDelta);
+			pThis->doSpinControl(lpnmud->hdr.idFrom, lpnmud->iDelta);
 		}
 	}   	
 	

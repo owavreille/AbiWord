@@ -296,7 +296,7 @@ BOOL XAP_Win32Dialog_Image::_onDeltaPos(NM_UPDOWN * pnmud)
 	switch( pnmud->hdr.idFrom )
 	{
 	case XAP_RID_DIALOG_IMAGE_SPN_WIDTH:
-		if( pnmud->iDelta < 0 )
+		if( pnmud->iDelta > 0 )
 		{
 			incrementWidth( true );
 		}
@@ -309,7 +309,7 @@ BOOL XAP_Win32Dialog_Image::_onDeltaPos(NM_UPDOWN * pnmud)
 		return 1;
 
 	case XAP_RID_DIALOG_IMAGE_SPN_HEIGHT:
-		if( pnmud->iDelta < 0 )
+		if( pnmud->iDelta > 0 )
 		{
 			incrementHeight( true );
 		}
