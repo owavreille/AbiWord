@@ -74,6 +74,7 @@ protected:
 	XAP_Win32ColourButton	m_shadingButton;
 	XAP_Win32ColourButton	m_borderButton;
 	HWND					m_hwndComboEx;
+	HIMAGELIST				m_hStyleImages;
 };
 
 #endif /* AP_WIN32DIALOG_BORDER_SHADING_H */

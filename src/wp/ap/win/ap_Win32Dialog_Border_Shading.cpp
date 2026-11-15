@@ -84,7 +84,8 @@ AP_Win32Dialog_Border_Shading::AP_Win32Dialog_Border_Shading(XAP_DialogFactory *
 	m_hBitmapRight(nullptr),
 	m_hBitmapLeft(nullptr),
 	m_pPreviewWidget(nullptr),
-	m_hwndComboEx(nullptr)
+	m_hwndComboEx(nullptr),
+	m_hStyleImages(nullptr)
 {
 }
 
@@ -100,6 +101,9 @@ AP_Win32Dialog_Border_Shading::~AP_Win32Dialog_Border_Shading(void)
           DeleteObject(m_hBitmapRight);
 	if (m_hBitmapLeft)
           DeleteObject(m_hBitmapLeft);
+	// CBEM_SETIMAGELIST does not destroy the list with the control.
+	if (m_hStyleImages)
+		ImageList_Destroy(m_hStyleImages);
 }
 
 void AP_Win32Dialog_Border_Shading::runModeless(XAP_Frame * pFrame)
@@ -173,9 +177,17 @@ int AP_Win32Dialog_Border_Shading::_insertItemToComboboxEx(
 
 	cbei.mask			= mask;
 	cbei.iItem			= index;
-	cbei.pszText		= (LPWSTR)txt;
 	cbei.iImage			= imgIndex;
 	cbei.iSelectedImage	= selectedImgIndex;
+	// CBEM_INSERTITEMW reads UTF-16. A null text with CBEIF_TEXT is not a buffer.
+	UT_Win32LocaleString wide;
+	if (txt && *txt)
+	{
+		wide.fromUTF8(txt);
+		cbei.pszText = const_cast<LPWSTR>(wide.c_str());
+	}
+	else
+		cbei.mask &= ~CBEIF_TEXT;
 
 	return static_cast<int>(SendMessageW(hCbx, CBEM_INSERTITEMW, 0, reinterpret_cast<LPARAM>(&cbei)));
 }
@@ -259,25 +271,40 @@ BOOL AP_Win32Dialog_Border_Shading::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, 
 									combo_rect, 
 									AP_RID_DIALOG_BORDERSHADING_COMBO_BORDER_STYLE);
 
-	HIMAGELIST hImageList =	ImageList_Create(
-											BORDER_STYLE_BITMAP_WIDTH, 
-											BORDER_STYLE_BITMAP_HEIGHT, 
-											ILC_MASK|ILC_COLOR32, 
-											BORDER_SHADING_NUMOFSTYLES, 
-											0);
-
 	// Follow the PP_PropertyMap::TypeLineStyle order.
-	HBITMAP tmp_bmp0 = XAP_Win32DialogHelper::s_loadBitmap(hWnd, 0, "BORDER_STYLE_NONE",	BORDER_STYLE_BITMAP_WIDTH, BORDER_STYLE_BITMAP_HEIGHT, Color); 
-	HBITMAP tmp_bmp1 = XAP_Win32DialogHelper::s_loadBitmap(hWnd, 0, "BORDER_STYLE_SOLID",	BORDER_STYLE_BITMAP_WIDTH, BORDER_STYLE_BITMAP_HEIGHT, Color); 
-	HBITMAP tmp_bmp2 = XAP_Win32DialogHelper::s_loadBitmap(hWnd, 0, "BORDER_STYLE_DOTTED",  BORDER_STYLE_BITMAP_WIDTH, BORDER_STYLE_BITMAP_HEIGHT, Color); 
-	HBITMAP tmp_bmp3 = XAP_Win32DialogHelper::s_loadBitmap(hWnd, 0, "BORDER_STYLE_DASHED",  BORDER_STYLE_BITMAP_WIDTH, BORDER_STYLE_BITMAP_HEIGHT, Color); 
+	HBITMAP tmp_bmp0 = XAP_Win32DialogHelper::s_loadBitmap(hWnd, 0, "BORDER_STYLE_NONE",	BORDER_STYLE_BITMAP_WIDTH, BORDER_STYLE_BITMAP_HEIGHT, Color);
+	HBITMAP tmp_bmp1 = XAP_Win32DialogHelper::s_loadBitmap(hWnd, 0, "BORDER_STYLE_SOLID",	BORDER_STYLE_BITMAP_WIDTH, BORDER_STYLE_BITMAP_HEIGHT, Color);
+	HBITMAP tmp_bmp2 = XAP_Win32DialogHelper::s_loadBitmap(hWnd, 0, "BORDER_STYLE_DOTTED",  BORDER_STYLE_BITMAP_WIDTH, BORDER_STYLE_BITMAP_HEIGHT, Color);
+	HBITMAP tmp_bmp3 = XAP_Win32DialogHelper::s_loadBitmap(hWnd, 0, "BORDER_STYLE_DASHED",  BORDER_STYLE_BITMAP_WIDTH, BORDER_STYLE_BITMAP_HEIGHT, Color);
+	HBITMAP styleBitmaps[4] = { tmp_bmp0, tmp_bmp1, tmp_bmp2, tmp_bmp3 };
 
-	ImageList_Add(hImageList, tmp_bmp0, nullptr);
-	ImageList_Add(hImageList, tmp_bmp1, nullptr);
-	ImageList_Add(hImageList, tmp_bmp2, nullptr);
-	ImageList_Add(hImageList, tmp_bmp3, nullptr);
-
-	SendMessage(m_hwndComboEx, CBEM_SETIMAGELIST, 0, reinterpret_cast<LPARAM>(hImageList));
+	// ImageList_Add copies the bitmaps. The originals must be deleted, and
+	// the list itself survives the ComboBoxEx control.
+	if (m_hStyleImages)
+	{
+		ImageList_Destroy(m_hStyleImages);
+		m_hStyleImages = nullptr;
+	}
+	if (tmp_bmp0 && tmp_bmp1 && tmp_bmp2 && tmp_bmp3)
+	{
+		m_hStyleImages = ImageList_Create(
+											BORDER_STYLE_BITMAP_WIDTH,
+											BORDER_STYLE_BITMAP_HEIGHT,
+											ILC_MASK|ILC_COLOR32,
+											BORDER_SHADING_NUMOFSTYLES,
+											0);
+	}
+	if (m_hStyleImages)
+	{
+		for (int style = 0; style < 4; ++style)
+			ImageList_Add(m_hStyleImages, styleBitmaps[style], nullptr);
+		SendMessage(m_hwndComboEx, CBEM_SETIMAGELIST, 0, reinterpret_cast<LPARAM>(m_hStyleImages));
+	}
+	for (int style = 0; style < 4; ++style)
+	{
+		if (styleBitmaps[style])
+			DeleteObject(styleBitmaps[style]);
+	}
 
 	_insertItemToComboboxEx(m_hwndComboEx, nullptr, 0, 0);
 	_insertItemToComboboxEx(m_hwndComboEx, nullptr, 1, 1);
@@ -557,7 +584,12 @@ void AP_Win32Dialog_Border_Shading::setSensitivity(bool /*bSens*/)
 void AP_Win32Dialog_Border_Shading::destroy(void) 
 {
 	finalize();	
-	DestroyWindow(m_hDlg);	
+	DestroyWindow(m_hDlg);
+	if (m_hStyleImages)
+	{
+		ImageList_Destroy(m_hStyleImages);
+		m_hStyleImages = nullptr;
+	}
 }
 
 void AP_Win32Dialog_Border_Shading::activate(void)

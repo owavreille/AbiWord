@@ -92,6 +92,32 @@ BOOL AP_Win32Dialog_MailMerge::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARA
 	return 0; // 0 because we called SetFocus
 }
 
+static bool s_selectedMergeField(HWND dialog, UT_Win32LocaleString & str)
+{
+	HWND lBox = GetDlgItem(dialog, AP_RID_DIALOG_MAILMERGE_LISTBOX);
+	if (!lBox)
+		return false;
+
+	const LRESULT nItem = SendMessageW(lBox, LB_GETCURSEL, 0, 0);
+	if (nItem == LB_ERR)
+		return false;
+
+	// LB_GETTEXTLEN returns LB_ERR on failure. That value must not become a size.
+	const LRESULT len = SendMessageW(lBox, LB_GETTEXTLEN, nItem, 0);
+	if (len < 0)
+		return false;
+
+	wchar_t * szBuff = static_cast<wchar_t *>(g_try_malloc(sizeof(wchar_t) * (static_cast<size_t>(len) + 1)));
+	if (!szBuff)
+		return false;
+
+	const bool ok = SendMessageW(lBox, LB_GETTEXT, nItem, (LPARAM)szBuff) != LB_ERR;
+	if (ok)
+		str.fromLocale(szBuff);
+	g_free(szBuff);
+	return ok;
+}
+
 BOOL AP_Win32Dialog_MailMerge::_onCommand(HWND /*hWnd*/, WPARAM wParam, LPARAM /*lParam*/)
 {
 //	WORD wNotifyCode = HIWORD(wParam);
@@ -104,19 +130,9 @@ BOOL AP_Win32Dialog_MailMerge::_onCommand(HWND /*hWnd*/, WPARAM wParam, LPARAM /
 		if (HIWORD(wParam)==LBN_DBLCLK)
 		{
 			UT_Win32LocaleString str;
-			int nItem = SendMessageW(GetDlgItem(m_hDlg, AP_RID_DIALOG_MAILMERGE_LISTBOX), LB_GETCURSEL, 0, 0);
-			
-			if (nItem!=LB_ERR)
-			{	
-				// get the mail merge field from the listbox
-				HWND lBox = GetDlgItem(m_hDlg, AP_RID_DIALOG_MAILMERGE_LISTBOX);
-				UT_sint32 len = SendMessageW(lBox, LB_GETTEXTLEN, nItem, (LPARAM)0);
-				wchar_t* szBuff = (wchar_t*)g_malloc(sizeof(wchar_t) * (len + 1));
-				SendMessageW(lBox, LB_GETTEXT, nItem, (LPARAM)szBuff);
-				str.fromLocale(szBuff);
-				FREEP(szBuff);
-
-				setMergeField(str.utf8_str());			
+			if (s_selectedMergeField(m_hDlg, str))
+			{
+				setMergeField(str.utf8_str());
 				addClicked();
 			}
 			return 1;
@@ -137,18 +153,8 @@ BOOL AP_Win32Dialog_MailMerge::_onCommand(HWND /*hWnd*/, WPARAM wParam, LPARAM /
 			} 
 			else
 			{
-				int nItem = SendMessageW(GetDlgItem(m_hDlg, AP_RID_DIALOG_MAILMERGE_LISTBOX), LB_GETCURSEL, 0, 0);
-			
-				if (nItem!=LB_ERR)
-				{	
-					// get the mail merge field from the listbox
-					HWND lBox = GetDlgItem(m_hDlg, AP_RID_DIALOG_MAILMERGE_LISTBOX);
-					UT_sint32 len = SendMessageW(lBox, LB_GETTEXTLEN, nItem, (LPARAM)0);
-					wchar_t* szBuff = (wchar_t*)g_malloc(sizeof(wchar_t) * (len + 1));
-					SendMessageW(lBox, LB_GETTEXT, nItem, (LPARAM)szBuff);
-					str.fromLocale(szBuff);
-					FREEP(szBuff);
-
+				if (s_selectedMergeField(m_hDlg, str))
+				{
 					setMergeField(str.utf8_str());
 					addClicked();
 				}				 
