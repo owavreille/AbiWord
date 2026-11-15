@@ -103,6 +103,10 @@ void ev_Win32Keyboard::remapKeyboard(HKL hKeyboardLayout)
 {
 	char  szCodePage[16];
 
+	// A pending high surrogate belongs to the previous layout; keeping
+	// it would pair it with the next low surrogate from the new one.
+	m_utf16Lead = 0;
+
 	if( m_iconv != UT_ICONV_INVALID )
 	{
 		UT_iconv_close( m_iconv );
