@@ -1077,11 +1077,13 @@ bool EV_Win32Toolbar::synthesize(void)
 			{
 				case EV_TBIT_ComboBox:
 					hwndCtrl = _getControlWindow(id);
-					UT_ASSERT(hwndCtrl);
-					GetWindowRect(hwndCtrl, &r);
+					memset(&r, 0, sizeof(r));
+					if (!hwndCtrl || !GetWindowRect(hwndCtrl, &r))
+						break;
 					nHeight = r.bottom - r.top;
 
-					SendMessageW(m_hwnd, TB_GETITEMRECT, (WPARAM) k, (LPARAM)(LPRECT) &r);
+					if (!SendMessageW(m_hwnd, TB_GETITEMRECT, (WPARAM) k, (LPARAM)(LPRECT) &r))
+						break;
 
 					nSep = (r.bottom - r.top - nHeight)/2;
 					if (nSep < 0)
@@ -1122,17 +1124,22 @@ HWND EV_Win32Toolbar::getWindow(void) const
 HWND EV_Win32Toolbar::_getControlWindow(XAP_Toolbar_Id id)
 {
 	TBBUTTON tbb;
-	HWND hwndCtrl;
+	memset(&tbb, 0, sizeof(tbb));
 	UINT u = WmCommandFromItemId(id);
 
-	UT_uint32 k = SendMessageW(m_hwnd, TB_COMMANDTOINDEX, (WPARAM) u, 0);
-	SendMessageW(m_hwnd, TB_GETBUTTON, (WPARAM) k, (LPARAM)(LPTBBUTTON) &tbb);
-	UT_ASSERT(tbb.idCommand == (int) u);
-	UT_ASSERT(tbb.fsStyle & TBSTYLE_SEP);
+	// TB_COMMANDTOINDEX returns -1 when the command is not on the bar.
+	// A failed TB_GETBUTTON leaves TBBUTTON untouched.
+	// https://learn.microsoft.com/en-us/windows/win32/controls/tb-commandtoindex
+	// https://learn.microsoft.com/en-us/windows/win32/controls/tb-getbutton
+	const LRESULT index = SendMessageW(m_hwnd, TB_COMMANDTOINDEX, (WPARAM) u, 0);
+	if (index < 0)
+		return nullptr;
+	if (!SendMessageW(m_hwnd, TB_GETBUTTON, (WPARAM) index, (LPARAM)&tbb))
+		return nullptr;
+	if (tbb.idCommand != static_cast<int>(u) || !(tbb.fsStyle & TBSTYLE_SEP))
+		return nullptr;
 
-	hwndCtrl = (HWND) tbb.dwData;
-
-	return hwndCtrl;
+	return (HWND) tbb.dwData;
 }
 
 void EV_Win32Toolbar::_releaseListener(void)
@@ -1424,7 +1431,9 @@ bool EV_Win32Toolbar::getToolTip(LPARAM lParam)
 	if (ansi)
 	{
 		NMTTDISPINFOA * info = reinterpret_cast<NMTTDISPINFOA *>(lParam);
-		WideCharToMultiByte(CP_ACP, 0, str.c_str(), -1, info->szText, 80, nullptr, nullptr);
+		info->szText[0] = '\0';
+		if (WideCharToMultiByte(CP_ACP, 0, str.c_str(), -1, info->szText, 80, nullptr, nullptr) <= 0)
+			info->szText[0] = '\0';
 		info->szText[79] = '\0';
 		info->lpszText = info->szText;
 	}
@@ -1583,7 +1592,8 @@ bool EV_Win32Toolbar::repopulateStyles(void)
 	
 	
 	HWND hwndCombo = _getControlWindow(id);
-	UT_ASSERT(hwndCombo);
+	if (!hwndCombo)
+		return false;
 	// GtkCombo * item = GTK_COMBO(wd->m_widget);
 //
 // Now the combo box has to be refilled from this
@@ -2033,7 +2043,9 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 	int height = windowRc.bottom - windowRc.top;
 
 	RECT work;
-	SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0);
+	memset(&work, 0, sizeof(work));
+	if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0))
+		SetRect(&work, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
 	int x = origin.x;
 	int y = origin.y;
 	if (x + width > work.right)
@@ -2071,7 +2083,9 @@ void EV_Win32Toolbar::showChevron(POINT screen)
 		return;
 
 	RECT bar;
-	GetClientRect(m_hwnd, &bar);
+	memset(&bar, 0, sizeof(bar));
+	if (!GetClientRect(m_hwnd, &bar))
+		return;
 	const int count = (int)SendMessageW(m_hwnd, TB_BUTTONCOUNT, 0, 0);
 	HMENU menu = CreatePopupMenu();
 	if (!menu)

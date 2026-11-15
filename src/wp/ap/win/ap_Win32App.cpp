@@ -1105,6 +1105,41 @@ void abi_win32_note(const char * step)
 	UT_Win32Trace(step);
 }
 
+// GetModuleFileNameW returns the buffer size when the path does not fit,
+// and leaves the buffer without a usable terminator. WideCharToMultiByte
+// returns 0 without writing a string when the UTF-8 buffer is too small.
+// https://learn.microsoft.com/en-us/windows/win32/api/libloaderapi/nf-libloaderapi-getmodulefilenamew
+// https://learn.microsoft.com/en-us/windows/win32/api/stringapiset/nf-stringapiset-widechartomultibyte
+static bool abi_win32_module_path(HMODULE mod, WCHAR *path, DWORD cap)
+{
+	if (!mod || !path || cap < 2)
+		return false;
+	path[0] = 0;
+	const DWORD n = GetModuleFileNameW(mod, path, cap);
+	if (n == 0 || n >= cap)
+	{
+		path[0] = 0;
+		return false;
+	}
+	path[n] = 0;
+	return true;
+}
+
+static void abi_win32_utf8_from_wide(const WCHAR *wide, char *utf8, size_t cap)
+{
+	if (!utf8 || cap == 0)
+		return;
+	utf8[0] = 0;
+	if (!wide || WideCharToMultiByte(CP_UTF8, 0, wide, -1, utf8, static_cast<int>(cap), nullptr, nullptr) <= 0)
+	{
+		utf8[0] = '?';
+		if (cap > 1)
+			utf8[1] = 0;
+		return;
+	}
+	utf8[cap - 1] = 0;
+}
+
 static void abi_win32_write_crash(EXCEPTION_POINTERS * info)
 {
 	if (!info || !info->ExceptionRecord)
@@ -1134,8 +1169,8 @@ static void abi_win32_write_crash(EXCEPTION_POINTERS * info)
 						   reinterpret_cast<LPCWSTR>(er->ExceptionAddress), &mod))
 	{
 		WCHAR modname[MAX_PATH];
-		if (GetModuleFileNameW(mod, modname, G_N_ELEMENTS(modname)))
-			WideCharToMultiByte(CP_UTF8, 0, modname, -1, module, sizeof(module), nullptr, nullptr);
+		if (abi_win32_module_path(mod, modname, G_N_ELEMENTS(modname)))
+			abi_win32_utf8_from_wide(modname, module, sizeof(module));
 	}
 
 	char buf[1024];
@@ -1173,11 +1208,11 @@ static void abi_win32_write_crash(EXCEPTION_POINTERS * info)
 							   reinterpret_cast<LPCWSTR>(frames[i]), &frameModule))
 		{
 			WCHAR modname[MAX_PATH];
-			if (GetModuleFileNameW(frameModule, modname, G_N_ELEMENTS(modname)))
+			if (abi_win32_module_path(frameModule, modname, G_N_ELEMENTS(modname)))
 			{
 				const WCHAR *base = wcsrchr(modname, L'\\');
 				base = base ? base + 1 : modname;
-				WideCharToMultiByte(CP_UTF8, 0, base, -1, frameMod, sizeof(frameMod), nullptr, nullptr);
+				abi_win32_utf8_from_wide(base, frameMod, sizeof(frameMod));
 			}
 		}
 		ULONG_PTR baseAddr = reinterpret_cast<ULONG_PTR>(frameModule);
@@ -1221,11 +1256,11 @@ static LONG CALLBACK abi_win32_vectored(EXCEPTION_POINTERS * info)
 							   &mod))
 		{
 			WCHAR modname[MAX_PATH];
-			if (GetModuleFileNameW(mod, modname, G_N_ELEMENTS(modname)))
+			if (abi_win32_module_path(mod, modname, G_N_ELEMENTS(modname)))
 			{
 				const WCHAR * base = wcsrchr(modname, L'\\');
 				base = base ? base + 1 : modname;
-				WideCharToMultiByte(CP_UTF8, 0, base, -1, module, sizeof(module), nullptr, nullptr);
+				abi_win32_utf8_from_wide(base, module, sizeof(module));
 			}
 		}
 		char note[160];
