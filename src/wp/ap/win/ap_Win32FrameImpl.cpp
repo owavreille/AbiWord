@@ -57,6 +57,14 @@
 #define WM_MOUSEHWHEEL 0x020E
 #endif
 
+// GetClientRect leaves the RECT untouched when it fails.
+// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getclientrect
+static bool s_clientRect(HWND hwnd, RECT &r)
+{
+	memset(&r, 0, sizeof(r));
+	return hwnd && GetClientRect(hwnd, &r);
+}
+
 #ifndef UNICODE_NOCHAR
 #define UNICODE_NOCHAR 0xFFFF
 #endif
@@ -137,7 +145,8 @@ HWND AP_Win32FrameImpl::_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent
 	// now create all the various windows inside the container window.
 
 	RECT r;
-	GetClientRect(m_hwndContainer,&r);
+	if (!s_clientRect(m_hwndContainer, r))
+		SetRect(&r, 0, 0, static_cast<int>(iWidth), static_cast<int>(iHeight));
 	const int cyHScroll = GetSystemMetrics(SM_CYHSCROLL);
 	const int cxVScroll = GetSystemMetrics(SM_CXVSCROLL);
 
@@ -261,8 +270,8 @@ void AP_Win32FrameImpl::_toggleBar(UT_uint32 iBarNb, bool bBarOn)
 	// rebar to the bands that remain, then let the frame redraw the rulers
 	// against the new document rectangle.
 	RECT frameRect;
-	GetClientRect(_getTopLevelWindow(), &frameRect);
-	_layoutRebar(frameRect.right - frameRect.left, frameRect.bottom - frameRect.top);
+	if (s_clientRect(_getTopLevelWindow(), frameRect))
+		_layoutRebar(frameRect.right - frameRect.left, frameRect.bottom - frameRect.top);
 
 	if (!static_cast<AP_FrameData *>(getFrame()->getFrameData())->m_bIsFullScreen)
 		getFrame()->queue_resize();
@@ -319,7 +328,8 @@ void AP_Win32FrameImpl::_hideMenuScroll(bool /*bHideMenuScroll*/)
 void AP_Win32FrameImpl::_getDocumentArea(RECT &r)
 {
 	HWND hwnd = getHwndDocument();
-	GetClientRect(hwnd, &r);
+	if (!s_clientRect(hwnd, r))
+		return;
 	InvalidateRect(hwnd, nullptr, TRUE);
 }
 
@@ -343,7 +353,8 @@ void AP_Win32FrameImpl::_createTopRuler(XAP_Frame *pFrame)
 	RECT r;
 	int cxVScroll;
 
-	GetClientRect(m_hwndContainer,&r);
+	if (!s_clientRect(m_hwndContainer, r))
+		return;
 	cxVScroll = GetSystemMetrics(SM_CXVSCROLL);
 
 	// create the top ruler
@@ -373,7 +384,8 @@ void AP_Win32FrameImpl::_createLeftRuler(XAP_Frame *pFrame)
 	RECT r;
 	int cyHScroll;
 
-	GetClientRect(m_hwndContainer,&r);
+	if (!s_clientRect(m_hwndContainer, r))
+		return;
 	cyHScroll = GetSystemMetrics(SM_CYHSCROLL);
 
 	UT_uint32 yTopRulerHeight = 0;
@@ -438,8 +450,8 @@ void AP_Win32FrameImpl::_toggleTopRuler(AP_Win32Frame *pFrame, bool bRulerOn)
 
 	// repack the child windows
 	RECT r;
-	GetClientRect(m_hwndContainer, &r);
-	_onSize(pFrameData, r.right - r.left, r.bottom - r.top);
+	if (s_clientRect(m_hwndContainer, r))
+		_onSize(pFrameData, r.right - r.left, r.bottom - r.top);
 }
 
 void AP_Win32FrameImpl::_toggleLeftRuler(AP_Win32Frame *pFrame, bool bRulerOn)
@@ -479,8 +491,8 @@ void AP_Win32FrameImpl::_toggleLeftRuler(AP_Win32Frame *pFrame, bool bRulerOn)
 
 	// repack the child windows
 	RECT r;
-	GetClientRect(m_hwndContainer, &r);
-	_onSize(pFrameData, r.right - r.left, r.bottom - r.top);
+	if (s_clientRect(m_hwndContainer, r))
+		_onSize(pFrameData, r.right - r.left, r.bottom - r.top);
 }
 
 void AP_Win32FrameImpl::_translateDocumentToScreen(UT_sint32 &x, UT_sint32 &y)
@@ -500,7 +512,8 @@ void AP_Win32FrameImpl::_setXScrollRange(AP_FrameData * pData, AV_View *pView)
 	UT_return_if_fail(m_hwndDocument);
 
 	RECT r;
-	GetClientRect(m_hwndDocument, &r);
+	if (!s_clientRect(m_hwndDocument, r))
+		return;
 	const UT_uint32 iWindowWidth = r.right - r.left;
 	const UT_uint32 iWidth = pView->getGraphics()->tdu(pData->m_pDocLayout->getWidth());
 	XAP_Frame::tZoomType tZoom = getFrame()->getZoomType();	
@@ -528,8 +541,8 @@ void AP_Win32FrameImpl::_setXScrollRange(AP_FrameData * pData, AV_View *pView)
 
 			ShowWindow (m_hWndHScroll, SW_HIDE);
 			ShowWindow (m_hWndGripperHack, SW_HIDE);
-			GetClientRect(m_hwndContainer, &clientRect);
-			_onSize(pData, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
+			if (s_clientRect(m_hwndContainer, clientRect))
+				_onSize(pData, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 		}
 	}
  	else
@@ -539,8 +552,8 @@ void AP_Win32FrameImpl::_setXScrollRange(AP_FrameData * pData, AV_View *pView)
 
 			ShowWindow(m_hWndHScroll, SW_NORMAL);
 			ShowWindow (m_hWndGripperHack, SW_NORMAL);
-			GetClientRect(m_hwndContainer, &clientRect);
-			_onSize(pData, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
+			if (s_clientRect(m_hwndContainer, clientRect))
+				_onSize(pData, clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 		}		
 	}
 
@@ -551,7 +564,8 @@ void AP_Win32FrameImpl::_setYScrollRange(AP_FrameData * pData, AV_View *pView)
 	UT_return_if_fail(m_hwndDocument);
 
 	RECT r;
-	GetClientRect(m_hwndDocument, &r);
+	if (!s_clientRect(m_hwndDocument, r))
+		return;
 	const UT_uint32 iWindowHeight = r.bottom - r.top;
 	const UT_uint32 iHeight = pView->getGraphics()->tdu(pData->m_pDocLayout->getHeight());
 
@@ -810,7 +824,16 @@ void AP_Win32FrameImpl::_startTracking(UT_sint32 /*x*/, UT_sint32 y)
 	m_startMouseWheelY = y;
 	m_bMouseWheelTrack = true;
 
-	m_startScrollPosition = GetScrollPos(m_hWndVScroll, SB_CTL);
+	// GetScrollPos is the compatibility call and returns 0 both at the
+	// top of the document and when the bar cannot be read.
+	// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getscrollinfo
+	SCROLLINFO si;
+	memset(&si, 0, sizeof(si));
+	si.cbSize = sizeof(si);
+	si.fMask = SIF_POS;
+	m_startScrollPosition = 0;
+	if (GetScrollInfo(m_hWndVScroll, SB_CTL, &si))
+		m_startScrollPosition = si.nPos;
 
 	SetCapture(m_hwndDocument);
 }
@@ -827,33 +850,49 @@ void AP_Win32FrameImpl::_track(UT_sint32 /*x*/, UT_sint32 y)
 
 	// map delta to scroll bar range.
 
-	int iMin, iMax;
 	RECT rect;
-	GetClientRect(m_hwndDocument, &rect);
+	if (!s_clientRect(m_hwndDocument, rect))
+		return;
 
 	if(y < rect.top || y > rect.bottom)
 		return;
 
-	GetScrollRange(m_hWndVScroll, SB_CTL, &iMin, &iMax);
+	// A synthetic WM_VSCROLL can only carry 16 bits in HIWORD, and the
+	// handler reads nTrackPos, which that message does not update.
+	// https://learn.microsoft.com/en-us/windows/win32/controls/wm-vscroll
+	SCROLLINFO si;
+	memset(&si, 0, sizeof(si));
+	si.cbSize = sizeof(si);
+	si.fMask = SIF_RANGE | SIF_POS | SIF_PAGE;
+	if (!GetScrollInfo(m_hWndVScroll, SB_CTL, &si))
+		return;
 
+	int iNewPosition;
 	if(Delta < 0)
 	{
 		const int span = m_startMouseWheelY - rect.top;
 		if (span <= 0)
 			return;
-		int iNewPosition = (m_startScrollPosition - iMin) * (y - rect.top) / span;
-
-		SendMessageW(m_hwndContainer, WM_VSCROLL, MAKEWPARAM(SB_THUMBTRACK, (WORD)iNewPosition), 0);
+		iNewPosition = si.nMin + (m_startScrollPosition - si.nMin) * (y - rect.top) / span;
 	}
 	else
 	{
 		const int span = rect.bottom - m_startMouseWheelY;
 		if (span <= 0)
 			return;
-		int iNewPosition = m_startScrollPosition + (iMax - m_startScrollPosition) * (y - m_startMouseWheelY) / span;
-
-		SendMessageW(m_hwndContainer, WM_VSCROLL, MAKEWPARAM(SB_THUMBTRACK, (WORD)iNewPosition), 0);
+		iNewPosition = m_startScrollPosition + (si.nMax - m_startScrollPosition) * (y - m_startMouseWheelY) / span;
 	}
+	if (iNewPosition < si.nMin)
+		iNewPosition = si.nMin;
+	if (iNewPosition > si.nMax)
+		iNewPosition = si.nMax;
+
+	si.fMask = SIF_POS;
+	si.nPos = iNewPosition;
+	SetScrollInfo(m_hWndVScroll, SB_CTL, &si, TRUE);
+	AV_View * pView = getFrame()->getCurrentView();
+	if (pView && pView->getGraphics())
+		pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos));
 
 }
 

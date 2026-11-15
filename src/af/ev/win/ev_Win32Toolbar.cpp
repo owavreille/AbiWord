@@ -1787,7 +1787,9 @@ static void s_chooseCustomColor(EV_Win32Toolbar * toolbar, XAP_Toolbar_Id id)
 static int s_hitColor(HWND hwnd, int x, int y)
 {
 	RECT rc;
-	GetClientRect(hwnd, &rc);
+	memset(&rc, 0, sizeof(rc));
+	if (!hwnd || !GetClientRect(hwnd, &rc))
+		return -1;
 	int gx = s_colorGridX(rc.right - rc.left);
 	int gy = COLOR_PAD;
 
@@ -1888,7 +1890,12 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 			int x = static_cast<short>(LOWORD(lParam));
 			int y = static_cast<short>(HIWORD(lParam));
 			RECT rc;
-			GetClientRect(hwnd, &rc);
+			memset(&rc, 0, sizeof(rc));
+			if (!GetClientRect(hwnd, &rc))
+			{
+				DestroyWindow(hwnd);
+				return 0;
+			}
 			bool inside = (x >= 0 && y >= 0 && x < rc.right && y < rc.bottom);
 			if (!inside)
 			{
@@ -1932,8 +1939,18 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 		{
 			PAINTSTRUCT ps;
 			HDC hdc = BeginPaint(hwnd, &ps);
+			if (!hdc)
+			{
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
 			RECT rc;
-			GetClientRect(hwnd, &rc);
+			memset(&rc, 0, sizeof(rc));
+			if (!GetClientRect(hwnd, &rc))
+			{
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
 			FillRect(hdc, &rc, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
 
 			int gx = s_colorGridX(rc.right - rc.left);

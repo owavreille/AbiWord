@@ -172,32 +172,43 @@ static wchar_t gszThSep[16];
 
 void AP_Win32Dialog_WordCount::_setDlgItemInt(UINT nCtrl, int nValue)
 {	
-	wchar_t szFormatted[64], szUnFormatted[64];
-	swprintf(szUnFormatted, L"%d", nValue);
+	wchar_t szFormatted[64];
+	wchar_t szUnFormatted[64];
+	szFormatted[0] = 0;
+	_snwprintf(szUnFormatted, G_N_ELEMENTS(szUnFormatted), L"%d", nValue);
+	szUnFormatted[G_N_ELEMENTS(szUnFormatted) - 1] = 0;
 
 	if (numberfmt.lpThousandSep==nullptr)	// We only do this the first time
 	{
 		wchar_t szBuffer[16];
-		
-		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, gszDecSep, G_N_ELEMENTS(gszDecSep));
-		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, gszThSep, G_N_ELEMENTS(gszThSep));
-				
-		numberfmt.NumDigits = 0;		
-		GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_ILZERO, szBuffer, G_N_ELEMENTS(szBuffer));
-		numberfmt.LeadingZero = _wtoi(szBuffer);
+		szBuffer[0] = 0;
 
-		GetLocaleInfoW( LOCALE_USER_DEFAULT, LOCALE_SGROUPING, szBuffer, G_N_ELEMENTS(szBuffer));
-		numberfmt.Grouping = _wtoi(szBuffer);
+		// GetLocaleInfoW leaves the buffer unchanged when it fails.
+		// https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-getlocaleinfow
+		if (!GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SDECIMAL, gszDecSep, G_N_ELEMENTS(gszDecSep)))
+			wcscpy(gszDecSep, L".");
+		if (!GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_STHOUSAND, gszThSep, G_N_ELEMENTS(gszThSep)))
+			wcscpy(gszThSep, L",");
+
+		numberfmt.NumDigits = 0;
+		numberfmt.LeadingZero = GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_ILZERO, szBuffer, G_N_ELEMENTS(szBuffer))
+			? _wtoi(szBuffer) : 1;
+		numberfmt.Grouping = GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_SGROUPING, szBuffer, G_N_ELEMENTS(szBuffer))
+			? _wtoi(szBuffer) : 3;
 		numberfmt.lpDecimalSep = gszDecSep;
 		numberfmt.lpThousandSep = gszThSep;
-
-		GetLocaleInfoW( LOCALE_USER_DEFAULT, LOCALE_INEGNUMBER, szBuffer, G_N_ELEMENTS(szBuffer));
-		numberfmt.NegativeOrder = _wtoi(szBuffer);
+		numberfmt.NegativeOrder = GetLocaleInfoW(LOCALE_USER_DEFAULT, LOCALE_INEGNUMBER, szBuffer, G_N_ELEMENTS(szBuffer))
+			? _wtoi(szBuffer) : 1;
 	}
-	
-	/* Convert the number string into the proper locale defn */
-	GetNumberFormatW(LOCALE_USER_DEFAULT, 0, szUnFormatted,
-		&numberfmt, szFormatted, G_N_ELEMENTS(szFormatted));
+
+	// GetNumberFormatW leaves the output buffer untouched on failure.
+	// https://learn.microsoft.com/en-us/windows/win32/api/winnls/nf-winnls-getnumberformatw
+	if (GetNumberFormatW(LOCALE_USER_DEFAULT, 0, szUnFormatted,
+		&numberfmt, szFormatted, G_N_ELEMENTS(szFormatted)) <= 0)
+	{
+		wcsncpy(szFormatted, szUnFormatted, G_N_ELEMENTS(szFormatted) - 1);
+		szFormatted[G_N_ELEMENTS(szFormatted) - 1] = 0;
+	}
 
 	SetDlgItemTextW(m_hDlg, nCtrl, szFormatted);		
 }						

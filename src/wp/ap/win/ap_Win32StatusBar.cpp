@@ -52,7 +52,10 @@ LRESULT APIENTRY StatusbarWndProc (HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 		// when the statusbar has been resized.
 		
 		// stopper when nothing has changed
-		RECT rect; GetWindowRect(hwnd, &rect);
+		RECT rect;
+		memset(&rect, 0, sizeof(rect));
+		if (!GetWindowRect(hwnd, &rect))
+			return lresult;
 		
 		if (pBar->getPrevWidth() != (rect.right - rect.left)) {
 			
@@ -120,7 +123,13 @@ LRESULT APIENTRY StatusbarWndProc (HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 			// Part 0 is the page number. The progress bar belongs in the
 			// message pane that follows it, so the page indicator stays visible.
 			RECT client;
-			GetClientRect(hwnd, &client);
+			memset(&client, 0, sizeof(client));
+			if (!GetClientRect(hwnd, &client))
+			{
+				delete [] pArWidths;
+				delete [] pArOffsets;
+				return lresult;
+			}
 			int left = pArOffsets[0];
 			int right = (nParts > 1) ? pArOffsets[1] : client.right;
 			if (left < 0)
