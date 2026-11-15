@@ -129,6 +129,9 @@ void GR_Win32Graphics::_constructorCommonCode(HDC hdc)
 	m_bPrint = false;
 	m_bStartPrint = false;
 	m_bStartPage = false;
+	m_bPrintCancelled = false;
+	m_hwndPrintOwner = nullptr;
+	m_hwndPrintDisabled = nullptr;
 	m_pFont = nullptr;
 	m_pFontGUI = nullptr;
 	m_bIsPreview = false;
@@ -250,6 +253,8 @@ void GR_Win32Graphics::layoutToClient(UT_sint32 x, UT_sint32 y, int & cx, int & 
 
 GR_Win32Graphics::~GR_Win32Graphics()
 {
+	if (m_bPrint)
+		closePrintAbort();
 	// Deselect the buffer before the fonts it may still hold are destroyed.
 	_releasePersistentBuffer();
 	_destroyFonts ();
@@ -1002,6 +1007,117 @@ void GR_Win32Graphics::fillRect(const UT_RGBColor& c, UT_sint32 x, UT_sint32 y, 
 	UT_Win32TraceHeap("fill");
 }
 
+namespace {
+
+bool s_printAbort = false;
+HWND s_printAbortWnd = nullptr;
+
+LRESULT CALLBACK s_printAbortWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+	if (msg == WM_COMMAND && LOWORD(wParam) == 1)
+	{
+		s_printAbort = true;
+		EnableWindow(GetDlgItem(hwnd, 1), FALSE);
+		return 0;
+	}
+	if (msg == WM_CLOSE)
+	{
+		s_printAbort = true;
+		return 0;
+	}
+	return DefWindowProcW(hwnd, msg, wParam, lParam);
+}
+
+BOOL CALLBACK s_printAbortProc(HDC, int)
+{
+	MSG msg;
+	while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+	{
+		if (msg.message == WM_QUIT)
+		{
+			PostQuitMessage(static_cast<int>(msg.wParam));
+			s_printAbort = true;
+			return FALSE;
+		}
+		TranslateMessage(&msg);
+		DispatchMessageW(&msg);
+	}
+	return s_printAbort ? FALSE : TRUE;
+}
+
+} // namespace
+
+void GR_Win32Graphics::closePrintAbort(void)
+{
+	if (s_printAbortWnd)
+	{
+		DestroyWindow(s_printAbortWnd);
+		s_printAbortWnd = nullptr;
+	}
+	if (m_hwndPrintDisabled)
+	{
+		EnableWindow(m_hwndPrintDisabled, TRUE);
+		SetForegroundWindow(m_hwndPrintDisabled);
+		m_hwndPrintDisabled = nullptr;
+	}
+}
+
+static void s_showPrintAbort(GR_Win32Graphics * graphics, HWND owner)
+{
+	s_printAbort = false;
+	graphics->closePrintAbort();
+
+	static bool registered = false;
+	if (!registered)
+	{
+		WNDCLASSW wc;
+		memset(&wc, 0, sizeof(wc));
+		wc.lpfnWndProc = s_printAbortWndProc;
+		wc.hInstance = GetModuleHandleW(nullptr);
+		wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+		wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+		wc.lpszClassName = L"AbiWordPrintAbort";
+		registered = RegisterClassW(&wc) != 0;
+	}
+
+	const XAP_StringSet * strings = XAP_App::getApp() ? XAP_App::getApp()->getStringSet() : nullptr;
+	UT_Win32LocaleString title;
+	UT_Win32LocaleString button;
+	title.fromUTF8(strings ? strings->getValue(XAP_STRING_ID_DLG_UP_PrintTitle) : "Print");
+	button.fromUTF8(strings ? strings->getValue(XAP_STRING_ID_DLG_Cancel) : "Cancel");
+	if (!title.c_str() || !title.c_str()[0])
+		title.fromASCII("Print");
+	if (!button.c_str() || !button.c_str()[0])
+		button.fromASCII("Cancel");
+
+	const int width = 280;
+	const int height = 120;
+	int x = CW_USEDEFAULT;
+	int y = CW_USEDEFAULT;
+	if (owner)
+	{
+		RECT frame;
+		GetWindowRect(owner, &frame);
+		x = frame.left + ((frame.right - frame.left) - width) / 2;
+		y = frame.top + ((frame.bottom - frame.top) - height) / 2;
+	}
+
+	s_printAbortWnd = CreateWindowExW(WS_EX_DLGMODALFRAME, L"AbiWordPrintAbort", title.c_str(),
+		WS_POPUP | WS_CAPTION | WS_SYSMENU,
+		x, y, width, height, owner, nullptr, GetModuleHandleW(nullptr), nullptr);
+	if (!s_printAbortWnd)
+		return;
+
+	CreateWindowExW(0, L"BUTTON", button.c_str(),
+		WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+		90, 36, 100, 26, s_printAbortWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(1)),
+		GetModuleHandleW(nullptr), nullptr);
+	ShowWindow(s_printAbortWnd, SW_SHOW);
+	UpdateWindow(s_printAbortWnd);
+	if (owner)
+		EnableWindow(owner, FALSE);
+}
+
 bool GR_Win32Graphics::startPrint(void)
 {
 	UT_ASSERT(m_bPrint);
@@ -1009,7 +1125,15 @@ bool GR_Win32Graphics::startPrint(void)
 
 	if (!m_bIsPreview)
 	  {
+	    m_bPrintCancelled = false;
+	    s_showPrintAbort(this, m_hwndPrintOwner);
+	    if (m_hwndPrintOwner && s_printAbortWnd)
+		    m_hwndPrintDisabled = m_hwndPrintOwner;
+	    // SetAbortProc must run before StartDoc. Returning FALSE cancels the job.
+	    SetAbortProc(m_hdc, s_printAbortProc);
 	    m_bStartPrint = ( StartDocW(m_hdc,m_pDocInfo) > 0 );
+	    if (!m_bStartPrint)
+		    closePrintAbort();
 	  }
 	else
 	  {
@@ -1022,9 +1146,17 @@ bool GR_Win32Graphics::startPrint(void)
 bool GR_Win32Graphics::startPage(const char * /*szPageLabel*/, UT_uint32 /*pageNumber*/,
 									bool bPortrait, UT_uint32 iWidth, UT_uint32 iHeight)
 {
-	// need these in 10th of milimiters
-	iWidth = (int)((double)iWidth * m_fXYRatio * 254.0 / (double)getResolution() + 0.5);
-	iHeight = iHeight * 254 / getResolution();
+	// dmPaperWidth and dmPaperLength are both tenths of a millimetre.
+	// Layout units are square, so the pixel aspect ratio must not scale one side.
+	const double resolution = getResolution() ? static_cast<double>(getResolution()) : 1.0;
+	iWidth = static_cast<UT_uint32>(static_cast<double>(iWidth) * 254.0 / resolution + 0.5);
+	iHeight = static_cast<UT_uint32>(static_cast<double>(iHeight) * 254.0 / resolution + 0.5);
+
+	if (s_printAbort)
+	{
+		m_bPrintCancelled = true;
+		return false;
+	}
 
 	if (m_bStartPage)
 	{
@@ -1049,11 +1181,16 @@ bool GR_Win32Graphics::startPage(const char * /*szPageLabel*/, UT_uint32 /*pageN
 		fixDevMode(m_hDevMode);
 		
 		pDevMode = (DEVMODEW*) GlobalLock(m_hDevMode);
-		ResetDCW(m_hdc, pDevMode);
-		GlobalUnlock(m_hDevMode);
+		if (pDevMode)
+		{
+			ResetDCW(m_hdc, pDevMode);
+			GlobalUnlock(m_hDevMode);
+		}
 	}
 
 	const int iRet = StartPage(m_hdc);
+	if (s_printAbort)
+		m_bPrintCancelled = true;
 
 	if (!m_bIsPreview) {
 	  m_bStartPage = iRet > 0;
@@ -1078,14 +1215,33 @@ bool GR_Win32Graphics::startPage(const char * /*szPageLabel*/, UT_uint32 /*pageN
 
 bool GR_Win32Graphics::endPrint(void)
 {
-  if (m_bStartPage) {
-		EndPage(m_hdc);
+  if (m_bIsPreview)
+  {
+    if (m_bStartPage)
+      EndPage(m_hdc);
+    m_bStartPage = false;
+    m_bStartPrint = false;
+    return true;
   }
 
-  if (!m_bIsPreview)
-    return (EndDoc(m_hdc) > 0);
-  
-  return true;
+  // After the abort procedure returns FALSE, AbortDoc replaces EndPage and EndDoc.
+  bool ok = true;
+  if (m_bStartPrint)
+  {
+    if (s_printAbort || m_bPrintCancelled)
+      ok = AbortDoc(m_hdc) > 0;
+    else
+    {
+      if (m_bStartPage)
+        EndPage(m_hdc);
+      ok = EndDoc(m_hdc) > 0;
+    }
+  }
+  m_bStartPage = false;
+  m_bStartPrint = false;
+  closePrintAbort();
+  s_printAbort = false;
+  return ok;
 }
 
 /**

@@ -8636,14 +8636,15 @@ bool s_actuallyPrint(PD_Document *doc,  GR_Graphics *pGraphics,
 	  da.pG = pGraphics;
 
 	  XAP_Frame * pFrame = XAP_App::getApp()->getLastFocussedFrame ();
+	  bool keepPrinting = true;
 
 		if (bCollate)
 		{
-			for (j=1; (j <= nCopies); j++)
+			for (j=1; keepPrinting && (j <= nCopies); j++)
 				{
 					i = 0;
 					for (std::set<UT_sint32>::const_iterator page = pages.begin();
-						 page != pages.end();
+						 keepPrinting && page != pages.end();
 						 page++)
 						{
 							i++;
@@ -8659,7 +8660,11 @@ bool s_actuallyPrint(PD_Document *doc,  GR_Graphics *pGraphics,
 							// pGraphics->m_iRasterPosition when
 							// iHeight is allowed to vary page to page
 							pGraphics->m_iRasterPosition = (k-1)*iHeight;
-							pGraphics->startPage(pDocName, k, orient, iWidth, iHeight);
+							if (!pGraphics->startPage(pDocName, k, orient, iWidth, iHeight))
+							{
+								keepPrinting = false;
+								break;
+							}
 							pPrintView->drawPage(k-1, &da);
 						}
 				}
@@ -8668,13 +8673,13 @@ bool s_actuallyPrint(PD_Document *doc,  GR_Graphics *pGraphics,
 		{
 			i = 0;
 			for (std::set<UT_sint32>::const_iterator page = pages.begin();
-				 page != pages.end();
+				 keepPrinting && page != pages.end();
 				 page++)
 				{
 					k = *page;
 					i++;
 
-					for (j=1; (j <= nCopies); j++)
+					for (j=1; keepPrinting && (j <= nCopies); j++)
 						{
 							snprintf (msgBuf, 1024, msgTmpl, i, pages.size());
 
@@ -8687,7 +8692,11 @@ bool s_actuallyPrint(PD_Document *doc,  GR_Graphics *pGraphics,
 							// pGraphics->m_iRasterPosition when
 							// iHeight is allowed to vary page to page
 							pGraphics->m_iRasterPosition = (k-1)*iHeight;
-							pGraphics->startPage(pDocName, k, orient, iWidth, iHeight);
+							if (!pGraphics->startPage(pDocName, k, orient, iWidth, iHeight))
+							{
+								keepPrinting = false;
+								break;
+							}
 							pPrintView->drawPage(k-1, &da);
 						}
 				}

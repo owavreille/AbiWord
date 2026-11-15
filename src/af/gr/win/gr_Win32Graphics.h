@@ -291,6 +291,9 @@ public:
 
 	static bool fixDevMode(HGLOBAL hModDev);
 
+	void closePrintAbort(void);
+	void setPrintOwner(HWND hwnd) { m_hwndPrintOwner = hwnd; }
+
 	static DOCINFOW *getDocInfo();
 	static HDC createbestmetafilehdc();
 	// The HDC and DOCINFO passed to the print constructor are deleted with this object.
@@ -412,6 +415,9 @@ private:
 	HBRUSH					m_hClearBrush;
 	int						m_nLogPixelsY;
 	HGLOBAL					m_hDevMode;
+	bool					m_bPrintCancelled;
+	HWND					m_hwndPrintOwner;
+	HWND					m_hwndPrintDisabled;
 
 	typedef struct
 	{

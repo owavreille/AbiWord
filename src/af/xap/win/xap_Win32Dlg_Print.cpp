@@ -165,7 +165,9 @@ GR_Graphics * XAP_Win32Dialog_Print::getPrinterGraphicsContext(void)
 	GR_Win32AllocInfo ai(m_pPersistPrintDlg->hDC,&m_DocInfo, m_pPersistPrintDlg->hDevMode);
 	GR_Win32Graphics *pGr = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
 	UT_ASSERT(pGr);
-	
+	if (pGr)
+		pGr->setPrintOwner(m_pPersistPrintDlg->hwndOwner);
+
 	return pGr;
 }
 
@@ -199,7 +201,11 @@ void XAP_Win32Dialog_Print::runModal(XAP_Frame * pFrame)
 	m_pPersistPrintDlg->nToPage		= (WORD)m_nLastPage;
 	m_pPersistPrintDlg->nMinPage	= (WORD)m_nFirstPage;
 	m_pPersistPrintDlg->nMaxPage	= (WORD)m_nLastPage;
-	m_pPersistPrintDlg->Flags		= PD_ALLPAGES | PD_RETURNDC | PD_ENABLEPRINTHOOK;
+	// PD_RETURNDC without PD_USEDEVMODECOPIESANDCOLLATE makes PrintDlg
+	// report the wrong copy count. With the flag, the user's count is
+	// dmCopies and collation is dmCollate. AbiWord then prints the copies.
+	m_pPersistPrintDlg->Flags		= PD_ALLPAGES | PD_RETURNDC | PD_ENABLEPRINTHOOK
+		| PD_USEDEVMODECOPIESANDCOLLATE;
 	m_pPersistPrintDlg->lpfnPrintHook   = s_PrintHookProc;
 	m_pPersistPrintDlg->lCustData       = (INT_PTR)this;
 		
@@ -242,7 +248,15 @@ void XAP_Win32Dialog_Print::runModal(XAP_Frame * pFrame)
 			
 			DEVMODEW * pDevMode = (DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
 			DEVNAMES * pDevNames = (DEVNAMES *)GlobalLock(m_pPersistPrintDlg->hDevNames);
-			UT_return_if_fail(pDevNames); //GlobalLock can return nullptr
+			if (!pDevMode || !pDevNames)
+			{
+				if (pDevMode)
+					GlobalUnlock(m_pPersistPrintDlg->hDevMode);
+				if (pDevNames)
+					GlobalUnlock(m_pPersistPrintDlg->hDevNames);
+				m_answer = a_CANCEL;
+				return;
+			}
 
 			wchar_t * p = (wchar_t *)pDevNames;
 			m_pPersistPrintDlg->hDC = CreateDCW(p + pDevNames->wDriverOffset,
@@ -300,15 +314,27 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 	m_nFirstPage		= m_pPersistPrintDlg->nFromPage;
 	m_nLastPage			= m_pPersistPrintDlg->nToPage;
 
-	// Most Win32 printer drivers support multicopies and collating, 
-	//however we want Abi to do both by himself, like in the rest of platforms		
+	// The driver must not print the copies as well: AbiWord loops itself,
+	// as on the other ports. Read the count first, then force a single copy.
 	DEVMODEW *pDevMode=(DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
-	UT_return_if_fail(pDevMode); //GlobalLock can return nullptr
-	m_nCopies = pDevMode->dmCopies;
-	m_bCollate	= ((pDevMode->dmCollate  & DMCOLLATE_TRUE) != 0);		
+	if (!pDevMode)
+	{
+		m_answer = a_CANCEL;
+		return;
+	}
+	if ((pDevMode->dmFields & DM_COPIES) && pDevMode->dmCopies > 0)
+		m_nCopies = pDevMode->dmCopies;
+	else if (m_pPersistPrintDlg->nCopies > 0)
+		m_nCopies = m_pPersistPrintDlg->nCopies;
+	else
+		m_nCopies = 1;
+	if (pDevMode->dmFields & DM_COLLATE)
+		m_bCollate = (pDevMode->dmCollate == DMCOLLATE_TRUE);
+	else
+		m_bCollate = (m_pPersistPrintDlg->Flags & PD_COLLATE) != 0;
 	pDevMode->dmCopies = 1;
 	pDevMode->dmCollate = DMCOLLATE_FALSE;
-	pDevMode->dmFields = DM_COPIES | DM_COLLATE;
+	pDevMode->dmFields |= DM_COPIES | DM_COLLATE;
 	GlobalUnlock(m_pPersistPrintDlg->hDevMode);
 
 	// any changes to the DEVMODE structure must be followed by this call before the
@@ -316,8 +342,13 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 	GR_Win32Graphics::fixDevMode(m_pPersistPrintDlg->hDevMode);
 
 	pDevMode=(DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
+	if (!pDevMode)
+	{
+		m_answer = a_CANCEL;
+		return;
+	}
 	ResetDCW(m_pPersistPrintDlg->hDC,pDevMode);
-	GlobalUnlock(pDevMode);
+	GlobalUnlock(m_pPersistPrintDlg->hDevMode);
 	
 	if (m_bDoPrintToFile)
 	{
