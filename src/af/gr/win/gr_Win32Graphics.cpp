@@ -2811,11 +2811,22 @@ GR_Image * GR_Win32Graphics::genImageFromRectangle(const UT_Rect & r) {
 	if (getClipRect())
 		setClipRect(getClipRect());
 	GdiFlush();
+	// DeleteObject on a bitmap still selected in the DC, then DeleteDC,
+	// frees that bitmap twice.
+	// https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-deleteobject
 	if (hOld)
 		SelectObject(hMemDC, hOld);
 
-	const UT_uint32 stride = (UT_uint32)(((iWidth * 3 + 3) & ~3));
-	const UT_uint32 imageBytes = stride * (UT_uint32)iHeight;
+	const UT_uint64 stride64 = (static_cast<UT_uint64>(iWidth) * 3u + 3u) & ~UT_uint64(3);
+	if (stride64 == 0 || stride64 > 0xffffffffu
+		|| stride64 > 0xffffffffu / static_cast<UT_uint32>(iHeight))
+	{
+		DeleteObject(hBit);
+		DeleteDC(hMemDC);
+		return nullptr;
+	}
+	const UT_uint32 stride = static_cast<UT_uint32>(stride64);
+	const UT_uint32 imageBytes = stride * static_cast<UT_uint32>(iHeight);
 	BITMAPINFO *dib = (BITMAPINFO *)g_try_malloc(sizeof(BITMAPINFOHEADER) + imageBytes);
 	if (!dib)
 	{

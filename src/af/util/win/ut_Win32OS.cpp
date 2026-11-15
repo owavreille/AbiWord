@@ -119,7 +119,7 @@ wchar_t * UT_GetDefaultPrinterName()
 {
 	UT_uint32 iBufferSize = 128; // will become 2x bigger immediately in the loop
 	wchar_t * pPrinterName = nullptr;
-	DWORD rc;
+	DWORD rc = ERROR_INVALID_FUNCTION;
 
 	do
 	{
@@ -147,6 +147,7 @@ wchar_t * UT_GetDefaultPrinterName()
 			{
 				if ((rc = GetLastError()) != ERROR_INSUFFICIENT_BUFFER)
 				{
+					g_free(pPrinterName);
 					return nullptr;
 				}
 			}
@@ -181,7 +182,7 @@ wchar_t * UT_GetDefaultPrinterName()
 					}
 					else
 					{
-						*pPrinterName = '0';
+						*pPrinterName = L'\0';
 						rc = ERROR_SUCCESS;
 					}
 				}
@@ -197,14 +198,20 @@ wchar_t * UT_GetDefaultPrinterName()
 
 				HMODULE hWinSpool = LoadLibraryW(L"winspool.drv");
 				if (!hWinSpool)
+				{
+					g_free(pPrinterName);
 					return nullptr;
+				}
 
-				HRESULT (WINAPI * fnGetDefaultPrinter)(LPWSTR, LPDWORD) =
-					reinterpret_cast<HRESULT (WINAPI * )(LPWSTR, LPDWORD)>(reinterpret_cast<void *>(GetProcAddress(hWinSpool, GETDEFAULTPRINTER)));
-				
+				// GetDefaultPrinterW returns BOOL, not HRESULT.
+				// https://learn.microsoft.com/en-us/windows/win32/printdocs/getdefaultprinter
+				BOOL (WINAPI * fnGetDefaultPrinter)(LPWSTR, LPDWORD) =
+					reinterpret_cast<BOOL (WINAPI *)(LPWSTR, LPDWORD)>(reinterpret_cast<void *>(GetProcAddress(hWinSpool, GETDEFAULTPRINTER)));
+
 				if (!fnGetDefaultPrinter)
 				{
 					FreeLibrary(hWinSpool);
+					g_free(pPrinterName);
 					return nullptr;
 				}
 
@@ -228,9 +235,9 @@ wchar_t * UT_GetDefaultPrinterName()
 				else
 				{
 					p = pPrinterName;
-					while (*p != '0' && *p !=L',')
+					while (*p != L'\0' && *p != L',')
 						++p;
-					*p = '0';
+					*p = L'\0';
 
 					rc = ERROR_SUCCESS;
 				}
@@ -238,7 +245,10 @@ wchar_t * UT_GetDefaultPrinterName()
 		}
 	}
 	while (rc == ERROR_INSUFFICIENT_BUFFER);
-	
+
+	if (rc != ERROR_SUCCESS && pPrinterName)
+		pPrinterName[0] = L'\0';
+
 	return pPrinterName;
 }
 
@@ -251,7 +261,10 @@ HDC  UT_GetDefaultPrinterDC()
 	wchar_t * pPrinterName  = UT_GetDefaultPrinterName();
 
 	if(!pPrinterName || !*pPrinterName)
+	{
+		g_free(pPrinterName);
 		return nullptr;
+	}
 
 	//	HANDLE hPrinter;
 	//	if(!OpenPrinter(pPrinterName, &hPrinter, nullptr))

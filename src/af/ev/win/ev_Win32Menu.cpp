@@ -957,15 +957,19 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 	{	
 					  		
 		HDC hdcMem = CreateCompatibleDC(lpdis->hDC);
-		HGDIOBJ previous = SelectObject(hdcMem,(void *)hBitmap);
+		if (hdcMem)
+		{
+			HGDIOBJ previous = SelectObject(hdcMem,(void *)hBitmap);
 
-		if(m_iDIR)
-			BitBlt(lpdis->hDC, lpdis->rcItem.right - 20, lpdis->rcItem.top+1, BITMAP_WITDH, BITMAP_HEIGHT, hdcMem, 0, 0, SRCCOPY );
-		else
-			BitBlt(lpdis->hDC, lpdis->rcItem.left+1, lpdis->rcItem.top+1, BITMAP_WITDH, BITMAP_HEIGHT, hdcMem, 0, 0, SRCCOPY );
+			if(m_iDIR)
+				BitBlt(lpdis->hDC, lpdis->rcItem.right - 20, lpdis->rcItem.top+1, BITMAP_WITDH, BITMAP_HEIGHT, hdcMem, 0, 0, SRCCOPY );
+			else
+				BitBlt(lpdis->hDC, lpdis->rcItem.left+1, lpdis->rcItem.top+1, BITMAP_WITDH, BITMAP_HEIGHT, hdcMem, 0, 0, SRCCOPY );
 
-		SelectObject(hdcMem, previous);
-		DeleteDC(hdcMem);
+			if (previous)
+				SelectObject(hdcMem, previous);
+			DeleteDC(hdcMem);
+		}
 				
 	}
 	else 
@@ -975,23 +979,29 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 			UINT nHeight = GetSystemMetrics(SM_CYMENUCHECK);
 			RECT r;
 			HBITMAP bm = CreateBitmap(nWidth, nHeight, 1, 1, nullptr );
-			HDC hdcMem = CreateCompatibleDC(lpdis->hDC);
+			HDC hdcMem = bm ? CreateCompatibleDC(lpdis->hDC) : nullptr;
 
 			SetBkColor(lpdis->hDC, GetSysColor(colorID));
-			HGDIOBJ previous = SelectObject(hdcMem, bm);
-			SetRect(&r, 0, 0, nWidth, nHeight);
-			DrawFrameControl(hdcMem, &r, DFC_MENU,DFCS_MENUCHECK);			
+			if (bm && hdcMem)
+			{
+				HGDIOBJ previous = SelectObject(hdcMem, bm);
+				SetRect(&r, 0, 0, nWidth, nHeight);
+				DrawFrameControl(hdcMem, &r, DFC_MENU,DFCS_MENUCHECK);
 
-			if(m_iDIR)
-				BitBlt(lpdis->hDC, lpdis->rcItem.right - 20, lpdis->rcItem.top+2, nWidth, nHeight,
-					   hdcMem, 0, 0, SRCCOPY);
-			else
-				BitBlt(lpdis->hDC, lpdis->rcItem.left+2, lpdis->rcItem.top+2, nWidth, nHeight,
-					   hdcMem, 0, 0, SRCCOPY);
+				if(m_iDIR)
+					BitBlt(lpdis->hDC, lpdis->rcItem.right - 20, lpdis->rcItem.top+2, nWidth, nHeight,
+						   hdcMem, 0, 0, SRCCOPY);
+				else
+					BitBlt(lpdis->hDC, lpdis->rcItem.left+2, lpdis->rcItem.top+2, nWidth, nHeight,
+						   hdcMem, 0, 0, SRCCOPY);
 
-			SelectObject(hdcMem, previous);
-			DeleteDC(hdcMem);
-			DeleteObject(bm);
+				if (previous)
+					SelectObject(hdcMem, previous);
+			}
+			if (hdcMem)
+				DeleteDC(hdcMem);
+			if (bm)
+				DeleteObject(bm);
 		}	
 
     SelectObject(lpdis->hDC, hfontOld); 
