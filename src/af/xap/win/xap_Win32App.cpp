@@ -171,11 +171,16 @@ bool XAP_Win32App::initialize(const char * szKeyBindingsKey, const char * szKeyB
 	m_pSlurp = new XAP_Win32Slurp(this);
 	m_pSlurp->connectSlurper();
 	WCHAR bufExePathname[2048];
-	GetModuleFileNameW(nullptr,bufExePathname,G_N_ELEMENTS(bufExePathname));
-
-	// TODO these are Application-Specific values.  Move them out of here.
-	m_pSlurp->stuffRegistry(".abw",getApplicationName(),bufExePathname,"application/abiword");
-	m_pSlurp->stuffRegistry(".zabw",getApplicationName(),bufExePathname,"application/abiword-compressed");
+	bufExePathname[0] = 0;
+	// A return equal to the buffer size means the path was truncated.
+	// Failure leaves the buffer untouched, so it must start empty.
+	const DWORD exeChars = GetModuleFileNameW(nullptr, bufExePathname, G_N_ELEMENTS(bufExePathname));
+	if (exeChars > 0 && exeChars < G_N_ELEMENTS(bufExePathname))
+	{
+		// TODO these are Application-Specific values.  Move them out of here.
+		m_pSlurp->stuffRegistry(".abw",getApplicationName(),bufExePathname,"application/abiword");
+		m_pSlurp->stuffRegistry(".zabw",getApplicationName(),bufExePathname,"application/abiword-compressed");
+	}
 
 	return true;
 }
@@ -197,22 +202,27 @@ XAP_Toolbar_ControlFactory * XAP_Win32App::getControlFactory(void) const
 
 UT_uint32 XAP_Win32App::_getExeDir(LPWSTR pDirBuf, UT_uint32 iBufLen)
 {
-	UT_uint32 iResult = GetModuleFileNameW(nullptr, pDirBuf, iBufLen);
+	if (!pDirBuf || iBufLen == 0)
+		return 0;
+	pDirBuf[0] = 0;
 
-	if (iResult > 0)
+	// GetModuleFileNameW returns the character count without the null.
+	// A count of iBufLen means the path did not fit and must not be used.
+	const DWORD n = GetModuleFileNameW(nullptr, pDirBuf, iBufLen);
+	if (n == 0 || n >= iBufLen)
 	{
-		LPWSTR p = pDirBuf + wcslen(pDirBuf);
-		while (p > pDirBuf && *p != '\\')
-			p--;
-		if (*p != '\\')
-			return 0;
-		UT_ASSERT(p > pDirBuf);
-		p++;
-		*p = 0;
-		iResult = (p - pDirBuf);
+		pDirBuf[0] = 0;
+		return 0;
 	}
 
-	return iResult;
+	LPWSTR p = pDirBuf + n;
+	while (p > pDirBuf && *p != L'\\')
+		p--;
+	if (*p != L'\\')
+		return 0;
+	p++;
+	*p = 0;
+	return static_cast<UT_uint32>(p - pDirBuf);
 }
 
 static bool isWriteable(LPWSTR lpPath)

@@ -43,7 +43,11 @@ static UINT_PTR CALLBACK s_PrintHookProc(
 	if(uiMsg == WM_INITDIALOG)
 	{
 		PRINTDLGW * pDlgInfo = (PRINTDLGW*)lParam;
+		if (!pDlgInfo)
+			return 0;
 		pThis = (XAP_Win32Dialog_Print*)pDlgInfo->lCustData;
+		if (!pThis)
+			return 0;
 		SetWindowLongPtrW(hdlg, DWLP_USER, (LONG_PTR) pThis);
 
 		// reset the 'closed' flag which indicates that the dialog should be considered
@@ -68,6 +72,9 @@ static UINT_PTR CALLBACK s_PrintHookProc(
 		pThis = (XAP_Win32Dialog_Print*)GetWindowLongPtrW(hdlg, DWLP_USER);
 	}
 	
+	if (!pThis)
+		return 0;
+
 	if(uiMsg == WM_COMMAND)
 	{
 		// if the command indicates that the user changed printer, we change the Cancel
@@ -266,20 +273,48 @@ void XAP_Win32Dialog_Print::runModal(XAP_Frame * pFrame)
 			
 			GlobalUnlock(m_pPersistPrintDlg->hDevMode);
 			GlobalUnlock(m_pPersistPrintDlg->hDevNames);
+			if (!m_pPersistPrintDlg->hDC)
+			{
+				m_answer = a_CANCEL;
+				return;
+			}
 
 			// notify layout of printer (this results in redoing doc layout !!!)
-			GR_Win32Graphics* pG=(GR_Win32Graphics*)XAP_App::getApp()->getLastFocussedFrame()->getCurrentView()->getGraphics();
-			UT_return_if_fail( pG );
+			XAP_Frame * focussed = XAP_App::getApp()->getLastFocussedFrame();
+			AV_View * focussedView = focussed ? focussed->getCurrentView() : nullptr;
+			GR_Win32Graphics* pG = focussedView ? static_cast<GR_Win32Graphics*>(focussedView->getGraphics()) : nullptr;
+			if (!pG)
+			{
+				DeleteDC(m_pPersistPrintDlg->hDC);
+				m_pPersistPrintDlg->hDC = nullptr;
+				m_answer = a_CANCEL;
+				return;
+			}
 			pG->setPrintDC(m_pPersistPrintDlg->hDC);
 		}
 	}
 	else if (PrintDlgW(m_pPersistPrintDlg))		// raise the actual dialog.
 	{
+		// PD_RETURNDC puts a DC in hDC. PrintDlgW can still come back
+		// without one; ResetDC on that handle is not valid.
+		if (!m_pPersistPrintDlg->hDC)
+		{
+			m_answer = a_CANCEL;
+			return;
+		}
 		_extractResults(pFrame);
 
 		// notify layout of printer (this results in redoing doc layout !!!)
-		GR_Win32Graphics* pG=(GR_Win32Graphics*)XAP_App::getApp()->getLastFocussedFrame()->getCurrentView()->getGraphics();
-		UT_return_if_fail( pG );
+		XAP_Frame * focussed = XAP_App::getApp()->getLastFocussedFrame();
+		AV_View * focussedView = focussed ? focussed->getCurrentView() : nullptr;
+		GR_Win32Graphics* pG = focussedView ? static_cast<GR_Win32Graphics*>(focussedView->getGraphics()) : nullptr;
+		if (!pG)
+		{
+			DeleteDC(m_pPersistPrintDlg->hDC);
+			m_pPersistPrintDlg->hDC = nullptr;
+			m_answer = a_CANCEL;
+			return;
+		}
 		pG->setPrintDC(m_pPersistPrintDlg->hDC);
 
 		// we need to differentiate between actual OK being pressed by user and simulated

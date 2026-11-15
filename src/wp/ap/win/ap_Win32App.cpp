@@ -356,7 +356,9 @@ bool AP_Win32App::initialize(void)
 			memcpy(dest + used, extra, (add + 1) * sizeof(WCHAR));
 			return true;
 		};
-		_getExeDir( szPath, PATH_MAX);
+		szPath[0] = 0;
+		if (_getExeDir(szPath, PATH_MAX) == 0)
+			szPath[0] = 0;
 #ifdef _MSC_VER
 		const wchar_t * searchTail = L"..\\plugins\\*.dll";
 		const wchar_t * dirTail = L"..\\plugins\\";
@@ -368,14 +370,15 @@ bool AP_Win32App::initialize(void)
 
 		WIN32_FIND_DATAW cfile;
 		HANDLE findtag = INVALID_HANDLE_VALUE;
-		if (appendLimited(szPath, PATH_MAX, searchTail))
+		if (szPath[0] && appendLimited(szPath, PATH_MAX, searchTail))
 			findtag = FindFirstFileW( szPath, &cfile );
 		if( findtag != INVALID_HANDLE_VALUE )
 		{
 			do
 			{
-				_getExeDir( szPlugin, PATH_MAX );
-				if (!appendLimited(szPlugin, PATH_MAX, dirTail)
+				szPlugin[0] = 0;
+				if (_getExeDir(szPlugin, PATH_MAX) == 0
+					|| !appendLimited(szPlugin, PATH_MAX, dirTail)
 					|| !appendLimited(szPlugin, PATH_MAX, cfile.cFileName))
 					continue;
 				XAP_ModuleManager::instance().loadModule( getUTF8String(szPlugin) );

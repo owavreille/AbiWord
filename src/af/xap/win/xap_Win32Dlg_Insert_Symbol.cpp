@@ -191,18 +191,19 @@ BOOL XAP_Win32Dialog_Insert_Symbol::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, 
 	// Fill the list box with symbol fonts.
 
 	HDC hDCScreen = CreateDCW(L"DISPLAY", nullptr, nullptr, nullptr);
-
+	if (hDCScreen)
+	{
 #if 1
-	EnumFontFamiliesW(hDCScreen, (const wchar_t *)nullptr, (FONTENUMPROCW)fontEnumProcedure, (LPARAM)this);
+		EnumFontFamiliesW(hDCScreen, (const wchar_t *)nullptr, (FONTENUMPROCW)fontEnumProcedure, (LPARAM)this);
 #else
-	LOGFONTW LogFont;
-//	LogFont.lfCharSet = SYMBOL_CHARSET; - all fonts enum is more inline with XP nature
-	LogFont.lfCharSet = DEFAULT_CHARSET;
-	LogFont.lfFaceName[0] = '\0';
-	EnumFontFamiliesExW(hDCScreen, &LogFont, (FONTENUMPROCW)fontEnumProcedure, (LPARAM)this, 0);
-#endif	
-	
-	DeleteDC(hDCScreen);
+		LOGFONTW LogFont;
+//		LogFont.lfCharSet = SYMBOL_CHARSET; - all fonts enum is more inline with XP nature
+		LogFont.lfCharSet = DEFAULT_CHARSET;
+		LogFont.lfFaceName[0] = '\0';
+		EnumFontFamiliesExW(hDCScreen, &LogFont, (FONTENUMPROCW)fontEnumProcedure, (LPARAM)this, 0);
+#endif
+		DeleteDC(hDCScreen);
+	}
 
 	// The list is wide. A byte string would be read as UTF-16 and miss Symbol.
 	UT_Win32LocaleString wanted;
