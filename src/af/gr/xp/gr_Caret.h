@@ -69,6 +69,14 @@ public:
 	void							resetBlinkTimeout(void);
 	void                            setPendingBlink(void);
 	bool                            doBlinkIfNeeded(void);
+	bool                            getCoords(UT_sint32 & x, UT_sint32 & y) const
+	{
+		if (!m_bPositionSet)
+			return false;
+		x = m_xPoint;
+		y = m_yPoint;
+		return true;
+	}
 private:
 	GR_Caret() = delete;
 	GR_Caret(const GR_Caret& rhs) = delete;

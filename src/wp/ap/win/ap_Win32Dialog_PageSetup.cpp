@@ -63,12 +63,22 @@ XAP_Dialog* AP_Win32Dialog_PageSetup::static_constructor(XAP_DialogFactory* pDlg
 
 AP_Win32Dialog_PageSetup::AP_Win32Dialog_PageSetup(	XAP_DialogFactory* pDlgFactory,
 													XAP_Dialog_Id id)
-:	AP_Dialog_PageSetup (pDlgFactory, id),m_PageSize(fp_PageSize::psLetter)
+:	AP_Dialog_PageSetup (pDlgFactory, id),
+	m_bmpLandscape(nullptr),
+	m_bmpPortrait(nullptr),
+	m_bmpPreview(nullptr),
+	m_PageSize(fp_PageSize::psLetter)
 {
 }
 
 AP_Win32Dialog_PageSetup::~AP_Win32Dialog_PageSetup()
 {
+	if (m_bmpLandscape)
+		DeleteObject(m_bmpLandscape);
+	if (m_bmpPortrait)
+		DeleteObject(m_bmpPortrait);
+	if (m_bmpPreview)
+		DeleteObject(m_bmpPreview);
 }
 
 
@@ -457,6 +467,15 @@ void AP_Win32Dialog_PageSetup_Page::_onInitDialog()
 	HDC hdc = GetDC(getHandle());
 	RECT rect;
 	GetClientRect(GetDlgItem(getHandle(), AP_RID_DIALOG_PAGE_SETUP_BMP_ORIENTATION), &rect);
+	if (m_pParent->m_bmpPortrait)
+		DeleteObject(m_pParent->m_bmpPortrait);
+	if (m_pParent->m_bmpLandscape)
+		DeleteObject(m_pParent->m_bmpLandscape);
+	if (m_pParent->m_bmpPreview)
+		DeleteObject(m_pParent->m_bmpPreview);
+	m_pParent->m_bmpPortrait = nullptr;
+	m_pParent->m_bmpLandscape = nullptr;
+	m_pParent->m_bmpPreview = nullptr;
 	UT_Xpm2Bmp( rect.right - rect.left,
                 rect.bottom - rect.top,
                 (const char**) orient_vertical_xpm,

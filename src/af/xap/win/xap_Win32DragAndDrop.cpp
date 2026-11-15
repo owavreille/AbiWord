@@ -53,9 +53,11 @@ STDMETHODIMP XAP_Win32DropTarget::QueryInterface(REFIID riid, LPVOID FAR* ppvObj
 	if (!ppvObj) return E_POINTER;
 	if (riid==IID_IDropTarget) {
 		*ppvObj=(IDropTarget*)this;
+		AddRef();
 		return S_OK;
 	} else if (riid==IID_IUnknown) {
 		*ppvObj=(IUnknown*)this;
+		AddRef();
 		return S_OK;
 	}
 	return E_NOINTERFACE;
@@ -64,15 +66,16 @@ STDMETHODIMP XAP_Win32DropTarget::QueryInterface(REFIID riid, LPVOID FAR* ppvObj
 
 STDMETHODIMP_(ULONG) XAP_Win32DropTarget::AddRef()
 {
-        ++m_nCount; 
-        return S_OK;       
+        ++m_nCount;
+        return (ULONG)m_nCount;
 }
 
 
 STDMETHODIMP_(ULONG) XAP_Win32DropTarget::Release()
 {
-        --m_nCount;
-	return S_OK;
+        if (m_nCount > 0)
+		--m_nCount;
+	return (ULONG)m_nCount;
 }
 
 //
@@ -100,11 +103,28 @@ STDMETHODIMP XAP_Win32DropTarget::DragEnter (LPDATAOBJECT pDataObj, DWORD /*grfK
 	return S_OK;
 }
 
-STDMETHODIMP XAP_Win32DropTarget::DragOver(DWORD /*grfKeyState*/, POINTL /*pointl*/, LPDWORD pdwEffect)
-{        	
-	*pdwEffect = (m_bSupportedFormat) ? DROPEFFECT_COPY : DROPEFFECT_NONE;			
-	
-	SendMessageW(static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow(), WM_VSCROLL, SB_LINEDOWN, 0);
+STDMETHODIMP XAP_Win32DropTarget::DragOver(DWORD /*grfKeyState*/, POINTL pointl, LPDWORD pdwEffect)
+{
+	*pdwEffect = (m_bSupportedFormat) ? DROPEFFECT_COPY : DROPEFFECT_NONE;
+
+	if (!m_bSupportedFormat || !m_pFrame)
+		return S_OK;
+
+	HWND hwnd = static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow();
+	POINT client;
+	client.x = pointl.x;
+	client.y = pointl.y;
+	ScreenToClient(hwnd, &client);
+	RECT rc;
+	GetClientRect(hwnd, &rc);
+	const int edge = 24;
+	WPARAM code = 0;
+	if (client.y < edge)
+		code = SB_LINEUP;
+	else if (client.y > rc.bottom - edge)
+		code = SB_LINEDOWN;
+	if (code)
+		SendMessageW(hwnd, WM_VSCROLL, code, 0);
 
 	return S_OK;
 }
@@ -129,23 +149,25 @@ STDMETHODIMP XAP_Win32DropTarget::Drop (LPDATAOBJECT pDataObj, DWORD /*grfKeySta
 	IE_Imp* 	pImp = nullptr;
 	const char * 	szEncoding = nullptr;
 	int 		count = 0;
+
+	memset(&medium, 0, sizeof(medium));
 	
 	FORMATETC fmte = {CF_HDROP, nullptr, DVASPECT_CONTENT, -1, TYMED_HGLOBAL};
 	
 	//
 	// Is the user dropping files?
+	// lParam 1 tells the frame that this HDROP belongs to the OLE medium,
+	// so it must not call DragFinish. ReleaseStgMedium frees it once.
 	//
 	if (NOERROR == pDataObj->QueryGetData(&fmte))
 	{
 		if (pDataObj && SUCCEEDED (pDataObj->GetData (&fmte, &medium)))
+		{
 			count = DragQueryFileW((HDROP)medium.hGlobal, 0xFFFFFFFF, nullptr, 0);
-		
-		// We send an event Message Window to the Win32Frame since historicaly
-		// the file loading was processed there
-		if (count) 
-			SendMessageW(static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow(), WM_DROPFILES, (WPARAM)medium.hGlobal, 0);
-				
-		ReleaseStgMedium(&medium);	     
+			if (count)
+				SendMessageW(static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow(), WM_DROPFILES, (WPARAM)medium.hGlobal, 1);
+			ReleaseStgMedium(&medium);
+		}
 		return S_OK;
 	}
 	
@@ -188,7 +210,6 @@ STDMETHODIMP XAP_Win32DropTarget::Drop (LPDATAOBJECT pDataObj, DWORD /*grfKeySta
 	}
 
 	GlobalUnlock(medium.hGlobal);
-	GlobalFree(medium.hGlobal);
 	ReleaseStgMedium(&medium);
 
         return S_OK;

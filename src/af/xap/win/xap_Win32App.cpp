@@ -221,16 +221,12 @@ static bool isWriteable(LPWSTR lpPath)
 	bool  result = false;
 	DWORD len = lstrlenW(lpPath);
 	DWORD rem = MAX_PATH - len - 1;
-	DWORD err;
 	if (rem < 13) return false;
 
 	lstrcpyW(&lpPath[len],L"/abiword.flg");
 	if (CreateDirectoryW(lpPath,nullptr)) {
 		RemoveDirectoryW(lpPath);
-		err=GetLastError();
-		if (err != ERROR_ACCESS_DENIED) result=true;
-	} else {
-		err=GetLastError();
+		result = true;
 	}
 	lpPath[len]=0;
 	return result;

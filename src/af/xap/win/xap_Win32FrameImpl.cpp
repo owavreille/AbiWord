@@ -48,6 +48,7 @@
 #include "xav_View.h"
 #include "xap_Prefs.h"
 #include "ie_impGraphic.h"
+#include "ie_exp.h"
 #include "fv_View.h"
 #include "ap_Win32App.h"
 #include "fg_Graphic.h"
@@ -1027,6 +1028,30 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		return 0;
 	}
 
+	case WM_ENDSESSION:
+		if (wParam && pView)
+		{
+			FV_View * pFV = static_cast<FV_View *>(pView);
+			PD_Document * pDoc = pFV->getDocument();
+			if (pDoc && pDoc->isDirty())
+			{
+				if (f->getFilename())
+					pFV->cmdSave();
+				else
+				{
+					const char * dir = XAP_App::getApp()->getUserPrivateDirectory();
+					if (dir && *dir)
+					{
+						static int s_recovery = 0;
+						char path[4096];
+						snprintf(path, sizeof(path), "%s\\abiword-recovery-%d.abw", dir, ++s_recovery);
+						pFV->cmdSaveAs(path, static_cast<int>(IE_Exp::fileTypeForSuffix(".abw")));
+					}
+				}
+			}
+		}
+		return 0;
+
 	case WM_CLOSE:
 	{
 		XAP_App * pApp = XAP_App::getApp();
@@ -1075,6 +1100,12 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		return SendMessageW(fimpl->m_hwndContainer, iMsg, wParam, lParam);
 	}
 
+	case WM_VSCROLL:
+	case WM_HSCROLL:
+		if (fimpl->m_hwndContainer)
+			return SendMessageW(fimpl->m_hwndContainer, iMsg, wParam, lParam);
+		break;
+
 	case WM_SYSCOLORCHANGE:
 	{
 		if (fimpl->m_hwndRebar)
@@ -1104,6 +1135,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 	case WM_DROPFILES:
 		{
 			HDROP hDrop = (HDROP) wParam;
+			const bool oleOwned = (lParam != 0);
 			// How many files were dropped?
 			int count = DragQueryFileW(hDrop, 0xFFFFFFFF, nullptr, 0);
 			UT_Win32LocaleString str;
@@ -1169,7 +1201,8 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 						{
 						  f->setStatusMessage("Could not open another window");
 						  g_free(uri);
-						  DragFinish(hDrop);
+						  if (!oleOwned)
+							  DragFinish(hDrop);
 						  return 0;
 						}
 					}
@@ -1198,7 +1231,8 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 				}
 				g_free(uri);
 			}
-			DragFinish(hDrop);
+			if (!oleOwned)
+				DragFinish(hDrop);
 		}
 		return 0;
 

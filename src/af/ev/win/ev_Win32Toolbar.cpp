@@ -882,8 +882,15 @@ bool EV_Win32Toolbar::synthesize(void)
 						// bind this separator to its control
 						tbb.dwData = (DWORD_PTR) hwndCombo;
 
-						// for now, we never repopulate, so can just toss it
-						DELETEP(pControl);
+						// Keep the font list. The owner-draw path would otherwise
+						// enumerate every installed face a second time.
+						if (id == AP_TOOLBAR_ID_FMT_FONT)
+						{
+							delete m_pFontCtrl;
+							m_pFontCtrl = static_cast<AP_Win32Toolbar_FontCombo *>(pControl);
+						}
+						else
+							DELETEP(pControl);
 					}
 					break;
 					
@@ -948,7 +955,17 @@ bool EV_Win32Toolbar::synthesize(void)
 						// As long as translators don't cut the text short,
 						// we need to autosize just to squize anything insize 1280 :)
 						tbb.fsStyle |= TBSTYLE_AUTOSIZE;
-						tbb.iString = SendMessageW(m_hwnd, TB_ADDSTRING, (WPARAM) 0, (LPARAM) (LPSTR) szLabel);
+						UT_Win32LocaleString label;
+						label.fromUTF8(szLabel ? szLabel : "");
+						const wchar_t * wide = label.c_str();
+						size_t n = wide ? wcslen(wide) : 0;
+						wchar_t * pool = new wchar_t[n + 2];
+						if (n && wide)
+							memcpy(pool, wide, n * sizeof(wchar_t));
+						pool[n] = L'\0';
+						pool[n + 1] = L'\0';
+						tbb.iString = (INT_PTR)SendMessageW(m_hwnd, TB_ADDSTRINGW, (WPARAM) 0, (LPARAM) pool);
+						delete [] pool;
 					}
 					
 					if (pAction->getItemType() == EV_TBIT_ColorFore || pAction->getItemType() == EV_TBIT_ColorBack)

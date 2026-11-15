@@ -242,6 +242,12 @@ HDC GR_Win32Graphics::swapDC(HDC hdc)
 	return previous;
 }
 
+void GR_Win32Graphics::layoutToClient(UT_sint32 x, UT_sint32 y, int & cx, int & cy) const
+{
+	cx = (int)((double)_tduX(x) * m_fXYRatio);
+	cy = _tduY(y);
+}
+
 GR_Win32Graphics::~GR_Win32Graphics()
 {
 	// Deselect the buffer before the fonts it may still hold are destroyed.
@@ -2180,6 +2186,19 @@ HFONT GR_Win32Font::getFontFromCache(UT_uint32 pixelsize, bool /*bIsLayout*/, UT
 
 void GR_Win32Font::insertFontInCache(UT_uint32 pixelsize, HFONT pFont) const
 {
+	// Each zoom creates another HFONT. Keep a few sizes and release the rest.
+	while (m_allocFonts.getItemCount() >= 8)
+	{
+		allocFont *old = (allocFont *)m_allocFonts.getNthItem(0);
+		if (old)
+		{
+			if (old->hFont)
+				DeleteObject(old->hFont);
+			delete old;
+		}
+		m_allocFonts.deleteNthItem(0);
+	}
+
 	allocFont *entry = new allocFont;
 	entry->pixelSize = pixelsize;
 	entry->hFont = pFont;

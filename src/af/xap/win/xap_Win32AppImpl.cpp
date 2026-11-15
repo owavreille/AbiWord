@@ -20,7 +20,6 @@
 
 
 #include <windows.h>
-#include <winreg.h>
 
 #include "xap_Win32AppImpl.h"
 #include "ut_string_class.h"
@@ -33,192 +32,36 @@
 
 bool XAP_Win32AppImpl::openURL(const char * szURL)
 {
-	// NOTE: could get finer control over browser window via DDE 
-	// NOTE: may need to fallback to WinExec for old NSCP versions
+	if (!szURL || !*szURL)
+		return false;
 
-	UT_String sURL = szURL;
-
-	// If this is a file:// URL, strip off file:// and make it backslashed
-	if (sURL.substr(0, 7) == "file://")
-	{
-		sURL = sURL.substr(7, sURL.size() - 7);
-
-		// View as WebPage likes to throw in an extra /\ just for fun, strip it off
-		if (sURL.substr(0, 2) == "/\\")
-			sURL = sURL.substr(2, sURL.size() - 2);
-
-		if (sURL.substr(0, 1) == "/")
-			sURL = sURL.substr(1, sURL.size() - 1);
-		
-		// Convert all forwardslashes to backslashes
-		for (unsigned int i=0; i<sURL.length();i++)	
-			if (sURL[i]=='/')	
-                sURL[i]='\\';
-
-		// GetShortPathName is the wide call in this build. A byte buffer
-		// is read as UTF-16, and a path past PATH_MAX used to overflow it.
-		UT_Win32LocaleString widePath;
-		widePath.fromUTF8(sURL.c_str());
-		if (widePath.c_str() && widePath.c_str()[0])
-		{
-			DWORD need = GetShortPathNameW(widePath.c_str(), nullptr, 0);
-			bool shortened = false;
-			if (need > 0)
-			{
-				wchar_t * shortWide = new wchar_t[need];
-				DWORD got = GetShortPathNameW(widePath.c_str(), shortWide, need);
-				if (got > 0 && got < need)
-				{
-					UT_Win32LocaleString shortPath;
-					shortPath.fromLocale(shortWide);
-					sURL = shortPath.utf8_str().utf8_str();
-					shortened = true;
-				}
-				delete [] shortWide;
-			}
-			if (!shortened)
-			{
-				const char * scan = sURL.c_str();
-				bool spaced = false;
-				if (scan)
-				{
-					for (; *scan; ++scan)
-					{
-						if (*scan == ' ')
-						{
-							spaced = true;
-							break;
-						}
-					}
-				}
-				if (spaced)
-				{
-					UT_String quoted("\"");
-					quoted += sURL;
-					quoted += "\"";
-					sURL = quoted;
-				}
-			}
-		}
-	}
-
-	// Query the registry for the default browser so we can directly invoke it
-	UT_String sBrowser;
-	HKEY hKey;
-	unsigned long lType;
-	DWORD dwSize;
-	LPWSTR szValue = nullptr;
-	UT_Win32LocaleString str,str2;
-	UT_UTF8String utf8;
-
-	if (RegOpenKeyExW(HKEY_CLASSES_ROOT, L"http\\shell\\open\\command", 0, KEY_READ, &hKey) == ERROR_SUCCESS)
-	{
-		if(RegQueryValueExW(hKey, nullptr, nullptr, &lType, nullptr, &dwSize) == ERROR_SUCCESS)
-		{
-			szValue = new WCHAR[dwSize + 1];
-			RegQueryValueExW(hKey, nullptr, nullptr, &lType, (LPBYTE) szValue, &dwSize);
-			str.fromLocale(szValue);
-			utf8=str.utf8_str();
-			sBrowser = utf8.utf8_str();
-			DELETEP(szValue);
-		}
-		RegCloseKey(hKey);
-	}
-
-	/* Now that we have sBrowser from the registry, we need to parse it out.
-	 * If the first character is a double-quote, everything up to and including
-	 * the next double-quote is the sBrowser command. Everything after the
-	 * double-quote is appended to the parameters.
-	 * If the first character is NOT a double-quote, we assume
-	 * everything up to the first whitespace is the command and anything after
-	 * is appended to the parameters.
-	 */
-
-	int iDelimiter;
-	if (sBrowser.substr(0, 1) == "\"")
-		iDelimiter = UT_String_findCh(sBrowser.substr(1, sBrowser.length()-1), '"')+2;
-	else
-		iDelimiter = UT_String_findCh(sBrowser.substr(0, sBrowser.length()), ' ');
-
-	// Store params into a separate UT_String before we butcher sBrowser
-	UT_String sParams = sBrowser.substr(iDelimiter+1, sBrowser.length()-iDelimiter+1);
-	// Cut params off of sBrowser so all we're left with is the broweser path & executable
-	sBrowser = sBrowser.substr(0, iDelimiter);
-
-	// Check for a %1 passed in from the registry.  If we find it,
-	// substitute our URL for %1.  Otherwise, just append sURL to params.
-	const char *pdest = strstr(sParams.c_str(), "%1");
-	if (pdest != nullptr)
-	{
-		int i = pdest - sParams.c_str() + 1;
-		sParams = sParams.substr(0, i-1) + sURL + sParams.substr(i+1, sParams.length()-i+1);
-	}
-	else
-	{
-		sParams = sParams + " " + sURL;
-	}
+	// ShellExecute with the open verb uses the user's current association
+	// for http, https and file. The old http\\shell\\open\\command value
+	// is not that association, and its quotes were passed as part of the path.
+	UT_Win32LocaleString url;
+	url.fromUTF8(szURL);
+	if (!url.c_str() || !url.c_str()[0])
+		return false;
 
 	XAP_Frame * pFrame = XAP_App::getApp()->getLastFocussedFrame();
-	UT_return_val_if_fail(pFrame, false);
-	XAP_Win32FrameImpl *pFImp =  (XAP_Win32FrameImpl *) pFrame->getFrameImpl();
-	UT_return_val_if_fail(pFImp, false);
+	HWND hwnd = nullptr;
+	if (pFrame && pFrame->getFrameImpl())
+		hwnd = static_cast<XAP_Win32FrameImpl *>(pFrame->getFrameImpl())->getTopLevelWindow();
 
-	str.fromUTF8(sBrowser.c_str());
-	str2.fromUTF8(sParams.c_str());
-
-	intptr_t res = (intptr_t) ShellExecuteW(pFImp->getTopLevelWindow() /*(HWND)*/,
-								 L"open", str.c_str(), str2.c_str(), nullptr, SW_SHOW );
-
-	// TODO: localized error messages
-	// added more specific error messages as documented in http://msdn.microsoft.com/library/default.asp?url=/library/en-us/debug/base/system_error_codes.asp
+	INT_PTR res = (INT_PTR)ShellExecuteW(hwnd, L"open", url.c_str(), nullptr, nullptr, SW_SHOW);
 	if (res <= 32)
 	{
-		UT_String errMsg;
-		switch (res)
+		UT_String errMsg = "Error (";
+		errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
+		errMsg += ") displaying URL: \n [ ";
+		errMsg += szURL;
+		errMsg += " ] ";
+		if (hwnd)
 		{
-			case ERROR_FILE_NOT_FOUND:
-				{
-					errMsg = "Error ("; 
-					errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
-					errMsg += ") displaying URL: The system cannot find the file specified.\n";
-					errMsg += " [ ";  errMsg += sURL;  errMsg += " ] ";
-				}
-				break;
-
-			case ERROR_PATH_NOT_FOUND:
-				{
-					errMsg = "Error ("; 
-					errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
-					errMsg += ") displaying URL: The system cannot find the path specified.\n";
-					errMsg += " [ ";  errMsg += sURL;  errMsg += " ] ";
-				}
-				break;
-
-			case SE_ERR_ACCESSDENIED:
-				{
-					errMsg = "Error ("; 
-					errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
-					errMsg += ") displaying URL: Access is denied.\n";
-					errMsg += " [ ";  errMsg += sURL;  errMsg += " ] ";
-				}
-				break;
-
-			default:
-				{
-					errMsg = "Error ("; 
-					errMsg += UT_String_sprintf("%lld", static_cast<long long>(res));
-					errMsg += ") displaying URL: \n";
-					errMsg += " [ ";  errMsg += sURL;  errMsg += " ] ";
-				}
-				break;
-		} /* switch (res) */
-		if (errMsg[0]) {
+			UT_Win32LocaleString str;
 			str.fromUTF8(errMsg.c_str());
-			MessageBoxW(pFImp->getTopLevelWindow(),str.c_str(), 
-				L"Error displaying URL", MB_OK|MB_ICONEXCLAMATION);
+			MessageBoxW(hwnd, str.c_str(), L"Error displaying URL", MB_OK|MB_ICONEXCLAMATION);
 		}
-	} /* if (res <= 32) */
-
-	return (res>32);
+	}
+	return res > 32;
 }
-

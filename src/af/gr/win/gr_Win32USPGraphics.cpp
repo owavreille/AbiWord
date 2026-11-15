@@ -19,6 +19,7 @@
 
 #include "gr_Win32USPGraphics.h"
 #include "ut_debugmsg.h"
+#include <string.h>
 #include "xap_App.h"
 #include "xap_Prefs.h"
 #include "xap_Frame.h"
@@ -715,6 +716,61 @@ void GR_Win32USPGraphics::_setupFontOnDC(GR_Win32USPFont *pFont, bool bZoomMe)
 
 #define GRWIN32USP_CHARBUFF_SIZE 100
 #define GRWIN32USP_ITEMBUFF_SIZE 20
+
+namespace {
+
+bool s_needsSurrogate(UT_UCS4Char ch)
+{
+	return ch >= 0x10000 && ch <= 0x10FFFF;
+}
+
+void s_storeUtf16(WCHAR * dest, UT_uint32 & n, UT_UCS4Char ch)
+{
+	if (s_needsSurrogate(ch))
+	{
+		UT_UCS4Char c = ch - 0x10000;
+		dest[n++] = static_cast<WCHAR>(0xD800 + ((c >> 10) & 0x3FF));
+		dest[n++] = static_cast<WCHAR>(0xDC00 + (c & 0x3FF));
+	}
+	else
+		dest[n++] = static_cast<WCHAR>(ch);
+}
+
+class Utf16Index
+{
+public:
+	UT_uint32 * index;
+	Utf16Index() : index(nullptr) {}
+	~Utf16Index() { delete [] index; }
+	void note(UT_uint32 utf16, UT_uint32 ucs4, UT_uint32 units, UT_uint32 ucs4Count)
+	{
+		if (units == 1 && !index)
+			return;
+		if (!index)
+		{
+			index = new UT_uint32[ucs4Count * 2 + 1];
+			for (UT_uint32 k = 0; k <= utf16; ++k)
+				index[k] = k;
+		}
+		index[utf16] = ucs4;
+		if (units == 2)
+			index[utf16 + 1] = ucs4;
+	}
+	void finish(UT_uint32 utf16, UT_uint32 ucs4Count)
+	{
+		if (index)
+			index[utf16] = ucs4Count;
+	}
+	UT_uint32 map(UT_uint32 utf16, UT_uint32 utf16Count) const
+	{
+		if (!index || utf16 > utf16Count)
+			return utf16;
+		return index[utf16];
+	}
+};
+
+} // namespace
+
 bool GR_Win32USPGraphics::itemize(UT_TextIterator & text, GR_Itemization & I)
 {
 	static WCHAR wcInChars[GRWIN32USP_CHARBUFF_SIZE];
@@ -735,17 +791,35 @@ bool GR_Win32USPGraphics::itemize(UT_TextIterator & text, GR_Itemization & I)
 	if(iLen > GRWIN32USP_CHARBUFF_SIZE)
 	{
 		UT_DEBUGMSG(("GR_Win32USPGraphics::itemize: text buffer too small (iLen %d)\n", iLen));
-		pInChars = new WCHAR[iLen];
+		pInChars = new WCHAR[iLen * 2];
 		UT_return_val_if_fail(pInChars,false);
 		bDeleteChars = true;
 	}
 
 	UT_uint32 i;
+	UT_uint32 nUtf16 = 0;
+	UT_uint32 cap = bDeleteChars ? iLen * 2 : GRWIN32USP_CHARBUFF_SIZE;
+	Utf16Index utf16Map;
 	for(i = 0; i < iLen; ++i, ++text)
 	{
 		UT_return_val_if_fail(text.getStatus() == UTIter_OK, false);
-		pInChars[i] = (WCHAR)text.getChar();
+		UT_UCS4Char ch = text.getChar();
+		UT_uint32 units = s_needsSurrogate(ch) ? 2u : 1u;
+		if (nUtf16 + units > cap)
+		{
+			WCHAR * grown = new WCHAR[iLen * 2];
+			UT_return_val_if_fail(grown, false);
+			memcpy(grown, pInChars, nUtf16 * sizeof(WCHAR));
+			if (bDeleteChars)
+				delete [] pInChars;
+			pInChars = grown;
+			bDeleteChars = true;
+			cap = iLen * 2;
+		}
+		utf16Map.note(nUtf16, i, units, iLen);
+		s_storeUtf16(pInChars, nUtf16, ch);
 	}
+	utf16Map.finish(nUtf16, iLen);
 	
 	int       iItemCount;
 	UT_uint16 iLid = wvLangToLIDConverter(I.getLang());
@@ -776,7 +850,7 @@ bool GR_Win32USPGraphics::itemize(UT_TextIterator & text, GR_Itemization & I)
 	sc.fReserved = 0; 
 
 		
-	HRESULT hRes = fScriptItemize(pInChars, iLen, GRWIN32USP_ITEMBUFF_SIZE, &sc, &ss, pItems, &iItemCount);
+	HRESULT hRes = fScriptItemize(pInChars, nUtf16, GRWIN32USP_ITEMBUFF_SIZE, &sc, &ss, pItems, &iItemCount);
 	if(hRes)
 	{
 		UT_return_val_if_fail(hRes == E_OUTOFMEMORY, false);
@@ -794,7 +868,7 @@ bool GR_Win32USPGraphics::itemize(UT_TextIterator & text, GR_Itemization & I)
 			UT_return_val_if_fail(pItems, false);
 			bDeleteItems = true;
 
-			hRes = fScriptItemize(pInChars, iLen, iItemBuffSize, /*sc*/nullptr, &ss, pItems, &iItemCount);
+			hRes = fScriptItemize(pInChars, nUtf16, iItemBuffSize, /*sc*/nullptr, &ss, pItems, &iItemCount);
 			
 		}while(hRes == E_OUTOFMEMORY);
 
@@ -807,7 +881,7 @@ bool GR_Win32USPGraphics::itemize(UT_TextIterator & text, GR_Itemization & I)
 		GR_Win32USPItem * pI = new GR_Win32USPItem(pItems[i]);
 		UT_return_val_if_fail(pI, false);
 
-		I.addItem(pItems[i].iCharPos, pI);
+		I.addItem(utf16Map.map(pItems[i].iCharPos, nUtf16), pI);
 	}
 
 	I.addItem(iPosEnd - iPosStart + 1, new GR_Win32USPItem(GRScriptType_Void));
@@ -862,18 +936,47 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 	if(si.m_iLength > GRWIN32USP_CHARBUFF_SIZE)
 	{
 		UT_DEBUGMSG(("GR_Win32USPGraphics::shape: char buffer too small (len %d)\n", si.m_iLength));
-		pInChars = new WCHAR[si.m_iLength];
+		pInChars = new WCHAR[si.m_iLength * 2];
 		UT_return_val_if_fail(pInChars,false);
 
 		bDeleteChars = true; // data on heap; cleanup later
 	}
 
 	UT_uint32 i;
+	UT_uint32 nUtf16 = 0;
+	UT_uint32 cap = bDeleteChars ? (UT_uint32)si.m_iLength * 2 : GRWIN32USP_CHARBUFF_SIZE;
+	Utf16Index utf16Map;
 	for(i = 0; i < (UT_uint32)si.m_iLength; ++i, ++si.m_Text)
 	{
 		UT_return_val_if_fail(si.m_Text.getStatus() == UTIter_OK, false);
-		pInChars[i] = (WCHAR)si.m_Text.getChar();
+		UT_UCS4Char ch = si.m_Text.getChar();
+		UT_uint32 units = s_needsSurrogate(ch) ? 2u : 1u;
+		if (nUtf16 + units > cap)
+		{
+			WCHAR * grown = new WCHAR[si.m_iLength * 2];
+			UT_return_val_if_fail(grown, false);
+			memcpy(grown, pInChars, nUtf16 * sizeof(WCHAR));
+			if (bDeleteChars)
+				delete [] pInChars;
+			pInChars = grown;
+			bDeleteChars = true;
+			cap = (UT_uint32)si.m_iLength * 2;
+		}
+		utf16Map.note(nUtf16, i, units, (UT_uint32)si.m_iLength);
+		s_storeUtf16(pInChars, nUtf16, ch);
 	}
+	utf16Map.finish(nUtf16, (UT_uint32)si.m_iLength);
+	const int cChars = (int)nUtf16;
+	struct ClustFree {
+		WORD * p;
+		~ClustFree() { delete [] p; }
+	} extraClust = { nullptr };
+	if (nUtf16 != (UT_uint32)si.m_iLength)
+	{
+		extraClust.p = new WORD[nUtf16];
+		UT_return_val_if_fail(extraClust.p, false);
+	}
+	WORD * pClust = extraClust.p ? extraClust.p : RI->m_pClust;
 
 	// the problem with the glyph buffer is that we do no know how big
 	// it needs to be, and what is worse, we will only find out by
@@ -919,9 +1022,9 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 	
 	// we need to make sure that the analysis embeding level is in sync with si.m_iVisDir
 	pItem->m_si.a.fRTL = si.m_iVisDir == UT_BIDI_RTL ? 1 : 0;
-	HRESULT hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, si.m_iLength,
+	HRESULT hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, cChars,
 								iGlyphBuffSize, & pItem->m_si.a, pGlyphs,
-								RI->m_pClust, pVa, &iGlyphCount);
+								pClust, pVa, &iGlyphCount);
 
 	if( hRes == E_PENDING)
 	{
@@ -929,9 +1032,9 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 
 		_setupFontOnDC(pFont, false);
 		hdc = m_printHDC ? m_printHDC : m_hdc;
-		hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, si.m_iLength,
+		hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, cChars,
 							iGlyphBuffSize, & pItem->m_si.a, pGlyphs,
-							RI->m_pClust, pVa, &iGlyphCount);
+							pClust, pVa, &iGlyphCount);
 	}
 
 	if(hRes == E_OUTOFMEMORY)
@@ -959,8 +1062,8 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 			
 			bDeleteGlyphs = true; // glyphs in dynamically alloc. memory
 
-			hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, si.m_iLength, iGlyphBuffSize,
-							   & pItem->m_si.a, pGlyphs, RI->m_pClust, pVa, &iGlyphCount);
+			hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, cChars, iGlyphBuffSize,
+							   & pItem->m_si.a, pGlyphs, pClust, pVa, &iGlyphCount);
 			
 		}while(hRes == E_OUTOFMEMORY);
 
@@ -982,8 +1085,8 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 		WORD eScript = pItem->m_si.a.eScript;
 		pItem->m_si.a.eScript = GRScriptType_Undefined;
 
-		hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, si.m_iLength, iGlyphBuffSize,
-						   & pItem->m_si.a, pGlyphs, RI->m_pClust, pVa, &iGlyphCount);
+		hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, cChars, iGlyphBuffSize,
+						   & pItem->m_si.a, pGlyphs, pClust, pVa, &iGlyphCount);
 
 		pItem->m_si.a.eScript = eScript;
 		UT_return_val_if_fail(hRes == 0, false);
@@ -1043,6 +1146,19 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 	{
 		// !bDeleteGlyphs && !bCopyGlyphs
 		UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+	}
+
+	if (extraClust.p)
+	{
+		UT_uint32 u = 0;
+		for (UT_uint32 c = 0; c < (UT_uint32)si.m_iLength; ++c)
+		{
+			RI->m_pClust[c] = extraClust.p[u];
+			UT_uint32 next = u + 1;
+			while (next < nUtf16 && utf16Map.index && utf16Map.index[next] == c)
+				++next;
+			u = next;
+		}
 	}
 
 	// need to transfer data that we will need later from si to RI
@@ -2287,17 +2403,15 @@ void GR_Win32USPGraphics::_drawChars(const UT_UCS4Char* pChars,
 	WCHAR * pwChars = buff;
     bool bDelete = false;
 	
-	if(iLength > 100)
+	if(iLength * 2 > 100)
 	{
-		pwChars = new WCHAR[iLength];
+		pwChars = new WCHAR[iLength * 2];
 		bDelete = true;
 	}
 
-	UT_sint32 i = 0;
-	for(i = 0; i < iLength; ++i)
-	{
-		pwChars[i] = pChars[i+iCharOffset];
-	}
+	UT_uint32 nUtf16 = 0;
+	for(UT_sint32 i = 0; i < iLength; ++i)
+		s_storeUtf16(pwChars, nUtf16, pChars[i + iCharOffset]);
 
 	// The ruler labels are plain text. ScriptStringAnalyse / ScriptStringOut /
 	// ScriptStringFree corrupt the process heap on Windows 11 (0xC0000374)
@@ -2305,16 +2419,16 @@ void GR_Win32USPGraphics::_drawChars(const UT_UCS4Char* pChars,
 	// complex document text goes through renderChars.
 	// https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-exttextoutw
 	GR_Win32USPFont * pFont = static_cast<GR_Win32USPFont *>(m_pFont);
-	UT_Win32TraceF("chars-font font=%p len=%d", (void*)pFont, iLength);
+	UT_Win32TraceF("chars-font font=%p len=%d", (void*)pFont, (int)nUtf16);
 	_setupFontOnDC(pFont, true);
 	UT_Win32TraceHeap("chars-font");
 
 	UT_sint32 x = (UT_sint32)((double)_tduX(xoff) * m_fXYRatio);
 	UT_sint32 y = _tduY(yoff);
 	UT_Win32TraceF("chars x=%d y=%d len=%d hdc=%p c0=%u",
-				   x, y, iLength, (void*)m_hdc,
-				   (iLength > 0) ? (unsigned)pwChars[0] : 0);
-	BOOL drew = ExtTextOutW(m_hdc, x, y, 0, nullptr, pwChars, iLength, nullptr);
+				   x, y, (int)nUtf16, (void*)m_hdc,
+				   (nUtf16 > 0) ? (unsigned)pwChars[0] : 0);
+	BOOL drew = ExtTextOutW(m_hdc, x, y, 0, nullptr, pwChars, nUtf16, nullptr);
 	UT_Win32TraceF("chars-end drew=%d err=%lu", drew ? 1 : 0, (unsigned long)GetLastError());
 	UT_Win32TraceHeap("chars-end");
 

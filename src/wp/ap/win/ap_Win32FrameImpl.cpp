@@ -19,6 +19,7 @@
  */
 
 #include "ap_Win32FrameImpl.h"
+#include "fv_View.h"
 
 #include "ap_Win32Frame.h"
 #include "ut_Win32Timer.h"
@@ -32,6 +33,7 @@
 #include "ut_misc.h"
 
 #include <winuser.h>
+#include <imm.h>
 
 #include <zmouse.h>
 #ifdef __MINGW32__
@@ -968,7 +970,6 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 		case WM_HSCROLL:
 		{
 			int nScrollCode = (int) LOWORD(wParam); // scroll bar value
-			int nPos = (int) HIWORD(wParam);  // scroll box position
 
 			SCROLLINFO si;
 			memset(&si, 0, sizeof(si));
@@ -1005,7 +1006,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 					break;
 				case SB_THUMBPOSITION:
 				case SB_THUMBTRACK:
-					si.nPos = nPos;
+					// HIWORD(wParam) is only 16 bits. nTrackPos is the full position.
+					si.nPos = si.nTrackPos;
 					SetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si, TRUE);
 					break;
 			}
@@ -1071,6 +1073,52 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 	}
 
 	return 0; // to silence the compiler
+}
+
+static void s_placeImeWindow(HWND hwnd, AV_View * pView)
+{
+	if (!hwnd || !pView)
+		return;
+	FV_View * pFV = static_cast<FV_View *>(pView);
+	GR_Graphics * pG = pFV->getGraphics();
+	if (!pG)
+		return;
+
+	HMODULE imm = GetModuleHandleW(L"imm32.dll");
+	if (!imm)
+		imm = LoadLibraryW(L"imm32.dll");
+	if (!imm)
+		return;
+
+	typedef HIMC (WINAPI *GetCtx)(HWND);
+	typedef BOOL (WINAPI *SetComp)(HIMC, LPCOMPOSITIONFORM);
+	typedef BOOL (WINAPI *RelCtx)(HWND, HIMC);
+	GetCtx getCtx = reinterpret_cast<GetCtx>(reinterpret_cast<void *>(GetProcAddress(imm, "ImmGetContext")));
+	SetComp setComp = reinterpret_cast<SetComp>(reinterpret_cast<void *>(GetProcAddress(imm, "ImmSetCompositionWindow")));
+	RelCtx relCtx = reinterpret_cast<RelCtx>(reinterpret_cast<void *>(GetProcAddress(imm, "ImmReleaseContext")));
+	if (!getCtx || !setComp || !relCtx)
+		return;
+
+	HIMC himc = getCtx(hwnd);
+	if (!himc)
+		return;
+
+	COMPOSITIONFORM cf;
+	memset(&cf, 0, sizeof(cf));
+	cf.dwStyle = CFS_POINT;
+	GR_Caret * caret = pG->allCarets()->getBaseCaret();
+	UT_sint32 x = 0;
+	UT_sint32 y = 0;
+	if (caret && caret->getCoords(x, y))
+	{
+		int cx = 0;
+		int cy = 0;
+		static_cast<GR_Win32Graphics *>(pG)->layoutToClient(x, y, cx, cy);
+		cf.ptCurrentPos.x = cx;
+		cf.ptCurrentPos.y = cy;
+	}
+	setComp(himc, &cf);
+	relCtx(hwnd, himc);
 }
 
 LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARAM wParam, LPARAM lParam)
@@ -1295,6 +1343,11 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 			pWin32Keyboard->onUniChar(pView,hwnd,iMsg,wParam,lParam);		
 			return UT_DefWindowProc(hwnd,iMsg,wParam,lParam);
 		}
+
+		case WM_IME_STARTCOMPOSITION:
+		case WM_IME_COMPOSITION:
+			s_placeImeWindow(hwnd, pView);
+			break;
 
 		case WM_IME_CHAR:
 		{

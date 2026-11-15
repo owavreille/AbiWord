@@ -185,6 +185,8 @@ public:
 	// WM_PAINT must draw on the HDC from BeginPaint, then restore the
 	// window DC. Returns the previous HDC.
 	HDC swapDC(HDC hdc);
+	// Layout units to client pixels, including the scroll offset.
+	void layoutToClient(UT_sint32 x, UT_sint32 y, int & cx, int & cy) const;
 
 	static UT_uint32 s_getClassId() {return GRID_WIN32;}
 	virtual UT_uint32 getClassId() override {return s_getClassId();}
