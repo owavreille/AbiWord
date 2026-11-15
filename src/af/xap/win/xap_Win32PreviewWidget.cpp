@@ -60,25 +60,41 @@ XAP_Win32PreviewWidget::XAP_Win32PreviewWidget(XAP_Win32App * pWin32App, HWND hw
 		UT_return_if_fail(m_atomPreviewWidgetClass);
 	}
 
-	RECT rParent;
-	GetClientRect(hwndParent,&rParent);
-	
-	m_hwndPreview = UT_CreateWindowEx(0L, m_bufClassName, nullptr,
-								 WS_CHILD|WS_VISIBLE,
-								 0,0,(rParent.right-rParent.left),(rParent.bottom-rParent.top),
-								 hwndParent,nullptr,m_pWin32App->getInstance(),nullptr);
-	UT_ASSERT(m_hwndPreview);
+	// GetClientRect leaves the rectangle untouched on failure.
+	// A zero client size is still a written rectangle: the child can be
+	// created at that size. GetDC(nullptr) is the screen DC, so it is
+	// only called for a real window.
+	RECT rParent = {};
+	const bool parentMeasured = hwndParent
+		&& GetClientRect(hwndParent, &rParent)
+		&& rParent.right >= rParent.left
+		&& rParent.bottom >= rParent.top;
+	if (parentMeasured)
+	{
+		m_hwndPreview = UT_CreateWindowEx(0L, m_bufClassName, nullptr,
+									 WS_CHILD|WS_VISIBLE,
+									 0,0,(rParent.right-rParent.left),(rParent.bottom-rParent.top),
+									 hwndParent,nullptr,m_pWin32App->getInstance(),nullptr);
+		UT_ASSERT(m_hwndPreview);
+	}
 
 	// bind window back to this object.  note that this will happen
 	// after WM_Create (and many other messages) have gone thru, but
 	// before anything we care about.
-	
-	SWL(m_hwndPreview,this);
 
-	// create a GR_Graphics for this window and HDC
-	GR_Win32AllocInfo ai(GetDC(m_hwndPreview),m_hwndPreview);
-	m_pGraphics = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
-	UT_ASSERT(m_pGraphics);
+	if (m_hwndPreview)
+	{
+		SWL(m_hwndPreview,this);
+
+		// CS_OWNDC: GetDC returns the class DC. ReleaseDC has no effect on it.
+		HDC hdc = GetDC(m_hwndPreview);
+		if (hdc)
+		{
+			GR_Win32AllocInfo ai(hdc, m_hwndPreview);
+			m_pGraphics = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
+			UT_ASSERT(m_pGraphics);
+		}
+	}
 
 	m_iInstanceCount++;
 }
@@ -103,8 +119,15 @@ XAP_Win32PreviewWidget::~XAP_Win32PreviewWidget(void)
 
 void XAP_Win32PreviewWidget::getWindowSize(UT_uint32 * pWidth, UT_uint32 * pHeight) const
 {
-	RECT r;
-	GetClientRect(m_hwndPreview,&r);
+	RECT r = {};
+	if (!m_hwndPreview || !GetClientRect(m_hwndPreview, &r))
+	{
+		if (pWidth)
+			*pWidth = 0;
+		if (pHeight)
+			*pHeight = 0;
+		return;
+	}
 	if (pWidth)
 		*pWidth = (r.right-r.left);
 	if (pHeight)

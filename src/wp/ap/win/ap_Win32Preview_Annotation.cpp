@@ -94,7 +94,9 @@ void AP_Win32Preview_Annotation::_createToolTip(HWND hwndParent)
     ti.hwnd = hwndParent;
     ti.hinst = hinst;
     ti.lpszText = const_cast<wchar_t *>(m_tipText.c_str());
-    GetClientRect (hwndParent, &ti.rect);
+    // GetClientRect leaves TOOLINFOW.rect untouched on failure.
+    if (!hwndParent || !GetClientRect(hwndParent, &ti.rect))
+        return;
     SendMessageW(m_hToolTip, TTM_ADDTOOLW, 0, (LPARAM) &ti);
 
 	if (!getTitle().empty() || !getAuthor().empty())

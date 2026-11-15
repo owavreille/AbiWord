@@ -23,6 +23,7 @@
 #include <windows.h>
 #include <commctrl.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "ut_misc.h"
 #include "ut_types.h"
@@ -74,15 +75,20 @@ AP_Win32Dialog_Options::AP_Win32Dialog_Options(XAP_DialogFactory * pDlgFactory,
 											   XAP_Dialog_Id id)
 	: AP_Dialog_Options(pDlgFactory,id),m_pDialogFactory(pDlgFactory)
 {
-	m_langchanged = FALSE;	
-	LOGFONTW	logFont;
+	m_langchanged = FALSE;
+	m_hFont = nullptr;
 
-	// Create bold font
-	HFONT hFont = (HFONT) GetStockObject(DEFAULT_GUI_FONT);
-	GetObjectW (hFont, sizeof(LOGFONTW), &logFont); 	
-													
-	logFont.lfWeight  = FW_BOLD;
-	m_hFont = CreateFontIndirectW(&logFont);
+	// Copy the stock GUI font, then make that copy bold.
+	// GetObjectW writes the LOGFONT only when it returns the full size.
+	// The stock handle itself is not destroyed.
+	LOGFONTW logFont;
+	memset(&logFont, 0, sizeof(logFont));
+	HFONT hFont = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+	if (hFont && GetObjectW(hFont, sizeof(logFont), &logFont) == sizeof(logFont))
+	{
+		logFont.lfWeight = FW_BOLD;
+		m_hFont = CreateFontIndirectW(&logFont);
+	}
 }
 
 AP_Win32Dialog_Options::~AP_Win32Dialog_Options(void)
