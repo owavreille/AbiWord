@@ -174,16 +174,15 @@ BOOL XAP_Win32Dialog_History::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lPar
 				if(iSelCount)
 				{
 					LVITEMW item;
-
+					memset(&item, 0, sizeof(item));
 					item.iSubItem = 0;
 					item.iItem = ListView_GetSelectionMark(h);
 					item.mask = LVIF_PARAM;
-					item.pszText = nullptr;
-					item.cchTextMax = 0;
 
-					SendMessageW(h, LVM_GETITEMW, 0, (LPARAM)&item);
-
-					setSelectionId(item.lParam);
+					if (SendMessageW(h, LVM_GETITEMW, 0, (LPARAM)&item))
+						setSelectionId(item.lParam);
+					else
+						setSelectionId(0);
 				}
 				else
 					setSelectionId(0);

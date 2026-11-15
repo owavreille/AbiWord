@@ -20,6 +20,8 @@
 #ifndef AP_WIN32PREVIEW_ANNOTATION_H
 #define AP_WIN32PREVIEW_ANNOTATION_H
 
+#include <string>
+
 #include "xap_App.h"
 #include "ap_Preview_Annotation.h"
 
@@ -42,6 +44,9 @@ private:
 	void					_createToolTip(HWND hwndParent);
 
 	HWND					m_hToolTip;
+	// TTM_ADDTOOL keeps this pointer and reads it when the tip opens.
+	std::wstring			m_tipText;
+	std::wstring			m_tipTitle;
 };
 
 #endif /* AP_WIN32PREVIEW_ANNOTATION_H */

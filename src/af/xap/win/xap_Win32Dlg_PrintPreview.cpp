@@ -610,9 +610,8 @@ public:
 
     d (g_print("endPrint()\n"));
 
-    ShellExecuteW (nullptr, L"open", (WCHAR *)m_tiffFilename, nullptr, nullptr, SW_SHOW);
-
-    return true;
+    const INT_PTR opened = (INT_PTR)ShellExecuteW(nullptr, L"open", (WCHAR *)m_tiffFilename, nullptr, nullptr, SW_SHOW);
+    return opened > 32;
   }
 
   void endPage()
