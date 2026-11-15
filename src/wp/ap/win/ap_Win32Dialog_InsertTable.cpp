@@ -190,8 +190,9 @@ BOOL AP_Win32Dialog_InsertTable::_onDeltaPos(NM_UPDOWN * pnmud)
 		wchar_t text[16];
 		text[0] = 0;
 		GetDlgItemTextW(m_hDlg, editId, text, 16);
-		// iDelta is negative for the up arrow. Step from the number shown.
-		int next = _wtoi(text) - pnmud->iDelta;
+		// The up arrow reports a positive iDelta, the down arrow a negative one.
+		// https://learn.microsoft.com/en-us/windows/win32/controls/udn-deltapos
+		int next = _wtoi(text) + pnmud->iDelta;
 		if (next < minimum)
 			next = minimum;
 		else if (next > maximum)
@@ -214,8 +215,8 @@ BOOL AP_Win32Dialog_InsertTable::_onDeltaPos(NM_UPDOWN * pnmud)
 	if (GetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTTABLE_VAL_SIZE, szBuff, 255 ))	
 		dValue = (float) atofw(szBuff);				 
 	
-	// iDelta is negative for the up arrow. Negate it so up increases the width.
-	_doSpin(0 - static_cast<UT_sint32>(pnmud->iDelta), dValue);
+	// The up arrow reports a positive iDelta, the down arrow a negative one.
+	_doSpin(static_cast<UT_sint32>(pnmud->iDelta), dValue);
 	
 	swprintf (szBuff, L"%02.2f", dValue);
 	SetWindowTextW (GetDlgItem(m_hDlg,AP_RID_DIALOG_INSERTTABLE_VAL_SIZE), szBuff);
