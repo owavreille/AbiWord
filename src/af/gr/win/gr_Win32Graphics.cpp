@@ -1420,16 +1420,23 @@ void GR_Win32Graphics::setClipRect(const UT_Rect* pRect)
 		int r = (UT_sint32)((double)_tduX(copy.left + copy.width) * m_fXYRatio);
 		int b = _tduY(copy.top + copy.height);
 		UT_Win32TraceF("clip l=%d t=%d r=%d b=%d hdc=%p", l, t, r, b, (void*)m_hdc);
-		// set the clip rectangle
-		HRGN hrgn = CreateRectRgn(l, t, r, b);
-		UT_ASSERT(hrgn);
+		// CreateRectRgn fails when the rectangle is empty. SelectClipRgn
+		// of NULL would drop clipping and paint the whole DC.
+		HRGN hrgn = (r > l && b > t) ? CreateRectRgn(l, t, r, b) : nullptr;
 		UT_Win32TraceF("clip-rgn %p", (void*)hrgn);
-
-		int selected = SelectClipRgn(m_hdc, hrgn);
+		int selected;
+		if (hrgn)
+		{
+			selected = SelectClipRgn(m_hdc, hrgn);
+			DeleteObject(hrgn);
+		}
+		else
+		{
+			SelectClipRgn(m_hdc, nullptr);
+			selected = IntersectClipRect(m_hdc, 0, 0, 0, 0);
+		}
 		res = selected;
 		UT_Win32TraceF("clip-select %d", selected);
-
-		DeleteObject(hrgn);
 		UT_Win32TraceHeap("clip");
 		_noteBufferClip(l, t, r, b, false);
 	}

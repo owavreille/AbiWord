@@ -69,14 +69,15 @@ bool AP_Win32Toolbar_FontCombo::populate(void)
 	seenFonts.clear();
 
 	// populate the vector
-	HWND hwnd = nullptr;
-    HDC hdc = GetDC(hwnd) ;
+	// GetDC(NULL) is the screen DC. A failed call must not be released.
+	HDC hdc = GetDC(nullptr);
+	if (!hdc)
+		return false;
 	LOGFONTW lf;
-	lf.lfCharSet=DEFAULT_CHARSET;
-	*lf.lfFaceName=0;
-	lf.lfPitchAndFamily=0;
+	memset(&lf, 0, sizeof(lf));
+	lf.lfCharSet = DEFAULT_CHARSET;
     EnumFontFamiliesExW(hdc, &lf, (FONTENUMPROCW) AP_Win32Toolbar_FontCombo::_EnumFontsProc, (LONG_PTR) this, 0) ;
-    ReleaseDC(hwnd, hdc) ;
+    ReleaseDC(nullptr, hdc) ;
 
 	seenFonts.clear();
 
@@ -113,7 +114,12 @@ int CALLBACK AP_Win32Toolbar_FontCombo::_EnumFontsProc(LPLOGFONTW lplf,
 
 	UT_Win32LocaleString str;
 	str.fromLocale (lplf->lfFaceName);
-	char * p = g_strdup((str.utf8_str().utf8_str()));
+	const char * utf8 = str.utf8_str().utf8_str();
+	if (!utf8 || !*utf8)
+		return 1;
+	char * p = g_strdup(utf8);
+	if (!p)
+		return 1;
 
 	if (seenFonts.find(p)!=seenFonts.end()) {
 		FREEP(p);

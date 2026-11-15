@@ -738,6 +738,8 @@ void XAP_Frame::setAutoSaveFile(bool b)
 	if(b)
 	{
 		UT_Timer *timer = UT_Timer::findTimer(m_iIdAutoSaveTimer);
+		if (!timer)
+			return;
 		if(m_iAutoSavePeriod < 1)
 		{
 			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
