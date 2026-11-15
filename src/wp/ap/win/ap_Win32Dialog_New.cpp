@@ -127,15 +127,19 @@ BOOL AP_Win32Dialog_New::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*lP
 			do
 			{	
 				str.fromLocale(cfile.cFileName);
-				if(!wcsstr(str.c_str(), L"normal.awt-")) // don't truncate localized template names
+				// size() - 4 wraps when the name is shorter than ".awt".
+				if (str.size() >= 4 && !wcsstr(str.c_str(), L"normal.awt-"))
 					str = str.substr ( 0, str.size () - 4 ) ;
 
-				UT_sint32 nIndex = SendMessageW( hControl, LB_ADDSTRING, 0, (LPARAM)str.c_str());
-				SendMessageW( hControl, LB_SETITEMDATA, (WPARAM) nIndex, (LPARAM) i );
+				LRESULT nIndex = SendMessageW( hControl, LB_ADDSTRING, 0, (LPARAM)str.c_str());
+				if (nIndex != LB_ERR)
+					SendMessageW( hControl, LB_SETITEMDATA, (WPARAM) nIndex, (LPARAM) i );
 
 			} while( FindNextFileW( findtag, &cfile ) );
+			// FindClose requires the handle from a successful FindFirstFile.
+			// https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-findclose
+			FindClose( findtag );
 		}
-		FindClose( findtag );
 	}
 
 	XAP_Win32DialogHelper::s_centerDialog(hWnd);	

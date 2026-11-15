@@ -831,13 +831,23 @@ bool GR_Win32USPGraphics::itemize(UT_TextIterator & text, GR_Itemization & I)
 	Utf16Index utf16Map;
 	for(i = 0; i < iLen; ++i, ++text)
 	{
-		UT_return_val_if_fail(text.getStatus() == UTIter_OK, false);
+		if (text.getStatus() != UTIter_OK)
+		{
+			if (bDeleteChars)
+				delete [] pInChars;
+			return false;
+		}
 		UT_UCS4Char ch = text.getChar();
 		UT_uint32 units = s_needsSurrogate(ch) ? 2u : 1u;
 		if (nUtf16 + units > cap)
 		{
 			WCHAR * grown = new WCHAR[iLen * 2];
-			UT_return_val_if_fail(grown, false);
+			if (!grown)
+			{
+				if (bDeleteChars)
+					delete [] pInChars;
+				return false;
+			}
 			memcpy(grown, pInChars, nUtf16 * sizeof(WCHAR));
 			if (bDeleteChars)
 				delete [] pInChars;
@@ -880,35 +890,60 @@ bool GR_Win32USPGraphics::itemize(UT_TextIterator & text, GR_Itemization & I)
 
 		
 	HRESULT hRes = fScriptItemize(pInChars, nUtf16, GRWIN32USP_ITEMBUFF_SIZE, &sc, &ss, pItems, &iItemCount);
-	if(hRes)
+	if(hRes == E_OUTOFMEMORY)
 	{
-		UT_return_val_if_fail(hRes == E_OUTOFMEMORY, false);
+		// One item per character, plus the terminal item ScriptItemize always appends.
+		// https://learn.microsoft.com/en-us/windows/win32/api/usp10/nf-usp10-scriptitemize
+		const UT_uint32 itemCap = nUtf16 + 2;
 		UT_uint32 iItemBuffSize = GRWIN32USP_ITEMBUFF_SIZE;
 		UT_DEBUGMSG(("GR_Win32USPGraphics::itemize: item buffer too small (len %d)\n", iItemBuffSize));
-		
+
 		do
 		{
-			iItemBuffSize *= 2;
-			
+			if (iItemBuffSize >= itemCap)
+				break;
+			UT_uint32 next = iItemBuffSize * 2;
+			if (next < iItemBuffSize || next > itemCap)
+				next = itemCap;
+			iItemBuffSize = next;
+
 			if(bDeleteItems)
 				delete [] pItems;
-			
+
 			pItems = new SCRIPT_ITEM[iItemBuffSize];
-			UT_return_val_if_fail(pItems, false);
+			if (!pItems)
+			{
+				if (bDeleteChars)
+					delete [] pInChars;
+				return false;
+			}
 			bDeleteItems = true;
 
-			hRes = fScriptItemize(pInChars, nUtf16, iItemBuffSize, /*sc*/nullptr, &ss, pItems, &iItemCount);
-			
-		}while(hRes == E_OUTOFMEMORY);
+			hRes = fScriptItemize(pInChars, nUtf16, iItemBuffSize, &sc, &ss, pItems, &iItemCount);
 
-		UT_return_val_if_fail(hRes == 0, false);
+		}while(hRes == E_OUTOFMEMORY);
+	}
+	if(hRes)
+	{
+		if(bDeleteItems)
+			delete [] pItems;
+		if(bDeleteChars)
+			delete [] pInChars;
+		return false;
 	}
 	
 	// now we process the ouptut
 	for(i = 0; i < (UT_uint32)iItemCount; ++i)
 	{
 		GR_Win32USPItem * pI = new GR_Win32USPItem(pItems[i]);
-		UT_return_val_if_fail(pI, false);
+		if (!pI)
+		{
+			if(bDeleteItems)
+				delete [] pItems;
+			if(bDeleteChars)
+				delete [] pInChars;
+			return false;
+		}
 
 		I.addItem(utf16Map.map(pItems[i].iCharPos, nUtf16), pI);
 	}

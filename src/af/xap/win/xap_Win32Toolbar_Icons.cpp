@@ -501,7 +501,14 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 	{
 		//	Format: ICONNAME_LANGCODE where LANGCODE code can be _XX (_yi) or _XXXA (_caES)
 		char szBaseID[300];
-		strcpy(szBaseID, szIconName);
+		szBaseID[0] = 0;
+		if (szIconName)
+		{
+			const size_t nameLen = strlen(szIconName);
+			const size_t copyLen = nameLen >= sizeof(szBaseID) ? sizeof(szBaseID) - 1 : nameLen;
+			memcpy(szBaseID, szIconName, copyLen);
+			szBaseID[copyLen] = 0;
+		}
 		char *pLast = strrchr(szBaseID, '_');
 
 		if (pLast)
@@ -632,7 +639,14 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 	{
 		//	Format: ICONNAME_LANGCODE where LANGCODE code can be _XX (_yi) or _XXXA (_caES)
 		char szBaseID[300];
-		strcpy(szBaseID, szIconName);
+		szBaseID[0] = 0;
+		if (szIconName)
+		{
+			const size_t nameLen = strlen(szIconName);
+			const size_t copyLen = nameLen >= sizeof(szBaseID) ? sizeof(szBaseID) - 1 : nameLen;
+			memcpy(szBaseID, szIconName, copyLen);
+			szBaseID[copyLen] = 0;
+		}
 		char *pLast = strrchr(szBaseID, '_');
 
 		if (pLast)

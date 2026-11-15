@@ -342,27 +342,42 @@ bool AP_Win32App::initialize(void)
 	{
 		WCHAR szPath[PATH_MAX];
 		WCHAR szPlugin[PATH_MAX];
+		// lstrcatW writes past PATH_MAX when the install directory or the
+		// DLL name is long. Skip that file instead.
+		// https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-lstrcatw
+		auto appendLimited = [](WCHAR * dest, size_t cap, const WCHAR * extra) -> bool
+		{
+			if (!dest || !extra || cap == 0)
+				return false;
+			const size_t used = wcslen(dest);
+			const size_t add = wcslen(extra);
+			if (used >= cap || add >= cap - used)
+				return false;
+			memcpy(dest + used, extra, (add + 1) * sizeof(WCHAR));
+			return true;
+		};
 		_getExeDir( szPath, PATH_MAX);
 #ifdef _MSC_VER
-		lstrcatW(szPath, L"..\\plugins\\*.dll");
+		const wchar_t * searchTail = L"..\\plugins\\*.dll";
+		const wchar_t * dirTail = L"..\\plugins\\";
 #else
 #define ABI_WIDE_STRING(t) L ## t
-		lstrcatW(szPath, ABI_WIDE_STRING("..\\lib\\" PACKAGE L"-" ABIWORD_SERIES L"\\plugins\\*.dll"));
+		const wchar_t * searchTail = ABI_WIDE_STRING("..\\lib\\" PACKAGE L"-" ABIWORD_SERIES L"\\plugins\\*.dll");
+		const wchar_t * dirTail = ABI_WIDE_STRING("..\\lib\\" PACKAGE L"-" ABIWORD_SERIES L"\\plugins\\");
 #endif
 
 		WIN32_FIND_DATAW cfile;
-		HANDLE findtag = FindFirstFileW( szPath, &cfile );
+		HANDLE findtag = INVALID_HANDLE_VALUE;
+		if (appendLimited(szPath, PATH_MAX, searchTail))
+			findtag = FindFirstFileW( szPath, &cfile );
 		if( findtag != INVALID_HANDLE_VALUE )
 		{
 			do
-			{	
+			{
 				_getExeDir( szPlugin, PATH_MAX );
-#ifdef _MSC_VER
-				lstrcatW( szPlugin, L"..\\plugins\\" );
-#else
-				lstrcatW( szPlugin, ABI_WIDE_STRING("..\\lib\\" PACKAGE L"-" ABIWORD_SERIES L"\\plugins\\" ));
-#endif
-				lstrcatW( szPlugin, cfile.cFileName );
+				if (!appendLimited(szPlugin, PATH_MAX, dirTail)
+					|| !appendLimited(szPlugin, PATH_MAX, cfile.cFileName))
+					continue;
 				XAP_ModuleManager::instance().loadModule( getUTF8String(szPlugin) );
 			} while( FindNextFileW ( findtag, &cfile ) );
 			FindClose( findtag );

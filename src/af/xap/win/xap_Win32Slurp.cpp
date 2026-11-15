@@ -227,11 +227,13 @@ void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 	// this will be the dde command
 	char command[1024];
 	dest = command;
-	for ( ; *next != '('; ++next )
+	for ( ; *next && *next != '(' && dest < command + sizeof(command) - 1; ++next )
 	{
 		*dest++ = *next;
 	}
 	*dest = 0;
+	if (*next != '(')
+		goto Finished;
 
 	// chomp the ( and the "
 	if ( *next++ != '(' ) goto Finished;
@@ -240,11 +242,13 @@ void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 	// " are not allowed in filenames, so we should be safe here
 	char pathname[4096];
 	dest = pathname;
-	for ( ; *next != '"'; ++next )	
+	for ( ; *next && *next != '"' && dest < pathname + sizeof(pathname) - 1; ++next )
 	{
 		*dest++ = *next;
 	}
 	*dest = 0;
+	if (*next != '"')
+		goto Finished;
 	
 	// chomp the ", ), and ]
 	if ( *next++ != '"' ) goto Finished;
@@ -268,7 +272,9 @@ void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 			char *uri = UT_go_filename_to_uri(pathname);
 			XAP_Win32App *p_app = (XAP_Win32App *)XAP_App::getApp();
 			UT_sint32 ndx = p_app->findFrame(uri);
-			UT_Error error;
+			// A clean document already open is not a failure. Leaving
+			// error uninitialized made that path test a garbage value.
+			UT_Error error = UT_OK;
 			if ((ndx < 0) || p_app->getFrame(ndx)->isDirty()) {
 				error = p_app->fileOpen(p_app->getLastFocussedFrame(), uri);
 			}
@@ -285,7 +291,8 @@ void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 
 Finished:
 	FREEP(pBuf);
-	DdeFreeDataHandle(hData);
+	// XTYP_EXECUTE owns hData. DDEML frees it when the callback returns.
+	// https://learn.microsoft.com/en-us/windows/win32/dataxchg/dynamic-data-exchange-management-library
 }
 
 ///////////////////////////////////////////////////////////////////
