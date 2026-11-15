@@ -78,7 +78,6 @@ AP_Win32FrameImpl::AP_Win32FrameImpl(AP_Frame *pFrame) :
 	m_hWndHScroll(nullptr),
 	m_hWndVScroll(nullptr),
 	m_hWndGripperHack(nullptr),
-	m_vScale(0),
 	m_wheelRemainderV(0),
 	m_wheelRemainderH(0),
 	m_wheelRemainderZoom(0),
@@ -714,44 +713,15 @@ void AP_Win32FrameImpl::_onSize(AP_FrameData* pData, int nWidth, int nHeight)
 
 void AP_Win32FrameImpl::_setVerticalScrollInfo(const SCROLLINFO * psi)
 {
-	// internal interface to GetScrollInfo() and SetScrollInfo()
-	// to deal with 16-bit limitations of SB_THUMBTRACK.
-
-	UT_uint32 scale, x;
-	for (x=psi->nMax, scale=0; (x > 0x0000ffff); x>>=1, scale++)
-		;
-
-	m_vScale = scale;
-
-	if (scale == 0)
-	{
-		SetScrollInfo(m_hWndVScroll, SB_CTL, psi, TRUE);
-		return;
-	}
-
-	SCROLLINFO si = *psi;				// structure copy
-	si.nMin >>= scale;
-	si.nMax >>= scale;
-	si.nPos >>= scale;
-	si.nPage >>= scale;
-
-	SetScrollInfo(m_hWndVScroll, SB_CTL, &si, TRUE);
-	return;
+	// SCROLLINFO stores a 32-bit range. Shrinking it to fit HIWORD(wParam)
+	// dropped the low bits, so a long document jumped while dragging.
+	// https://learn.microsoft.com/en-us/windows/win32/api/winuser/ns-winuser-scrollinfo
+	SetScrollInfo(m_hWndVScroll, SB_CTL, psi, TRUE);
 }
 
 void AP_Win32FrameImpl::_getVerticalScrollInfo(SCROLLINFO * psi)
 {
 	GetScrollInfo(m_hWndVScroll, SB_CTL, psi);
-
-	if (m_vScale)
-	{
-		psi->nMin <<= m_vScale;
-		psi->nMax <<= m_vScale;
-		psi->nPos <<= m_vScale;
-		psi->nPage <<= m_vScale;
-	}
-
-	return;
 }
 
 int AP_Win32FrameImpl::_getMouseWheelLines()
@@ -955,8 +925,9 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 					break;
 				case SB_THUMBPOSITION:
 				case SB_THUMBTRACK:
-					si.nPos = (int)HIWORD(wParam); // dynamic scroll box position -- a 16-bit value
-					si.nPos <<= fImpl->m_vScale;
+					// HIWORD(wParam) is only 16 bits. nTrackPos is the full position.
+					// https://learn.microsoft.com/en-us/windows/win32/controls/wm-vscroll
+					si.nPos = si.nTrackPos;
 					break;
 			}
 

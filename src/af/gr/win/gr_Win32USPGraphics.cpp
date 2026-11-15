@@ -1068,32 +1068,52 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 
 	if(hRes == E_OUTOFMEMORY)
 	{
-		// glyph buffer too small ...
+		// ScriptShape returns E_OUTOFMEMORY when cMaxGlyphs is below
+		// 1.5 * cChars + 16. Grow up to a hard cap so a bad DC cannot
+		// double the buffer without limit.
+		// https://learn.microsoft.com/en-us/windows/win32/api/usp10/nf-usp10-scriptshape
+		const UT_uint32 glyphCap = (UT_uint32)cChars * 8u + 64u;
 		do
 		{
-			// try twice the buffer size
-			iGlyphBuffSize *= 2;
+			if (iGlyphBuffSize >= glyphCap)
+				break;
+			UT_uint32 next = iGlyphBuffSize * 2;
+			if (next < iGlyphBuffSize || next > glyphCap)
+				next = glyphCap;
+			iGlyphBuffSize = next;
 			if(bDeleteGlyphs)
 			{
+				if (pGlyphs == RI->m_pIndices)
+				{
+					RI->m_pIndices = nullptr;
+					RI->m_pVisAttr = nullptr;
+					RI->m_iIndicesSize = 0;
+				}
 				delete [] pGlyphs;
 				delete [] pVa;
+				pGlyphs = nullptr;
+				pVa = nullptr;
 				if(RI->m_pAdvances) {delete [] RI->m_pAdvances; RI->m_pAdvances = nullptr;}
 				if(RI->m_pGoffsets) {delete [] RI->m_pGoffsets; RI->m_pGoffsets = nullptr;}
 				if(RI->m_pJustify)  {delete [] RI->m_pJustify;  RI->m_pJustify  = nullptr;}
 			}
 
 			bCopyGlyphs = true; // glyphs not in RI
-			
+
 			pGlyphs = new WORD[iGlyphBuffSize];
-			UT_return_val_if_fail(pGlyphs, false);
 			pVa = new SCRIPT_VISATTR[iGlyphBuffSize];
-			UT_return_val_if_fail(pVa, false);
-			
+			if (!pGlyphs || !pVa)
+			{
+				delete [] pGlyphs;
+				delete [] pVa;
+				return false;
+			}
+
 			bDeleteGlyphs = true; // glyphs in dynamically alloc. memory
 
 			hRes = fScriptShape(hdc, pFont->getScriptCache(), pInChars, cChars, iGlyphBuffSize,
 							   & pItem->m_si.a, pGlyphs, pClust, pVa, &iGlyphCount);
-			
+
 		}while(hRes == E_OUTOFMEMORY);
 
 		UT_return_val_if_fail(hRes == 0, false);

@@ -129,7 +129,6 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
 	HWND						m_hWndVScroll;
 	HWND						m_hWndGripperHack;
 
-	UT_uint32					m_vScale; /* vertical scroll scaling to get around 16-bit scrollbar problems */
 	int							m_wheelRemainderV;
 	int							m_wheelRemainderH;
 	int							m_wheelRemainderZoom;

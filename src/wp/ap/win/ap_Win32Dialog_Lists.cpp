@@ -726,11 +726,15 @@ void AP_Win32Dialog_Lists::_fillStyleList(int iType)
 	// Get the HDC of the droplist to be able to get the
 	// width of each of the strings.
 	HDC hDCcombo = GetDC(hComboStyle);
-	HDC hDC = CreateCompatibleDC(hDCcombo);
-	ReleaseDC(hComboStyle, hDCcombo);
+	HDC hDC = hDCcombo ? CreateCompatibleDC(hDCcombo) : nullptr;
+	if (hDCcombo)
+		ReleaseDC(hComboStyle, hDCcombo);
 
+	// DeleteDC destroys an application font still selected in the DC.
+	// Put the previous font back first.
+	// https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-deletedc
 	HFONT hFont = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
-	SelectObject(hDC, hFont);
+	HGDIOBJ previousFont = hDC ? SelectObject(hDC, hFont) : nullptr;
 
 	for (size_t i = 0; i < nIDs; ++i)
 	{
@@ -751,7 +755,12 @@ void AP_Win32Dialog_Lists::_fillStyleList(int iType)
 		}
 	}
 
-	DeleteDC(hDC);
+	if (hDC)
+	{
+		if (previousFont)
+			SelectObject(hDC, previousFont);
+		DeleteDC(hDC);
+	}
 
 	if (nMaxWidth > 50 && nMaxWidth < 500 /* sanity check*/)
 	{

@@ -1508,7 +1508,12 @@ void fp_Line::recalcHeight(fp_Run * pLastRun)
 			iAscent += iAscent * 1/2;
 			iDescent += iDescent;
 		}
-		if(pRun->getType() == FPRUN_IMAGE)
+		// Images, math and embeds already have their own height. Multiplying
+		// that height by the paragraph line spacing adds a blank band and
+		// can push the following lines onto an extra page.
+		if(pRun->getType() == FPRUN_IMAGE
+			|| pRun->getType() == FPRUN_MATH
+			|| pRun->getType() == FPRUN_EMBED)
 		{
 			iMaxImage = UT_MAX(iAscent,iMaxImage);
 		}
@@ -1891,11 +1896,16 @@ void fp_Line::_doClearScreenFromRunToEnd(UT_sint32 runIndex)
 		{
 			leftClear = 0;
 		}
-		else if(j>=0 && pPrev != nullptr && pPrev->getType() == FPRUN_IMAGE)
+		else if(j>=0 && pPrev != nullptr
+			&& (pPrev->getType() == FPRUN_IMAGE
+				|| pPrev->getType() == FPRUN_MATH
+				|| pPrev->getType() == FPRUN_EMBED))
 		{
 			leftClear = 0;
 		}
-		if(pRun->getType() == FPRUN_IMAGE)
+		if(pRun->getType() == FPRUN_IMAGE
+			|| pRun->getType() == FPRUN_MATH
+			|| pRun->getType() == FPRUN_EMBED)
 		{
 			leftClear = 0;
 		}

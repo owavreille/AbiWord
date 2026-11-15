@@ -36,17 +36,17 @@ void _UT_OutputMessage(const char *s, ...)
 	va_list marker;
 
 	va_start(marker, s);
-
-#if 0
-	vsprintf(sBuf, s, marker);
-#else
-	// MPritchett or others: REVERT THIS IF NECESSARY
-	_vsnprintf(sBuf, sizeof(sBuf), s, marker);
-#endif
+	// _vsnprintf does not write a NUL when the text fills the buffer.
+	// https://learn.microsoft.com/en-us/cpp/c-runtime-library/reference/vsnprintf-vsnprintf-vsnprintf-l-vsnwprintf-vsnwprintf-l
+	sBuf[0] = '\0';
+	_vsnprintf(sBuf, sizeof(sBuf) - 1, s, marker);
+	va_end(marker);
+	sBuf[sizeof(sBuf) - 1] = '\0';
 
 	WCHAR wBuf[1024];
-	MultiByteToWideChar(CP_UTF8,0,sBuf,-1,wBuf,1024);
-	OutputDebugStringW(wBuf);
+	wBuf[0] = 0;
+	if (MultiByteToWideChar(CP_UTF8, 0, sBuf, -1, wBuf, 1024) > 0)
+		OutputDebugStringW(wBuf);
 #endif
 }
 
@@ -63,7 +63,13 @@ void _UT_WarningMessage(const char *s, ...)
 	va_list marker;
 
 	va_start(marker, s);
-	_vsnprintf(sBuf, sizeof(sBuf), s, marker);
+	sBuf[0] = '\0';
+	_vsnprintf(sBuf, sizeof(sBuf) - 1, s, marker);
+	va_end(marker);
+	sBuf[sizeof(sBuf) - 1] = '\0';
 
-	MessageBoxA(nullptr, sBuf, "Warning", MB_OK | MB_ICONWARNING); //!TODO Using ANSI function
+	WCHAR wBuf[1024];
+	wBuf[0] = 0;
+	if (MultiByteToWideChar(CP_UTF8, 0, sBuf, -1, wBuf, 1024) > 0)
+		MessageBoxW(nullptr, wBuf, L"Warning", MB_OK | MB_ICONWARNING);
 }

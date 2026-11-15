@@ -403,7 +403,9 @@ bool ev_Win32Keyboard::onChar(AV_View * pView,
 		#endif
 
 		// reset the command flag; see bug 8928
+		// The skipped UTF-16 unit must not stay paired with a later one.
 		m_bWasAnAbiCommand = false;
+		m_utf16Lead = 0;
 		return true;
 	} 
 	
