@@ -110,8 +110,11 @@ const wchar_t * XAP_Win32Dialog_FileOpenSaveAs::_getDefaultExtension(UT_uint32 i
 		return abw_sfx;
 	}
 	
-	// copy at most DEFAULT_EXT_SIZE characters from the suffix;
-	strncpy(defaultExtension, m_szSuffixes[indx] + 2, DEFAULT_EXT_SIZE);
+	// Suffixes look like "*.abw". Two characters shorter than that is not an extension.
+	const char * rawSuffix = m_szSuffixes[indx];
+	if (!rawSuffix || strlen(rawSuffix) <= 2)
+		return abw_sfx;
+	strncpy(defaultExtension, rawSuffix + 2, DEFAULT_EXT_SIZE);
 	
 	defaultExtension[DEFAULT_EXT_SIZE] = 0;
 	
@@ -573,7 +576,9 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UI
 								break;
 							const wchar_t * ext = pThis->_getDefaultExtension(pNotify->lpOFN->nFilterIndex - 1);
 							// lpstrFile still holds the original name. The control has what was typed.
-							GetDlgItemTextW(GetParent(hDlg), edt1, buff, MAX_DLG_INS_PICT_STRING);
+							buff[0] = 0;
+							if (GetDlgItemTextW(GetParent(hDlg), edt1, buff, MAX_DLG_INS_PICT_STRING) <= 0)
+								buff[0] = 0;
 							buff[MAX_DLG_INS_PICT_STRING - 1] = 0;
 							wchar_t * slash = wcsrchr(buff, L'\\');
 							if (!slash)
@@ -706,12 +711,16 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 
 	// Check if File Name is for a file
 	wchar_t buf[MAX_DLG_INS_PICT_STRING];
-	SendMessageW( hFOSADlg, CDM_GETFILEPATH, MAX_DLG_INS_PICT_STRING, (LPARAM) buf );
-	// If a Directory stop
-	if ( GetFileAttributesW( buf ) == FILE_ATTRIBUTE_DIRECTORY )
-	{
+	buf[0] = 0;
+	// A negative result means the buffer was too small and was not filled.
+	const LRESULT pathChars = SendMessageW(hFOSADlg, CDM_GETFILEPATH, MAX_DLG_INS_PICT_STRING, (LPARAM)buf);
+	if (pathChars <= 0 || pathChars > MAX_DLG_INS_PICT_STRING)
 		return false;
-	}
+	buf[MAX_DLG_INS_PICT_STRING - 1] = 0;
+	// Attributes are a bit mask. A directory also carries archive or hidden bits.
+	const DWORD attrs = GetFileAttributesW(buf);
+	if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY))
+		return false;
 
     str.fromLocale (buf);
 	UT_DEBUGMSG(("File Selected is %s\n", str.utf8_str().utf8_str()));
@@ -722,8 +731,9 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 	char *uri = UT_go_filename_to_uri(str.utf8_str().utf8_str());
 	if(uri)
 		errorCode = IE_ImpGraphic::loadGraphic(uri, IEGFT_Unknown, pfg);
+	FREEP(uri);
 
-	if (errorCode)
+	if (errorCode || !pfg)
 	{
 		return false;
 	}
@@ -741,19 +751,15 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 
 	// Update Height and Width Strings
     str.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_IP_Height_Label));
-	swprintf( buf, 
-			  L"%s %d",
-			  str.c_str(), 
-			  iImageHeight );
+	_snwprintf(buf, MAX_DLG_INS_PICT_STRING, L"%s %d", str.c_str(), iImageHeight);
+	buf[MAX_DLG_INS_PICT_STRING - 1] = 0;
 	SetDlgItemTextW( hDlg,
 					XAP_RID_DIALOG_INSERT_PICTURE_TEXT_HEIGHT,
 					buf );
 
     str.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_IP_Width_Label));
-	swprintf( buf, 
-			 L"%s %d",
-			 str.c_str(), 
-			  iImageWidth );
+	_snwprintf(buf, MAX_DLG_INS_PICT_STRING, L"%s %d", str.c_str(), iImageWidth);
+	buf[MAX_DLG_INS_PICT_STRING - 1] = 0;
 	SetDlgItemTextW( hDlg,
 					XAP_RID_DIALOG_INSERT_PICTURE_TEXT_WIDTH,
 					buf );
@@ -773,11 +779,22 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 
 	PAINTSTRUCT ps;
 	HDC hdc = BeginPaint(hThumbnail, &ps);
+	if (!hdc)
+	{
+		EndPaint(hThumbnail, &ps);
+		DELETEP(pImage);
+		return false;
+	}
 	FillRect(hdc, &r, GetSysColorBrush(COLOR_BTNFACE));
 
 	GR_Win32AllocInfo ai(hdc,hThumbnail);
 	GR_Win32Graphics *pGr = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
-	UT_return_val_if_fail(pGr, false);
+	if (!pGr)
+	{
+		EndPaint(hThumbnail, &ps);
+		DELETEP(pImage);
+		return false;
+	}
 	
 	pGr->drawImage(pImage,
 				   pGr->tlu((r.right	- scaled_width ) / 2),

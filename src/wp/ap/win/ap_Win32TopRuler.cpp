@@ -228,7 +228,13 @@ LRESULT CALLBACK AP_Win32TopRuler::_TopRulerWndProc(HWND hwnd, UINT iMsg, WPARAM
 						   (void*)hdc, ps.fErase,
 						   ps.rcPaint.left, ps.rcPaint.top,
 						   ps.rcPaint.right, ps.rcPaint.bottom);
-			UT_return_val_if_fail(hdc, 0);
+			// BeginPaint a validé la zone. EndPaint doit suivre, même si le
+			// contexte est nul, sinon Windows renvoie WM_PAINT en boucle.
+			if (!hdc)
+			{
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
 
 			// Un document neuf a encore le point d'insertion à 0.
 			// Il faut quand même valider WM_PAINT, sinon Windows le

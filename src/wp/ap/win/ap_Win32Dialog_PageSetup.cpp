@@ -462,7 +462,10 @@ void AP_Win32Dialog_PageSetup_Page::_onInitDialog()
 	UT_RGBColor Color( GetRValue(ColorRef), GetGValue(ColorRef), GetBValue(ColorRef));
 	HDC hdc = GetDC(getHandle());
 	RECT rect;
-	GetClientRect(GetDlgItem(getHandle(), AP_RID_DIALOG_PAGE_SETUP_BMP_ORIENTATION), &rect);
+	memset(&rect, 0, sizeof(rect));
+	HWND orient = GetDlgItem(getHandle(), AP_RID_DIALOG_PAGE_SETUP_BMP_ORIENTATION);
+	if (orient)
+		GetClientRect(orient, &rect);
 	if (m_pParent->m_bmpPortrait)
 		DeleteObject(m_pParent->m_bmpPortrait);
 	if (m_pParent->m_bmpLandscape)
@@ -472,23 +475,36 @@ void AP_Win32Dialog_PageSetup_Page::_onInitDialog()
 	m_pParent->m_bmpPortrait = nullptr;
 	m_pParent->m_bmpLandscape = nullptr;
 	m_pParent->m_bmpPreview = nullptr;
-	UT_Xpm2Bmp( rect.right - rect.left,
-                rect.bottom - rect.top,
-                (const char**) orient_vertical_xpm,
-				sizeof(orient_vertical_xpm),
-				hdc,
-                &Color,
-				&m_pParent->m_bmpPortrait);
-	UT_Xpm2Bmp( rect.right - rect.left,
-                rect.bottom - rect.top,
-                (const char**) orient_horizontal_xpm,
-				sizeof(orient_horizontal_xpm),
-				hdc,
-                &Color,
-				&m_pParent->m_bmpLandscape);
-	GetClientRect(GetDlgItem(getHandle(), AP_RID_DIALOG_PAGE_SETUP_BMP_PREVIEW), &rect);
-	m_pParent->m_bmpPreview = CreateCompatibleBitmap( hdc, rect.right - rect.left, rect.bottom - rect.top );
-	ReleaseDC( getHandle(), hdc );
+	HWND preview = GetDlgItem(getHandle(), AP_RID_DIALOG_PAGE_SETUP_BMP_PREVIEW);
+	RECT previewRect;
+	memset(&previewRect, 0, sizeof(previewRect));
+	if (preview)
+		GetClientRect(preview, &previewRect);
+	const int previewW = previewRect.right - previewRect.left;
+	const int previewH = previewRect.bottom - previewRect.top;
+	// CreateDIBitmap and CreateCompatibleBitmap need a real DC. A zero
+	// side makes CreateCompatibleBitmap fail. ReleaseDC only takes a DC
+	// that GetDC actually returned.
+	if (hdc)
+	{
+		UT_Xpm2Bmp( rect.right - rect.left,
+					rect.bottom - rect.top,
+					(const char**) orient_vertical_xpm,
+					sizeof(orient_vertical_xpm),
+					hdc,
+					&Color,
+					&m_pParent->m_bmpPortrait);
+		UT_Xpm2Bmp( rect.right - rect.left,
+					rect.bottom - rect.top,
+					(const char**) orient_horizontal_xpm,
+					sizeof(orient_horizontal_xpm),
+					hdc,
+					&Color,
+					&m_pParent->m_bmpLandscape);
+		if (previewW > 0 && previewH > 0)
+			m_pParent->m_bmpPreview = CreateCompatibleBitmap(hdc, previewW, previewH);
+		ReleaseDC(getHandle(), hdc);
+	}
 
 	if( m_pParent->getPageOrientation() == m_pParent->PORTRAIT )
 	{
@@ -900,6 +916,16 @@ void AP_Win32Dialog_PageSetup::updatePreview()
 	HBRUSH brushBackground = CreateSolidBrush( colorBackground );
 	HBRUSH brushWhite = CreateSolidBrush( colorWhite );
 	HBRUSH brushBlack = CreateSolidBrush( colorBlack );
+	if (!brushBackground || !brushWhite || !brushBlack)
+	{
+		if (brushBackground)
+			DeleteObject(brushBackground);
+		if (brushWhite)
+			DeleteObject(brushWhite);
+		if (brushBlack)
+			DeleteObject(brushBlack);
+		return;
+	}
 
 	int pageWidth  = (int) m_PageSize.Width( DIM_MM );  // in mm
 	int pageHeight = (int) m_PageSize.Height( DIM_MM ); // in mm
