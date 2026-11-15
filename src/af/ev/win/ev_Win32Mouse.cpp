@@ -191,7 +191,10 @@ void EV_Win32Mouse::onButtonUp(AV_View * pView,
 	if (m_iCaptureCount > 0)
 		m_iCaptureCount--;
 
-	if (emb != m_embCaptured)	// ignore other button releases
+	// ReleaseCapture delivers WM_CAPTURECHANGED before it returns, and that
+	// handler clears m_embCaptured. Keep the button that started the click.
+	const EV_EditMouseButton embCaptured = m_embCaptured;
+	if (emb != embCaptured)	// ignore other button releases
 		return;
 	ReleaseCapture();
 	m_iCaptureCount=0;
@@ -213,13 +216,13 @@ void EV_Win32Mouse::onButtonUp(AV_View * pView,
 	m_clickState = 0;
 
 	emc = m_contextState;
-	result = m_pEEM->Mouse(emc|mop|m_embCaptured|ems, &pEM);
+	result = m_pEEM->Mouse(emc|mop|embCaptured|ems, &pEM);
 	switch (result)
 	{
 	case EV_EEMR_COMPLETE:
 		UT_ASSERT(pEM);
 		invokeMouseMethod(pView,pEM,x,y);
-		signal(emc|mop|m_embCaptured|ems, x, y);
+		signal(emc|mop|embCaptured|ems, x, y);
 		return;
 	case EV_EEMR_INCOMPLETE:
 		// I'm not sure this makes any sense, but we allow it.

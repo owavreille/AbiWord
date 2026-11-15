@@ -1931,9 +1931,11 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 			// hit-test to figure out where that puts us
 			UT_sint32 xC, yC;
 
-			PT_DocPosition iNewP;
+			PT_DocPosition iNewP = 0;
 			fp_Page* pPage2 = _getPageForXY(xP, yP, xC, yC);
 			bool isTOC = false;
+			if (!pPage2)
+				return;
 			pPage2->mapXYToPosition(xC, yC, iNewP, bBOL, bEOL,isTOC);
 			UT_sint32 ii =0;
 			while((iNewP == iOldPoint) && (ii < 100) && (yPoint > 0))
@@ -1941,6 +1943,8 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 				yPoint -= iAfter;
 				yP = yPoint + iPageOffset - m_yScrollOffset;
 				pPage2 = _getPageForXY(xP, yP, xC, yC);
+				if (!pPage2)
+					return;
 				pPage2->mapXYToPosition(xC, yC, iNewP, bBOL, bEOL,isTOC);
 				ii++;
 			}
@@ -2000,6 +2004,8 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 		xPoint = xPoint + (pNewRec.left - pOldRec.left);
 		pPage = _getPageForXY(xPoint, yPoint, xClick, yClick);
 	}
+	if (!pPage)
+		return;
 	PT_DocPosition iNewPoint = 0;
 	bBOL = false;
 	bEOL = false;
@@ -2040,11 +2046,12 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 		if (bNext)
 		{
 			int delta = iLineHeight;
+			int guard = 0;
 //
 // Whoops! foornotes/endnotes can screw this up since they placed on the page
 // out of order to their location in the PieceTable
 //
-			while (iNewPoint <= getPoint() && (getCurrentPage() == pPage) )
+			while (iLineHeight > 0 && guard++ < 1000 && iNewPoint <= getPoint() && (getCurrentPage() == pPage) )
 			{
 				if (yClick+delta > pPage->getHeight())
 				{
@@ -2063,11 +2070,12 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 		else
 		{
 			int delta = iLineHeight;
+			int guard = 0;
 //
 // Whoops! foornotes/endnotes can screw this up since they placed on the page
 // out of order to their location in the PieceTable
 //
-			while (iNewPoint >= getPoint() && (getCurrentPage() == pPage) )
+			while (iLineHeight > 0 && guard++ < 1000 && iNewPoint >= getPoint() && (getCurrentPage() == pPage) )
 			{
 				if (yClick-delta < 0)
 				{
@@ -2084,12 +2092,16 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 			}
 		}
 
-		while(pPage && (iNewPoint == iOldPoint) && (yClick < m_pLayout->getHeight()) && (yClick > 0))
+		int guard = 0;
+		while(pPage && guard++ < 1000 && (iNewPoint == iOldPoint) && (yClick < m_pLayout->getHeight()) && (yClick > 0))
 		{
+			const UT_sint32 yBefore = yClick;
 			if (bNext)
 				yClick += iLineHeight/2;
 			else
 				yClick -= m_pG->tlu(2);
+			if (yClick == yBefore)
+				break;
 
 			if(yClick > pPage->getHeight())
 			{
@@ -2575,18 +2587,23 @@ fp_Page* FV_View::_getPageForXY(UT_sint32 xPos, UT_sint32 yPos, UT_sint32& xClic
 	xClick = xPos + m_xScrollOffset - getPageViewLeftMargin();
 	yClick = yPos + m_yScrollOffset - getPageViewTopMargin();
 	fp_Page* pPage = m_pLayout->getFirstPage();
-	
+	if (!pPage)
+		return nullptr;
+
 	if (xClick <= (signed)getWidthPagesInRow(pPage))  //So we can't select the next row by clicking outside 
 	{
 		while (pPage) //First, find the row the page is in
 		{
 			UT_uint32 iNumHorizPages = getNumHorizPages();
+			if (iNumHorizPages < 1)
+				iNumHorizPages = 1;
 			UT_sint32 iPageHeight = pPage->getHeight();
 			
 			if(getViewMode() != VIEW_PRINT)
 			{
-				iPageHeight = iPageHeight - pPage->getOwningSection()->getTopMargin() -
-					pPage->getOwningSection()->getBottomMargin();
+				fl_DocSectionLayout * pOwn = pPage->getOwningSection();
+				if (pOwn)
+					iPageHeight = iPageHeight - pOwn->getTopMargin() - pOwn->getBottomMargin();
 			}
 			
 			if (yClick < iPageHeight)
@@ -2594,10 +2611,12 @@ fp_Page* FV_View::_getPageForXY(UT_sint32 xPos, UT_sint32 yPos, UT_sint32& xClic
 				//Found the first page in the row
 				break;
 			}
-			else
-			{
-				yClick -= iPageHeight + getPageViewSep();
-			}
+			// A zero or negative stride never reaches the next row and the
+			// click never returns.
+			const UT_sint32 step = iPageHeight + getPageViewSep();
+			if (step <= 0)
+				break;
+			yClick -= step;
 			
 			//Loop because we're jumping entire rows
 			for (unsigned int i = 0; i < iNumHorizPages; i++)
@@ -2615,7 +2634,10 @@ fp_Page* FV_View::_getPageForXY(UT_sint32 xPos, UT_sint32 yPos, UT_sint32& xClic
 			
 			if (xClick > iPageWidth && !rtlPages()) // Left to right
 			{
-				xClick -= iPageWidth + getHorizPageSpacing();
+				const UT_sint32 xStep = iPageWidth + getHorizPageSpacing();
+				if (xStep <= 0)
+					break;
+				xClick -= xStep;
 			}
 			else if (xClick < static_cast<UT_sint32>(getWidthPrevPagesInRow(m_pLayout->findPage(pPage))) && rtlPages()) // Right to left
 			{

@@ -1120,7 +1120,7 @@ static void abi_win32_write_crash(EXCEPTION_POINTERS * info)
 			WideCharToMultiByte(CP_UTF8, 0, modname, -1, module, sizeof(module), nullptr, nullptr);
 	}
 
-	char buf[768];
+	char buf[1024];
 	int len = std::snprintf(buf, sizeof(buf),
 		"step=%s\ncode=0x%08lx\naddress=%p\nmodule=%s\n",
 		s_abiStep,
@@ -1131,6 +1131,47 @@ static void abi_win32_write_crash(EXCEPTION_POINTERS * info)
 	{
 		DWORD wrote = 0;
 		WriteFile(file, buf, static_cast<DWORD>(len), &wrote, nullptr);
+	}
+	if (er->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && er->NumberParameters >= 2)
+	{
+		len = std::snprintf(buf, sizeof(buf), "access=%s %p\n",
+			er->ExceptionInformation[0] ? "write" : "read",
+			reinterpret_cast<void *>(er->ExceptionInformation[1]));
+		if (len > 0)
+		{
+			DWORD wrote = 0;
+			WriteFile(file, buf, static_cast<DWORD>(len), &wrote, nullptr);
+		}
+	}
+
+	void *frames[24];
+	USHORT count = CaptureStackBackTrace(0, 24, frames, nullptr);
+	for (USHORT i = 0; i < count; ++i)
+	{
+		char frameMod[MAX_PATH] = "";
+		HMODULE frameModule = nullptr;
+		if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+							   GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+							   reinterpret_cast<LPCWSTR>(frames[i]), &frameModule))
+		{
+			WCHAR modname[MAX_PATH];
+			if (GetModuleFileNameW(frameModule, modname, G_N_ELEMENTS(modname)))
+			{
+				const WCHAR *base = wcsrchr(modname, L'\\');
+				base = base ? base + 1 : modname;
+				WideCharToMultiByte(CP_UTF8, 0, base, -1, frameMod, sizeof(frameMod), nullptr, nullptr);
+			}
+		}
+		ULONG_PTR baseAddr = reinterpret_cast<ULONG_PTR>(frameModule);
+		ULONG_PTR off = reinterpret_cast<ULONG_PTR>(frames[i]) - baseAddr;
+		len = std::snprintf(buf, sizeof(buf), "frame %u %p %s+0x%llx\n",
+			static_cast<unsigned>(i), frames[i], frameMod,
+			static_cast<unsigned long long>(off));
+		if (len > 0)
+		{
+			DWORD wrote = 0;
+			WriteFile(file, buf, static_cast<DWORD>(len), &wrote, nullptr);
+		}
 	}
 	CloseHandle(file);
 }

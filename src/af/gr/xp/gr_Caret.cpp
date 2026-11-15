@@ -519,9 +519,15 @@ void GR_Caret::_blink(bool bExplicit)
 
 				UT_sint32 x1 = m_xPoint + iDelta * m_pG->tlu(1);
 				UT_sint32 x2 = m_xPoint;
-				while(m_pG->_tduX(x1) == m_pG->_tduX(x2))
+				// One layout unit is often smaller than a pixel. Stop if the
+				// device coordinate never changes: a stuck conversion used to
+				// spin here when the caret was redrawn after a scroll.
+				for (int step = 0; step < 64 && m_pG->_tduX(x1) == m_pG->_tduX(x2); ++step)
 				{
-					x1 += iDelta;
+					const UT_sint32 next = x1 + iDelta;
+					if (next == x1)
+						break;
+					x1 = next;
 				}
 				painter.drawLine(x1,
 								 m_yPoint + m_pG->tlu(1),

@@ -6966,8 +6966,10 @@ PT_DocPosition FV_View::getDocPositionFromXY(UT_sint32 xpos, UT_sint32 ypos, boo
 	// Pass the click down to that page.
 	UT_sint32 xClick, yClick;
 	fp_Page* pPage = _getPageForXY(xpos, ypos, xClick, yClick);
+	if (!pPage)
+		return 0;
 
-	PT_DocPosition iNewPoint;
+	PT_DocPosition iNewPoint = 0;
 	bool bBOL = false;
 	bool bEOL = false;
 	bool isTOC = false;
@@ -6994,9 +6996,11 @@ void FV_View::extSelToXY(UT_sint32 xPos, UT_sint32 yPos, bool bDrag)
 	// Pass the click down to that page.
 	UT_sint32 xClick, yClick;
 	fp_Page* pPage = _getPageForXY(xPos, yPos, xClick, yClick);
+	if (!pPage)
+		return;
 	xxx_UT_DEBUGMSG((" Selected to x %d \n",xPos));
 
-	PT_DocPosition iNewPoint;
+	PT_DocPosition iNewPoint = 0;
 	bool bBOL = false;
 	bool bEOL = false;
 	bool isTOC = false;
@@ -7063,8 +7067,10 @@ void FV_View::extSelToXYword(UT_sint32 xPos, UT_sint32 yPos, bool bDrag)
 	// Pass the click down to that page.
 	UT_sint32 xClick, yClick;
 	fp_Page* pPage = _getPageForXY(xPos, yPos, xClick, yClick);
+	if (!pPage)
+		return;
 
-	PT_DocPosition iNewPoint;
+	PT_DocPosition iNewPoint = 0;
 	bool bBOL, bEOL;
 
 	bBOL = bEOL = false;
@@ -8053,10 +8059,13 @@ void FV_View::warpInsPtToXY(UT_sint32 xPos, UT_sint32 yPos, bool bClick = false)
 
 	UT_sint32 xClick, yClick;
 	fp_Page* pPage = _getPageForXY(xPos, yPos, xClick, yClick);
+	if (!pPage)
+		return;
 
 	if (!isSelectionEmpty())
 		_clearSelection();
-	PT_DocPosition pos,posEnd;
+	PT_DocPosition pos = 0;
+	PT_DocPosition posEnd = 0;
 	bool bBOL = false;
 	bool bEOL = false;
 	fl_HdrFtrShadow* pShadow = nullptr;
@@ -8238,6 +8247,31 @@ void FV_View::setYScrollOffset(UT_sint32 v)
 
 	m_pG->scroll(0, dy);
 	m_yScrollOffset = v;
+
+	// ScrollWindowEx only invalidates the strip it uncovers. The horizontal
+	// path redraws that strip here. Leaving the vertical path to a later
+	// WM_PAINT kept a clip on the retained bitmap; the next click then drew
+	// into that stale context and faulted.
+	UT_sint32 y1 = 0;
+	UT_sint32 dy2 = getWindowHeight();
+
+	if (dy > 0)
+	{
+		if (dy < getWindowHeight())
+		{
+			y1 = getWindowHeight() - dy;
+			dy2 = dy;
+		}
+	}
+	else
+	{
+		if (dy > -getWindowHeight())
+		{
+			dy2 = -dy;
+		}
+	}
+
+	_draw(0, y1 - m_pG->tlu(1), getWindowWidth(), dy2 + m_pG->tlu(2), false, true);
 
 	_fixInsertionPointCoords();
 	_updateSelectionHandles();
@@ -10012,8 +10046,7 @@ EV_EditMouseContext FV_View::_getMouseContext(UT_sint32 xPos, UT_sint32 yPos)
 			m_pDoc->getStruxOfTypeFromPosition(m_pLayout->getLID(),pos+1,
 											   PTX_SectionFrame, &psfh);
 			fl_FrameLayout * pFL = static_cast<fl_FrameLayout *>(psfh);
-			UT_ASSERT(pFL->getContainerType() == FL_CONTAINER_FRAME);
-			if(pFL->getFrameType() >= FL_FRAME_WRAPPER_IMAGE)
+			if (pFL && pFL->getFrameType() >= FL_FRAME_WRAPPER_IMAGE)
 			{
 				m_prevMouseContext = EV_EMC_POSOBJECT;
 				xxx_UT_DEBUGMSG(("Over positioned object \n"));
@@ -10027,8 +10060,10 @@ EV_EditMouseContext FV_View::_getMouseContext(UT_sint32 xPos, UT_sint32 yPos)
 		//
 		UT_sint32 xPage,yPage;
 		getPageScreenOffsets(pPage,xPage,yPage);
-		fl_FrameLayout * pFL = static_cast<fl_FrameLayout *>(pBlock->myContainingLayout());
-		fp_FrameContainer * pFCon = static_cast<fp_FrameContainer *>(pFL->getFirstContainer());
+		fl_FrameLayout * pFL = pBlock ? static_cast<fl_FrameLayout *>(pBlock->myContainingLayout()) : nullptr;
+		fp_FrameContainer * pFCon = pFL ? static_cast<fp_FrameContainer *>(pFL->getFirstContainer()) : nullptr;
+		if (pFCon)
+		{
 		UT_sint32 iLeft = xPage + pFCon->getFullX();
 		UT_sint32 iRight = xPage + pFCon->getFullX() + pFCon->getFullWidth();
 		UT_sint32 iTop = yPage + pFCon->getFullY();
@@ -10056,6 +10091,7 @@ EV_EditMouseContext FV_View::_getMouseContext(UT_sint32 xPos, UT_sint32 yPos)
 			xxx_UT_DEBUGMSG(("getContext: Found left frame line \n"));
 			m_prevMouseContext = EV_EMC_FRAME;
 			return EV_EMC_FRAME;
+		}
 		}
 
 	}	

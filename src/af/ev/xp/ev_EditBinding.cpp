@@ -332,7 +332,13 @@ EV_EditBinding * EV_EditBindingMap::findEditBinding(EV_EditBits eb)
 
 	if (EV_IsMouse(eb))					// mouse
 	{
-		UT_uint32 n_emb = EV_EMB_ToNumber(eb)-1;
+		// EV_EMB_ToNumber is 0 when the event has a mouse operation but no
+		// button field. Subtracting 1 used to wrap to 0xffffffff and read
+		// m_pebMT[] far outside the object (click after the window opens).
+		const UT_uint32 n_btn = EV_EMB_ToNumber(eb);
+		if (n_btn == 0 || n_btn > EV_COUNT_EMB)
+			return nullptr;
+		UT_uint32 n_emb = n_btn - 1;
 		xxx_UT_DEBUGMSG(("is mouse %d binding number %d \n",eb,n_emb));
 		//
 		// Handle the case of accidently middle clicking during a 
@@ -341,15 +347,20 @@ EV_EditBinding * EV_EditBindingMap::findEditBinding(EV_EditBits eb)
 		if((n_emb == 2) && ((m_iLastMouseNo == 4) || (m_iLastMouseNo == 5)))
 		{
 				n_emb = m_iLastMouseNo;
-		} 
+		}
+		if (n_emb >= EV_COUNT_EMB)
+			return nullptr;
 		m_iLastMouseNo = n_emb;
 		class ev_EB_MouseTable * p = m_pebMT[n_emb];
 		if (!p)
 			return nullptr;				// no bindings of anykind for this mouse button
-		UT_uint32 n_emo = EV_EMO_ToNumber(eb)-1;
-		UT_uint32 n_ems = EV_EMS_ToNumber(eb);
-		UT_uint32 n_emc = EV_EMC_ToNumber(eb);
-		return p->m_peb[n_emo][n_ems][n_emc];
+		const UT_uint32 n_op = EV_EMO_ToNumber(eb);
+		const UT_uint32 n_ems = EV_EMS_ToNumber(eb);
+		const UT_uint32 n_ctx = (eb & EV_EMC__MASK__) >> 27;
+		if (n_op == 0 || n_op > EV_COUNT_EMO || n_ems >= EV_COUNT_EMS
+			|| n_ctx == 0 || n_ctx > EV_COUNT_EMC)
+			return nullptr;
+		return p->m_peb[n_op - 1][n_ems][n_ctx - 1];
 
 	}
 	else if (EV_IsKeyboard(eb))			// a keyevent, find out what kind

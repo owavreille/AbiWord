@@ -306,12 +306,23 @@ gdip_init (void)
     } \
   } G_STMT_END
 
+// The highest-resolution printer made an A3 preview allocate a bitmap of
+// several hundred megabytes and abort. The screen DC keeps the raster at
+// the size of the page on screen.
+static HDC s_previewReferenceDC ()
+{
+  HDC dc = CreateDCW (L"DISPLAY", nullptr, nullptr, nullptr);
+  if (!dc)
+    dc = GR_Win32Graphics::createbestmetafilehdc ();
+  return dc;
+}
+
 class ABI_EXPORT GR_Win32PrintPreviewGraphics : public GR_Win32Graphics
 {
 public:
 
   GR_Win32PrintPreviewGraphics(const RECT &rect)
-    : GR_Win32Graphics(createbestmetafilehdc(), getDocInfo()),
+    : GR_Win32Graphics(s_previewReferenceDC(), getDocInfo()),
       m_pGraphics(nullptr),
       page_rect(rect),
       metafile_dc(nullptr),
@@ -553,10 +564,23 @@ public:
 
     d (g_print ("startPage(%d)\n", pageNumber));
 
+    if (!getPrimaryDC())
+      return false;
+
     metafile_dc = CreateEnhMetaFileW (getPrimaryDC(), nullptr, &page_rect, L"AbiWord\0Print Preview\0\0");
-    
+    if (!metafile_dc)
+      return false;
+
     GR_Win32AllocInfo ai(metafile_dc, m_pDocInfo, nullptr);
     m_pGraphics = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
+    if (!m_pGraphics)
+      {
+	HENHMETAFILE dead = CloseEnhMetaFile (metafile_dc);
+	if (dead)
+	  DeleteEnhMetaFile (dead);
+	metafile_dc = nullptr;
+	return false;
+      }
 
     return true;
   }
@@ -564,6 +588,9 @@ public:
   virtual bool endPrint(void)
    override {
     endPage();
+
+    if (!m_multiPageTiff || !m_tiffFilename)
+      return true;
 
     EncoderParameters encoder_params;
     ULONG parameterValue = EncoderValueFlush;
@@ -599,33 +626,57 @@ public:
 	HENHMETAFILE metafile;
 	
 	metafile = CloseEnhMetaFile (metafile_dc);
+	metafile_dc = nullptr;
+	DELETEP(m_pGraphics);
 	d (g_print ("metafile = %p\n", metafile));
+	if (!metafile)
+	  return;
 
 	// must be a Bitmap for the multi-page stuff to work
-	GpImage *meta;
+	GpImage *meta = nullptr;
 
 	// jump through hoops to convert a metafile to a bitmap
 	// saveaddimage() won't work if the base image or the
 	// new image is a metafile.
-	GpImage *m;
+	GpImage *m = nullptr;
 	status = GdipCreateMetafileFromEmf(metafile, TRUE, &m);
 	ASSERT_GDIP_SUCCESS (status, GdipCreateMetafileFromEmf);
+	if (status != 0 || !m)
+	  {
+	    DeleteEnhMetaFile (metafile);
+	    return;
+	  }
 	
-	guint width, height;
-	GdipGetImageWidth(m, &width);
-	GdipGetImageHeight(m, &height);
+	guint width = 0, height = 0;
+	if (GdipGetImageWidth(m, &width) != 0 || GdipGetImageHeight(m, &height) != 0
+	    || width == 0 || height == 0 || width > 4096 || height > 4096)
+	  {
+	    GdipDisposeImage(m);
+	    return;
+	  }
 
 	d (g_print ("w: %d | h: %d\n", width, height));
 
 	status = GdipCreateBitmapFromScan0 (width, height, 0, PixelFormat32bppARGB, nullptr, &meta);
 	ASSERT_GDIP_SUCCESS (status, GdipCreateBitmapFromScan0);
+	if (status != 0 || !meta)
+	  {
+	    GdipDisposeImage(m);
+	    return;
+	  }
 
-	status = GdipBitmapSetResolution (meta, metafile_xres, metafile_yres);
+	status = GdipBitmapSetResolution (meta, (float)metafile_xres, (float)metafile_yres);
 	ASSERT_GDIP_SUCCESS (status, GdipBitmapSetResolution);
 
-	GpGraphics *g;
+	GpGraphics *g = nullptr;
 	status = GdipGetImageGraphicsContext (meta, &g);
 	ASSERT_GDIP_SUCCESS (status, GdipGetImageGraphicsContext);
+	if (status != 0 || !g)
+	  {
+	    GdipDisposeImage(meta);
+	    GdipDisposeImage(m);
+	    return;
+	  }
 	
 	// gotta clear the bitmap
 	status = GdipGraphicsClear(g, 0xffffffff);
@@ -651,8 +702,18 @@ public:
 	    encoder_params.Parameter[0].NumberOfValues = 1;
 	    encoder_params.Parameter[0].Value = &parameterValue;
 
+	    if (!m_tiffFilename)
+	      {
+		GdipDisposeImage (meta);
+		return;
+	      }
 	    status = GdipSaveImageToFile (meta, (WCHAR *)m_tiffFilename, &tiff_clsid, &encoder_params);
 	    ASSERT_GDIP_SUCCESS (status, GdipSaveImageToFile);
+	    if (status != 0)
+	      {
+		GdipDisposeImage (meta);
+		return;
+	      }
 
 	    d (g_print ("Saved EMF to file\n"));
 
@@ -676,9 +737,6 @@ public:
 
 	    GdipDisposeImage (meta);
 	  }
-
-	metafile_dc = nullptr;
-	DELETEP(m_pGraphics);
       }
   }
 

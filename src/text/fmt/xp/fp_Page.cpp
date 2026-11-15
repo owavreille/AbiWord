@@ -2462,6 +2462,10 @@ void fp_Page::mapXYToPosition(UT_sint32 x, UT_sint32 y, PT_DocPosition& pos, boo
  */
 void fp_Page::mapXYToPosition(bool bNotFrames,UT_sint32 x, UT_sint32 y, PT_DocPosition& pos, bool& bBOL, bool& bEOL, bool &isTOC, bool bUseHdrFtr, fl_HdrFtrShadow ** pShadow ) const
 {
+	pos = 0;
+	bBOL = false;
+	bEOL = false;
+	isTOC = false;
 	UT_sint32 count = m_vecColumnLeaders.getItemCount();
 	UT_uint32 iMinDist = 0xffffffff;
 	fp_VerticalContainer * pMinDist = nullptr;
@@ -2492,6 +2496,8 @@ void fp_Page::mapXYToPosition(bool bNotFrames,UT_sint32 x, UT_sint32 y, PT_DocPo
 			pFrameC = getNthAboveFrameContainer(i);
 			bool isImage = false;
 			fl_FrameLayout * pFL = static_cast<fl_FrameLayout *>(pFrameC->getSectionLayout());
+			if (!pFL)
+				continue;
 			if(pFL->getFrameType() >= FL_FRAME_WRAPPER_IMAGE)
 			{
 				isImage = true;
@@ -2549,6 +2555,8 @@ void fp_Page::mapXYToPosition(bool bNotFrames,UT_sint32 x, UT_sint32 y, PT_DocPo
 			pFrameC = getNthBelowFrameContainer(i);
 			bool isImage = false;
 			fl_FrameLayout * pFL = static_cast<fl_FrameLayout *>(pFrameC->getSectionLayout());
+			if (!pFL)
+				continue;
 			if(pFL->getFrameType() >= FL_FRAME_WRAPPER_IMAGE)
 			{
 				isImage = true;

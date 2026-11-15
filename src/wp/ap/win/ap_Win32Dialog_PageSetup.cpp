@@ -282,18 +282,13 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 			if( selected != previous )
 			{
 				m_pParent->m_PageSize.Set( (fp_PageSize::Predefined)selected );
-#if 0
-				// let user select units she wants, see bug 8118
-				if( m_pParent->getPageUnits() != m_pParent->m_PageSize.getDims() )
-				{
-					SendDlgItemMessage( hWnd,
-								 		AP_RID_DIALOG_PAGE_SETUP_LBX_UNITS,
-								 		CB_SETCURSEL, 
-								 		(WPARAM) m_pParent->m_PageSize.getDims(),
-							 			(LPARAM) 0);
-					m_pParent->setPageUnits( m_pParent->m_PageSize.getDims() );
-				}
-#endif
+				if( m_pParent->getPageOrientation() == m_pParent->PORTRAIT )
+					m_pParent->m_PageSize.setPortrait();
+				else
+					m_pParent->m_PageSize.setLandscape();
+				// Keep the unit already shown. Set() would otherwise relabel
+				// A3 as millimetres while the combo still says centimetres.
+				m_pParent->applyPageUnit( m_pParent->getPageUnits() );
 				m_pParent->updateWidth();
 				m_pParent->updateHeight();
 				m_pParent->updatePreview();
@@ -304,9 +299,10 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 	case AP_RID_DIALOG_PAGE_SETUP_LBX_UNITS:
 		if( wNotifyCode == CBN_SELCHANGE )
 		{
-			UT_Dimension unit = (UT_Dimension)SendMessage( hWndCtrl, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0 ); 
-			if( unit != m_pParent->m_PageSize.getDims() )
+			UT_Dimension unit = (UT_Dimension)SendMessage( hWndCtrl, CB_GETCURSEL, (WPARAM) 0, (LPARAM) 0 );
+			if( unit != m_pParent->getPageUnits() )
 			{
+				m_pParent->applyPageUnit( unit );
 				m_pParent->updateWidth();
 				m_pParent->updateHeight();
 				m_pParent->updatePreview();
@@ -441,6 +437,7 @@ void AP_Win32Dialog_PageSetup_Page::_onInitDialog()
 	{
 		m_pParent->m_PageSize.setLandscape();
 	}
+	m_pParent->applyPageUnit( m_pParent->getPageUnits() );
 
 	char buf[BUFSIZE];
 	m_pParent->updateWidth();
@@ -458,8 +455,7 @@ void AP_Win32Dialog_PageSetup_Page::_onInitDialog()
 
 	m_pParent->updatePageSize();
 
-	int nUnit =  m_pParent->m_PageSize.getDims();
-	selectComboItem (AP_RID_DIALOG_PAGE_SETUP_LBX_UNITS, (WPARAM) nUnit );                 
+	selectComboItem (AP_RID_DIALOG_PAGE_SETUP_LBX_UNITS, (WPARAM) m_pParent->getPageUnits() );                 
 
 	// Load Appropriate XPM to BMPs
 	COLORREF ColorRef = GetSysColor(COLOR_BTNFACE);
@@ -766,6 +762,25 @@ void AP_Win32Dialog_PageSetup_Margin::doSpinControl(UT_uint32 id, UT_sint32 delt
 	}
 }
 
+
+void AP_Win32Dialog_PageSetup::applyPageUnit(UT_Dimension unit)
+{
+	if (unit != DIM_IN && unit != DIM_CM && unit != DIM_MM)
+		unit = DIM_MM;
+
+	const bool portrait = (getPageOrientation() == PORTRAIT);
+	const double width = m_PageSize.Width(unit);
+	const double height = m_PageSize.Height(unit);
+	if (portrait)
+		m_PageSize.Set(width, height, unit);
+	else
+		m_PageSize.Set(height, width, unit);
+	if (portrait)
+		m_PageSize.setPortrait();
+	else
+		m_PageSize.setLandscape();
+	setPageUnits(unit);
+}
 
 void AP_Win32Dialog_PageSetup::updatePageSize()
 {

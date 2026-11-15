@@ -125,6 +125,7 @@ protected:
  	AP_Win32Dialog_PageSetup_Margin		m_margin;
 	//UT_sint32					m_curSelection;
 
+	void						applyPageUnit(UT_Dimension unit);
 	void						updatePageSize();
 	void						updateWidth();
 	void						updateHeight();

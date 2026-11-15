@@ -3188,10 +3188,12 @@ void GR_Win32Graphics::_DeviceContext_SwitchToBuffer()
 	if (!m_bufferHdc)
 		return;
 
-	// A drag may already have clipped this DC to a thin strip. Copy the
-	// whole window when the bitmap does not already match the screen.
-	// Otherwise presenting the buffer erases the rest of the page.
+	// A drag or a previous paint may already have clipped either DC to a
+	// thin strip. ScrollWindowEx and the following BitBlt would then move
+	// or copy only that strip, and the next click draws into the leftover.
 	SelectClipRgn(m_hdc, nullptr);
+	if (m_bufferHdc)
+		SelectClipRgn(m_bufferHdc, nullptr);
 	if (!m_bufferCoherent)
 	{
 		BOOL blt = BitBlt(m_bufferHdc, 0, 0, width, height, m_hdc, 0, 0, SRCCOPY);

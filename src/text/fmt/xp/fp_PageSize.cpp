@@ -307,6 +307,32 @@ bool fp_PageSize::Set(const PP_PropertyVector & attributes)
 			Set(m_iHeight, m_iWidth, FUND);
 		}
 	}
+	// A predefined size is stored from the paper table, whose unit is not
+	// the one written in the document. Keep that document unit so A3 in
+	// centimetres stays 29.70 x 42.00 cm instead of 297 x 420 mm.
+	UT_Dimension fileUnit = DIM_none;
+	if (g_ascii_strcasecmp(szUnits.c_str(), "cm") == 0)
+		fileUnit = DIM_CM;
+	else if (g_ascii_strcasecmp(szUnits.c_str(), "mm") == 0)
+		fileUnit = DIM_MM;
+	else if (g_ascii_strcasecmp(szUnits.c_str(), "in") == 0
+		 || g_ascii_strcasecmp(szUnits.c_str(), "inch") == 0)
+		fileUnit = DIM_IN;
+	if (fileUnit != DIM_none && getDims() != fileUnit)
+	{
+		const bool portrait = isPortrait();
+		const double fileWidth = Width(fileUnit);
+		const double fileHeight = Height(fileUnit);
+		if (portrait)
+			Set(fileWidth, fileHeight, fileUnit);
+		else
+			Set(fileHeight, fileWidth, fileUnit);
+		if (portrait)
+			setPortrait();
+		else
+			setLandscape();
+	}
+
 	UT_DEBUGMSG(("PageSize - Height %lf Width %lf \n",m_iHeight,m_iWidth));
 	return true;
 }
@@ -402,14 +428,15 @@ void fp_PageSize::Set(double w, double h, UT_Dimension u)
 		}
 	}
 
-	// Force Custom Label if nothing else fits
+	// Force Custom Label if nothing else fits. Storage stays in millimetres;
+	// the requested unit remains the one Width() and the dialog display.
 	if ( i == static_cast<int>(_last_predefined_pagesize_dont_use_) )
 	{
 		Set (static_cast<Predefined>(i-1), u);
 		m_iWidth  = UT_convertDimensions(w, u, FUND);
 		m_iHeight = UT_convertDimensions(h, u, FUND);
-		// WE must make sure to use the same units...
-		m_unit = FUND;
+		if (u != DIM_IN && u != DIM_CM && u != DIM_MM)
+			m_unit = FUND;
 	}
 }
 

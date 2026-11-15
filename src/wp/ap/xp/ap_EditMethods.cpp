@@ -8931,11 +8931,8 @@ static bool s_doPrintPreview(FV_View * pView)
 	pDialog->runModal(pFrame);
 
 	GR_Graphics * pGraphics = pDialog->getPrinterGraphicsContext();
-	if (!(pGraphics && pGraphics->queryProperties(GR_Graphics::DGP_PAPER)))
+	if (!pGraphics || !pGraphics->queryProperties(GR_Graphics::DGP_PAPER))
 		{
-			UT_ASSERT_HARMLESS(pGraphics);
-			UT_ASSERT_HARMLESS(pGraphics->queryProperties(GR_Graphics::DGP_PAPER));
-			
 			pDialogFactory->releaseDialog(pDialog);
 			
 			// Turn off wait cursor
@@ -9349,42 +9346,30 @@ static bool s_doPageSetupDlg (FV_View * pView)
 	fp_PageSize::Predefined orig_def,final_def;
 	double orig_wid = -1, orig_ht = -1, final_wid = -1, final_ht = -1;
 	UT_Dimension orig_ut = DIM_IN, final_ut = DIM_IN;
-	fp_PageSize pSize(pDoc->getPageSize()->getPredefinedName());
-	orig_def = pSize.NameToPredefined(pSize.getPredefinedName());
-	//
-	// Set first page of the dialog properties.
-	//
+	// Copy the document page. Rebuilding from the paper name alone drops
+	// the document unit, so an A3 stored in centimetres came back as millimetres.
+	fp_PageSize pSize = *pDoc->getPageSize();
+	orig_def = fp_PageSize::NameToPredefined(pSize.getPredefinedName());
 	AP_Dialog_PageSetup::Orientation orig_ori,final_ori;
-	orig_ori =	AP_Dialog_PageSetup::PORTRAIT;
-	if(pDoc->getPageSize()->isPortrait() == false)
-	{
-		orig_ori = AP_Dialog_PageSetup::LANDSCAPE;
-	}
-	if (orig_def == fp_PageSize::psCustom)
-	{
-		orig_ut = pDoc->getPageSize()->getDims();
-		orig_wid = pDoc->getPageSize()->Width(orig_ut);
-		orig_ht = pDoc->getPageSize()->Height(orig_ut);
-		if(orig_ori == AP_Dialog_PageSetup::LANDSCAPE)
-		{
-			pSize.Set(orig_ht, orig_wid, orig_ut);
-		}
-		else
-		{
-			pSize.Set(orig_wid, orig_ht, orig_ut);
-		}
-	}
+	orig_ori = pSize.isPortrait() ? AP_Dialog_PageSetup::PORTRAIT
+		: AP_Dialog_PageSetup::LANDSCAPE;
+	orig_ut = pSize.getDims();
+	if (orig_ut != DIM_IN && orig_ut != DIM_CM && orig_ut != DIM_MM)
+		orig_ut = DIM_MM;
+	orig_wid = pSize.Width(orig_ut);
+	orig_ht = pSize.Height(orig_ut);
 	pDialog->setPageSize(pSize);
 	pDialog->setPageOrientation(orig_ori);
 	UT_Dimension orig_margu,final_margu;
 	double orig_scale,final_scale;
 	orig_scale = pDoc->getPageSize()->getScale();
 
-	// respect units set in the dialogue constructer from prefs
-	UT_Dimension orig_uprefs = DIM_IN;
+	// Page and margins use the document unit. A ruler preference in inches
+	// must not relabel a page stored in centimetres.
+	UT_Dimension orig_uprefs = orig_ut;
 	std::string rulerUnits;
-	if (pApp->getPrefsValue(AP_PREF_KEY_RulerUnits, rulerUnits)) {
-		// we only allow in, cm, mm in the dlg
+	if (orig_uprefs != DIM_IN && orig_uprefs != DIM_CM && orig_uprefs != DIM_MM
+	    && pApp->getPrefsValue(AP_PREF_KEY_RulerUnits, rulerUnits)) {
 		UT_Dimension units = UT_determineDimension(rulerUnits.c_str());
 		if(units == DIM_CM || units == DIM_MM || units == DIM_IN)
 		{
@@ -9499,17 +9484,15 @@ static bool s_doPageSetupDlg (FV_View * pView)
 		return true;
 	}
 
-	final_def = pSize.NameToPredefined(pDialog->getPageSize().getPredefinedName());
+	pSize = pDialog->getPageSize();
+	final_def = fp_PageSize::NameToPredefined(pSize.getPredefinedName());
 	final_ori = pDialog->getPageOrientation();
 	final_scale = pDialog->getPageScale()/100.0;
-	pSize.Set(final_def);
-
-	if (final_def == fp_PageSize::psCustom)
-	{
-		final_ut = pDialog->getPageSize().getDims();
-		final_wid = pDialog->getPageSize().Width(final_ut);
-		final_ht = pDialog->getPageSize().Height(final_ut);
-	}
+	final_ut = pDialog->getPageUnits();
+	if (final_ut != DIM_IN && final_ut != DIM_CM && final_ut != DIM_MM)
+		final_ut = pSize.getDims();
+	final_wid = pSize.Width(final_ut);
+	final_ht = pSize.Height(final_ut);
 
 	if((final_def != orig_def) || (final_ori != orig_ori) || ((final_scale-orig_scale) > 0.001) || ((final_scale-orig_scale) < -0.001) || (orig_ht != final_ht) || (orig_wid != final_wid) || (orig_ut != final_ut) )
 	{
