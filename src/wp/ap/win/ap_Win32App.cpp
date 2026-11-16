@@ -776,7 +776,8 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
 	WORD    	cClrBits; 
 
 	// Retrieve the bitmap's color format, width, and height. 
-    	if (!GetObjectW(hBmp, sizeof(BITMAP), (LPSTR)&bmp)) 
+	// GetObjectW writes the BITMAP only when it returns the full size.
+    	if (GetObjectW(hBmp, sizeof(bmp), &bmp) != sizeof(bmp))
 		return nullptr;
 	
 	if (bmp.bmBitsPixel==16) bmp.bmBitsPixel=24;	// 16 bit BMPs are not supported by all programs

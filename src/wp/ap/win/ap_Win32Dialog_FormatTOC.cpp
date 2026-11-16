@@ -121,7 +121,7 @@ void AP_Win32Dialog_FormatTOC::runModeless(XAP_Frame * pFrame)
 {
 
 	UT_return_if_fail (pFrame);
-	RECT rect;
+	RECT rect = {};
 	POINT pnt;
 	XAP_Win32App * pWin32App = static_cast<XAP_Win32App *>(XAP_App::getApp());
 
@@ -143,14 +143,18 @@ void AP_Win32Dialog_FormatTOC::runModeless(XAP_Frame * pFrame)
 	m_pSheet->addPage(m_pLayout);
 	m_pSheet->runModeless(pWin32App, pFrame, AP_STRING_ID_DLG_FormatTOC_Title);	
 
-	GetWindowRect(GetDlgItem(m_pSheet->getHandle() ,IDCANCEL), &rect);	
-	pnt.x = rect.left;
-	pnt.y = rect.top;
-	ScreenToClient (m_pSheet->getHandle(), &pnt);
-
-	HWND hwndOK = GetDlgItem(m_pSheet->getHandle(),IDOK);
-	MoveWindow (hwndOK, 
-		pnt.x, pnt.y, rect.right - rect.left, rect.bottom - rect.top, true);
+	HWND sheet = m_pSheet->getHandle();
+	HWND cancel = sheet ? GetDlgItem(sheet, IDCANCEL) : nullptr;
+	HWND hwndOK = sheet ? GetDlgItem(sheet, IDOK) : nullptr;
+	if (cancel && hwndOK && GetWindowRect(cancel, &rect))
+	{
+		const int buttonWidth = rect.right - rect.left;
+		const int buttonHeight = rect.bottom - rect.top;
+		pnt.x = rect.left;
+		pnt.y = rect.top;
+		if (buttonWidth > 0 && buttonHeight > 0 && ScreenToClient(sheet, &pnt))
+			MoveWindow(hwndOK, pnt.x, pnt.y, buttonWidth, buttonHeight, true);
+	}
 
 	UT_sint32 sid =(UT_sint32)  getDialogId();
 	m_pApp->rememberModelessId( sid, (XAP_Dialog_Modeless *) m_pDialog);

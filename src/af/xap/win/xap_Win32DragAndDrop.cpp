@@ -208,9 +208,12 @@ STDMETHODIMP XAP_Win32DropTarget::DragOver(DWORD /*grfKeyState*/, POINTL pointl,
 	POINT client;
 	client.x = pointl.x;
 	client.y = pointl.y;
-	ScreenToClient(doc, &client);
-	RECT rc;
-	GetClientRect(doc, &rc);
+	// ScreenToClient and GetClientRect leave their outputs untouched on failure.
+	if (!ScreenToClient(doc, &client))
+		return S_OK;
+	RECT rc = {};
+	if (!GetClientRect(doc, &rc))
+		return S_OK;
 	if (client.x < rc.left || client.x >= rc.right
 	    || client.y < rc.top || client.y >= rc.bottom)
 		return S_OK;

@@ -2462,10 +2462,20 @@ void GR_Win32Font::selectFontIntoDC(GR_Graphics * pGr, HDC hdc)
 
 void GR_Win32Graphics::polygon(const UT_RGBColor& c, const UT_Point *pts,UT_uint32 nPoints)
 {
-	HPEN hPen = CreatePen(PS_SOLID, (UT_sint32)((double)_tduR(m_iLineWidth) * m_fXYRatio), RGB(c.m_red, c.m_grn, c.m_blu));
-	HPEN hOldPen = (HPEN)SelectObject(m_hdc,hPen);
+	if (!pts || nPoints == 0 || !m_hdc)
+		return;
 
+	HPEN hPen = CreatePen(PS_SOLID, (UT_sint32)((double)_tduR(m_iLineWidth) * m_fXYRatio), RGB(c.m_red, c.m_grn, c.m_blu));
 	HBRUSH hBrush = CreateSolidBrush(RGB(c.m_red, c.m_grn, c.m_blu));
+	if (!hPen || !hBrush)
+	{
+		if (hPen)
+			DeleteObject(hPen);
+		if (hBrush)
+			DeleteObject(hBrush);
+		return;
+	}
+	HPEN hOldPen = (HPEN)SelectObject(m_hdc,hPen);
 	HBRUSH hOldBrush = (HBRUSH)SelectObject(m_hdc, hBrush);
 
 	POINT * points = new POINT[nPoints];
@@ -2479,10 +2489,12 @@ void GR_Win32Graphics::polygon(const UT_RGBColor& c, const UT_Point *pts,UT_uint
 
 	Polygon(m_hdc, points, nPoints);
 
-	(void) SelectObject(m_hdc, hOldBrush);
+	if (hOldBrush)
+		SelectObject(m_hdc, hOldBrush);
 	DeleteObject(hBrush);
 
-	(void) SelectObject(m_hdc, hOldPen);
+	if (hOldPen)
+		SelectObject(m_hdc, hOldPen);
 	DeleteObject(hPen);
 
 	delete[] points;
@@ -2677,7 +2689,7 @@ BITMAPINFO * GR_Win32Graphics::ConvertDDBToDIB(HBITMAP bitmap, HPALETTE hPal, DW
 
 	// Get bitmap information. A failed call leaves bm uninitialized.
 	memset(&bm, 0, sizeof(bm));
-	if (!bitmap || ::GetObjectW(bitmap, sizeof(bm), &bm) == 0)
+	if (!bitmap || ::GetObjectW(bitmap, sizeof(bm), &bm) != sizeof(bm))
 		return nullptr;
 	if (bm.bmWidth <= 0 || bm.bmHeight <= 0)
 		return nullptr;	
