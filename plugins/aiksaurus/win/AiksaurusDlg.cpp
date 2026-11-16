@@ -140,19 +140,21 @@ BOOL AiksaurusDlg::_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam)
                   GCL_HICON,
 				  reinterpret_cast<LONG_PTR>(LoadIcon(m_hInstance, MAKEINTRESOURCE(ID_ICON_AIK))) ); 
 
-	// Center Window
-	RECT rectDesktop, rectDlg;
+	// GetWindowRect leaves the rectangles untouched on failure.
+	RECT rectDesktop = {}, rectDlg = {};
 	HWND hDesktop = GetDesktopWindow();
-	GetWindowRect( hWnd, &rectDlg );
-	GetWindowRect( hDesktop, &rectDesktop );
-	int Width = rectDlg.right - rectDlg.left;
-	int Height = rectDlg.bottom - rectDlg.top;
-	MoveWindow( hWnd, 
-		        (rectDesktop.right - Width) / 2, 
-				(rectDesktop.bottom - Height) / 2, 
-				Width, 
-				Height,
-				true );
+	if (GetWindowRect(hWnd, &rectDlg) && hDesktop && GetWindowRect(hDesktop, &rectDesktop))
+	{
+		int Width = rectDlg.right - rectDlg.left;
+		int Height = rectDlg.bottom - rectDlg.top;
+		if (Width > 0 && Height > 0)
+			MoveWindow( hWnd,
+				        (rectDesktop.right - Width) / 2,
+						(rectDesktop.bottom - Height) / 2,
+						Width,
+						Height,
+						true );
+	}
 
 	return 1;
 }
@@ -183,7 +185,13 @@ BOOL AiksaurusDlg::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 				if( wNotifyCode == LBN_DBLCLK )
 				{
 					char buf[MAX_WORD_LENGTH];
-					SendMessage( m_hMeanings, LB_GETTEXT, nSelect, (LPARAM)buf );
+					// LB_GETTEXTLEN excludes the NUL. A longer line does not fit.
+					const LRESULT len = SendMessageA(m_hMeanings, LB_GETTEXTLEN, nSelect, 0);
+					if (len < 0 || len >= MAX_WORD_LENGTH)
+						return 1;
+					buf[0] = '\0';
+					if (SendMessageA(m_hMeanings, LB_GETTEXT, nSelect, (LPARAM)buf) < 0)
+						return 1;
 					SetWindowText( m_hCombo, buf );
 					_doSearch();
 				}
@@ -205,7 +213,12 @@ BOOL AiksaurusDlg::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 			if( nSelect != CB_ERR )
 			{
 				char buf[MAX_WORD_LENGTH];
-				SendMessage( m_hSynonyms, LB_GETTEXT, nSelect, (LPARAM)buf );
+				const LRESULT len = SendMessageA(m_hSynonyms, LB_GETTEXTLEN, nSelect, 0);
+				if (len < 0 || len >= MAX_WORD_LENGTH)
+					return 1;
+				buf[0] = '\0';
+				if (SendMessageA(m_hSynonyms, LB_GETTEXT, nSelect, (LPARAM)buf) < 0)
+					return 1;
 				if( wNotifyCode == LBN_DBLCLK )
 				{
 					SetWindowText( m_hCombo, buf );

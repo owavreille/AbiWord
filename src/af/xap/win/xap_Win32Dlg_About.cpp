@@ -192,10 +192,16 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 
 	SetWindowLongPtrW(hwndAbout, GWLP_USERDATA, (LONG_PTR)this);
 
-	RECT rcClient;
-	GetClientRect(hwndAbout, &rcClient);
-	const int iWidth  = rcClient.right;
-	const int iHeight = rcClient.bottom;
+	RECT rcClient = {};
+	// GetClientRect leaves the rectangle untouched on failure.
+	// ABOUT_WIDTH and ABOUT_HEIGHT are the window size used to create it.
+	int iWidth = ABOUT_WIDTH;
+	int iHeight = ABOUT_HEIGHT;
+	if (GetClientRect(hwndAbout, &rcClient) && rcClient.right > 0 && rcClient.bottom > 0)
+	{
+		iWidth = rcClient.right;
+		iHeight = rcClient.bottom;
+	}
 	
 	str.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_OK));		
 	HWND hwndOK = CreateWindowW(L"BUTTON",
@@ -414,9 +420,9 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 	{
 	case WM_ERASEBKGND:
 	{
-		RECT r;
-		GetClientRect(hWnd, &r);
-		FillRect((HDC)wParam, &r, GetSysColorBrush(COLOR_BTNFACE));
+		RECT r = {};
+		if (wParam && GetClientRect(hWnd, &r))
+			FillRect((HDC)wParam, &r, GetSysColorBrush(COLOR_BTNFACE));
 		return 1;
 	}
 
@@ -424,14 +430,16 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 	{
 		HDC hdcCtrl = (HDC)wParam;
 		HWND hwndCtrl = (HWND)lParam;
-		RECT rcCtrl;
-		GetWindowRect(hwndCtrl, &rcCtrl);
-		MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT *>(&rcCtrl), 2);
+		RECT rcCtrl = {};
+		// A zero MapWindowPoints result is also a successful move of 0 pixels.
+		const bool placed = hwndCtrl && GetWindowRect(hwndCtrl, &rcCtrl);
+		if (placed)
+			MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT *>(&rcCtrl), 2);
 		int imageWidth = pThis->m_pGrImageSidebar ? pThis->m_pGrImageSidebar->getDisplayWidth() : 0;
 		SetTextColor(hdcCtrl, GetSysColor(COLOR_BTNTEXT));
 		// The version string sits on the sidebar picture. The other
 		// labels use the same face color as the rest of the window.
-		if (rcCtrl.left < imageWidth)
+		if (placed && rcCtrl.left < imageWidth)
 		{
 			SetBkMode(hdcCtrl, TRANSPARENT);
 			return (LRESULT)GetStockObject(HOLLOW_BRUSH);
@@ -445,9 +453,18 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
+		if (!hdc)
+		{
+			EndPaint(hWnd, &ps);
+			return 0;
+		}
 
-		RECT r;
-		GetClientRect(hWnd, &r);
+		RECT r = {};
+		if (!GetClientRect(hWnd, &r))
+		{
+			EndPaint(hWnd, &ps);
+			return 0;
+		}
 		FillRect(hdc, &r, GetSysColorBrush(COLOR_BTNFACE));
 		GR_Win32Image * pImage = pThis->m_pGrImageSidebar;
 		BITMAPINFO * pDIB = pImage ? pImage->getDIB() : nullptr;

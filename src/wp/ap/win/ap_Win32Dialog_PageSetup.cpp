@@ -498,20 +498,27 @@ void AP_Win32Dialog_PageSetup_Page::_onInitDialog()
 	// that GetDC actually returned.
 	if (hdc)
 	{
-		UT_Xpm2Bmp( rect.right - rect.left,
-					rect.bottom - rect.top,
+		const int orientW = rect.right - rect.left;
+		const int orientH = rect.bottom - rect.top;
+		// A failed GetClientRect leaves the zeroed rectangle. A zero side
+		// makes the DIB allocation empty.
+		if (orientW > 0 && orientH > 0)
+		{
+		UT_Xpm2Bmp( orientW,
+					orientH,
 					(const char**) orient_vertical_xpm,
 					sizeof(orient_vertical_xpm),
 					hdc,
 					&Color,
 					&m_pParent->m_bmpPortrait);
-		UT_Xpm2Bmp( rect.right - rect.left,
-					rect.bottom - rect.top,
+		UT_Xpm2Bmp( orientW,
+					orientH,
 					(const char**) orient_horizontal_xpm,
 					sizeof(orient_horizontal_xpm),
 					hdc,
 					&Color,
 					&m_pParent->m_bmpLandscape);
+		}
 		if (previewW > 0 && previewH > 0)
 			m_pParent->m_bmpPreview = CreateCompatibleBitmap(hdc, previewW, previewH);
 		ReleaseDC(getHandle(), hdc);

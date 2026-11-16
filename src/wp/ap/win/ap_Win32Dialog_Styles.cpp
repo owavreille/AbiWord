@@ -728,8 +728,9 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 	    hWndButton = GetDlgItem(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_BTN_TOGGLEITEMS);
 		const XAP_StringSet * pSS = m_pApp->getStringSet();
 
-		// Get button position
-	    GetWindowRect(hWndButton, &rect);
+		// GetWindowRect leaves the rectangle untouched on failure.
+	    if (!hWndButton || !GetWindowRect(hWndButton, &rect))
+			return 1;
 	    x = rect.left;
 	    y = rect.bottom;
 

@@ -1815,22 +1815,31 @@ static int s_hitColor(HWND hwnd, int x, int y)
 static void s_fillSwatch(HDC hdc, const RECT & cell, COLORREF color, bool hot)
 {
 	HBRUSH brush = CreateSolidBrush(color);
-	FillRect(hdc, &cell, brush);
-	DeleteObject(brush);
+	if (brush)
+	{
+		FillRect(hdc, &cell, brush);
+		DeleteObject(brush);
+	}
 
 	RECT edge = cell;
 	if (hot)
 		InflateRect(&edge, 1, 1);
 	HBRUSH border = CreateSolidBrush(hot ? RGB(0, 0, 0) : RGB(90, 90, 90));
-	FrameRect(hdc, &edge, border);
-	DeleteObject(border);
+	if (border)
+	{
+		FrameRect(hdc, &edge, border);
+		DeleteObject(border);
+	}
 }
 
 static void s_paintFooter(HDC hdc, const RECT & cell, const wchar_t * text, bool hot)
 {
 	HBRUSH brush = CreateSolidBrush(hot ? GetSysColor(COLOR_HIGHLIGHT) : GetSysColor(COLOR_BTNFACE));
-	FillRect(hdc, &cell, brush);
-	DeleteObject(brush);
+	if (brush)
+	{
+		FillRect(hdc, &cell, brush);
+		DeleteObject(brush);
+	}
 
 	SetBkMode(hdc, TRANSPARENT);
 	SetTextColor(hdc, hot ? GetSysColor(COLOR_HIGHLIGHTTEXT) : GetSysColor(COLOR_BTNTEXT));

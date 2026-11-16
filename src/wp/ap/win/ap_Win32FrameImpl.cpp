@@ -733,9 +733,10 @@ void AP_Win32FrameImpl::_setVerticalScrollInfo(const SCROLLINFO * psi)
 	SetScrollInfo(m_hWndVScroll, SB_CTL, psi, TRUE);
 }
 
-void AP_Win32FrameImpl::_getVerticalScrollInfo(SCROLLINFO * psi)
+bool AP_Win32FrameImpl::_getVerticalScrollInfo(SCROLLINFO * psi)
 {
-	GetScrollInfo(m_hWndVScroll, SB_CTL, psi);
+	// GetScrollInfo leaves the structure untouched when it fails.
+	return psi && GetScrollInfo(m_hWndVScroll, SB_CTL, psi) != FALSE;
 }
 
 int AP_Win32FrameImpl::_getMouseWheelLines()
@@ -788,10 +789,16 @@ void AP_Win32FrameImpl::_scrollWheel(AV_View * pView, HWND hwnd, bool horizontal
 
 	if (horizontal)
 	{
-		GetScrollInfo(m_hWndHScroll, SB_CTL, &si);
+		if (!GetScrollInfo(m_hWndHScroll, SB_CTL, &si))
+			return;
 		int iNewPos = si.nPos + pixels;
-		if (iNewPos > si.nMax)
-			iNewPos = si.nMax;
+		// The thumb stops at nMax - (nPage - 1). A larger nPos is clamped
+		// by SetScrollInfo, so the view would otherwise keep the request.
+		int limit = si.nMax;
+		if (si.nPage > 1 && si.nMax - static_cast<int>(si.nPage) + 1 > si.nMin)
+			limit = si.nMax - static_cast<int>(si.nPage) + 1;
+		if (iNewPos > limit)
+			iNewPos = limit;
 		if (iNewPos < si.nMin)
 			iNewPos = si.nMin;
 		if (iNewPos == si.nPos)
@@ -803,10 +810,14 @@ void AP_Win32FrameImpl::_scrollWheel(AV_View * pView, HWND hwnd, bool horizontal
 		return;
 	}
 
-	_getVerticalScrollInfo(&si);
+	if (!_getVerticalScrollInfo(&si))
+		return;
 	int iNewPos = si.nPos - pixels;
-	if (iNewPos > si.nMax)
-		iNewPos = si.nMax;
+	int limit = si.nMax;
+	if (si.nPage > 1 && si.nMax - static_cast<int>(si.nPage) + 1 > si.nMin)
+		limit = si.nMax - static_cast<int>(si.nPage) + 1;
+	if (iNewPos > limit)
+		iNewPos = limit;
 	if (iNewPos < si.nMin)
 		iNewPos = si.nMin;
 	if (iNewPos == si.nPos)
@@ -952,7 +963,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 
 			si.cbSize = sizeof(si);
 			si.fMask = SIF_ALL;
-			fImpl->_getVerticalScrollInfo(&si);
+			if (!fImpl->_getVerticalScrollInfo(&si))
+				return 0;
 
 			switch (nScrollCode)
 			{
@@ -984,7 +996,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 			}
 
 			fImpl->_setVerticalScrollInfo(&si);				// notify window of new value.
-			fImpl->_getVerticalScrollInfo(&si);				// update from window, in case we got clamped
+			if (!fImpl->_getVerticalScrollInfo(&si))
+				return 0;
 			pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos));	// now tell the view
 
 			return 0;
@@ -999,7 +1012,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 
 			si.cbSize = sizeof(si);
 			si.fMask = SIF_ALL;
-			GetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si);
+			if (!GetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si))
+				return 0;
 
 			switch (nScrollCode)
 			{
@@ -1037,10 +1051,10 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 
 			if (nScrollCode != SB_ENDSCROLL)
 			{
-				// in case we got clamped
-				GetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si);
+				// SetScrollInfo clamps nPos. Read back the position it kept.
+				if (!GetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si))
+					return 0;
 
-				// now tell the view
 				pView->sendHorizontalScrollEvent(pView->getGraphics()->tlu(si.nPos));
 			}
 
@@ -1463,11 +1477,11 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 				si.cbSize = sizeof(si);
 				si.fMask = SIF_ALL;
 
-				fImpl->_getVerticalScrollInfo(&si);
-				pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
+				if (fImpl->_getVerticalScrollInfo(&si))
+					pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
 
-				GetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si);
-				pView->sendHorizontalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
+				if (GetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si))
+					pView->sendHorizontalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
 			}
 			return 0;
 		}
