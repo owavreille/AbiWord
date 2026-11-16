@@ -116,12 +116,15 @@ void GR_Win32CharWidths::setCharWidthsOfRange(HDC hdc, UT_UCS4Char c0, UT_UCS4Ch
 	{
 		HFONT hFont = (HFONT) GetCurrentObject(hdc, OBJ_FONT);
 		LOGFONTW aLogFont;
-		UT_DebugOnly<int> iRes = GetObjectW(hFont, sizeof(LOGFONTW), &aLogFont);
-		UT_ASSERT(iRes);
+		memset(&aLogFont, 0, sizeof(aLogFont));
+		// GetObjectW writes the LOGFONT only when it returns the full size.
+		const int gotFont = GetObjectW(hFont, sizeof(aLogFont), &aLogFont);
+		UT_ASSERT(gotFont == sizeof(aLogFont));
+		UT_DebugOnly<int> iRes = 0;
 
 		xxx_UT_DEBUGMSG(("gr_Win32Graphics::getCharWidth: extra interchar. spacing %d\n", GetTextCharacterExtra(hdc)));
 		
-		if(aLogFont.lfCharSet == SYMBOL_CHARSET)
+		if(gotFont == sizeof(aLogFont) && aLogFont.lfCharSet == SYMBOL_CHARSET)
 		{
 			// Symbol character handling
 			for (k=c0; k<=c1; k++)

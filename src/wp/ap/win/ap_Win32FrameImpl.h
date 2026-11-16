@@ -82,7 +82,7 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
 	void						_updateContainerWindow(void) { UpdateWindow(_getHwndContainer()); }
 
 	void						_setVerticalScrollInfo(const SCROLLINFO * psi);
-	void						_getVerticalScrollInfo(SCROLLINFO * psi);
+	bool						_getVerticalScrollInfo(SCROLLINFO * psi);
 
 	//void						_createRulers(XAP_Frame *pFrame) {  _createTopRuler(pFrame); _createLeftRuler(pFrame);  }
 

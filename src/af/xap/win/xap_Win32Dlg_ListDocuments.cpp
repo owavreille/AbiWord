@@ -85,8 +85,11 @@ BOOL XAP_Win32Dialog_ListDocuments::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, 
 
 //	DWORD dwStyle = GetWindowLongPtrW(h, GWL_STYLE);
 
-	RECT r;
-	GetWindowRect(h, &r);
+	RECT r = {};
+	// GetWindowRect leaves the rectangle untouched on failure.
+	const int columnWidth = (h && GetWindowRect(h, &r) && r.right > r.left + 5)
+		? r.right - r.left - 5
+		: 120;
 	
 	// The dialog is Unicode. LVM_INSERTITEMA would recode the UTF-8
 	// filename through the ANSI code page.
@@ -94,7 +97,7 @@ BOOL XAP_Win32Dialog_ListDocuments::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, 
 	memset(&col, 0, sizeof(col));
 	col.mask = LVCF_TEXT | LVCF_SUBITEM | LVCF_WIDTH;
 	col.iSubItem = 0;
-	col.cx = r.right - r.left - 5;
+	col.cx = columnWidth;
 	UT_Win32LocaleString heading;
 	heading.fromUTF8(_getHeading() ? _getHeading() : "");
 	col.pszText = const_cast<wchar_t *>(heading.c_str());
