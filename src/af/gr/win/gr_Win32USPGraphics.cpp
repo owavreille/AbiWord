@@ -736,7 +736,7 @@ void GR_Win32USPGraphics::_setupFontOnDC(GR_Win32USPFont *pFont, bool bZoomMe)
 
 			UT_ASSERT_HARMLESS( UT_SHOULD_NOT_HAPPEN );
 			LOGFONTW lf;
-			if(GetObjectW(hFont, sizeof(LOGFONTW), &lf))
+			if(GetObjectW(hFont, sizeof(LOGFONTW), &lf) == sizeof(LOGFONTW))
 			{
 				LOG_USP_EXCPT_SX(narrow, lf.lfFaceName, lf.lfHeight)
 			}

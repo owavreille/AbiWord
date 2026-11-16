@@ -191,8 +191,10 @@ HWND AP_Win32FrameImpl::_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent
 	int yTopRulerHeight = 0;
 	int xLeftRulerWidth = 0;
 
-	/* Create Graphics */
-	GR_Win32AllocInfo ai(GetDC(m_hwndContainer), m_hwndContainer);
+	/* Create Graphics. GetDC(nullptr) would be the screen DC. */
+	HDC containerDC = GetDC(m_hwndContainer);
+	UT_return_val_if_fail(containerDC, nullptr);
+	GR_Win32AllocInfo ai(containerDC, m_hwndContainer);
 	GR_Win32Graphics * pG = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
 
 	UT_return_val_if_fail (pG, nullptr);
@@ -588,19 +590,24 @@ void AP_Win32FrameImpl::_setYScrollRange(AP_FrameData * pData, AV_View *pView)
 // then warp the document window contents.
 void AP_Win32FrameImpl::_scrollFuncY(UT_sint32 yoff, UT_sint32 /*ylimit*/)
 {
+	AV_View * view = getFrame()->getCurrentView();
+	GR_Graphics * pGr = view ? view->getGraphics() : nullptr;
+	if (!pGr)
+		return;
+
 	SCROLLINFO si;
 	memset(&si, 0, sizeof(si));
-
 	si.cbSize = sizeof(si);
 	si.fMask = SIF_ALL;
+	// A failed read must not be written back: SIF_ALL would clear the range.
+	if (!_getVerticalScrollInfo(&si))
+		return;
 
-	GR_Graphics *pGr = getFrame()->getCurrentView()->getGraphics();
-
-	_getVerticalScrollInfo(&si);
 	si.nPos = pGr->tdu (yoff);
 	_setVerticalScrollInfo(&si);
-	_getVerticalScrollInfo(&si); // values may have been clamped
-	getFrame()->getCurrentView()->setYScrollOffset(pGr->tlu(si.nPos));
+	if (!_getVerticalScrollInfo(&si))
+		return;
+	view->setYScrollOffset(pGr->tlu(si.nPos));
 }
 
 void AP_Win32FrameImpl::_scrollFuncX(UT_sint32 xoff, UT_sint32 /*xlimit*/)
@@ -611,16 +618,21 @@ void AP_Win32FrameImpl::_scrollFuncX(UT_sint32 xoff, UT_sint32 /*xlimit*/)
 	si.cbSize = sizeof(si);
 	si.fMask = SIF_ALL;
 
-	GR_Graphics *pGr = getFrame()->getCurrentView()->getGraphics();
+	AV_View * view = getFrame()->getCurrentView();
+	GR_Graphics * pGr = view ? view->getGraphics() : nullptr;
+	if (!pGr)
+		return;
 
 	HWND hwndH = _getHwndHScroll();
-	GetScrollInfo(hwndH, SB_CTL, &si);
+	if (!GetScrollInfo(hwndH, SB_CTL, &si))
+		return;
 
 	si.nPos = pGr->tdu(xoff);
 	SetScrollInfo(hwndH, SB_CTL, &si, TRUE);
 
-	GetScrollInfo(hwndH, SB_CTL, &si);	// may have been clamped
-	getFrame()->getCurrentView()->setXScrollOffset(pGr->tlu(si.nPos));
+	if (!GetScrollInfo(hwndH, SB_CTL, &si))
+		return;
+	view->setXScrollOffset(pGr->tlu(si.nPos));
 }
 
 bool AP_Win32FrameImpl::_RegisterClass(XAP_Win32App * app)
@@ -1582,6 +1594,13 @@ UT_RGBColor AP_Win32FrameImpl::getColorSelBackground () const
 
 GR_Win32Graphics *AP_Win32FrameImpl::createDocWndGraphics(void)
 {
-	GR_Win32AllocInfo ai(GetDC(getHwndDocument()), getHwndDocument());
+	HWND doc = getHwndDocument();
+	if (!doc)
+		return nullptr;
+	// CS_OWNDC: this is the class DC. GetDC(nullptr) would be the screen.
+	HDC hdc = GetDC(doc);
+	if (!hdc)
+		return nullptr;
+	GR_Win32AllocInfo ai(hdc, doc);
 	return (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
 }
