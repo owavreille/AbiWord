@@ -105,6 +105,7 @@ void GR_Win32Graphics::_constructorCommonCode(HDC hdc)
 	m_hdc = hdc;
 	m_bOwnHDC = false;
 	m_bOwnDocInfo = false;
+	m_bOwnDevMode = false;
 	m_bufferHdc = nullptr;
 	m_bufferBitmap = nullptr;
 	m_bufferPrevBitmap = nullptr;
@@ -299,12 +300,20 @@ GR_Win32Graphics::~GR_Win32Graphics()
 	}
 	if (m_bOwnDocInfo && m_pDocInfo)
 		FREEP(m_pDocInfo);
+	if (m_bOwnDevMode && m_hDevMode)
+	{
+		GlobalFree(m_hDevMode);
+		m_hDevMode = nullptr;
+	}
 }
 
 void GR_Win32Graphics::takeOwnershipOfDCAndDocInfo()
 {
 	m_bOwnHDC = (m_hdc != nullptr);
 	m_bOwnDocInfo = (m_pDocInfo != nullptr);
+	// The DEVMODE from CreateDC belongs with this object. The print dialog
+	// keeps its own handle and does not call this.
+	m_bOwnDevMode = (m_hDevMode != nullptr);
 }
 
 bool GR_Win32Graphics::queryProperties(GR_Graphics::Properties gp) const
@@ -362,6 +371,8 @@ win32Internal_fontEnumProcedure(ENUMLOGFONTW* pLogFont,
 								LPARAM lParam)
 {
 	win32FontCharset *choice = reinterpret_cast<win32FontCharset *>(lParam);
+	if (!choice || !pLogFont)
+		return 1;
 	const BYTE charset = pLogFont->elfLogFont.lfCharSet;
 	int rank = 1;
 	if (charset == ANSI_CHARSET)
@@ -1345,7 +1356,8 @@ void GR_Win32Graphics::scroll(UT_sint32 dx, UT_sint32 dy)
 	m_bufferCoherent = false;
 	// A clip left on the CS_OWNDC window would scroll only that rectangle.
 	clearScreenClip();
-	ScrollWindowEx(m_hwnd, ddx, ddy, nullptr, nullptr, nullptr, nullptr, SW_INVALIDATE);
+	if (m_hwnd)
+		ScrollWindowEx(m_hwnd, ddx, ddy, nullptr, nullptr, nullptr, nullptr, SW_INVALIDATE);
 }
 
 void GR_Win32Graphics::scroll(UT_sint32 x_dest, UT_sint32 y_dest,
@@ -1368,8 +1380,9 @@ void GR_Win32Graphics::scroll(UT_sint32 x_dest, UT_sint32 y_dest,
 
 	m_bufferCoherent = false;
 	clearScreenClip();
-	ScrollWindowEx(m_hwnd, (x_dest - x_src), (y_dest - y_src),
-				   &r, nullptr, nullptr, nullptr, SW_INVALIDATE | SW_ERASE);
+	if (m_hwnd)
+		ScrollWindowEx(m_hwnd, (x_dest - x_src), (y_dest - y_src),
+					   &r, nullptr, nullptr, nullptr, SW_INVALIDATE | SW_ERASE);
 }
 
 void GR_Win32Graphics::clearArea(UT_sint32 x, UT_sint32 y, UT_sint32 width, UT_sint32 height)
@@ -1411,7 +1424,10 @@ void GR_Win32Graphics::invertRect(const UT_Rect* pRect)
 	#ifdef GR_GRAPHICS_DEBUG
 	UT_DEBUGMSG(("GR_Win32Graphics::invertRect\n"));	
 	#endif
-	
+
+	if (!pRect || !m_hdc)
+		return;
+
 	RECT r;
 
 	r.left = (UT_sint32)((double)_tduX(pRect->left) * m_fXYRatio);
@@ -1913,6 +1929,8 @@ void GR_Win32Graphics::fillRect(GR_Color3D c, UT_sint32 x, UT_sint32 y, UT_sint3
 	COLORREF clr = RGB(GetRValue(m_3dColors[c]), GetGValue(m_3dColors[c]), GetBValue(m_3dColors[c]));
 	
 	const COLORREF cr = ::SetBkColor(hdc,  clr);
+	if (cr == CLR_INVALID)
+		return;
 	::ExtTextOutW(hdc, 0, 0, ETO_OPAQUE, &r, nullptr, 0, nullptr);
 	::SetBkColor(hdc, cr);
 }
@@ -3067,12 +3085,20 @@ GR_Graphics * GR_Win32Graphics::getPrinterGraphics(const wchar_t * pPrinterName,
 	if(bFreePN)
 		g_free(pPN);
 
-	if(hDM && !pGr)
-		GlobalFree(hDM);
+	if (pGr)
+		static_cast<GR_Win32Graphics *>(pGr)->takeOwnershipOfDCAndDocInfo();
+	else
+	{
+		// CreateDC and GlobalAlloc are ours until the graphics object
+		// accepts them. A later failure must not leave the printer DC open.
+		if (hPDC)
+			DeleteDC(hPDC);
+		if (hDM)
+			GlobalFree(hDM);
+		if (pDI)
+			g_free(pDI);
+	}
 
-	if(pDI && !pGr)
-		g_free(pDI);
-	
 	if(hPrinter)
 		ClosePrinter(hPrinter);
 	
@@ -3369,8 +3395,16 @@ void GR_Win32Graphics::_DeviceContext_SwitchToBuffer()
 		SelectClipRgn(m_bufferHdc, nullptr);
 	if (!m_bufferCoherent)
 	{
+		// A failed BitBlt leaves the memory bitmap empty. Marking it coherent
+		// would copy that empty bitmap over the window on the next present.
 		BOOL blt = BitBlt(m_bufferHdc, 0, 0, width, height, m_hdc, 0, 0, SRCCOPY);
 		UT_Win32TraceF("buffer-blt %d", blt ? 1 : 0);
+		if (!blt)
+		{
+			if (!persist)
+				_releasePersistentBuffer();
+			return;
+		}
 		m_bufferCoherent = true;
 	}
 
