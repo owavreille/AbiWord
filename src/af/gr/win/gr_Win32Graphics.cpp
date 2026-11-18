@@ -1266,8 +1266,10 @@ bool GR_Win32Graphics::startPage(const char * /*szPageLabel*/, UT_uint32 /*pageN
 		pDevMode = (DEVMODEW*) GlobalLock(m_hDevMode);
 		if (pDevMode)
 		{
-			ResetDCW(m_hdc, pDevMode);
+			const HDC reset = ResetDCW(m_hdc, pDevMode);
 			GlobalUnlock(m_hDevMode);
+			if (!reset)
+				return false;
 		}
 	}
 

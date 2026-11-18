@@ -385,14 +385,16 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 				*/
 				if (pLayoutItem->getMenuLayoutFlags() == EV_MLF_BeginSubMenu)
 				{
-					HMENU sub = CreateMenu();	// TODO NOTE: Leaking handle!
+					HMENU sub = CreateMenu();
 					UT_ASSERT(sub);
 
 					UT_DEBUGMSG(("menu::synthesize [name %s][subMenu 0x%08lx] %u\n",szLabelName,u, static_cast<unsigned>(stack.size())));
 
 					flags |= MF_POPUP;
 					stack.push_back(sub);
-					u = (size_t) sub;					
+					// AppendMenuW takes UINT_PTR. A USER handle keeps 32 significant
+					// bits and is sign-extended. Storing it in a UINT zero-extends it.
+					const UINT_PTR popupId = reinterpret_cast<UINT_PTR>(sub);
 					
 					if (szLabelName && *szLabelName)					
 					{
@@ -405,14 +407,14 @@ bool EV_Win32Menu::synthesizeMenu(XAP_Frame * pFrame, HMENU menuRoot)
 						m_vecItems.addItem(item);
 							
 						if (!m_bTrack && stack.size()==2)
-							AppendMenuW(m, flags,u, szLabelName);
+							AppendMenuW(m, flags, popupId, szLabelName);
 						else {
 							if (UT_IsWinVista()) {
-								AppendMenuW(m, flags|MF_STRING,u, szLabelName);
-								_setBitmapforID(m, id, u);
+								AppendMenuW(m, flags|MF_STRING, popupId, szLabelName);
+								_setBitmapforID(m, id, popupId);
 							}
 							else
-								AppendMenuW(m, flags|MF_OWNERDRAW,u, (const wchar_t*) item);
+								AppendMenuW(m, flags|MF_OWNERDRAW, popupId, (const wchar_t*) item);
 						}
 					}		
 						
@@ -725,7 +727,7 @@ HBITMAP EV_Win32Menu::_loadBitmap(XAP_Menu_Id id, int width, int height, const U
 }
 
 // Sets the Bitmap in Windows Vista
-void EV_Win32Menu::_setBitmapforID (HMENU hMenu, XAP_Menu_Id id, UINT cmd)
+void EV_Win32Menu::_setBitmapforID (HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd)
 {
 	UT_RGBColor Color;
 	Color.m_bIsTransparent=true;

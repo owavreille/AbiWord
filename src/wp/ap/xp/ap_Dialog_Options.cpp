@@ -458,7 +458,8 @@ void AP_Dialog_Options::_storeDataForControl (tControl id)
 void AP_Dialog_Options::_setColorForTransparent(const gchar *
 												pzsColorForTransparent)
 {
-	strncpy(m_CurrentTransparentColor,pzsColorForTransparent,9);
+	strncpy(m_CurrentTransparentColor, pzsColorForTransparent, sizeof(m_CurrentTransparentColor) - 1);
+	m_CurrentTransparentColor[sizeof(m_CurrentTransparentColor) - 1] = 0;
 }
 
 const gchar * AP_Dialog_Options::_gatherColorForTransparent(void)

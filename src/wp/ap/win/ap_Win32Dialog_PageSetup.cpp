@@ -20,6 +20,7 @@
 
 #include <windows.h>
 #include <math.h>
+#include <stdlib.h>
 
 #include "ut_types.h"
 #include "ut_string.h"
@@ -51,6 +52,19 @@
 #define SIGDIGIT	4
 #define FMT_STRING "%0.2f"
 #define EPSILON 1.0e-7
+
+// atof stays in the C locale, so a French comma is cut at the separator.
+static double s_dialogMeasure(const char * text)
+{
+	char normalized[BUFSIZE];
+	size_t i = 0;
+	if (!text)
+		return 0.0;
+	for (; text[i] && i + 1 < sizeof(normalized); ++i)
+		normalized[i] = (text[i] == ',') ? '.' : text[i];
+	normalized[i] = 0;
+	return strtod(normalized, nullptr);
+}
 
 float mScale[] = { 25.4f, 10.0f, 1.0f };
 
@@ -322,10 +336,10 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
 			buf[BUFSIZE - 1] = 0;
-			if( atof(buf) >= 0.0 && atof(buf) != m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()) )
+			if( s_dialogMeasure(buf) >= 0.0 && s_dialogMeasure(buf) != m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()) )
 			{
-				m_pParent->m_PageSize.Set( (m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? atof(buf) : m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()),
-								(m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()) : atof(buf),
+				m_pParent->m_PageSize.Set( (m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? s_dialogMeasure(buf) : m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()),
+								(m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()) : s_dialogMeasure(buf),
 								m_pParent->m_PageSize.getDims() );
 				m_pParent->updatePageSize();
 				m_pParent->updatePreview();
@@ -342,10 +356,10 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
 			buf[BUFSIZE - 1] = 0;
-			if( atof(buf) >= 0.0 && atof(buf) != m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()) )
+			if( s_dialogMeasure(buf) >= 0.0 && s_dialogMeasure(buf) != m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()) )
 			{
-				m_pParent->m_PageSize.Set( (m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()) : atof(buf), 
-								(m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? atof(buf) : m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()),
+				m_pParent->m_PageSize.Set( (m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()) : s_dialogMeasure(buf), 
+								(m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? s_dialogMeasure(buf) : m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()),
 								m_pParent->m_PageSize.getDims() );
 				m_pParent->updatePageSize();
 				m_pParent->updatePreview();
@@ -604,9 +618,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
 			buf[BUFSIZE - 1] = 0;
-			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginTop()) > EPSILON ) )
+			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginTop()) > EPSILON ) )
 			{
-				m_pParent->setMarginTop( (float) atof(buf) );
+				m_pParent->setMarginTop( (float) s_dialogMeasure(buf) );
 				m_pParent->updatePreview();
 			}
 			m_pParent->updateTopMargin();
@@ -620,9 +634,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
 			buf[BUFSIZE - 1] = 0;
-			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginBottom()) > EPSILON ) )
+			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginBottom()) > EPSILON ) )
 			{
-				m_pParent->setMarginBottom( (float) atof(buf) );
+				m_pParent->setMarginBottom( (float) s_dialogMeasure(buf) );
 				m_pParent->updatePreview();
 			}
 			m_pParent->updateBottomMargin();
@@ -636,9 +650,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
 			buf[BUFSIZE - 1] = 0;
-			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginLeft()) > EPSILON ) )
+			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginLeft()) > EPSILON ) )
 			{
-				m_pParent->setMarginLeft( (float) atof(buf) );
+				m_pParent->setMarginLeft( (float) s_dialogMeasure(buf) );
 				m_pParent->updatePreview();
 			}
 			m_pParent->updateLeftMargin();
@@ -652,9 +666,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
 			buf[BUFSIZE - 1] = 0;
-			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginRight()) > EPSILON ) )
+			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginRight()) > EPSILON ) )
 			{
-				m_pParent->setMarginRight( (float) atof(buf) );
+				m_pParent->setMarginRight( (float) s_dialogMeasure(buf) );
 				m_pParent->updatePreview();
 			}
 			m_pParent->updateRightMargin();
@@ -668,9 +682,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
 			buf[BUFSIZE - 1] = 0;
-			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginHeader()) > EPSILON ) )
+			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginHeader()) > EPSILON ) )
 			{
-				m_pParent->setMarginHeader( (float) atof(buf) );
+				m_pParent->setMarginHeader( (float) s_dialogMeasure(buf) );
 				m_pParent->updatePreview();
 			}
 			m_pParent->updateHeaderMargin();
@@ -684,9 +698,9 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 			buf[0] = 0;
 			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
 			buf[BUFSIZE - 1] = 0;
-			if( (atof( buf ) > -EPSILON) && (fabs(atof(buf) - (double) m_pParent->getMarginFooter()) > EPSILON ) )
+			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginFooter()) > EPSILON ) )
 			{
-				m_pParent->setMarginFooter( (float) atof(buf) );
+				m_pParent->setMarginFooter( (float) s_dialogMeasure(buf) );
 				m_pParent->updatePreview();
 			}
 			m_pParent->updateFooterMargin();

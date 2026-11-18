@@ -386,8 +386,13 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 		m_answer = a_CANCEL;
 		return;
 	}
-	ResetDCW(m_pPersistPrintDlg->hDC,pDevMode);
+	const HDC reset = ResetDCW(m_pPersistPrintDlg->hDC, pDevMode);
 	GlobalUnlock(m_pPersistPrintDlg->hDevMode);
+	if (!reset)
+	{
+		m_answer = a_CANCEL;
+		return;
+	}
 	
 	if (m_bDoPrintToFile)
 	{
