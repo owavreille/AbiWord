@@ -1025,6 +1025,23 @@ bool s_AbiWord_1_Listener::signal(UT_uint32 /* iSignal */)
 
 UT_Error IE_Exp_AbiWord_1::_writeDocument(void)
 {
+	// .zabw and .abw.gz are the compressed names of this same exporter.
+	// The suffix selects compression; --exp-props=compress:0 can turn it off.
+	const char * name = getFileName();
+	if (name && *name)
+	{
+		const size_t nlen = strlen(name);
+		auto endsWith = [name, nlen](const char * suffix) -> bool
+		{
+			const size_t slen = strlen(suffix);
+			if (nlen < slen)
+				return false;
+			return g_ascii_strcasecmp(name + (nlen - slen), suffix) == 0;
+		};
+		if (endsWith(".zabw") || endsWith(".abw.gz"))
+			m_bIsCompressed = true;
+	}
+
 	// allow people to override this on the command line or otherwise
 	const std::string & prop = (getProperty ("compress"));
 	if (!prop.empty())

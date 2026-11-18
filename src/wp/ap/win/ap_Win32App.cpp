@@ -1633,21 +1633,36 @@ bool AP_Win32App::doWindowlessArgs(const AP_Args *Args, bool & bSuccess)
 			{
 				// do not assert here, if the graphics creation failed, the static
 				// constructor has asserted already somewhere more relevant
+				fprintf(stderr, "AbiWord: could not open the printer [%s]\n", Args->m_sPrintTo);
+				bSuccess = false;
 				return false;
 			}
 			
 			conv.setVerbose(Args->m_iVerbose);
-			conv.print (Args->m_sFiles[0], pG, Args->m_sFileExtension);
+			if (!conv.print (Args->m_sFiles[0], pG, Args->m_sFileExtension))
+			{
+				fprintf(stderr, "AbiWord: could not print [%s]\n", Args->m_sFiles[0]);
+				bSuccess = false;
+			}
 	      
 			delete pG;
 		}
 		else
 		{
 			// couldn't load document
-			UT_DEBUGMSG(("Error: no file to print!\n"));
+			fprintf(stderr, "AbiWord: no file to print.\n");
 			bSuccess = false;
 		}
 
+		return false;
+	}
+
+	if (Args->m_iToThumb > 0)
+	{
+		// The thumbnail path in the GTK build is still disabled. Opening
+		// the editor here leaves the process waiting with no PNG.
+		fprintf(stderr, "AbiWord: thumbnail export is not available in this Windows build.\n");
+		bSuccess = false;
 		return false;
 	}
 
