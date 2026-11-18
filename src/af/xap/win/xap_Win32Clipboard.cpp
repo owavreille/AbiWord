@@ -58,8 +58,14 @@ bool XAP_Win32Clipboard::openClipboard(HWND hWnd)
 
 bool XAP_Win32Clipboard::closeClipboard(void)
 {
+	// CloseClipboard leaves the clipboard open when it fails. Clearing the
+	// flag first makes the next OpenClipboard refuse a clipboard we still own.
+	if (!m_bOpen)
+		return false;
+	if (CloseClipboard() == 0)
+		return false;
 	m_bOpen = false;
-	return (CloseClipboard() != 0);
+	return true;
 }
 
 bool XAP_Win32Clipboard::clearClipboard(void)
