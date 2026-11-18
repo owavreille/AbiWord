@@ -20,6 +20,7 @@
 
 #include <windows.h>
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
 #include "ut_types.h"
@@ -860,7 +861,8 @@ void AP_Win32Dialog_PageSetup::updateWidth()
 
 	char buf[BUFSIZE];
 
-	sprintf (buf, FMT_STRING, m_PageSize.Width (m_PageSize.getDims()));
+	snprintf(buf, sizeof(buf), FMT_STRING, m_PageSize.Width (m_PageSize.getDims()));
+	buf[sizeof(buf) - 1] = 0;
 	SetDlgItemText( m_page.getHandle(),
 			AP_RID_DIALOG_PAGE_SETUP_EBX_WIDTH, buf);
 	
@@ -869,7 +871,8 @@ void AP_Win32Dialog_PageSetup::updateWidth()
 void AP_Win32Dialog_PageSetup::updateHeight()
 {
 	char buf[BUFSIZE];
-	sprintf (buf, FMT_STRING, m_PageSize.Height(m_PageSize.getDims()));
+	snprintf(buf, sizeof(buf), FMT_STRING, m_PageSize.Height(m_PageSize.getDims()));
+	buf[sizeof(buf) - 1] = 0;
 	SetDlgItemText( m_page.getHandle(),
    	                AP_RID_DIALOG_PAGE_SETUP_EBX_HEIGHT, buf);
 }

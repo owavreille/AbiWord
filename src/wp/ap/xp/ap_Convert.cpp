@@ -234,7 +234,12 @@ bool AP_Convert::convertTo(const char * szSourceFilename,
 {
 	UT_Error error = UT_OK;
 
-	UT_return_val_if_fail(targetFormat != IEFT_Unknown, false);
+	if (targetFormat == IEFT_Unknown)
+	{
+		if (m_iVerbose > 0)
+			fprintf(stderr, "AbiWord: unknown export format.\n");
+		return false;
+	}
 	UT_return_val_if_fail(szSourceFilename != nullptr, false);
 	UT_return_val_if_fail(szTargetFilename != nullptr, false);
 
@@ -352,7 +357,11 @@ bool AP_Convert::convertTo(const char * szFilename,
 
       // unknown suffix and mime type
       if(ieft == IEFT_Unknown)
-	return false;
+	{
+	  if (m_iVerbose > 0)
+	    fprintf(stderr, "AbiWord: unknown export format [%s].\n", szTargetSuffixOrMime);
+	  return false;
+	}
     }
 
   if (file.empty())

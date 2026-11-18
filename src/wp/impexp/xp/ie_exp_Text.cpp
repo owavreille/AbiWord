@@ -138,7 +138,7 @@ UT_Confidence_t IE_Exp_Text_Sniffer::supportsMIME (const char * szMIME)
  */
 bool IE_Exp_Text_Sniffer::recognizeSuffix(const char * szSuffix)
 {
-	return (!g_ascii_strcasecmp(szSuffix,".txt") || !g_ascii_strcasecmp(szSuffix, ".text"));
+	return (!g_ascii_strcasecmp(szSuffix,".txt") || !g_ascii_strcasecmp(szSuffix, ".text") || !g_ascii_strcasecmp(szSuffix, ".utf8"));
 }
 
 UT_Error IE_Exp_Text_Sniffer::constructExporter(PD_Document * pDocument,

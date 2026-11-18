@@ -1130,7 +1130,16 @@ void IE_Imp_XHTML::startElement(const gchar *name,
 					utf8val = s_parseCSStyle (utf8val, CSS_MASK_INLINE);
 					UT_DEBUGMSG(("CSS->Props (utf8val): [%s]\n",utf8val.utf8_str()));
 				}
-			X_CheckError(pushInline (utf8val.utf8_str ()));
+			// An empty span still opens an inline scope. pushInline()
+			// skips the push when there are no properties, and the
+			// matching end tag then rejects the document.
+			if (utf8val.byteLength())
+				X_CheckError(pushInline (utf8val.utf8_str ()));
+			else
+				{
+					X_CheckError(requireBlock ());
+					_pushInlineFmt(PP_NOPROPS);
+				}
 		}
 		return;
 
