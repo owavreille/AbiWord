@@ -563,7 +563,13 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 	}
 
 	UINT lines = static_cast<UINT>(bmpInfo.header.biHeight < 0 ? -bmpInfo.header.biHeight : bmpInfo.header.biHeight);
-	GetDIBits(hdc, dibBitmap, 0, lines, pBuf, reinterpret_cast<BITMAPINFO *>(&bmpInfo), DIB_RGB_COLORS);
+	if (GetDIBits(hdc, dibBitmap, 0, lines, pBuf, reinterpret_cast<BITMAPINFO *>(&bmpInfo), DIB_RGB_COLORS) == 0)
+	{
+		free(pBuf);
+		ReleaseDC(nullptr, hdc);
+		DeleteObject(dibBitmap);
+		return false;
+	}
 	DeleteObject(dibBitmap);
 
 	BYTE* buff = (BYTE *)pBuf;
@@ -592,8 +598,23 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 
 	// convert the DIB into a DDB for display purposes
 	LONG height = bmpInfo.header.biHeight < 0 ? -bmpInfo.header.biHeight : bmpInfo.header.biHeight;
+	if (bmpInfo.header.biWidth <= 0 || height <= 0)
+	{
+		free(pBuf);
+		ReleaseDC(nullptr, hdc);
+		return false;
+	}
 	*pBitmap = CreateCompatibleBitmap(hdc, bmpInfo.header.biWidth, height);
-	SetDIBits(hdc, *pBitmap, 0, lines, pBuf, reinterpret_cast<BITMAPINFO *>(&bmpInfo), DIB_RGB_COLORS);
+	// SetDIBits returns 0 when the bitmap was not written.
+	if (!*pBitmap || SetDIBits(hdc, *pBitmap, 0, lines, pBuf, reinterpret_cast<BITMAPINFO *>(&bmpInfo), DIB_RGB_COLORS) == 0)
+	{
+		if (*pBitmap)
+			DeleteObject(*pBitmap);
+		*pBitmap = nullptr;
+		free(pBuf);
+		ReleaseDC(nullptr, hdc);
+		return false;
+	}
 	free(pBuf);
 	ReleaseDC(nullptr, hdc);
 	return true;
@@ -697,7 +718,13 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 	}
 
 	UINT lines = static_cast<UINT>(bmpInfo.header.biHeight < 0 ? -bmpInfo.header.biHeight : bmpInfo.header.biHeight);
-	GetDIBits(hdc, dibBitmap, 0, lines, pBuf, reinterpret_cast<BITMAPINFO *>(&bmpInfo), DIB_RGB_COLORS);
+	if (GetDIBits(hdc, dibBitmap, 0, lines, pBuf, reinterpret_cast<BITMAPINFO *>(&bmpInfo), DIB_RGB_COLORS) == 0)
+	{
+		free(pBuf);
+		ReleaseDC(nullptr, hdc);
+		DeleteObject(dibBitmap);
+		return false;
+	}
 	DeleteObject(dibBitmap);
 
 	BYTE* buff = (BYTE *)pBuf;

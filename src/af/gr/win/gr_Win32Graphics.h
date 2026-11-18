@@ -372,6 +372,7 @@ protected:
 	HDC						m_hdc;
 	bool					m_bOwnHDC;
 	bool					m_bOwnDocInfo;
+	bool					m_bOwnDevMode;
 	HDC                     m_printHDC;
 	static HDC				m_defPrintHDC;
 	static UT_uint32		s_iInstanceCount;

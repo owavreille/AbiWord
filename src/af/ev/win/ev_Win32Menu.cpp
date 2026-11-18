@@ -956,8 +956,11 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 	else
 		sTextLeft.fromLocale (item->szText);	
 	
-	if (lpdis->itemState & ODS_SELECTED) 
-		crBkgnd = SetBkColor(lpdis->hDC, GetSysColor(COLOR_HIGHLIGHT));
+	if (lpdis->itemState & ODS_SELECTED)
+	{
+		const COLORREF previous = SetBkColor(lpdis->hDC, GetSysColor(COLOR_HIGHLIGHT));
+		crBkgnd = (previous == CLR_INVALID) ? CLR_INVALID : previous;
+	}
 
 	/* Draw text*/
 	if(m_iDIR)
@@ -979,7 +982,7 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 					 DT_RIGHT | DT_VCENTER | DT_SINGLELINE | m_iDIR);
 	}
 	
-	if (lpdis->itemState & ODS_SELECTED) 
+	if ((lpdis->itemState & ODS_SELECTED) && crBkgnd != CLR_INVALID)
 		SetBkColor(lpdis->hDC, crBkgnd); 
 	
 	/* Draw bitmap*/
@@ -1011,7 +1014,7 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 			HBITMAP bm = CreateBitmap(nWidth, nHeight, 1, 1, nullptr );
 			HDC hdcMem = bm ? CreateCompatibleDC(lpdis->hDC) : nullptr;
 
-			SetBkColor(lpdis->hDC, GetSysColor(colorID));
+			const COLORREF checkBk = SetBkColor(lpdis->hDC, GetSysColor(colorID));
 			if (bm && hdcMem)
 			{
 				HGDIOBJ previous = SelectObject(hdcMem, bm);
@@ -1032,11 +1035,14 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 				DeleteDC(hdcMem);
 			if (bm)
 				DeleteObject(bm);
+			if (checkBk != CLR_INVALID)
+				SetBkColor(lpdis->hDC, checkBk);
 		}	
 
     if (hfontOld)
 		SelectObject(lpdis->hDC, hfontOld); 
-    SetTextColor(lpdis->hDC, crText); 	
+    if (crText != CLR_INVALID)
+		SetTextColor(lpdis->hDC, crText); 	
 	if (hBitmap)
 		DeleteObject(hBitmap);	
 }
