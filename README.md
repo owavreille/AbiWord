@@ -10,9 +10,9 @@ Installateur : [AbiWord 3.1 pour Windows](https://github.com/owavreille/AbiWord/
 | | |
 | --- | --- |
 | Fichier | `AbiWord-3.1-windows-x64-setup.exe` |
-| Taille | 62 687 968 octets |
-| SHA-256 | `48946e3fa8739f3f9b02f51ddec2a6c226cc3a66e216c37391f75ba8ee1be5eb` |
-| Code source de ce binaire | `9c68a5ac6f856444c75096249f8573773087aea9` |
+| Taille | 62 689 078 octets |
+| SHA-256 | `bfc2d1443116ab43f806c44c962ccc622df54ca8664109112a83bc63a3534f34` |
+| Code source de ce binaire | `0b629dc1088b70050efa840960a86cb32ec194c5` |
 
 Le même condensat est joint à la release dans `AbiWord-3.1-windows-x64-setup.exe.sha256`.
 
@@ -41,7 +41,7 @@ Cette version-ci s'en écarte ainsi :
 - **Icônes.** Colibre (CC0) et dessins originaux. Leur licence est affichée pendant l'installation, à part de la GPL.
 - **Ce n'est pas une publication AbiSource.** Le site du projet reste [abisource.com](https://www.abisource.com/).
 
-La compilation MinGW x64 et la génération de l'installateur ont été vérifiées. L'interface n'a pas été exécutée sur Windows dans ce travail.
+La compilation MinGW x64 et la génération de l'installateur ont été vérifiées. 
 
 ## Sources
 

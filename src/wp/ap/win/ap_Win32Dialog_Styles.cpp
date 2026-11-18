@@ -110,8 +110,10 @@ void AP_Win32Dialog_Styles::_onDrawButton(LPDRAWITEMSTRUCT lpDrawItemStruct, HWN
         hPen = CreatePen(PS_SOLID, 0, GetSysColor(COLOR_GRAYTEXT));
     else
         hPen = CreatePen(PS_SOLID, 0, GetSysColor(COLOR_BTNTEXT));
-    
-    pOldPen =  (HPEN) SelectObject(hdc, hPen);
+
+    pOldPen = nullptr;
+    if (hPen)
+        pOldPen = (HPEN) SelectObject(hdc, hPen);
 
     // draw the border of the button
     if(uiState&ODS_SELECTED)
@@ -139,9 +141,14 @@ void AP_Win32Dialog_Styles::_onDrawButton(LPDRAWITEMSTRUCT lpDrawItemStruct, HWN
 	str.fromUTF8(pText);
 	ExtTextOutW(hdc, (nWidth/6)*1, ((nHeight/4)), 0, nullptr, str.c_str(), str.length(), nullptr);
 		
-    // Clean Up
-    SelectObject(hdc, pOldPen);       
-    DeleteObject(hPen);
+    // Clean Up. A failed CreatePen or SelectObject must not select NULL
+    // or delete a pen that is still in the DC.
+    if (hPen)
+    {
+        if (pOldPen)
+            SelectObject(hdc, pOldPen);
+        DeleteObject(hPen);
+    }
 }
 
 void AP_Win32Dialog_Styles::runModal(XAP_Frame * pFrame)

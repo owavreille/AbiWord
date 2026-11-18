@@ -894,7 +894,11 @@ void GR_Win32Graphics::drawLine(UT_sint32 x1, UT_sint32 y1, UT_sint32 x2, UT_sin
 	/*If not cached, let's create it*/
 	if (!hPen)
 	{
+		// CreatePen returns NULL when GDI has no pen. Selecting that
+		// leaves the previous pen in the DC and still draws.
 		hPen = CreatePen(penStyle, iLineWidth, m_clrCurrent);
+		if (!hPen)
+			return;
 
 		if (m_nArPenPos<_MAX_CACHE_PENS)
 		{			
@@ -918,7 +922,15 @@ void GR_Win32Graphics::drawLine(UT_sint32 x1, UT_sint32 y1, UT_sint32 x2, UT_sin
 	
 	UT_Win32TraceF("line %d,%d %d,%d pen=%p w=%d cached=%d",
 				  x1, y1, x2, y2, (void*)hPen, iLineWidth, bCached ? 1 : 0);
-	HPEN hOldPen = (HPEN) SelectObject(m_hdc, hPen);	
+	// SelectObject returns NULL when the pen was not selected. The
+	// previous pen must stay in the DC.
+	HPEN hOldPen = (HPEN) SelectObject(m_hdc, hPen);
+	if (!hOldPen)
+	{
+		if (!bCached)
+			DeleteObject(hPen);
+		return;
+	}
 
 	MoveToEx(m_hdc, x1, y1, nullptr);
 	LineTo(m_hdc, x2, y2);
@@ -964,14 +976,22 @@ void GR_Win32Graphics::xorLine(UT_sint32 x1, UT_sint32 y1, UT_sint32 x2, UT_sint
 
 	if (m_clrCurrent != m_clrXorPen || !m_hXorPen)
 	{
+		HPEN created = CreatePen(PS_SOLID, (UT_sint32)((double)_tduR(m_iLineWidth) * m_fXYRatio), m_clrCurrent);
+		if (!created)
+			return;
 		if (m_hXorPen)
 			DeleteObject(m_hXorPen);
-		m_hXorPen = CreatePen(PS_SOLID, (UT_sint32)((double)_tduR(m_iLineWidth) * m_fXYRatio), m_clrCurrent);
+		m_hXorPen = created;
 		m_clrXorPen = m_clrCurrent;
 	}
 
 	int iROP = SetROP2(m_hdc, R2_XORPEN);
 	HPEN hOldPen = (HPEN)SelectObject(m_hdc, m_hXorPen);
+	if (!hOldPen)
+	{
+		SetROP2(m_hdc, iROP);
+		return;
+	}
 
 	MoveToEx(m_hdc, x1, y1, nullptr);
 	LineTo(m_hdc, x2, y2);
@@ -986,11 +1006,26 @@ void GR_Win32Graphics::polyLine(const UT_Point * pts, UT_uint32 nPoints)
 	UT_DEBUGMSG(("GR_Win32Graphics::polyLine %u\n", nPoints));	
 	#endif
 	
+	if (!pts || nPoints == 0 || !m_hdc)
+		return;
+
 	HPEN hPen = CreatePen(PS_SOLID, (UT_sint32)((double)_tduR(m_iLineWidth) * m_fXYRatio), m_clrCurrent);
-	HPEN hOldPen = (HPEN) SelectObject(m_hdc, hPen);
+	if (!hPen)
+		return;
 
 	POINT * points = (POINT *)UT_calloc(nPoints, sizeof(POINT));
-	UT_return_if_fail(points);
+	if (!points)
+	{
+		DeleteObject(hPen);
+		return;
+	}
+	HPEN hOldPen = (HPEN) SelectObject(m_hdc, hPen);
+	if (!hOldPen)
+	{
+		DeleteObject(hPen);
+		FREEP(points);
+		return;
+	}
 
 	for (UT_uint32 i = 0; i < nPoints; i++)
 	{
@@ -1026,7 +1061,11 @@ void GR_Win32Graphics::fillRect(const UT_RGBColor& c, UT_sint32 x, UT_sint32 y, 
 	// CreateSolidBrush is dog slow.
 	HDC hdc = m_hdc;
 	UT_Win32TraceF("fill %d,%d %d,%d hdc=%p", r.left, r.top, r.right, r.bottom, (void*)hdc);
+	// SetBkColor returns CLR_INVALID and leaves the DC unchanged.
+	// Writing that value back is not the previous color.
 	const COLORREF cr = ::SetBkColor(hdc,  clr);
+	if (cr == CLR_INVALID)
+		return;
 	::ExtTextOutW(hdc, 0, 0, ETO_OPAQUE, &r, nullptr, 0, nullptr);
 	::SetBkColor(hdc, cr);
 	UT_Win32TraceHeap("fill");
@@ -1931,13 +1970,30 @@ void GR_Font::s_getGenericFontProperties(const char * szFontName,
 	// created.  hopefully, this will let us more accurately
 	// reflect what is being seen on screen.
 
+	// CreateFontIndirect and CreateDC return NULL on failure. GetTextMetrics
+	// leaves TEXTMETRIC untouched, so a failed call must not be read.
 	HFONT hFont = CreateFontIndirectW(&lf);
 	HDC hdc = CreateDCW(L"DISPLAY",nullptr,nullptr,nullptr);
-	HFONT hFontOld = (HFONT) SelectObject(hdc,hFont);
-	GetTextMetricsW(hdc,&tm);
-	SelectObject(hdc,hFontOld);
-	DeleteObject(hFont);
-	DeleteDC(hdc);
+	bool measured = false;
+	if (hFont && hdc)
+	{
+		HFONT hFontOld = (HFONT) SelectObject(hdc,hFont);
+		if (hFontOld && GetTextMetricsW(hdc,&tm))
+			measured = true;
+		if (hFontOld)
+			SelectObject(hdc,hFontOld);
+	}
+	if (hFont)
+		DeleteObject(hFont);
+	if (hdc)
+		DeleteDC(hdc);
+	if (!measured)
+	{
+		if (pff) *pff = FF_Unknown;
+		if (pfp) *pfp = FP_Variable;
+		if (pbTrueType) *pbTrueType = false;
+		return;
+	}
 
 	BYTE xx = tm.tmPitchAndFamily;
 
@@ -2026,7 +2082,8 @@ GR_Win32Font::GR_Win32Font(LOGFONTW & lf, double fPoints, HDC hdc, HDC printHDC)
 	{
 		// now we need to retrieve the y-axis metrics
 		HFONT hOldFont = (HFONT)SelectObject(printHDC, printFont);
-		if (hOldFont == (HFONT)GDI_ERROR)
+		// A font selection fails with NULL. GDI_ERROR is the region failure.
+		if (!hOldFont || hOldFont == (HFONT)GDI_ERROR)
 		{
 			LOG_WIN32_EXCPT("Could not select font into DC.")
 			m_layoutFont = nullptr;
@@ -2034,10 +2091,12 @@ GR_Win32Font::GR_Win32Font(LOGFONTW & lf, double fPoints, HDC hdc, HDC printHDC)
 		}
 		else
 		{
-			// Setting the m_hashKey 
-			wchar_t lpFaceName[1000];
-			
-			GetTextFaceW(printHDC, 1000, lpFaceName );
+			// Setting the m_hashKey. GetTextFaceW leaves the buffer untouched
+			// when it fails, so it must start empty.
+			wchar_t lpFaceName[LF_FACESIZE];
+			lpFaceName[0] = 0;
+			if (GetTextFaceW(printHDC, LF_FACESIZE, lpFaceName) == 0)
+				lpFaceName[0] = 0;
 
 			_updateFontYMetrics(hdc, printHDC);
 
@@ -2058,7 +2117,11 @@ GR_Win32Font::GR_Win32Font(LOGFONTW & lf, double fPoints, HDC hdc, HDC printHDC)
 			
 			UINT d = m_tm.tmDefaultChar;
 
-			UT_return_if_fail(_getCharWidths());
+			if (!_getCharWidths())
+			{
+				SelectObject(printHDC, hOldFont);
+				return;
+			}
 			_getCharWidths()->setCharWidthsOfRange(printHDC, d, d);
 			m_defaultCharWidth = getCharWidthFromCache(d);
 
@@ -2144,7 +2207,13 @@ void GR_Win32Font::_updateFontYMetrics(HDC hdc, HDC printHDC)
 	// we have to remeasure if (a) the printer changed, or (b) the primary device changed
 	if(printHDC != m_yhdc)
 	{
-		GetTextMetricsW(printHDC,&m_tm);
+		// A failed GetTextMetrics leaves TEXTMETRIC untouched. Caching that
+		// as the printer face makes every later line use a zero height.
+		TEXTMETRICW tm;
+		memset(&tm, 0, sizeof(tm));
+		if (!GetTextMetricsW(printHDC, &tm))
+			return;
+		m_tm = tm;
 
 		// now we have to scale the metrics down from the printHDC to our layout units
 		// 
@@ -2226,6 +2295,8 @@ UT_sint32 GR_Win32Font::measureUnremappedCharForCache(UT_UCS4Char cChar) const
 	// safe on this reused DC; deleting the DC while it is selected is not.
 	HGDIOBJ previous = SelectObject(measureDC, m_layoutFont);
 	UT_Win32TraceF("widths-font prev=%p", previous);
+	if (!previous || previous == HGDI_ERROR)
+		return 0;
 	_getCharWidths()->setCharWidthsOfRange(measureDC, base, limit);
 	UT_Win32TraceHeap("widths-range");
 	if (previous)
