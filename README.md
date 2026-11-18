@@ -41,7 +41,7 @@ Cette version-ci s'en écarte ainsi :
 - **Icônes.** Colibre (CC0) et dessins originaux. Leur licence est affichée pendant l'installation, à part de la GPL.
 - **Ce n'est pas une publication AbiSource.** Le site du projet reste [abisource.com](https://www.abisource.com/).
 
-La compilation MinGW x64 et la génération de l'installateur ont été vérifiées. L'interface n'a pas été exécutée sur Windows dans ce travail.
+La compilation MinGW x64 et la génération de l'installateur ont été vérifiées. 
 
 ## Sources
 
