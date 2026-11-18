@@ -3023,7 +3023,8 @@ void FL_DocLayout::updateColor()
 //
 // Save the new preference color
 //
-		strncpy(m_szCurrentTransparentColor, transparentColor.c_str(), 9);
+		strncpy(m_szCurrentTransparentColor, transparentColor.c_str(), sizeof(m_szCurrentTransparentColor) - 1);
+		m_szCurrentTransparentColor[sizeof(m_szCurrentTransparentColor) - 1] = 0;
 	}
 //
 // Now loop through the document and update the Background color

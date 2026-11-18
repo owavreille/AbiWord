@@ -94,14 +94,14 @@ fl_AutoNum::fl_AutoNum(	UT_uint32 id,
 		m_pParentItem(nullptr)
 {
 	// Set in Block???
-	memset(m_pszDelim, 0, 80);
-	memset(m_pszDecimal, 0, 80);
+	memset(m_pszDelim, 0, sizeof(m_pszDelim));
+	memset(m_pszDecimal, 0, sizeof(m_pszDecimal));
 	UT_ASSERT(m_pDoc);
 	if (lDelim)
-		strncpy( m_pszDelim, lDelim, 80);
+		strncpy(m_pszDelim, lDelim, sizeof(m_pszDelim) - 1);
 
 	if (lDecimal)
-		strncpy( m_pszDecimal, lDecimal, 80);
+		strncpy(m_pszDecimal, lDecimal, sizeof(m_pszDecimal) - 1);
 	
 	if(m_iParentID != 0)
 	{
@@ -372,35 +372,22 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 	// TODO This is a bit of a hack to split the delim string. It would be
 	// TODO nice to clear it up.
 
-	strncpy (p, m_pszDelim, sizeof(p));
-	UT_uint32 rTmp;
-
-	i = 0;
-
-	while (((i + 1) < G_N_ELEMENTS(p)) && p[i] && p[i] != '%' && p[i+1] != 'L')
+	strncpy(p, m_pszDelim, sizeof(p) - 1);
+	p[sizeof(p) - 1] = 0;
+	// The marker is the two characters "%L". A capital L earlier in the
+	// delimiter, as in "LEVEL %L", is ordinary text.
+	const char * marker = strstr(p, "%L");
+	if (!marker)
 	{
-		// FIXME check the bounds to not overflow leftDelim
-		// Update: the arrays are now the same length to prevent overflows
-		leftDelim[i] = p[i];
-		i++;
-	}
-	if (i >= G_N_ELEMENTS(p) || p[i] == '\0') {
-//		UT_ASSERT(UT_NOT_REACHED);
 		UT_DEBUGMSG (("Hub: not a delim (SHOULD NOT HAPPEN)!!!\n"));
 		*insPoint = 0;
 		return;
 	}
-	leftDelim[i] = '\0';
-	i += 2;
-	rTmp = i;
-	while ((i < G_N_ELEMENTS(p)) && p[i])
-	{
-		// FIXME check the bounds to not overflow rightDelim
-		// Update: the arrays are now the same length to prevent overflows
-		rightDelim[i - rTmp] = p[i];
-		i++;
-	}
-	rightDelim[i - rTmp] = '\0';
+	const size_t leftLen = static_cast<size_t>(marker - p);
+	memcpy(leftDelim, p, leftLen);
+	leftDelim[leftLen] = 0;
+	strncpy(rightDelim, marker + 2, sizeof(rightDelim) - 1);
+	rightDelim[sizeof(rightDelim) - 1] = 0;
 
 	if(m_pParent != nullptr  && m_List_Type < BULLETED_LIST)
 	{
@@ -621,8 +608,8 @@ bool fl_AutoNum::isDirty() const
 
 void fl_AutoNum::setDelim(const gchar * lDelim)
 {
-	strncpy( m_pszDelim, lDelim, 80);
-	m_pszDelim[80] = 0;
+	strncpy(m_pszDelim, lDelim, sizeof(m_pszDelim) - 1);
+	m_pszDelim[sizeof(m_pszDelim) - 1] = 0;
 	m_bDirty = true;
 }
 
@@ -639,7 +626,8 @@ const gchar * fl_AutoNum::getDecimal() const
 
 void fl_AutoNum::setDecimal(const gchar * lDecimal)
 {
-	strncpy( m_pszDecimal, lDecimal, 80);
+	strncpy(m_pszDecimal, lDecimal, sizeof(m_pszDecimal) - 1);
+	m_pszDecimal[sizeof(m_pszDecimal) - 1] = 0;
 	m_bDirty = true;
 }
 

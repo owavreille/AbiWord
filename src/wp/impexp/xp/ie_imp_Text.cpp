@@ -934,12 +934,13 @@ bool IE_Imp_Text::_doEncodingDialog(const char *szEncoding)
 	if (bOK)
 	{
 		const gchar * s;
-		static gchar szEnc[16];
+		static gchar szEnc[64];
 
 		s = pDialog->getEncoding();
 		UT_return_val_if_fail (s, false);
 
-		strcpy(szEnc,s);
+		strncpy(szEnc, s, sizeof(szEnc) - 1);
+		szEnc[sizeof(szEnc) - 1] = 0;
 		_setEncoding(static_cast<const char *>(szEnc));
 		getDoc()->setEncodingName(szEnc);
 	}

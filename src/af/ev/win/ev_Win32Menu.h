@@ -75,7 +75,7 @@ protected:
 
 	static bool					_isAMenuBar(XAP_Menu_Id	id,HMENU hMenu);
 	static HBITMAP				_loadBitmap(XAP_Menu_Id id, int width, int height, const UT_RGBColor & color);
-	void		 				_setBitmapforID(HMENU hMenu, XAP_Menu_Id id, UINT cmd);
+	void		 				_setBitmapforID(HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd);
 
 	XAP_Win32App *				m_pWin32App;
 	const EV_EditEventMapper *	m_pEEM;

@@ -1631,26 +1631,27 @@ void IE_Exp_RTF::_write_parafmt(const PP_AttrProp * pSpanAP, const PP_AttrProp *
 		///
 		/// extract text before and after numbering symbol
 		///
-		static gchar p[80],leftDelim[80],rightDelim[80];
-		sprintf(p, "%s",pAuto->getDelim());
-		UT_uint32 rTmp;
-
-		UT_uint32 i = 0;
-
-		while (p[i] && p[i] != '%' && p[i+1] != 'L')
+		char leftDelim[81];
+		char rightDelim[81];
+		const char * delim = pAuto->getDelim();
+		const char * marker = delim ? strstr(delim, "%L") : nullptr;
+		leftDelim[0] = 0;
+		rightDelim[0] = 0;
+		if (marker)
 		{
-			leftDelim[i] = p[i];
-			i++;
+			size_t leftLen = static_cast<size_t>(marker - delim);
+			if (leftLen > 80)
+				leftLen = 80;
+			memcpy(leftDelim, delim, leftLen);
+			leftDelim[leftLen] = 0;
+			strncpy(rightDelim, marker + 2, 80);
+			rightDelim[80] = 0;
 		}
-		leftDelim[i] = '\0';
-		i += 2;
-		rTmp = i;
-		while (p[i] != '\0')
+		else if (delim)
 		{
-			rightDelim[i - rTmp] = p[i];
-			i++;
+			strncpy(leftDelim, delim, 80);
+			leftDelim[80] = 0;
 		}
-		rightDelim[i - rTmp] = '\0';
 
 		fl_AutoNumConstPtr pParent = pAuto->getParent();
 		if(pParent == nullptr && (lType < BULLETED_LIST))

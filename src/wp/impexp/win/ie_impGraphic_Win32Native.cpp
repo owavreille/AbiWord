@@ -585,7 +585,11 @@ UT_Error IE_ImpGraphic_Win32Native::Convert_BMP_Palette(UT_ByteBuf* pBB)
 		palette[i].red   = ReadByte(pBB,iOffset++);
 		if(!m_bOldBMPFormat) iOffset++;
 	}
-    if (iOffset > m_iOffset) return UT_IE_BOGUSDOCUMENT;
+    if (iOffset > m_iOffset)
+	{
+		png_free(m_pPNG, palette);
+		return UT_IE_BOGUSDOCUMENT;
+	}
     
     png_set_PLTE( m_pPNG, m_pPNGInfo, palette, numClrs );
     
