@@ -93,11 +93,30 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 	if(err != UT_OK)
 		return err;
 
-	if(getProperty("background-color", szValue) == UT_OK)
+	if(hspan > 1)
 	{
-		err = exporter->setBackgroundColor(TARGET_DOCUMENT, szValue);
+		err = exporter->setGridSpan(TARGET_DOCUMENT, hspan);
 		if(err != UT_OK)
 			return err;
+	}
+
+	if(vspan > 1 && !isVertCont)
+	{
+		err = exporter->setVerticalMerge(TARGET_DOCUMENT, "restart");
+		if(err != UT_OK)
+			return err;
+	}
+	else if(isVertCont)
+	{
+		err = exporter->setVerticalMerge(TARGET_DOCUMENT, "continue");
+		if(err != UT_OK)
+			return err;
+	}
+
+	const gchar* background = nullptr;
+	if(getProperty("background-color", szValue) == UT_OK)
+	{
+		background = szValue;
 
 		const gchar * bgColor = szValue;
 
@@ -234,34 +253,20 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 	if(err != UT_OK)
 		return err;
 
-	if(hspan > 1)
+	if(background)
 	{
-		err = exporter->setGridSpan(TARGET_DOCUMENT, hspan);
+		err = exporter->setBackgroundColor(TARGET_DOCUMENT, background);
 		if(err != UT_OK)
 			return err;
 	}
 
 	if(vspan > 1)
 	{
-		if(!isVertCont)
-		{
-			err = exporter->setVerticalMerge(TARGET_DOCUMENT, "restart");
-			if(err != UT_OK)
-				return err;
-		}
-
 		//add the remaining part of the cell as a missing cell
 		OXML_SharedElement_Cell missingCell(new OXML_Element_Cell("", m_table, m_iLeft, m_iRight, -1, 1)); //vertically continued cell
 		OXML_SharedElement dummy(new OXML_Element_Paragraph(""));
 		missingCell->appendElement(dummy); //cells can't be empty!
 		m_table->addMissingCell(m_row->getRowNumber()+1, missingCell);
-	}
-
-	if(isVertCont)
-	{
-		err = exporter->setVerticalMerge(TARGET_DOCUMENT, "continue");
-		if(err != UT_OK)
-			return err;
 	}
 
 	return exporter->finishCellProperties(TARGET_DOCUMENT);

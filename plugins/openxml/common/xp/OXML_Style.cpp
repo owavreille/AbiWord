@@ -65,7 +65,7 @@ UT_Error OXML_Style::serialize(IE_Exp_OpenXML* exporter)
 			b_docDefaults = true;
 		}
 	}
-	std::string szType(type); // type is character or paragraph
+	std::string szType(type ? type : "paragraph");
 
 	if(b_docDefaults)
 	{
