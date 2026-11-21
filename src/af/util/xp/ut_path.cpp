@@ -67,7 +67,7 @@ std::string UT_createTmpFile(const std::string& prefix, const std::string& exten
 			g_error_free(err);
 		return "";
 	}
-	g_close(fd);
+	g_close(fd, nullptr);
 
 	std::string result = name ? name : "";
 	g_free(name);
@@ -88,7 +88,7 @@ std::string UT_createTmpFile(const std::string& prefix, const std::string& exten
 		g_unlink(result.c_str());
 		return "";
 	}
-	g_close(outfd);
+	g_close(outfd, nullptr);
 	g_unlink(result.c_str());
 	return withExt;
 }
