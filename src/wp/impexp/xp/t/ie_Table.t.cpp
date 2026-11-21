@@ -98,7 +98,7 @@ private:
   std::vector<TF_TableDesc> m_tables;
 };
 
-static const char *DATA_FILE =
+static const char *TABLE_DATA_FILE =
   "/test/wp/table.abw";
 
 }
@@ -107,7 +107,7 @@ TFTEST_MAIN("ie Table")
 {
   {
     std::string data_file;
-    TFPASS(TF_Test::ensure_test_data(DATA_FILE, data_file));
+    TFPASS(TF_Test::ensure_test_data(TABLE_DATA_FILE, data_file));
 
     PD_Document* doc = new PD_Document;
 

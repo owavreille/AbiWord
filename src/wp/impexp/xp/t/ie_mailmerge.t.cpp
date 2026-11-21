@@ -36,13 +36,13 @@ TFTEST_MAIN("IE Mail merge sniffers")
 }
 
 
-static const char *DATA_FILE =
+static const char *MAILMERGE_DATA_FILE =
   "/test/wp/mailmerge/data.csv";
 
 TFTEST_MAIN("IE Mail merger")
 {
   std::string data_file;
-  TFPASS(TF_Test::ensure_test_data(DATA_FILE, data_file));
+  TFPASS(TF_Test::ensure_test_data(MAILMERGE_DATA_FILE, data_file));
 
   IE_MailMergePtr pie;
   UT_Error err = IE_MailMerge::constructMerger(data_file.c_str(),
