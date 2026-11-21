@@ -47,12 +47,17 @@
 		unsigned int count;							\
 		if (isLoading()) {							\
 			*this << COMPACT_INT(count);			\
+			if (failed() || count > (1u << 20) || (count && sizeof(T) > static_cast<size_t>(-1) / count) || !canSerialize(static_cast<unsigned int>(count * sizeof(T)))) { \
+				fail();								\
+				return *this;						\
+			}										\
 			Val.resize( count );					\
 		} else {									\
 			count = Val.size();						\
 			*this << COMPACT_INT(count);			\
 		}											\
-		Serialize( &Val[0], count*sizeof(T) );		\
+		if (count)									\
+			Serialize( &Val[0], count*sizeof(T) );	\
 		return *this;								\
 	}
 
@@ -88,12 +93,21 @@ public:
 	virtual unsigned int Size() const = 0;
 	virtual void Skip( unsigned int Count ) = 0;
 	virtual bool EndOfFile() const = 0;
+	bool failed() const { return m_bFailed; }
 protected:
 	Archive( bool bLoading )
 	: m_bLoading( bLoading )
+	, m_bFailed( false )
 	{}
+	void fail() { m_bFailed = true; }
+	virtual bool canSerialize(unsigned int count) const
+	{
+		(void)count;
+		return !m_bFailed;
+	}
 private:
 	bool	m_bLoading;
+	bool	m_bFailed;
 
 public:
 	// pod types
@@ -115,13 +129,19 @@ public:
 		if (isLoading()) {
 			// get size, resize, and then get characters
 			*this << COMPACT_INT(s);
+			if (failed() || s > (16u << 20) || !canSerialize(s)) {
+				fail();
+				Val.clear();
+				return *this;
+			}
 			Val.resize( s );
 		} else {
 			// save size & then characters
-			s = Val.size();
+			s = static_cast<unsigned int>(Val.size());
 			*this << COMPACT_INT(s);
 		}
-		Serialize( &Val[0], s );
+		if (s)
+			Serialize( &Val[0], s );
 		return *this;
 	}
 #if !defined(SERIALIZATION_TEST)
@@ -158,13 +178,19 @@ public:
 		unsigned int count;
 		if (isLoading()) {
 			*this << count;
+			if (failed() || count > (1u << 20)) {
+				fail();
+				return *this;
+			}
 			Val.resize( count );
 		} else {
-			count = Val.size();
+			count = static_cast<unsigned int>(Val.size());
 			*this << count;
 		}
 		for (unsigned int i=0; i<count; ++i) {
 			*this << Val[i];
+			if (failed())
+				return *this;
 		}
 		return *this;
 	}
@@ -177,6 +203,11 @@ public:
 		{
 			Val.clear();
 			*this << count;
+			if (failed() || count > (1u << 20))
+			{
+				fail();
+				return *this;
+			}
 			for (unsigned int i=0; i<count; ++i)
 			{
 				_K k;
@@ -223,24 +254,39 @@ public:
 	: StrArchive( sSource )
 	, m_uPosition( 0 )
 	{}
+	virtual bool canSerialize(unsigned int count) const override
+	{
+		if (failed())
+			return false;
+		if (!isLoading())
+			return true;
+		return count <= m_sSource.size() && m_uPosition <= m_sSource.size() - count;
+	}
 	virtual void Serialize(void* Buffer, unsigned int Count) override
 	{
-#if !defined(SERIALIZATION_TEST)
-		UT_ASSERT( m_uPosition + Count <= m_sSource.size() );	// check if we're overshooting!
-#endif
-		memcpy( Buffer, &m_sSource[m_uPosition], Count );
+		if (!canSerialize(Count))
+		{
+			fail();
+			if (Buffer && Count)
+				memset(Buffer, 0, Count);
+			return;
+		}
+		if (Count)
+			memcpy( Buffer, &m_sSource[m_uPosition], Count );
 		m_uPosition += Count;
 	}
 	virtual void Skip(unsigned int Count) override
 	{
-#if !defined(SERIALIZATION_TEST)
-		UT_ASSERT( m_uPosition + Count <= m_sSource.size() );	// check if we're overshooting!
-#endif
+		if (!canSerialize(Count))
+		{
+			fail();
+			return;
+		}
 		m_uPosition += Count;
 	}
 	virtual bool EndOfFile() const override
 	{
-		return m_uPosition >= m_sSource.size();
+		return failed() || m_uPosition >= m_sSource.size();
 	}
 protected:
 	unsigned int				m_uPosition;

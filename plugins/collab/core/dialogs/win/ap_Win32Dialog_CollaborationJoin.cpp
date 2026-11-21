@@ -291,10 +291,10 @@ ShareListItem* AP_Win32Dialog_CollaborationJoin::_getSelectedItem()
 	}
 
 	TVITEM item;
+	memset(&item, 0, sizeof(item));
 	item.mask = TVIF_PARAM;
 	item.hItem = hSelItem;
-	UT_return_val_if_fail(SendMessageW(m_hDocumentTreeview, LVM_GETITEM, 0, 
-		(LPARAM) &item), NULL);
+	UT_return_val_if_fail(TreeView_GetItem(m_hDocumentTreeview, &item), NULL);
 
 	return reinterpret_cast<ShareListItem*>(item.lParam); 
 }

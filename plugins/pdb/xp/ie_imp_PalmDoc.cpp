@@ -229,10 +229,16 @@ UT_Error IE_Imp_PalmDoc::_parseFile(GsfInput * pdfp)
 
 		gsf_input_seek( pdfp, offset, G_SEEK_SET );
 
+		if (next_offset < offset)
+			return UT_ERROR;
+		const DWord recLen = next_offset - offset;
+		if (recLen > BUFFER_SIZE)
+			return UT_ERROR;
+
 		// be overly cautious here
 		_zero_fill (m_buf->buf, BUFFER_SIZE);
-		gsf_input_read(pdfp, next_offset - offset, m_buf->buf);
-		m_buf->position = next_offset - offset;
+		gsf_input_read(pdfp, recLen, m_buf->buf);
+		m_buf->position = recLen;
 
 		if ( bCompressed )
 			_uncompress( m_buf );
@@ -358,8 +364,12 @@ void IE_Imp_PalmDoc::_uncompress( buffer *buf )
 		c = buf->buf[ i++ ];
 
 		if ( c >= 1 && c <= 8 )
-			while ( c-- && j < BUFFER_SIZE-1)
+		{
+			if (i + c > buf->position)
+				break;
+			while ( c-- && j < BUFFER_SIZE-1 && i < buf->position)
 				m_new_buf->buf[ j++ ] = buf->buf[ i++ ];
+		}
 
 		else if ( c <= 0x7F )
 			m_new_buf->buf[ j++ ] = c;
@@ -374,9 +384,13 @@ void IE_Imp_PalmDoc::_uncompress( buffer *buf )
 		    int di, n;
 		    unsigned int temp_c = c;
 		    // c--> temp_c //tomy 2001.11.13 
+		    if (i >= buf->position)
+			    break;
 		    temp_c = (temp_c << 8) ;
 		    temp_c = temp_c + buf->buf[ i++ ];
 		    di = (temp_c & 0x3FFF) >> COUNT_BITS;
+		    if (di <= 0 || static_cast<unsigned int>(di) > j)
+			    break;
 		    for (n = (temp_c & ((1 << COUNT_BITS) - 1)) + 3; n-- && j < BUFFER_SIZE
 			   ; ++j )
 		      m_new_buf->buf[ j ] = m_new_buf->buf[ j - di ];

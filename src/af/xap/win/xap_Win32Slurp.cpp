@@ -188,6 +188,32 @@ bool XAP_Win32Slurp::disconnectSlurper(void)
 	return true;
 }
 
+static bool s_ddePathRefused(const char * path)
+{
+	if (!path || !path[0])
+		return true;
+	if ((path[0] == '\\' && path[1] == '\\') || (path[0] == '/' && path[1] == '/'))
+		return true;
+
+	const char * base = path;
+	for (const char * p = path; *p; ++p)
+		if (*p == '\\' || *p == '/')
+			base = p + 1;
+
+	char name[8];
+	size_t n = 0;
+	for (; base[n] && base[n] != '.' && n + 1 < sizeof(name); ++n)
+		name[n] = static_cast<char>(g_ascii_toupper(static_cast<guchar>(base[n])));
+	name[n] = 0;
+	if (strcmp(name, "CON") == 0 || strcmp(name, "PRN") == 0
+	    || strcmp(name, "AUX") == 0 || strcmp(name, "NUL") == 0)
+		return true;
+	if (n == 4 && name[3] >= '1' && name[3] <= '9'
+	    && (strncmp(name, "COM", 3) == 0 || strncmp(name, "LPT", 3) == 0))
+		return true;
+	return false;
+}
+
 void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 {
 	DWORD bufSize = DdeGetData(hData,nullptr,0,0);
@@ -273,9 +299,7 @@ void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 				UT_DEBUGMSG(("No pathname given in DDE Open command.\n"));
 				goto Finished;
 			}
-			// \\.\ and \\?\ reach devices and the Win32 namespace. A normal
-			// UNC path (\\server\share) has a different third character.
-			if (pathname[0] == '\\' && pathname[1] == '\\')
+			if (s_ddePathRefused(pathname))
 			{
 				UT_DEBUGMSG(("DDE Open refused a device or UNC path.\n"));
 				goto Finished;
@@ -588,7 +612,8 @@ void XAP_Win32Slurp::stuffRegistry(const char * szSuffix,
 			if (lstrcmpiW((LPCWSTR)buf,commandPathWithParam) == 0)
 				break;					// already has correct value, no need to overwrite.
 			
-			if(memcmp(buf, commandPathWithParam, lstrlenW(commandPathWithParam)<<1) == 0)
+			const size_t cmdBytes = static_cast<size_t>(lstrlenW(commandPathWithParam)) * sizeof(WCHAR);
+			if (cmdBytes <= sizeof(buf) && memcmp(buf, commandPathWithParam, cmdBytes) == 0)
 			{
 				// Path name is the same but has extra at the end.
 				// Probably "%1"

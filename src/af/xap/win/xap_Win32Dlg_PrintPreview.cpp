@@ -401,7 +401,8 @@ public:
       metafile_dc(nullptr),
       m_multiPageTiff(nullptr),
       m_tiffFilename(nullptr),
-      m_previewLaunched(false)
+      m_previewLaunched(false),
+      m_previewFailed(false)
   {
     takeOwnershipOfDCAndDocInfo();
 
@@ -666,8 +667,8 @@ public:
    override {
     endPage();
 
-    if (!m_multiPageTiff || !m_tiffFilename)
-      return true;
+    if (m_previewFailed || !m_multiPageTiff || !m_tiffFilename)
+      return false;
 
     EncoderParameters encoder_params;
     ULONG parameterValue = EncoderValueFlush;
@@ -680,6 +681,13 @@ public:
 
     GpStatus status = GdipSaveAdd (m_multiPageTiff, &encoder_params);
     ASSERT_GDIP_SUCCESS (status, GdipSaveAdd);
+    if (status != 0)
+      {
+	GdipDisposeImage (m_multiPageTiff);
+	m_multiPageTiff = nullptr;
+	m_previewFailed = true;
+	return false;
+      }
 
     status = GdipDisposeImage (m_multiPageTiff);
     m_multiPageTiff = nullptr;
@@ -713,7 +721,10 @@ public:
 	DELETEP(m_pGraphics);
 	d (g_print ("metafile = %p\n", metafile));
 	if (!metafile)
-	  return;
+	  {
+	    m_previewFailed = true;
+	    return;
+	  }
 
 	// saveaddimage() needs a bitmap. PlayEnhMetaFile replays the
 	// vectors into that bitmap, so the page is not a scaled screenshot.
@@ -742,6 +753,7 @@ public:
 	    if (dib)
 	      DeleteObject (dib);
 	    DeleteEnhMetaFile (metafile);
+	    m_previewFailed = true;
 	    return;
 	  }
 
@@ -759,6 +771,7 @@ public:
 	if (!played)
 	  {
 	    DeleteObject (dib);
+	    m_previewFailed = true;
 	    return;
 	  }
 
@@ -768,6 +781,7 @@ public:
 	if (status != 0 || !meta)
 	  {
 	    DeleteObject (dib);
+	    m_previewFailed = true;
 	    return;
 	  }
 
@@ -780,6 +794,7 @@ public:
 	  {
 	    DeleteObject (dib);
 	    GdipDisposeImage (meta);
+	    m_previewFailed = true;
 	    return;
 	  }
 	const INT srcStride = (INT)destW * 4;
@@ -805,6 +820,7 @@ public:
 	    if (!m_tiffFilename)
 	      {
 		GdipDisposeImage (meta);
+		m_previewFailed = true;
 		return;
 	      }
 	    status = GdipSaveImageToFile (meta, (WCHAR *)m_tiffFilename, &tiff_clsid, &encoder_params);
@@ -812,6 +828,7 @@ public:
 	    if (status != 0)
 	      {
 		GdipDisposeImage (meta);
+		m_previewFailed = true;
 		return;
 	      }
 
@@ -832,6 +849,8 @@ public:
 
 	    status = GdipSaveAddImage (m_multiPageTiff, meta, &encoder_params);
 	    ASSERT_GDIP_SUCCESS (status, GdipSaveAddImage);
+	    if (status != 0)
+	      m_previewFailed = true;
 
 	    d (g_print ("SaveAddImage\n"));
 
@@ -862,6 +881,7 @@ protected:
   GpBitmap *m_multiPageTiff;
   gunichar2 * m_tiffFilename;
   bool m_previewLaunched;
+  bool m_previewFailed;
   int metafile_xres;
   int metafile_yres;
 };

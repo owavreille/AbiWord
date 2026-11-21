@@ -59,8 +59,8 @@ void readByteString(GsfInput* stream, UT_UCS4Char*& str, UT_iconv_t converter, S
 
 class DocHdr {
 	public:
-		DocHdr() : sBlockName(nullptr), converter(reinterpret_cast<UT_iconv_t>(-1)) {}
-		~DocHdr() { if (sBlockName) free(sBlockName); if (UT_iconv_isValid(converter)) UT_iconv_close(converter); }
+		DocHdr() : sBlockName(nullptr), converter(reinterpret_cast<UT_iconv_t>(-1)), cryptor(nullptr) {}
+		~DocHdr() { delete cryptor; if (sBlockName) free(sBlockName); if (UT_iconv_isValid(converter)) UT_iconv_close(converter); }
 		/*! Reads the document header
 		 * \param stream The OLE Stream to load from - should be the one
 		 *               with the name "StarWriterDocument"
@@ -94,7 +94,7 @@ class DocHdr {
 
 // A text attribute record
 struct TextAttr {
-	TextAttr() : data(nullptr), isOff(false), isPara(false) {}
+	TextAttr() : data(nullptr), dataLen(0), isOff(false), isPara(false) {}
 	~TextAttr() { if (data) delete[] data; }
 	bool startSet, endSet; // true if the start/end attribute is valid
 	UT_uint16 which;

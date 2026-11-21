@@ -221,7 +221,7 @@ void streamRead(GsfInput* aStream, TextAttr& aAttr, gsf_off_t aEoa)
 				aAttr.isOff = true;
 			break;
 		case 0x1005: { // sub-/superscript
-			if (aAttr.dataLen < 3)
+			if (!aAttr.data || aAttr.dataLen < 3)
 				break;
 			// first byte is size of text % of normal size
 			UT_sint16 height = GSF_LE_GET_GINT16(aAttr.data + 1);
@@ -240,14 +240,16 @@ void streamRead(GsfInput* aStream, TextAttr& aAttr, gsf_off_t aEoa)
 			aAttr.attrName = "font-family";
 			// XXX TODO This code here assumes that the font names are in latin1
 			UT_uint16 fontLen = GSF_LE_GET_GUINT16(aAttr.data + 3);
-			aAttr.attrVal = UT_std_string_sprintf("%.*s", fontLen, (aAttr.data + 5));
+			if (static_cast<gsf_off_t>(5) + fontLen > aAttr.dataLen)
+				break;
+			aAttr.attrVal = UT_std_string_sprintf("%.*s", static_cast<int>(fontLen), (aAttr.data + 5));
 
 		break; }
     case 0x1007: // font height
       // structure: | height (2 byte, twips) | prop (?) (2 byte) (if version >= 2, if ver=1 1 byte) | unit (if version>=2) |
       // XXX we ignore "prop" and unit for now, they seem not used much
       aAttr.attrName = "font-size";
-      if (aAttr.data)
+      if (aAttr.data && aAttr.dataLen >= 2)
         aAttr.attrVal = twipsToSizeString(GSF_LE_GET_GUINT16(aAttr.data));
       break;
 		case 0x100a: // Italic
@@ -385,36 +387,29 @@ static void hexdump(void* aPtr, UT_uint32 aLen) {
 }
 #endif
 
-#define GetPassword() _getPassword ( XAP_App::getApp()->getLastFocussedFrame() )
 
-static std::string _getPassword (XAP_Frame * pFrame)
+static bool _askPassword (XAP_Frame * pFrame, std::string& password)
 {
-  std::string password;
+  password.clear();
+  if (!pFrame)
+    return false;
 
-  if ( pFrame )
-    {
-      pFrame->raise ();
-      
-      XAP_DialogFactory * pDialogFactory
-	= static_cast<XAP_DialogFactory *>(pFrame->getDialogFactory());
-      
-      XAP_Dialog_Password * pDlg = static_cast<XAP_Dialog_Password*>(pDialogFactory->requestDialog(XAP_DIALOG_ID_PASSWORD));
-      UT_return_val_if_fail(pDlg,password);
-      
-      pDlg->runModal (pFrame);
-      
-      XAP_Dialog_Password::tAnswer ans = pDlg->getAnswer();
-      bool bOK = (ans == XAP_Dialog_Password::a_OK);
-      
-      if (bOK)
-  	password = pDlg->getPassword ().utf8_str();
-      
-      UT_DEBUGMSG(("SDW: Password is %s\n", password.c_str()));
-      
-      pDialogFactory->releaseDialog(pDlg);
-    }
+  pFrame->raise ();
 
-  return password;
+  XAP_DialogFactory * pDialogFactory
+    = static_cast<XAP_DialogFactory *>(pFrame->getDialogFactory());
+
+  XAP_Dialog_Password * pDlg = static_cast<XAP_Dialog_Password*>(pDialogFactory->requestDialog(XAP_DIALOG_ID_PASSWORD));
+  UT_return_val_if_fail(pDlg, false);
+
+  pDlg->runModal (pFrame);
+
+  const bool accepted = pDlg->getAnswer() == XAP_Dialog_Password::a_OK;
+  if (accepted)
+    password = pDlg->getPassword ().utf8_str();
+
+  pDialogFactory->releaseDialog(pDlg);
+  return accepted;
 }
 
 void readByteString(GsfInput* stream, char*& str, UT_uint16* aLength)
@@ -573,9 +568,11 @@ void DocHdr::load(GsfInput* stream)
 	if (nFileFlags & SWGF_BLOCKNAME) {
 		char buf[64];
 		streamRead(stream, buf, 64);
-		UT_DEBUGMSG(("SDW: BLOCKNAME: %.64s\n", buf));
-		// XXX verify that the string is really null terminated
-		sBlockName = reinterpret_cast<UT_UCS4Char*>(UT_convert_cd(buf, strlen(buf) + 1, converter, nullptr, nullptr));
+		size_t blockLen = 0;
+		while (blockLen < sizeof(buf) && buf[blockLen])
+			blockLen++;
+		UT_DEBUGMSG(("SDW: BLOCKNAME: %.*s\n", static_cast<int>(blockLen), buf));
+		sBlockName = reinterpret_cast<UT_UCS4Char*>(UT_convert_cd(buf, blockLen, converter, nullptr, nullptr));
 	}
 
 	if (nRecSzPos != 0 && nVersion >= SWG_RECSIZES) {
@@ -587,6 +584,7 @@ void DocHdr::load(GsfInput* stream)
 	if (nFileFlags & SWGF_BAD_FILE)
 		throw UT_IE_BOGUSDOCUMENT;
 
+	delete cryptor;
 	if (nFileFlags & SWGF_HAS_PASSWD)
 		cryptor = new SDWCryptor(nDate, nTime, cPasswd);
 	else
@@ -614,8 +612,10 @@ void IE_Imp_StarOffice::readRecSize(GsfInput* aStream, UT_uint32& aSize, gsf_off
 	aSize = 0;
 	streamRead(aStream, buf, 3);
 	// buf content is little endian.
-	aSize = buf [0] | (buf[1] << 8) | (buf [2] << 16);
-	aSize -= 4; // Substract 4 for the rec type + size
+	const UT_uint32 raw = buf [0] | (buf[1] << 8) | (buf [2] << 16);
+	if (raw < 4)
+		throw UT_IE_BOGUSDOCUMENT;
+	aSize = raw - 4; // Substract 4 for the rec type + size
 	if (aSize == 0xFFFFFF && mDocHdr.nVersion >= SWG_LONGRECS) {
 		// XXX need recsizes from header, see above
 		UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED);
@@ -658,7 +658,9 @@ UT_Error IE_Imp_StarOffice::_loadFile(GsfInput * input)
 
 		// Ask for and verify the password
 		if (mDocHdr.cryptor) {
-			if (!mDocHdr.cryptor->SetPassword(GetPassword().c_str())) {
+			std::string password;
+			if (!_askPassword(XAP_App::getApp()->getLastFocussedFrame(), password)
+			    || !mDocHdr.cryptor->SetPassword(password.c_str())) {
 				UT_DEBUGMSG(("SDW: Wrong password\n"));
 				return UT_IE_PROTECTED;
 			}
@@ -803,6 +805,13 @@ UT_Error IE_Imp_StarOffice::_loadFile(GsfInput * input)
 								// now insert the spans of text
 								UT_uint32 len = textNode.length();
 								UT_uint32 lastInsPos = 0;
+								if (len == 1) {
+									attributes[1] = attrs.c_str();
+									if (!appendFmt(attributes))
+										return UT_IE_NOMEMORY;
+									UT_UCS4String span = textNode.substr(0, 1);
+									appendSpan(span.ucs4_str(), 1);
+								}
 								for (UT_uint32 i = 1; i < len; i++) {
 									bool doInsert = false; // whether there was an attribute change
 									for (UT_sint32 j = 0; j < charAttributes.getItemCount(); j++) {
@@ -963,7 +972,8 @@ UT_Error IE_Imp_StarOffice::_loadFile(GsfInput * input)
 						// the result of UT_convert_cd.... --hub
 						UT_DEBUGMSG(("SDW: StringPool: found 0x%04x <-> %.*s\n", id, len, str));
 						UT_UCS4Char* convertedString = reinterpret_cast<UT_UCS4Char*>(UT_convert_cd(str, len + 1, cd, nullptr, nullptr));
-						mStringPool.insert(stringpool_map::value_type(id, convertedString));
+						if (convertedString)
+							mStringPool.insert(stringpool_map::value_type(id, convertedString));
 						FREEP(convertedString);
                         delete [] str;
 					}
@@ -982,6 +992,9 @@ UT_Error IE_Imp_StarOffice::_loadFile(GsfInput * input)
 			if (gsf_input_seek(mDocStream, eor, G_SEEK_SET))
 				return UT_IE_BOGUSDOCUMENT;
 		}
+
+		if (!done)
+			return UT_IE_BOGUSDOCUMENT;
 
 		UT_DEBUGMSG(("SDW: Done\n"));
 

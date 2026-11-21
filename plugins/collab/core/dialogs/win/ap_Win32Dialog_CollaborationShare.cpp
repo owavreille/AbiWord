@@ -188,7 +188,7 @@ void AP_Win32Dialog_CollaborationShare::_populateWindowData()
 
 	if (pShareeableAcount)
 	{
-		UT_sint32 index = m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, (LPCSTR) AP_Win32App::s_fromUTF8ToWinLocale(pShareeableAcount->getDescription().utf8_str()).c_str());
+		UT_sint32 index = m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, pShareeableAcount->getDescription().utf8_str());
 		if (index >= 0)
 		{
 			UT_DEBUGMSG(("Added handler to index %d\n", index));
@@ -206,7 +206,7 @@ void AP_Win32Dialog_CollaborationShare::_populateWindowData()
 			if (!pAccount->isOnline() || !pAccount->canManuallyStartSession())
 				continue;
 
-			UT_sint32 index = m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, (LPCSTR) AP_Win32App::s_fromUTF8ToWinLocale(pAccount->getDescription().utf8_str()).c_str());
+			UT_sint32 index = m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, pAccount->getDescription().utf8_str());
 			if (index >= 0)
 			{
 				UT_DEBUGMSG(("Added handler to index %d\n", index));

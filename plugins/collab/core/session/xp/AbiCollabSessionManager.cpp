@@ -1274,6 +1274,13 @@ bool AbiCollabSessionManager::processPacket(AccountHandler& /*handler*/, Packet*
 			UT_return_val_if_fail(pAbiCollab, true);
 		}
 
+		AccountHandler* pBuddyAccount = buddy->getHandler();
+		if (!pBuddyAccount || !pBuddyAccount->hasAccess(pAbiCollab->getAcl(), buddy))
+		{
+			UT_DEBUGMSG(("Session packet refused: buddy is not on the ACL\n"));
+			return true;
+		}
+
 		// handle packet!
 		pAbiCollab->import(dsp, buddy);
 		return true;

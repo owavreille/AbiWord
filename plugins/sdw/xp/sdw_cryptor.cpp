@@ -54,7 +54,11 @@ bool SDWCryptor::SetPassword(const char* aPassword) {
 	memcpy(mPassword, gEncode, maxPWLen);
 	Encrypt(pw, mPassword, maxPWLen);
 
-	// Check password if we have valid date and/or time
+	// Without a date or a time there is nothing to compare, so the
+	// password cannot be confirmed. Refuse it instead of accepting any key.
+	if (!(mDate || mTime))
+		return false;
+
 	if (mDate || mTime) {
 		char testString[17];
 		UT_String needle = UT_String_sprintf("%08x%08x", mDate, mTime);

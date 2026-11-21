@@ -437,10 +437,16 @@ static void read_png_data(png_structp png_ptr, png_bytep data, png_size_t length
 {
     struct _bb* p = (struct _bb*) png_get_io_ptr(png_ptr);
     UT_DEBUGMSG(("PSION: read_png_data: %lu bytes at %d\n", length, p->iCurPos));
+    if (!p->pBB || p->iCurPos > p->pBB->getLength()
+        || length > p->pBB->getLength() - p->iCurPos)
+    {
+        png_error(png_ptr, "truncated png");
+        return;
+    }
     const UT_Byte* pBytes = p->pBB->getPointer(0);
                                               		
 	memcpy(data, pBytes + p->iCurPos, length);
-	p->iCurPos += length;
+	p->iCurPos += static_cast<UT_uint32>(length);
 }
 
 /***********************************
