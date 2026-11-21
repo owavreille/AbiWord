@@ -126,11 +126,19 @@ libimpexp_la_SOURCES += \
 endif
 
 if TOOLKIT_WIN
+if WITH_CAIRO
+AM_CPPFLAGS += -I$(srcdir)/gtk
+endif
 libimpexp_la_SOURCES += \
 	win/ie_impexp_RegisterWin32.cpp \
 	win/ie_impGraphic_Win32GDIPlus.cpp \
 	win/ie_impGraphic_Win32Native.cpp \
 	win/ie_impGraphic_Win32Native.h
+if WITH_CAIRO
+libimpexp_la_SOURCES += \
+	gtk/ie_exp_PDF.cpp \
+	gtk/ie_exp_PDF.h
+endif
 endif
 
 if TOOLKIT_QT

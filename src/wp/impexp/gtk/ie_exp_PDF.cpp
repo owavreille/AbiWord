@@ -20,12 +20,20 @@
  * 02110-1301 USA.
  */
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include <string.h>
 #include "ut_debugmsg.h"
 #include "ut_string.h"
 #include "ie_exp_PDF.h"
 #include "pd_Document.h"
+#if defined(TOOLKIT_WIN)
+#include "gr_Win32CairoPrintGraphics.h"
+#else
 #include "gr_CairoPrintGraphics.h"
+#endif
 #include "fv_View.h"
 #include "fl_DocLayout.h"
 #include "ap_EditMethods.h"

@@ -36,7 +36,7 @@ Cette version-ci s'en écarte ainsi :
 - **Version 3.1.** Le code suit la série 3.1, après la 3.0.5 officielle.
 - **Compilation MinGW.** Le binaire livré est construit avec MinGW-w64, pas avec l'ancien projet Visual C++ du portage Windows.
 - **Windows 11.** Les dialogues, le défilement, les polices, le presse-papiers, le DDE et les fichiers suivent les contrats actuels de la documentation Microsoft. Le programme n'utilise pas d'API réservée à Windows 11 : il reste compilé pour un niveau d'API disponible depuis Windows 2000, et tourne ainsi sur Windows 11.
-- **OpenDocument et OpenXML.** L'installateur contient ces deux greffons, ainsi que les dictionnaires.
+- **OpenDocument, OpenXML, PDF, StarOffice et collaboration.** L'installateur contient les greffons OpenDocument, OpenXML et StarOffice (.sdw), l'export PDF, la collaboration directe en TCP, ainsi que les dictionnaires.
 - **Installateur bilingue.** Les pages d'installation sont en français et en anglais.
 - **Icônes.** Colibre (CC0) et dessins originaux. Leur licence est affichée pendant l'installation, à part de la GPL.
 - **Ce n'est pas une publication AbiSource.** Le site du projet reste [abisource.com](https://www.abisource.com/).

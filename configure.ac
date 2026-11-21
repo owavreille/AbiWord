@@ -125,8 +125,8 @@ qt_pkgs="Qt5Gui Qt5Widgets   ${cairo_req}"
 cocoa_pkgs="$enchant_req $cairo_req gmodule-2.0   ${goffice_req}"
 
 
-# win32 deps
-win_pkgs="$enchant_req"
+# win32 deps. Cairo and Pango draw the PDF export. The screen stays on GDI.
+win_pkgs="$enchant_req cairo-pdf cairo-ps pangocairo"
 
 #
 # System tests
@@ -704,7 +704,7 @@ if test "$TOOLKIT" = "gtk"; then
 fi
 
 dnl make that for all.
-if test "$TOOLKIT" = "gtk" -o "$TOOLKIT" = "qt"; then
+if test "$TOOLKIT" = "gtk" -o "$TOOLKIT" = "qt" -o "$TOOLKIT" = "win"; then
 	dnl move away
 	AC_DEFINE([WITH_CAIRO], [1], [Using Cairo])
 	WITH_CAIRO=1

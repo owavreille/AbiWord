@@ -21,6 +21,11 @@ libpng                          libpng License
 libjpeg-turbo                   IJG License, BSD-3-Clause, zlib License
 ICU                             Unicode License
 FriBidi                         LGPL-2.1-or-later
+Cairo, Pixman                   LGPL-2.1-only OR MPL-1.1
+Pango                           LGPL-2.1-or-later
+HarfBuzz                        MIT
+FreeType                        FTL OR GPL-2.0-or-later
+Fontconfig, Expat               MIT
 Enchant                         LGPL-2.1-or-later
 Hunspell                        LGPL-2.1-or-later, GPL-2.0-or-later, MPL-1.1
 libgcrypt, libgpg-error         LGPL-2.1-or-later

@@ -72,6 +72,11 @@ libgr_la_SOURCES += \
 	win/gr_Win32Uniscribe.h \
 	win/gr_Win32USPGraphics.cpp \
 	win/gr_Win32USPGraphics.h
+if WITH_CAIRO
+libgr_la_SOURCES += \
+	win/gr_Win32CairoPrintGraphics.cpp \
+	win/gr_Win32CairoPrintGraphics.h
+endif
 endif
 
 if TOOLKIT_QT

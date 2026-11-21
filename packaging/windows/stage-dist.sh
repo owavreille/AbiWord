@@ -23,6 +23,18 @@ cp "$BUILDDIR/plugins/opendocument/.libs/opendocument.dll" \
 	"$DEST/lib/abiword-3.1/plugins/"
 cp "$BUILDDIR/plugins/openxml/.libs/openxml.dll" \
 	"$DEST/lib/abiword-3.1/plugins/"
+cp "$BUILDDIR/plugins/sdw/.libs/sdw.dll" \
+	"$DEST/lib/abiword-3.1/plugins/"
+cp "$BUILDDIR/plugins/collab/.libs/collab.dll" \
+	"$DEST/lib/abiword-3.1/plugins/"
+if [[ -d "$PREFIX/etc/fonts" ]]; then
+	mkdir -p "$DEST/etc/fonts"
+	cp -a "$PREFIX/etc/fonts/." "$DEST/etc/fonts/"
+fi
+if [[ -d "$PREFIX/etc/pango" ]]; then
+	mkdir -p "$DEST/etc/pango"
+	cp -a "$PREFIX/etc/pango/." "$DEST/etc/pango/"
+fi
 cp "$BUILDDIR"/po/*.strings "$DEST/share/abiword-3.1/strings/"
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 cp "$ROOT/src/wp/ap/win/ToolbarIcons/LICENSE.icons.txt" "$DEST/share/abiword-3.1/"
@@ -109,6 +121,8 @@ copy_tree "$DEST/bin/abiword.exe"
 copy_tree "$DEST/bin/libabiword-3.1.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/opendocument.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/openxml.dll"
+copy_tree "$DEST/lib/abiword-3.1/plugins/sdw.dll"
+copy_tree "$DEST/lib/abiword-3.1/plugins/collab.dll"
 copy_tree "$DEST/lib/enchant-2/enchant_hunspell.dll"
 
 hunspell=$(find "$DEST/bin" -maxdepth 1 -name 'libhunspell*.dll' -print -quit)
