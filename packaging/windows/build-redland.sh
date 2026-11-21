@@ -74,6 +74,8 @@ PY
 )
 fi
 
+# PCRE 8.45 est la dernière publication. Fedora 45 la fournit en
+# mingw64-pcre ; le téléchargement ne sert que si ce paquet est absent.
 if ! "$PKG_CONFIG" --exists libpcre; then
 fetch https://downloads.sourceforge.net/project/pcre/pcre/8.45/pcre-8.45.tar.gz pcre.tar.gz
 (
