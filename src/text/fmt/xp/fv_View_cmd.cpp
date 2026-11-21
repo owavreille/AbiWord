@@ -1549,6 +1549,7 @@ bool FV_View::cmdTextToTable(UT_uint32 iDelim)
 		}
 	}
 	e |= static_cast<UT_sint32>(m_pDoc->insertStrux(getPoint(),PTX_EndTable));
+	(void) e;
 //
 // Done! Now fill it.
 //

@@ -3501,6 +3501,7 @@ bool IE_Imp_RTF::HandleField()
 
 		tokenType = NextToken (keyword, &parameter, &paramUsed, MAX_KEYWORD_LEN);
 	}
+	(void) rtfFieldAttr;
 
 	// field instruction
 	if (tokenType == RTF_TOKEN_OPEN_BRACE)

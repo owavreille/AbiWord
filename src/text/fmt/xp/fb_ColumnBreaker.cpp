@@ -235,7 +235,6 @@ UT_sint32 fb_ColumnBreaker::_breakSection(fp_Page * pStartPage)
 	fp_Column* pCurColumn = nullptr;
 	fp_Column* pPrevColumn = nullptr;
 	UT_sint32 iCurPage = 0;
-	UT_sint32 iColCons =  0;
 	xxx_UT_DEBUGMSG(("Doing ColumnBreak for section %x at page %x \n",m_pDecSec,m_pStartPage));
 //	UT_ASSERT(m_pDocSec->needsSectionBreak());
 	pFirstLayout = m_pDocSec->getFirstLayout();
@@ -301,7 +300,6 @@ UT_sint32 fb_ColumnBreaker::_breakSection(fp_Page * pStartPage)
 			// Abort and start again
 			break;
 		}
-		iColCons = -1;
 		if(pCurColumn && pCurColumn->getPrev())
 		{
 			fp_Column * pPrevCol = static_cast<fp_Column *>(pCurColumn->getPrev());
@@ -428,7 +426,6 @@ UT_sint32 fb_ColumnBreaker::_breakSection(fp_Page * pStartPage)
 		while (pCurContainer)
 		{
 			//	pCurContainer->setMyBrokenContainer(nullptr);
-			iColCons++;
 			xxx_UT_DEBUGMSG(("curContainer pointer %p type %s \n",iLoop,pCurContainer,pCurContainer->getContainerString()));
 			if(pCurContainer->getDocSectionLayout() != m_pDocSec)
 			{

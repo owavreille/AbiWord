@@ -3281,7 +3281,6 @@ void fl_BlockLayout::getLeftRightForWrapping(UT_sint32 iX, UT_sint32 iHeight,
 {
 	UT_sint32 iMaxW = m_pVertContainer->getWidth();
 	UT_sint32 iMinR = m_pVertContainer->getWidth();
-	UT_sint32 iXDiff = getLeftMargin();
 	GR_Graphics * pG = m_pLayout->getGraphics();
 	UT_ASSERT(iHeight > 0);
 	if(iHeight == 0)
@@ -3303,7 +3302,6 @@ void fl_BlockLayout::getLeftRightForWrapping(UT_sint32 iX, UT_sint32 iHeight,
 		if(iBlockDir == UT_BIDI_LTR)
 		{
 			iMaxW -= getTextIndent();
-			iXDiff += getTextIndent();
 		}
 	}
 	UT_sint32 xoff,yoff;
@@ -6332,11 +6330,9 @@ bool	fl_BlockLayout::_doInsertRun(fp_Run* pNewRun)
 	{
 		pRun = m_pFirstRun;
 		fp_Run * pLastRun = nullptr;
-		UT_uint32 offset = 0;
 		while (pRun)
 		{
 			pLastRun = pRun;
-			offset += pRun->getLength();
 			pRun = pRun->getNextRun();
 		}
 		if (pLastRun)

@@ -291,6 +291,7 @@ fp_TableContainer * fp_VerticalContainer::getCorrectBrokenTable(const fp_Contain
 			iCount++;
 		}
 	}
+	(void) iCount;
 	if(bFound)
 	{
 		xxx_UT_DEBUGMSG(("getCorrect: Found table after %d tries \n",iCount));
@@ -340,6 +341,7 @@ fp_TOCContainer * fp_VerticalContainer::getCorrectBrokenTOC(const fp_Container *
 			iCount++;
 		}
 	}
+	(void) iCount;
 	if(bFound)
 	{
 		xxx_UT_DEBUGMSG(("getCorrect: Found table after %d tries \n",iCount));

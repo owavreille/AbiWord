@@ -788,11 +788,9 @@ void fp_TOCContainer::adjustBrokenTOCs(void)
 			xxx_UT_DEBUGMSG(("SEVIOR!!!!!!!!!!! 2 last broken TOC %x deleting %x Master TOC %x  \n",getLastBrokenTOC(),pBroke,this));
 			xxx_UT_DEBUGMSG(("SEVIOR!!!!!!!!!!! 2 get first %x get last broken TOC %x \n",getFirstBrokenTOC(),getLastBrokenTOC()));
 			fp_TOCContainer * pT = getFirstBrokenTOC();
-			UT_sint32 j = 0;
 			while(pT)
 			{
-				xxx_UT_DEBUGMSG(("SEVIOR: TOC %d is %x \n",j,pT));
-				j++;
+				xxx_UT_DEBUGMSG(("SEVIOR: TOC is %p \n",(void*)pT));
 				pT = static_cast<fp_TOCContainer *>(pT->getNext());
 			}
 			while(pBroke)

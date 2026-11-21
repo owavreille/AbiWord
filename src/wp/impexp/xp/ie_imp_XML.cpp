@@ -309,6 +309,7 @@ void IE_Imp_XML::charData(const gchar *s, int len)
                             static int addCount = 0;
                             addCount++;
                             UT_DEBUGMSG(("xml::import() addCount:%d\n", addCount ));
+                            (void) addCount;
                         }
 #endif
                         

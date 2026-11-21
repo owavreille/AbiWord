@@ -974,7 +974,7 @@ else
 		PLUGINS="$default_plugins"
 	fi
 	for i in $abi_cv_plugins; do
-		if test -d "plugins/$i"; then 
+		if test -d "$srcdir/plugins/$i"; then 
 			PLUGINS="$PLUGINS $i"
 		else
 			AC_MSG_WARN([Plugin $i does not exist.])
