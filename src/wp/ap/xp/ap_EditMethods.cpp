@@ -10061,6 +10061,8 @@ UT_return_val_if_fail(pFrameData, false);
 		pFrame->toggleTopRuler (true);
 
 	pView->setViewMode (VIEW_NORMAL);
+	pFrame->setXScrollRange();
+	pFrame->setYScrollRange();
 
 	// POLICY: make this the default for new frames, too
 	XAP_App * pApp = XAP_App::getApp();
@@ -10100,6 +10102,8 @@ UT_return_val_if_fail(pFrameData, false);
 
 	FV_View * pView = static_cast<FV_View *>(pAV_View);
 	pView->setViewMode (VIEW_WEB);
+	pFrame->setXScrollRange();
+	pFrame->setYScrollRange();
 
 	// POLICY: make this the default for new frames, too
 	XAP_App * pApp = XAP_App::getApp();
@@ -10137,6 +10141,8 @@ UT_return_val_if_fail(pFrameData, false);
 	FV_View * pView = static_cast<FV_View *>(pAV_View);
 	UT_DEBUGMSG(("Set mode VIEW PRINT \n"));
 	pView->setViewMode (VIEW_PRINT);
+	pFrame->setXScrollRange();
+	pFrame->setYScrollRange();
 
 	// POLICY: make this the default for new frames, too
 	XAP_App * pApp = XAP_App::getApp();

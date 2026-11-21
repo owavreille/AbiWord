@@ -1487,6 +1487,25 @@ void FV_View::_insertSectionBreak(void)
 }
 
 
+// In normal and web layout the margins are not part of the page on
+// screen. A margin larger than the paper used to make this height
+// negative, the following division walked forever, and nothing was painted.
+static UT_sint32 s_visiblePageHeight(const fp_Page * pPage, const fl_DocSectionLayout * pDSL)
+{
+	if (!pPage)
+		return 1;
+	UT_sint32 height = pPage->getHeight();
+	if (pDSL)
+	{
+		UT_sint32 content = height - pDSL->getTopMargin() - pDSL->getBottomMargin();
+		if (content > 0)
+			height = content;
+	}
+	if (height < 1)
+		height = 1;
+	return height;
+}
+
 /*!
   Calculate the position of the top left corner of a page relative to the application frame.
  */
@@ -1516,7 +1535,12 @@ void FV_View::_getPageXandYOffset(const fp_Page* pThePage, UT_sint32& xoff, UT_s
 		while(pDSL && num > 0)
 		{
 			fp_Page * pPage = pDSL->getFirstOwnedPage();
-			UT_sint32 height = pPage->getHeight() - pDSL->getTopMargin() - pDSL->getBottomMargin() +getPageViewSep();
+			if (!pPage)
+			{
+				pDSL = pDSL->getNextDocSection();
+				continue;
+			}
+			UT_sint32 height = s_visiblePageHeight(pPage, pDSL) + getPageViewSep();
 			if (num > pDSL->getPageCount())
 			{
 				y += pDSL->getPageCount() * height;
@@ -1527,7 +1551,7 @@ void FV_View::_getPageXandYOffset(const fp_Page* pThePage, UT_sint32& xoff, UT_s
 				y += num * height;
 				break;
 			}
-			pDSL = static_cast<fl_DocSectionLayout*>(pDSL->getNext());
+			pDSL = pDSL->getNextDocSection();
 		}
 	}
 
@@ -4617,8 +4641,14 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 			iFirstVisiblePageNumber = 0;
 			while (pDSL)
 			{
-				iPageHeight = pDSL->getFirstOwnedPage()->getHeight() - pDSL -> getTopMargin() - pDSL -> getBottomMargin();
-				iPageWidth = pDSL->getFirstOwnedPage()->getWidth();
+				fp_Page * pOwned = pDSL->getFirstOwnedPage();
+				if (!pOwned)
+				{
+					pDSL = pDSL->getNextDocSection();
+					continue;
+				}
+				iPageHeight = s_visiblePageHeight(pOwned, pDSL);
+				iPageWidth = pOwned->getWidth();
 				if (yRemaining < iPageHeight * pDSL->getPageCount())
 				{
 					iFirstVisiblePageNumber += yRemaining/iPageHeight;
@@ -4629,7 +4659,7 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 					yRemaining -= iPageHeight * pDSL->getPageCount();
 					iFirstVisiblePageNumber += pDSL->getPageCount();
 				}
-				pDSL = static_cast<fl_DocSectionLayout*>(pDSL->getNext());
+				pDSL = pDSL->getNextDocSection();
 			}
 		}
 	}
@@ -4640,7 +4670,7 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 
 	// enter a double-buffered section
 
-	if( !bDirtyRunsOnly && (getViewMode() == VIEW_PRINT) ) {
+	if( !bDirtyRunsOnly && (getViewMode() != VIEW_PREVIEW) ) {
 		UT_RGBColor clrMargin;
 		if (m_pG->getColor3D(GR_Graphics::CLR3D_BevelDown, clrMargin)) {
 			painter.fillRect(GR_Graphics::CLR3D_BevelDown, 0, 0,
@@ -4661,10 +4691,12 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		if(getViewMode() == VIEW_PRINT || getViewMode() == VIEW_PREVIEW)
 		{
 			iPageHeight = pPage->getHeight();
+			if (iPageHeight < 1)
+				iPageHeight = 1;
 		}
 		else
 		{
-			iPageHeight = pPage->getHeight() - pDSL->getTopMargin() - pDSL->getBottomMargin();
+			iPageHeight = s_visiblePageHeight(pPage, pDSL);
 		}
 		iPageWidth = pPage->getWidth();
 

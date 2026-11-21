@@ -224,6 +224,10 @@ HWND AP_Win32FrameImpl::_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent
 	//SWL(m_hwndDocument, this);
 	SWL(m_hwndDocument, pFrame);
 
+	// QueueDraw and updateScreen must hit the page, not the container
+	// sitting behind this child.
+	pG->setWindow(m_hwndDocument);
+
 	return m_hwndContainer;
 }
 
@@ -529,7 +533,10 @@ void AP_Win32FrameImpl::_setXScrollRange(AP_FrameData * pData, AV_View *pView)
 	si.nPos = ((pView) ? pView->getGraphics()->tdu(pView->getXScrollOffset()) : 0);
 	si.nPage = iWindowWidth;
 	SetScrollInfo(m_hWndHScroll, SB_CTL, &si, TRUE);
-
+	// SetScrollInfo clamps a position left over from another layout.
+	// The view has to follow that clamp, or the page sits above the window.
+	// A failed read leaves si as requested.
+	GetScrollInfo(m_hWndHScroll, SB_CTL, &si);
 	pView->sendHorizontalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
 
 	// hide the horizontal scrollbar if the scroll range is such that the window can contain it all
@@ -581,7 +588,10 @@ void AP_Win32FrameImpl::_setYScrollRange(AP_FrameData * pData, AV_View *pView)
 	si.nPos = ((pView) ? pView->getGraphics()->tdu(pView->getYScrollOffset()) : 0);
 	si.nPage = iWindowHeight;
 	_setVerticalScrollInfo(&si);
-
+	// Same clamp as the horizontal bar: a print-layout offset can fall
+	// past the end of the shorter normal or web layout.
+	// A failed read leaves si as requested.
+	_getVerticalScrollInfo(&si);
 	pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
 }
 

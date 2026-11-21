@@ -246,6 +246,27 @@ HDC GR_Win32Graphics::swapDC(HDC hdc)
 	return previous;
 }
 
+void GR_Win32Graphics::setWindow(HWND hwnd)
+{
+	if (!hwnd || m_bPrint || hwnd == m_hwnd)
+		return;
+	HDC hdc = GetDC(hwnd);
+	if (!hdc)
+		return;
+	_releasePersistentBuffer();
+	if (m_hdc && m_hwnd && !m_bOwnHDC)
+		ReleaseDC(m_hwnd, m_hdc);
+	m_hwnd = hwnd;
+	m_hdc = hdc;
+	int logY = GetDeviceCaps(m_hdc, LOGPIXELSY);
+	int logX = GetDeviceCaps(m_hdc, LOGPIXELSX);
+	if (logY)
+	{
+		m_nLogPixelsY = logY;
+		m_fXYRatio = (double)logX / (double)logY;
+	}
+}
+
 void GR_Win32Graphics::layoutToClient(UT_sint32 x, UT_sint32 y, int & cx, int & cy) const
 {
 	cx = (int)((double)_tduX(x) * m_fXYRatio);
