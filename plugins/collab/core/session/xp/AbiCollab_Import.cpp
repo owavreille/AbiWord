@@ -85,6 +85,22 @@ static bool _authorValueKnown(PD_Document* pDoc, const std::string& value)
  * A joiner keeps an author id only when that author is already in the
  * document the owner shipped.
  */
+static void _setAuthorAttribute(PP_PropertyVector& atts, const std::string& id)
+{
+	for (size_t i = 0; i + 1 < atts.size(); i += 2)
+	{
+		if (atts[i] == PT_AUTHOR_NAME)
+		{
+			atts[i + 1] = id;
+			return;
+		}
+	}
+	if (atts.size() % 2)
+		atts.pop_back();
+	atts.push_back(PT_AUTHOR_NAME);
+	atts.push_back(id);
+}
+
 static bool _bindAuthor(PD_Document* pDoc, AbiCollab* pSession, PP_PropertyVector& atts, BuddyPtr buddy)
 {
 	if (!pDoc || !pSession)
@@ -94,7 +110,7 @@ static bool _bindAuthor(PD_Document* pDoc, AbiCollab* pSession, PP_PropertyVecto
 		UT_sint32 iAuthorId = -1;
 		if (!_authorIntForBuddy(pDoc, buddy, iAuthorId))
 			return false;
-		PP_addOrSetAttribute(PT_AUTHOR_NAME, std::to_string(static_cast<long>(iAuthorId)), atts);
+		_setAuthorAttribute(atts, std::to_string(static_cast<long>(iAuthorId)));
 		return true;
 	}
 	if (!PP_hasAttribute(PT_AUTHOR_NAME, atts))
