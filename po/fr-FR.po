@@ -2377,7 +2377,7 @@ msgstr "Créer un Nouveau"
 #. MENU_LABEL_RDF_SEMITEM_CREATEREF
 #: po/tmp/ap_String_Id.h
 msgid "Create Reference"
-msgstr "Créer un Référence"
+msgstr "Créer une référence"
 
 #. MENU_LABEL_RDF_SEMITEM_CREATE
 #. MENU_STATUSLINE_RDF_SEMITEM_CREATE
@@ -3151,7 +3151,7 @@ msgstr "Exemple :"
 #. DLG_RDF_Query_Execute
 #: po/tmp/ap_String_Id.h
 msgid "Execute Query"
-msgstr "Exécuter de la Requête"
+msgstr "Exécuter la requête"
 
 #. DLG_RDF_Query_Title
 #: po/tmp/ap_String_Id.h

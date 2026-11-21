@@ -873,7 +873,7 @@ UT_Error IE_Exp_OpenXML::setTextColor(int target, const gchar* color)
  */
 UT_Error IE_Exp_OpenXML::setBackgroundColor(int target, const gchar* color)
 {
-	std::string str("<w:shd w:fill=\"");
+	std::string str("<w:shd w:val=\"clear\" w:fill=\"");
 	str += UT_colorToHex(color);
 	str += "\"/>";
 	return writeTargetStream(target, str.c_str());
@@ -937,9 +937,9 @@ UT_Error IE_Exp_OpenXML::setTextDirection(int target, const gchar* direction)
 {
 	std::string str(direction);
 	if(str.compare("rtl") == 0)
-		return writeTargetStream(target, "<w:rtl v:val=\"on\"/>");
+		return writeTargetStream(target, "<w:rtl w:val=\"on\"/>");
 	else if(str.compare("ltr") == 0)
-		return writeTargetStream(target, "<w:rtl v:val=\"off\"/>");
+		return writeTargetStream(target, "<w:rtl w:val=\"off\"/>");
 	return UT_OK;
 }
 
@@ -1352,21 +1352,33 @@ UT_Error IE_Exp_OpenXML::setPageSize(int target, const char* width, const char* 
  */
 UT_Error IE_Exp_OpenXML::setPageMargins(int target, const char* top, const char* left, const char* right, const char* bottom)
 {
-	std::string str("<w:pgMar w:top=\"");
-	str += convertToTwips(top);
-	str += "\"";
+	auto twips = [this](const char* value) -> std::string {
+		const gchar* converted = value ? convertToTwips(value) : nullptr;
+		return converted ? converted : "0";
+	};
 
-	str += " w:left=\"";
-	str += convertToTwips(left);
+	std::string topTwips = twips(top);
+	std::string leftTwips = twips(left);
+	std::string rightTwips = twips(right);
+	std::string bottomTwips = twips(bottom);
+
+	std::string str("<w:pgMar w:top=\"");
+	str += topTwips;
 	str += "\"";
 
 	str += " w:right=\"";
-	str += convertToTwips(right);
+	str += rightTwips;
 	str += "\"";
 
 	str += " w:bottom=\"";
-	str += convertToTwips(bottom);
-	str += "\"/>";
+	str += bottomTwips;
+	str += "\"";
+
+	str += " w:left=\"";
+	str += leftTwips;
+	str += "\"";
+
+	str += " w:header=\"720\" w:footer=\"720\" w:gutter=\"0\"/>";
 
 	return writeTargetStream(target, str.c_str());	
 }
@@ -2771,6 +2783,8 @@ UT_Error IE_Exp_OpenXML::startFootnotes()
 	std::string str("<w:footnotes ");
 	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"";
 	str += ">";
+	str += "<w:footnote w:type=\"separator\" w:id=\"-1\"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>";
+	str += "<w:footnote w:type=\"continuationSeparator\" w:id=\"0\"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>";
 
 	return writeTargetStream(TARGET_FOOTNOTE, str.c_str());
 }
@@ -2839,6 +2853,8 @@ UT_Error IE_Exp_OpenXML::startEndnotes()
 	std::string str("<w:endnotes ");
 	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"";
 	str += ">";
+	str += "<w:endnote w:type=\"separator\" w:id=\"-1\"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>";
+	str += "<w:endnote w:type=\"continuationSeparator\" w:id=\"0\"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>";
 
 	return writeTargetStream(TARGET_ENDNOTE, str.c_str());
 }
@@ -2915,6 +2931,8 @@ UT_Error IE_Exp_OpenXML::startStyle(const std::string& name, const std::string& 
 		str += sEscType;
 		str += "\"";
 	}
+	if(name == "Normal")
+		str += " w:default=\"1\"";
 	str += " w:styleId=\"";
 	str += sEscName;
 	str += "\">";

@@ -43,6 +43,81 @@ std::string windowText(HWND hWnd)
 	return str.utf8_str().utf8_str();
 }
 
+#ifndef BCM_GETIDEALSIZE
+#define BCM_GETIDEALSIZE (0x1600 + 1)
+#endif
+
+int buttonTextWidth(HWND btn)
+{
+	SIZE ideal = {};
+	if (SendMessageW(btn, BCM_GETIDEALSIZE, 0, (LPARAM)&ideal) && ideal.cx > 0)
+		return ideal.cx;
+
+	wchar_t text[256];
+	const int count = GetWindowTextW(btn, text, 256);
+	std::wstring visible;
+	for (int i = 0; i < count; ++i)
+	{
+		if (text[i] == L'&')
+			continue;
+		visible.push_back(text[i]);
+	}
+
+	HDC dc = GetDC(btn);
+	if (!dc)
+		return 0;
+	HFONT font = (HFONT)SendMessageW(btn, WM_GETFONT, 0, 0);
+	HGDIOBJ previous = font ? SelectObject(dc, font) : nullptr;
+	SIZE measured = {};
+	GetTextExtentPoint32W(dc, visible.c_str(), (int)visible.size(), &measured);
+	TEXTMETRICW metrics;
+	const BOOL haveMetrics = GetTextMetricsW(dc, &metrics);
+	if (previous)
+		SelectObject(dc, previous);
+	ReleaseDC(btn, dc);
+	const int pad = haveMetrics ? metrics.tmAveCharWidth * 4 : 24;
+	return measured.cx + pad;
+}
+
+void fitQueryButtons(HWND dlg)
+{
+	const int ids[] = {
+		AP_RID_DIALOG_RDFQUERY_BTN_CLOSE,
+		AP_RID_DIALOG_RDFQUERY_BTN_EXECUTE,
+		AP_RID_DIALOG_RDFQUERY_BTN_SHOWALL
+	};
+	HWND anchor = GetDlgItem(dlg, ids[0]);
+	if (!anchor)
+		return;
+
+	RECT anchorRc;
+	GetWindowRect(anchor, &anchorRc);
+	POINT rightEdge = { anchorRc.right, anchorRc.top };
+	ScreenToClient(dlg, &rightEdge);
+	int right = rightEdge.x;
+
+	for (int id : ids)
+	{
+		HWND btn = GetDlgItem(dlg, id);
+		if (!btn)
+			continue;
+
+		RECT rc;
+		GetWindowRect(btn, &rc);
+		POINT origin = { rc.left, rc.top };
+		ScreenToClient(dlg, &origin);
+		const int height = rc.bottom - rc.top;
+		int width = rc.right - rc.left;
+		const int needed = buttonTextWidth(btn);
+		if (needed > width)
+			width = needed;
+
+		right -= width;
+		MoveWindow(btn, right, origin.y, width, height, FALSE);
+		right -= 4;
+	}
+}
+
 void setItemText(HWND hList, int row, int column, const std::string& text)
 {
 	UT_Win32LocaleString str;
@@ -114,6 +189,7 @@ BOOL AP_Win32Dialog_RDFQuery::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM
 	setDlgItemText(AP_RID_DIALOG_RDFQUERY_BTN_SHOWALL, pSS->getValue(AP_STRING_ID_DLG_RDF_Query_ShowAll));
 	setDlgItemText(AP_RID_DIALOG_RDFQUERY_BTN_EXECUTE, pSS->getValue(AP_STRING_ID_DLG_RDF_Query_Execute));
 	setDlgItemText(AP_RID_DIALOG_RDFQUERY_BTN_CLOSE, pSS->getValue(AP_STRING_ID_DLG_CloseButton));
+	fitQueryButtons(hWnd);
 
 	HWND hList = GetDlgItem(hWnd, AP_RID_DIALOG_RDFQUERY_LIST);
 	ListView_SetExtendedListViewStyle(hList, LVS_EX_FULLROWSELECT | LVS_EX_GRIDLINES);
