@@ -530,7 +530,8 @@ bool UT_Multipart::append_Quoted (const char * buffer, UT_uint32 length)
 {
 	char * str = 0;
 
-	if (length > 78) // shouldn't be
+	const bool heap = length > 78;
+	if (heap) // shouldn't be
 		{
 			str = (char *) g_try_malloc (length + 2);
 			if (str == 0) return false;
@@ -551,7 +552,11 @@ bool UT_Multipart::append_Quoted (const char * buffer, UT_uint32 length)
 		switch (*bufptr)
 			{
 			case '=':
-				if (bufptr + 1 == bufend) suppressNewLine = true;
+				// A truncated "=X" or a soft line break "=" must not read past bufend.
+				if (bufptr + 1 == bufend)
+					suppressNewLine = true;
+				else if (bufptr + 2 >= bufend)
+					*strptr++ = *bufptr++;
 				else
 					{
 						bufptr++;
@@ -571,7 +576,7 @@ bool UT_Multipart::append_Quoted (const char * buffer, UT_uint32 length)
 
 	bool success = m_buf->append (reinterpret_cast<UT_Byte *>(str), strlen (str));
 
-	if (length > 80) FREEP(str);
+	if (heap) FREEP(str);
 	return success;
 }
 

@@ -289,7 +289,8 @@ UT_Error OXMLi_PackageManager::_parseStream( GsfInput * stream, OXMLi_StreamList
 		if (len > 0) {
 			data = gsf_input_read (stream, len, nullptr);
 			if (nullptr == data) {
-				g_object_unref (G_OBJECT (stream));
+				// The caller owns stream. parseDocumentStream stores it in
+				// m_pDocPart, and parseChildById releases it after this return.
 				return UT_ERROR;
 			}
 			cdata = (const char *)data;
@@ -310,15 +311,23 @@ UT_Error OXMLi_PackageManager::_parseStream( GsfInput * stream, OXMLi_StreamList
  */
 UT_ConstByteBufPtr OXMLi_PackageManager::parseImageStream(const char * id)
 {
+	if (!id || !*id)
+		return UT_ConstByteBufPtr();
 	GsfInput * parent = _getDocumentStream();
+	if (!parent)
+		return UT_ConstByteBufPtr();
 	GsfInput * stream = getChildById(parent, id);
+	if (!stream)
+		return UT_ConstByteBufPtr();
 
 	//First, we check if this stream has already been parsed before
-	std::string part_name = gsf_input_name(stream); //TODO: determine if part names are truly unique
+	const char * raw_name = gsf_input_name(stream);
+	std::string part_name = raw_name ? raw_name : "";
 	std::map<std::string, bool>::iterator it;
 	it = m_parsedParts.find(part_name);
 	if (it != m_parsedParts.end() && it->second) {
-		//this stream has already been parsed successfully
+		// The relation was opened above. Release it before leaving.
+		g_object_unref(G_OBJECT(stream));
 		return nullptr;
 	}
 
@@ -336,8 +345,17 @@ UT_ConstByteBufPtr OXMLi_PackageManager::parseImageStream(const char * id)
  */
 std::string OXMLi_PackageManager::getPartName(const char * id)
 {
+	if (!id || !*id)
+		return std::string();
 	GsfInput * parent = _getDocumentStream();
-	const char* target = gsf_open_pkg_rel_get_target(gsf_open_pkg_lookup_rel_by_id(parent, id));	
+	if (!parent)
+		return std::string();
+	auto rel = gsf_open_pkg_lookup_rel_by_id(parent, id);
+	if (!rel)
+		return std::string();
+	const char* target = gsf_open_pkg_rel_get_target(rel);
+	if (!target)
+		return std::string();
 	return std::string(target);
 }
 

@@ -218,7 +218,9 @@ namespace soa {
 	GenericPtr parse_response(const std::string& response, const std::string& method_name) {
 
 		// process the soap request
-		xmlDocPtr doc = xmlReadMemory(&response[0], response.size(), "noname.xml", NULL, 0);
+		if (response.empty() || response.size() > 8u * 1024u * 1024u)
+			return GenericPtr();
+		xmlDocPtr doc = xmlReadMemory(&response[0], static_cast<int>(response.size()), "noname.xml", NULL, XML_PARSE_NONET);
 		if (!doc) {
 			return GenericPtr();
 		}

@@ -340,6 +340,27 @@ void    fl_AutoNum::findAndSetParentItem(void)
 		update(0);
 }
 
+// getLabel() stores the result in a 100-element array. One slot stays free for NUL.
+static const UT_uint32 ABI_LIST_LABEL_MAX = 99;
+
+static void abi_label_append(UT_UCS4Char labelStr[], UT_uint32 * insPoint, UT_UCS4Char ch)
+{
+	if (*insPoint < ABI_LIST_LABEL_MAX)
+		labelStr[(*insPoint)++] = ch;
+}
+
+static void abi_copy_bounded(char * dest, size_t destsz, const char * src)
+{
+	if (!dest || destsz == 0)
+		return;
+	if (!src)
+	{
+		dest[0] = 0;
+		return;
+	}
+	snprintf(dest, destsz, "%s", src);
+}
+
 /*!
  * This method recursively calculates a label based on the type of label
  * of the AutoNum Class. This is output to the label string labelStr.
@@ -352,6 +373,11 @@ void    fl_AutoNum::findAndSetParentItem(void)
 void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 								  UT_uint32 depth, const pf_Frag_Strux* pLayout) const
 {
+	// A document can nest list levels without limit. Stop before the recursion
+	// walks off the stack; the levels already written stay in place.
+	if (depth > 20)
+		return;
+
 	// Keep these arrays the same length to prevent overflows; see Bug 10580
 	char p[100], leftDelim[100], rightDelim[100];
 	UT_uint32 i,psz;
@@ -397,9 +423,10 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 			psz = strlen(m_pszDecimal);
 			for(i=0; i<=psz;i++)
 			{
-				labelStr[(*insPoint)++] = CONV_TO_UCS m_pszDecimal[i];
+				abi_label_append(labelStr, insPoint, CONV_TO_UCS m_pszDecimal[i]);
 			}
-			(*insPoint)--;
+			if (*insPoint > 0)
+				(*insPoint)--;
 		}
 	}
 
@@ -423,30 +450,30 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 		{
 			UT_UCS4Char ch = g_utf8_get_char_validated(pSrc,pLim-pSrc);
 			if (((signed)ch) < 0) ch=UCS_REPLACECHAR;
-			labelStr[(*insPoint)++] = ch;
+			abi_label_append(labelStr, insPoint, ch);
 			pSrc = g_utf8_next_char(pSrc);
 		}
 	}
 	switch( m_List_Type)
 	{
 	case NUMBERED_LIST:
-		sprintf(p,"%i",place);
+		snprintf(p, sizeof(p), "%i", place);
 		psz = strlen( p);
 		for(i=0; i<psz; i++)
 		{
-			labelStr[(*insPoint)++] =  CONV_TO_UCS p[i];
+			abi_label_append(labelStr, insPoint, CONV_TO_UCS p[i]);
 		}
 		break;
 
 	case UPPERCASE_LIST:
 	{
 		char * val = dec2ascii(place - 1, 65);
-		sprintf(p,"%s",val);
+		abi_copy_bounded(p, sizeof(p), val);
 		FREEP(val);
 		psz = strlen( p);
 		for(i=0; i<psz; i++)
 		{
-			labelStr[(*insPoint)++] =  CONV_TO_UCS p[i];
+			abi_label_append(labelStr, insPoint, CONV_TO_UCS p[i]);
 		}
 		break;
 	}
@@ -454,12 +481,12 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 	case LOWERCASE_LIST:
 	{
 		char * val = dec2ascii(place - 1, 97);
-		sprintf(p,"%s",val);
+		abi_copy_bounded(p, sizeof(p), val);
 		FREEP(val);
 		psz = strlen( p);
 		for(i=0; i<psz; i++)
 		{
-			labelStr[(*insPoint)++] =  CONV_TO_UCS p[i];
+			abi_label_append(labelStr, insPoint, CONV_TO_UCS p[i]);
 		}
 		break;
 	}
@@ -467,12 +494,12 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 	case UPPERROMAN_LIST:
 	{
 		char * val = dec2roman(place,false);
-		sprintf(p,"%s",val);
+		abi_copy_bounded(p, sizeof(p), val);
 		FREEP(val);
 		psz = strlen( p);
 		for(i=0; i<psz; i++)
 		{
-			labelStr[(*insPoint)++] =  CONV_TO_UCS p[i];
+			abi_label_append(labelStr, insPoint, CONV_TO_UCS p[i]);
 		}
 		break;
 	}
@@ -480,22 +507,22 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 	case LOWERROMAN_LIST:
 	{
 		char * val = dec2roman(place,true);
-		sprintf(p,"%s",val);
+		abi_copy_bounded(p, sizeof(p), val);
 		FREEP(val);
 		psz = strlen( p);
 		for(i=0; i<psz; i++)
 		{
-			labelStr[(*insPoint)++] =  CONV_TO_UCS p[i];
+			abi_label_append(labelStr, insPoint, CONV_TO_UCS p[i]);
 		}
 		break;
 	}
 
 	case ARABICNUMBERED_LIST:
-		sprintf(p,"%i",place);
+		snprintf(p, sizeof(p), "%i", place);
 		psz = strlen( p);
 		for(i=0; i<psz; i++)
 		{
-			labelStr[(*insPoint)++] =  (CONV_TO_UCS p[i]) + 0x0660 - (CONV_TO_UCS '0');
+			abi_label_append(labelStr, insPoint, (CONV_TO_UCS p[i]) + 0x0660 - (CONV_TO_UCS '0'));
 		}
 		break;
 
@@ -504,51 +531,51 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 		break;
 
 	case BULLETED_LIST:
-		labelStr[(*insPoint)++] =  0x2022;
+		abi_label_append(labelStr, insPoint, 0x2022);
 		break;
 
 	case DASHED_LIST:
-		labelStr[(*insPoint)++] =  0x002D;
+		abi_label_append(labelStr, insPoint, 0x002D);
 		break;
 
 	case SQUARE_LIST:
-		labelStr[(*insPoint)++] =  0x25A0;
+		abi_label_append(labelStr, insPoint, 0x25A0);
 		break;
 
 	case TRIANGLE_LIST:
-		labelStr[(*insPoint)++] =  0x25B2;
+		abi_label_append(labelStr, insPoint, 0x25B2);
 		break;
 
 	case DIAMOND_LIST:
-		labelStr[(*insPoint)++] =  0x2666;
+		abi_label_append(labelStr, insPoint, 0x2666);
 		break;
 
 	case STAR_LIST:
-		labelStr[(*insPoint)++] =  0x2733;
+		abi_label_append(labelStr, insPoint, 0x2733);
 		break;
 
 	case IMPLIES_LIST:
-		labelStr[(*insPoint)++] =  0x21D2;
+		abi_label_append(labelStr, insPoint, 0x21D2);
 		break;
 
 	case TICK_LIST:
-		labelStr[(*insPoint)++] =  0x2713;
+		abi_label_append(labelStr, insPoint, 0x2713);
 		break;
 
 	case BOX_LIST:
-		labelStr[(*insPoint)++] =  0x2752;
+		abi_label_append(labelStr, insPoint, 0x2752);
 		break;
 
 	case HAND_LIST:
-		labelStr[(*insPoint)++] =  0x261E;
+		abi_label_append(labelStr, insPoint, 0x261E);
 		break;
 
 	case HEART_LIST:
-		labelStr[(*insPoint)++] =  0x2665;
+		abi_label_append(labelStr, insPoint, 0x2665);
 		break;
 
 	case ARROWHEAD_LIST:
-		labelStr[(*insPoint)++] =  0x27A3;
+		abi_label_append(labelStr, insPoint, 0x27A3);
 		break;
 
 	default:
@@ -566,10 +593,12 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 		{
 			UT_UCS4Char ch = g_utf8_get_char_validated(pSrc,pLim-pSrc);
 			if (((signed)ch) < 0) ch=UCS_REPLACECHAR;
-			labelStr[(*insPoint)++] = ch;
+			abi_label_append(labelStr, insPoint, ch);
 			pSrc = g_utf8_next_char(pSrc);
 		}
 	}
+	if (*insPoint > ABI_LIST_LABEL_MAX)
+		*insPoint = ABI_LIST_LABEL_MAX;
 	labelStr[(*insPoint)] = 0;
 	return;
 }
@@ -1173,6 +1202,19 @@ char *  fl_AutoNum::dec2roman(UT_sint32 value, bool lower)
 {
 	UT_String roman;
 
+	if (value < 0)
+		value = 0;
+
+	// A start value in the millions would append one M per thousand into an
+	// unbounded string, then copy it into a 100-byte buffer. Past the
+	// traditional range, the decimal form stays exact and bounded.
+	if (value > 3999)
+	{
+		char tmp[16];
+		snprintf(tmp, sizeof(tmp), "%d", static_cast<int>(value));
+		return g_strdup(tmp);
+	}
+
 	while( value >= 1000 )
 	{
 		roman += "M";
@@ -1259,18 +1301,21 @@ char *  fl_AutoNum::dec2roman(UT_sint32 value, bool lower)
 
 char * fl_AutoNum::dec2ascii(UT_sint32 value, UT_uint32 offset)
 {
-	char ascii[30];
-	UT_uint32 ndx, count, i;
+	// Word repeats the same letter. The repeat count is value/26, which a
+	// document can set far past this array. 64 letters is enough to read
+	// and still leaves room for the terminator.
+	char ascii[64];
+	if (value < 0)
+		value = 0;
 
-	ascii[0] = '\0';
-	ndx = abs(value % 26);
-	count = abs(value / 26);
+	const UT_uint32 ndx = static_cast<UT_uint32>(value % 26);
+	UT_uint32 count = static_cast<UT_uint32>(value / 26);
+	if (count >= sizeof(ascii) - 1)
+		count = static_cast<UT_uint32>(sizeof(ascii) - 2);
 
-	// For now, we do this like Word. A preference would be nice.
+	UT_uint32 i;
 	for (i = 0; i <= count; i++)
-	{
 		ascii[i] = static_cast<char>(ndx + offset);
-	}
 	ascii[i] = '\0';
 
 	return g_strdup(ascii);
@@ -1290,12 +1335,14 @@ void fl_AutoNum::dec2hebrew(UT_UCS4Char labelStr[], UT_uint32 * insPoint, UT_sin
 
 	bool outputSep = false;
 	UT_UCS4Char digit;
+	if (value < 0)
+		value = 0;
 	do
  	{
 		UT_sint32 n3 = value % 1000;
 
 		if(outputSep)
-			labelStr[(*insPoint)++] = 0x0020; // output thousand seperator
+			abi_label_append(labelStr, insPoint, 0x0020); // output thousand seperator
 		outputSep = ( n3 > 0); // request to output thousand seperator next time.
 
 		// Process digit for 100 - 900
@@ -1304,7 +1351,7 @@ void fl_AutoNum::dec2hebrew(UT_UCS4Char labelStr[], UT_uint32 * insPoint, UT_sin
 			if( n3 >= n1)
 			{
 				n3 -= n1;
-				labelStr[(*insPoint)++] = gHebrewDigit[(n1/100)-1+18];
+				abi_label_append(labelStr, insPoint, gHebrewDigit[(n1/100)-1+18]);
 			} else {
 				n1 -= 100;
 			} // if
@@ -1327,13 +1374,13 @@ void fl_AutoNum::dec2hebrew(UT_UCS4Char labelStr[], UT_uint32 * insPoint, UT_sin
 			} // if
 
 			n3 -= n2;
-			labelStr[(*insPoint)++] = digit;
+			abi_label_append(labelStr, insPoint, digit);
 		} // if
 
 		// Process digit for 1 - 9
 		if ( n3 > 0)
 		{
-			labelStr[(*insPoint)++] = gHebrewDigit[n3-1];
+			abi_label_append(labelStr, insPoint, gHebrewDigit[n3-1]);
 		} // if
 		value /= 1000;
 	} while (value >= 1);

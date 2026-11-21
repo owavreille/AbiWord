@@ -273,6 +273,14 @@ void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 				UT_DEBUGMSG(("No pathname given in DDE Open command.\n"));
 				goto Finished;
 			}
+			// \\.\ and \\?\ reach devices and the Win32 namespace. A normal
+			// UNC path (\\server\share) has a different third character.
+			if (pathname[0] == '\\' && pathname[1] == '\\' &&
+			    (pathname[2] == '.' || pathname[2] == '?'))
+			{
+				UT_DEBUGMSG(("DDE Open refused a device path.\n"));
+				goto Finished;
+			}
 
 			// ask the application to load this document into a window....
 
@@ -316,7 +324,7 @@ static XX_Status _fetchKey(HKEY k1, const char * szSubKey, HKEY * pkNew)
 {
 	DWORD dwDisposition;
 	LONG eResult = RegCreateKeyEx(k1, szSubKey, 0, nullptr,
-				      REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS,
+				      REG_OPTION_NON_VOLATILE, KEY_READ | KEY_WRITE,
 				      nullptr,
 				      pkNew, &dwDisposition);
 	if (eResult != ERROR_SUCCESS)

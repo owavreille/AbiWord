@@ -53,15 +53,18 @@ bool UT_Xpm2Bmp(UT_uint32 maxWidth,
 
 	// first row contains: width height, number of colors, chars per pixel
 
-	UT_uint32 width, height, xpm_width, xpm_height, nrColors, charsPerPixel;
+	UT_uint32 width, height, xpm_width = 0, xpm_height = 0, nrColors = 0, charsPerPixel = 0;
 	UT_uint32 cut_left, cut_top;
-	UT_DebugOnly<UT_uint32> n = sscanf(pIconData[0],"%u %u %u %u",
-						 &xpm_width,&xpm_height,&nrColors,&charsPerPixel);
-	UT_ASSERT(n == 4);
+	if (sscanf(pIconData[0], "%u %u %u %u",
+			   &xpm_width, &xpm_height, &nrColors, &charsPerPixel) != 4)
+		return false;
 	UT_ASSERT(xpm_width > 0);
 	UT_ASSERT(xpm_height > 0);
 
 	UT_ASSERT(charsPerPixel > 0);
+	// bufSymbol below is 10 bytes, including the terminator.
+	if (charsPerPixel == 0 || charsPerPixel > 9 || nrColors == 0 || nrColors > 4096)
+		return false;
 
 	width = xpm_width < maxWidth ? xpm_width : maxWidth;
 	cut_left = xpm_width - width;
@@ -122,7 +125,7 @@ bool UT_Xpm2Bmp(UT_uint32 maxWidth,
 			bufSymbol[kPx] = pIconDataPalette[k][kPx];
 		UT_ASSERT(strlen(bufSymbol) == charsPerPixel);
 		
-		UT_DebugOnly<UT_uint32> nf = sscanf(&pIconDataPalette[k][charsPerPixel+1]," %s %s",bufKey,bufColorValue);
+		UT_DebugOnly<UT_uint32> nf = sscanf(&pIconDataPalette[k][charsPerPixel+1]," %9s %99s",bufKey,bufColorValue);
 		UT_ASSERT(nf == 2);
 		UT_ASSERT(bufKey[0] == 'c' || bufKey[0] == 'g');
 

@@ -204,7 +204,10 @@ UT_Error UT_XML::parse (const char * szFilename)
 			reader->closeFile ();
 			return UT_ERROR;
 		}
-		xmlCtxtUseOptions (ctxt, XML_PARSE_NOENT);
+		xmlCtxtUseOptions (ctxt, XML_PARSE_NONET | XML_PARSE_NOENT);
+#if defined(LIBXML_VERSION) && LIBXML_VERSION >= 21200
+		xmlCtxtSetMaxAmplification (ctxt, 5);
+#endif
 		UT_sint32 chucks = -1;
 		while (!done && !m_bStopped)
 		{
@@ -289,6 +292,10 @@ UT_Error UT_XML::parse (const char * buffer, UT_uint32 length)
     }
   memcpy(ctxt->sax, &hdl, sizeof(hdl));
   ctxt->userData = static_cast<void *>(this);
+  xmlCtxtUseOptions (ctxt, XML_PARSE_NONET | XML_PARSE_NOENT);
+#if defined(LIBXML_VERSION) && LIBXML_VERSION >= 21200
+  xmlCtxtSetMaxAmplification (ctxt, 5);
+#endif
 
   m_bStopped = false;
 

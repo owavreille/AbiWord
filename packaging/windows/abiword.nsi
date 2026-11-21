@@ -36,6 +36,9 @@ ManifestDPIAware true
 !ifndef ICON
   !error "Definir ICON"
 !endif
+!ifndef NOTICES
+  !define NOTICES "${__FILEDIR__}/THIRD-PARTY-NOTICES.txt"
+!endif
 
 ${UnStrStr}
 
@@ -61,6 +64,7 @@ BrandingText "AbiWord ${VERSION}"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "${LICENSE}"
 !insertmacro MUI_PAGE_LICENSE "${ICON_LICENSE}"
+!insertmacro MUI_PAGE_LICENSE "${NOTICES}"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -111,6 +115,7 @@ Section "AbiWord" SecMain
   SetOutPath "$INSTDIR"
   File "${LICENSE}"
   File "${ICON_LICENSE}"
+  File "${NOTICES}"
   File /r "${DIST}/*.*"
 
   WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -122,7 +127,7 @@ Section "AbiWord" SecMain
   WriteRegStr HKLM "Software\AbiWord" "InstallDir" "$INSTDIR"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AbiWord" "DisplayName" "AbiWord ${VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AbiWord" "DisplayVersion" "${VERSION}"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AbiWord" "Publisher" "AbiWord"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AbiWord" "Publisher" "Portage non officiel"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AbiWord" "InstallLocation" "$INSTDIR"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AbiWord" "DisplayIcon" "$INSTDIR\bin\abiword.exe"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\AbiWord" "UninstallString" '"$INSTDIR\uninstall.exe"'
@@ -183,6 +188,7 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\share"
   Delete "$INSTDIR\COPYING"
   Delete "$INSTDIR\LICENSE.icons.txt"
+  Delete "$INSTDIR\THIRD-PARTY-NOTICES.txt"
   Delete "$INSTDIR\uninstall.exe"
   RMDir "$INSTDIR"
 

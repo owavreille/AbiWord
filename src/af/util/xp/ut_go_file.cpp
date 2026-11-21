@@ -1448,9 +1448,46 @@ fallback_open_uri(const gchar* url, GError** err)
 #include "ut_Win32LocaleString.h"
 #endif
 
+gboolean
+UT_go_url_may_open (gchar const *url)
+{
+	if (!url || !*url)
+		return FALSE;
+	if (g_ascii_strncasecmp(url, "mailto:", 7) == 0)
+		return url[7] != '\0';
+	if (g_ascii_strncasecmp(url, "https://", 8) == 0)
+		return url[8] != '\0';
+	if (g_ascii_strncasecmp(url, "http://", 7) == 0)
+		return url[7] != '\0';
+	// file: stays a document link. Other schemes (ms-msdt, search-ms, …)
+	// are handed to the shell association and are refused.
+	if (g_ascii_strncasecmp(url, "file:", 5) != 0)
+		return FALSE;
+
+	const char * slash = strrchr(url, '/');
+	const char * base = slash ? slash + 1 : url;
+	const char * dot = strrchr(base, '.');
+	if (!dot || !dot[1])
+		return TRUE;
+
+	static const char * blocked[] = {
+		".exe", ".bat", ".cmd", ".com", ".scr", ".js", ".jse",
+		".vbs", ".vbe", ".ps1", ".msi", ".lnk", ".hta", ".cpl",
+		".jar", ".msc", ".reg", nullptr
+	};
+	for (int i = 0; blocked[i]; ++i)
+	{
+		if (g_ascii_strcasecmp(dot, blocked[i]) == 0)
+			return FALSE;
+	}
+	return TRUE;
+}
+
 GError *
 UT_go_url_show (gchar const *url)
 {
+	if (!UT_go_url_may_open(url))
+		return g_error_new_literal(g_quark_from_static_string("abiword-url"), 1, "Refused URL");
 #ifdef G_OS_WIN32
 	UT_Win32LocaleString str;
 	str.fromUTF8 (url);

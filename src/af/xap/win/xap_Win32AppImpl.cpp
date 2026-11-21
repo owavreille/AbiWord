@@ -24,6 +24,7 @@
 #include "xap_Win32AppImpl.h"
 #include "ut_string_class.h"
 #include "ut_path.h"
+#include "ut_go_file.h"
 #include "xap_Frame.h"
 #include "xap_App.h"
 #include "xap_Win32FrameImpl.h"
@@ -33,6 +34,8 @@
 bool XAP_Win32AppImpl::openURL(const char * szURL)
 {
 	if (!szURL || !*szURL)
+		return false;
+	if (!UT_go_url_may_open(szURL))
 		return false;
 
 	// ShellExecute with the open verb uses the user's current association

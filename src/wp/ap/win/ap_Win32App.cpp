@@ -1152,13 +1152,13 @@ static void abi_win32_write_crash(EXCEPTION_POINTERS * info)
 		return;
 
 	WCHAR path[MAX_PATH];
-	if (wcslen(dir) + 18 >= G_N_ELEMENTS(path))
+	// A fixed name in the temp directory can be created ahead of the crash.
+	// GetTempFileNameW creates a unique file and fails if it cannot.
+	if (GetTempFileNameW(dir, L"abi", 0, path) == 0)
 		return;
-	wcscpy(path, dir);
-	wcscat(path, L"abiword-crash.log");
 
 	HANDLE file = CreateFileW(path, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
-							  CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+							  OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 	if (file == INVALID_HANDLE_VALUE)
 		return;
 

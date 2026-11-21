@@ -116,5 +116,13 @@ if [[ -n "$hunspell" ]]; then
 	cp "$hunspell" "$DEST/lib/enchant-2/"
 fi
 
+STRIP=${STRIP:-x86_64-w64-mingw32-strip}
+if command -v "$STRIP" >/dev/null 2>&1; then
+	find "$DEST" -type f \( -name '*.dll' -o -name '*.exe' \) -print0 \
+		| xargs -0 -r "$STRIP" --strip-unneeded
+else
+	echo "strip introuvable ($STRIP) : les symboles de debug restent" >&2
+fi
+
 echo "Arbre prêt : $DEST"
 find "$DEST/bin" -maxdepth 1 -type f | sort

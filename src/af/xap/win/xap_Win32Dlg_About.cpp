@@ -170,7 +170,10 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	const XAP_StringSet*  pSS = XAP_App::getApp()->getStringSet();
 	str.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_ABOUT_Title));
 	strbis.fromASCII (XAP_App::getApp()->getApplicationName());
-	swprintf(buf, str.c_str(), strbis.c_str());
+	// The Microsoft swprintf has no size argument. The format comes from
+	// the translation catalog, so keep the write inside buf.
+	_snwprintf(buf, G_N_ELEMENTS(buf), str.c_str(), strbis.c_str());
+	buf[G_N_ELEMENTS(buf) - 1] = 0;
 
 	HWND hwndAbout = UT_CreateWindowEx(	0L, pClassName,
 										buf,

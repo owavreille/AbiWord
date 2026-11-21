@@ -24,6 +24,10 @@
 
 #include "ut_types.h"
 
+// Shared with the manifest parser. A missing or hostile size must not reach g_malloc.
+inline constexpr UT_uint32 ODC_MAX_DECRYPTED_BYTES = 256u * 1024u * 1024u;
+inline constexpr UT_uint32 ODC_MAX_PBKDF2_ITERATIONS = 1000000u;
+
 class ODc_CryptoInfo {
 public:
 	// stream information
@@ -32,6 +36,8 @@ public:
 	// algorithm information
 	std::string		m_algorithm;
 	std::string		m_initVector;
+	std::string		m_checksum;
+	std::string		m_checksumType;
 
 	// key information
 	std::string		m_keyType;
@@ -46,5 +52,6 @@ public:
 
 private:
 	static UT_Error performDecrypt(GsfInput* pStream,	unsigned char* salt, UT_uint32 salt_length, UT_uint32 iter_count,
-                                   unsigned char* ivec, gsize ivec_length, const std::string& password, UT_uint32 decrypted_size, GsfInput** pDecryptedInput);
+                                   unsigned char* ivec, gsize ivec_length, const std::string& password, UT_uint32 decrypted_size,
+                                   const std::string& checksum, const std::string& checksumType, GsfInput** pDecryptedInput);
 };

@@ -1385,7 +1385,9 @@ void ServiceAccountHandler::signal(const Event& event, BuddyPtr pSource)
 
 bool ServiceAccountHandler::parseUserInfo(const std::string& userinfo, uint64_t& user_id)
 {
-	xmlDocPtr doc = xmlReadMemory(&userinfo[0], userinfo.size(), "noname.xml", NULL, 0);
+	if (userinfo.empty() || userinfo.size() > 8u * 1024u * 1024u)
+		return false;
+	xmlDocPtr doc = xmlReadMemory(&userinfo[0], static_cast<int>(userinfo.size()), "noname.xml", NULL, XML_PARSE_NONET);
 	UT_return_val_if_fail(doc, false);
 		
 	xmlNode* rootNode = xmlDocGetRootElement(doc);
