@@ -3839,6 +3839,8 @@ gchar *IE_Imp_RTF::_parseFldinstBlock (UT_ByteBuf & _buf, gchar *xmlField, bool 
 			if ( !strcmp(instr, "l") )
 			{
 				instr = strtok (nullptr, " \\{}");
+				if (instr == nullptr)
+					break;
 				href = "#";
 			}
 			else
@@ -3851,8 +3853,9 @@ gchar *IE_Imp_RTF::_parseFldinstBlock (UT_ByteBuf & _buf, gchar *xmlField, bool 
 			if(*instr == '\"')
 				instr++;
 
-			if(instr[strlen(instr)-1])
-				instr[strlen(instr)-1] = 0;
+			size_t instrLen = strlen(instr);
+			if (instrLen > 0 && instr[instrLen - 1] == '\"')
+				instr[instrLen - 1] = 0;
 
 			href += instr;
 

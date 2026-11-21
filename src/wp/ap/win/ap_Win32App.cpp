@@ -386,23 +386,6 @@ bool AP_Win32App::initialize(void)
 			FindClose( findtag );
 		}
 
-		UT_String pluginName( getUserPrivateDirectory() ); 
-		UT_String pluginDir( getUserPrivateDirectory() );
-		pluginDir += "\\AbiWord\\plugins\\*.dll";
-		UT_Win32LocaleString str;
-		str.fromUTF8(pluginDir.c_str());
-		findtag = FindFirstFileW( str.c_str(), &cfile );
-		if( findtag != INVALID_HANDLE_VALUE )
-		{
-			do
-			{	
-				pluginName = getUserPrivateDirectory();
-				pluginName += "\\AbiWord\\plugins\\";
-				pluginName += getUTF8String(cfile.cFileName);
-				XAP_ModuleManager::instance().loadModule( pluginName.c_str() );
-			} while( FindNextFileW( findtag, &cfile ) );
-			FindClose( findtag );
-		}
 	}
 	return bSuccess;
 }
@@ -636,7 +619,10 @@ bool AP_Win32App::_copyFmtToClipboard(PD_DocumentRange * pDocRange, const char *
 			status = pExpText->copyToBuffer(pDocRange,&buf);
 
 			if(status != UT_OK)
+			{
+				DELETEP(pExpText);
 				return false;
+			}
 			
 			UT_Byte b = 0;
 			buf.append(&b,1);			// nullptr terminate the string
@@ -661,7 +647,10 @@ bool AP_Win32App::_copyFmtToClipboard(PD_DocumentRange * pDocRange, const char *
 			status = pExpUnicodeText->copyToBuffer(pDocRange,&buf);
 
 			if(status != UT_OK)
+			{
+				DELETEP(pExpUnicodeText);
 				return false;
+			}
 			
 			UT_Byte b[2] = {0,0};
 			buf.append(b,2);			// nullptr terminate the string
@@ -684,7 +673,10 @@ bool AP_Win32App::_copyFmtToClipboard(PD_DocumentRange * pDocRange, const char *
 			status = pExpRtf->copyToBuffer(pDocRange,&buf);
 
 			if(status != UT_OK)
+			{
+				DELETEP(pExpRtf);
 				return false;
+			}
 
 			UT_Byte b = 0;
 			buf.append(&b,1);			// nullptr terminate the string

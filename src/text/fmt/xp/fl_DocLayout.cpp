@@ -1350,42 +1350,42 @@ void FL_DocLayout::getStringFromFootnoteVal(UT_String & sVal, UT_sint32 iVal, Fo
 		break;
 	case FOOTNOTE_TYPE_LOWER:
 	{
-		char * val = autoCalc.dec2ascii(iVal,96);
+		char * val = autoCalc.dec2ascii(iVal > 0 ? iVal - 1 : 0, 97);
 		UT_String_sprintf (sVal,"%s",val);
 		FREEP(val);
 		break;
 	}
 	case FOOTNOTE_TYPE_LOWER_PAREN:
 	{
-		char * val = autoCalc.dec2ascii(iVal,96);
+		char * val = autoCalc.dec2ascii(iVal > 0 ? iVal - 1 : 0, 97);
 		UT_String_sprintf (sVal,"(%s)",val);
 		FREEP(val);
 		break;
 	}
 	case FOOTNOTE_TYPE_LOWER_OPEN_PAREN:
 	{
-		char * val = autoCalc.dec2ascii(iVal,96);
+		char * val = autoCalc.dec2ascii(iVal > 0 ? iVal - 1 : 0, 97);
 		UT_String_sprintf (sVal,"%s)",val);
 		FREEP(val);
 		break;
 	}
 	case FOOTNOTE_TYPE_UPPER:
 	{
-		char * val = autoCalc.dec2ascii(iVal,64);
+		char * val = autoCalc.dec2ascii(iVal > 0 ? iVal - 1 : 0, 65);
 		UT_String_sprintf (sVal,"%s",val);
 		FREEP(val);
 		break;
 	}
 	case FOOTNOTE_TYPE_UPPER_PAREN:
 	{
-		char * val = autoCalc.dec2ascii(iVal,64);
+		char * val = autoCalc.dec2ascii(iVal > 0 ? iVal - 1 : 0, 65);
 		UT_String_sprintf (sVal,"(%s)",val);
 		FREEP(val);
 		break;
 	}
 	case FOOTNOTE_TYPE_UPPER_OPEN_PAREN:
 	{
-		char * val = autoCalc.dec2ascii(iVal,64);
+		char * val = autoCalc.dec2ascii(iVal > 0 ? iVal - 1 : 0, 65);
 		UT_String_sprintf (sVal,"%s)",val);
 		FREEP(val);
 		break;

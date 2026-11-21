@@ -1213,7 +1213,13 @@ void IE_Imp_XHTML::startElement(const gchar *name,
 		if (szSrc.compare(0, 5, "data:") == 0) { // data-URL - special case
 			pfg = importDataURLImage (szSrc.c_str() + 5);
 		} else if (!isClipboard ()) {
-			pfg = importImage (szSrc.c_str());
+			const char * src = szSrc.c_str();
+			bool local = src[0] != '/' && src[0] != '\\'
+				&& !(src[0] && src[1] == ':')
+				&& !strstr(src, "://")
+				&& !strstr(src, "..");
+			if (local)
+				pfg = importImage (src);
 		}
 
 		if (pfg == nullptr) {

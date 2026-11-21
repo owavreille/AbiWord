@@ -1501,7 +1501,7 @@ void fl_TableLayout::_lookupProperties(const PP_AttrProp* pSectionAP)
 		{
 			pColP = m_vecColProps.getNthItem(i);
 			UT_nonnull_or_continue(pColP);
-			pColP->m_iColWidth = static_cast<double>(m_iTableWidth)*pColP->m_dColRelWidth/tot;
+			pColP->m_iColWidth = (tot == 0.0) ? 0 : static_cast<double>(m_iTableWidth)*pColP->m_dColRelWidth/tot;
 		}
  	}
 

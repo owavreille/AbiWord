@@ -49,30 +49,32 @@ UT_Error OXML_Element_List::serializeProperties(IE_Exp_OpenXML* exporter)
 	//TODO: Add all the property serializations here
 	UT_Error err = UT_OK;
 
-	err = exporter->startListProperties(TARGET_DOCUMENT);
+	err = exporter->startListProperties(TARGET);
 	if(err != UT_OK)
 		return err;
 
-	const gchar* listLevel = parent->getListLevel();
-	bool isNumbered = parent->isNumberedList();
-	if(!listLevel || isNumbered)
-	{
+	const gchar* listLevel = nullptr;
+	bool ownLevel = getAttribute("level", listLevel) == UT_OK;
+	if (!ownLevel && parent)
+		listLevel = parent->getListLevel();
+	if (!listLevel || (!ownLevel && parent && parent->isNumberedList()))
 		listLevel = "0";
-	}
-	err = exporter->setListLevel(TARGET_DOCUMENT, listLevel);
+	err = exporter->setListLevel(TARGET, listLevel);
 	if(err != UT_OK)
 		return err;
 
-	const gchar* listId = parent->getListId();
+	const gchar* listId = nullptr;
+	if (getAttribute("listid", listId) != UT_OK && parent)
+		listId = parent->getListId();
 	if(!listId)
 	{
 		listId = "1";
 	}
-	err = exporter->setListFormat(TARGET_DOCUMENT, listId);
+	err = exporter->setListFormat(TARGET, listId);
 	if(err != UT_OK)
 		return err;
 
-	return exporter->finishListProperties(TARGET_DOCUMENT);
+	return exporter->finishListProperties(TARGET);
 }
 
 

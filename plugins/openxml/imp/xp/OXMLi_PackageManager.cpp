@@ -284,6 +284,8 @@ UT_Error OXMLi_PackageManager::_parseStream( GsfInput * stream, OXMLi_StreamList
 	UT_XML reader;
 	reader.setListener(pListener);
 
+	if (gsf_input_size (stream) > (gsf_off_t)(256 * 1024 * 1024))
+		return UT_ERROR;
 	if (gsf_input_size (stream) > 0) {
 		len = gsf_input_remaining (stream);
 		if (len > 0) {
@@ -319,6 +321,11 @@ UT_ConstByteBufPtr OXMLi_PackageManager::parseImageStream(const char * id)
 	GsfInput * stream = getChildById(parent, id);
 	if (!stream)
 		return UT_ConstByteBufPtr();
+	if (gsf_input_size(stream) > (gsf_off_t)(256 * 1024 * 1024))
+	{
+		g_object_unref(G_OBJECT(stream));
+		return UT_ConstByteBufPtr();
+	}
 
 	//First, we check if this stream has already been parsed before
 	const char * raw_name = gsf_input_name(stream);

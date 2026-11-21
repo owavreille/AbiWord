@@ -275,10 +275,9 @@ void XAP_Win32Slurp::processCommand(HDDEDATA hData)
 			}
 			// \\.\ and \\?\ reach devices and the Win32 namespace. A normal
 			// UNC path (\\server\share) has a different third character.
-			if (pathname[0] == '\\' && pathname[1] == '\\' &&
-			    (pathname[2] == '.' || pathname[2] == '?'))
+			if (pathname[0] == '\\' && pathname[1] == '\\')
 			{
-				UT_DEBUGMSG(("DDE Open refused a device path.\n"));
+				UT_DEBUGMSG(("DDE Open refused a device or UNC path.\n"));
 				goto Finished;
 			}
 

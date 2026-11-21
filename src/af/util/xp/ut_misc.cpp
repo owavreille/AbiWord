@@ -342,6 +342,8 @@ UT_UniqueId::UT_UniqueId()
 
 	UT_uint32 i = (UT_uint32) List;
 	m_iID[i] = AUTO_LIST_RESERVED;
+	m_iID[(UT_uint32) Footnote] = 1;
+	m_iID[(UT_uint32) Endnote] = 1;
 }
 
 

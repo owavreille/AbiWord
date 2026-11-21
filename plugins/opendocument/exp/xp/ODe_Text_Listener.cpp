@@ -1046,7 +1046,7 @@ void ODe_Text_Listener::insertInlinedImage(const gchar* pImageName,
 void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
                                                  const PP_AttrProp* pAP)
 {
-    UT_UTF8String output = "<text:p>";
+    UT_UTF8String output;
     UT_UTF8String str;
     UT_UTF8String escape;
     ODe_Style_Style* pStyle;
@@ -1208,7 +1208,7 @@ void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
        escape.clear();
     }
 
-    output += "</draw:frame></text:p>";
+    output += "</draw:frame>";
     
     ODe_writeUTF8String(m_pParagraphContent, output);
 }
@@ -1540,7 +1540,7 @@ void ODe_Text_Listener::_openParagraphDelayed(){
     
     if (styleName.empty()) {
         output += "<text:p>";
-        ODe_writeUTF8String(m_pParagraphContent, "</text:h>\n");
+        ODe_writeUTF8String(m_pParagraphContent, "</text:p>\n");
     } else {
         UT_uint8 outlineLevel = 0;
         

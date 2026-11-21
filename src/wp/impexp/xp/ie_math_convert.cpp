@@ -21,6 +21,7 @@
 #include "ie_math_convert.h"
 #include "ut_debugmsg.h"
 #include "xap_App.h"
+#include <glib.h>
 
 #include <libxslt/xslt.h>
 #include <libxslt/xsltInternals.h>
@@ -28,6 +29,41 @@
 #include <libxslt/xsltutils.h>
 #include <libxslt/security.h>
 #include <libxml/parser.h>
+
+static xmlDocPtr abi_xml_read_memory(const char * data, size_t length)
+{
+    if (!data || length > static_cast<size_t>(G_MAXINT))
+        return nullptr;
+    return xmlReadMemory(data, static_cast<int>(length), "math.xml", nullptr,
+                         XML_PARSE_NONET | XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
+}
+
+static xmlDocPtr abi_xslt_apply(xsltStylesheet * sheet, xmlDocPtr doc)
+{
+    if (!sheet || !doc)
+        return nullptr;
+    xsltSecurityPrefsPtr sec = xsltNewSecurityPrefs();
+    xsltTransformContextPtr tctxt = xsltNewTransformContext(sheet, doc);
+    if (!tctxt)
+    {
+        if (sec)
+            xsltFreeSecurityPrefs(sec);
+        return nullptr;
+    }
+    if (sec)
+    {
+        xsltSetSecurityPrefs(sec, XSLT_SECPREF_WRITE_FILE, xsltSecurityForbid);
+        xsltSetSecurityPrefs(sec, XSLT_SECPREF_CREATE_DIRECTORY, xsltSecurityForbid);
+        xsltSetSecurityPrefs(sec, XSLT_SECPREF_READ_NETWORK, xsltSecurityForbid);
+        xsltSetSecurityPrefs(sec, XSLT_SECPREF_WRITE_NETWORK, xsltSecurityForbid);
+        xsltSetCtxtSecurityPrefs(sec, tctxt);
+    }
+    xmlDocPtr res = xsltApplyStylesheetUser(sheet, doc, nullptr, nullptr, nullptr, tctxt);
+    xsltFreeTransformContext(tctxt);
+    if (sec)
+        xsltFreeSecurityPrefs(sec);
+    return res;
+}
 
 static xsltStylesheet * cur = nullptr;
 
@@ -180,14 +216,14 @@ bool convertOMMLtoMathML(const std::string & pOMML, std::string & pMathML)
 
     }
 
-    doc = xmlParseDoc((const xmlChar*)pOMML.c_str());
+    doc = abi_xml_read_memory(pOMML.c_str(), pOMML.size());
     if(!doc)
     {
         xxx_UT_DEBUGMSG(("convertOMMLtoMathML : Parsing OMML document failed\n"));
         return false;
     }
 
-    res = xsltApplyStylesheet(cur2, doc, nullptr);
+    res = abi_xslt_apply(cur2, doc);
     if(!res)
     {
         xxx_UT_DEBUGMSG(("convertOMMLtoMathML: Applying stylesheet failed\n"));
@@ -249,14 +285,14 @@ bool convertMathMLtoOMML(const std::string & rMathML, std::string & rOMML)
         }
     }
 
-    doc = xmlParseDoc((const xmlChar*)rMathML.c_str());
+    doc = abi_xml_read_memory(rMathML.c_str(), rMathML.size());
     if(!doc)
     {
         xxx_UT_DEBUGMSG(("convertMathMLtoOMML : Parsing MathML document failed\n"));
         return false;
     }
 
-    res = xsltApplyStylesheet(cur3, doc, nullptr);
+    res = abi_xslt_apply(cur3, doc);
     if(!res)
     {
         xxx_UT_DEBUGMSG(("convertMathMLtoOMML : Applying stylesheet failed\n"));

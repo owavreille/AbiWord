@@ -1810,6 +1810,8 @@ void fp_Page::updateColumnX()
 		pSL->checkAndAdjustColumnGap(iSpace);
 
 		UT_uint32 iNumColumns = pSL->getNumColumns();
+		if (iNumColumns == 0)
+			iNumColumns = 1;
 		UT_uint32 iColumnGap = pSL->getColumnGap();
 		UT_uint32 iColWidth = (iSpace - ((iNumColumns - 1) * iColumnGap)) / iNumColumns;
 
@@ -1923,6 +1925,8 @@ void fp_Page::_reformatColumns(void)
 		pSL->checkAndAdjustColumnGap(iSpace);
 
 		UT_uint32 iNumColumns = pSL->getNumColumns();
+		if (iNumColumns == 0)
+			iNumColumns = 1;
 		UT_uint32 iColumnGap = pSL->getColumnGap();
 		UT_uint32 iColWidth = (iSpace - ((iNumColumns - 1) * iColumnGap)) / iNumColumns;
 
