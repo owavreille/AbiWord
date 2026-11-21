@@ -2265,10 +2265,16 @@ void s_DocBook_Listener::_handleDataItems(void)
 			/* int result = */
 			UT_go_directory_create(fname.utf8_str(), nullptr);
 
-			if (mimeType == "image/svg+xml")
-				UT_UTF8String_sprintf(fname, "%s/%s_%d.svg", fname.utf8_str(), szName, loc);
-			else if (mimeType == "application/mathml+xml")
-				UT_UTF8String_sprintf(fname, "%s/%s_%d.mathml", fname.utf8_str(), szName, loc);
+			if (mimeType == "image/svg+xml" || mimeType == "application/mathml+xml")
+			{
+			  char * base = UT_go_basename(szName);
+			  const char * leaf = base ? base : "object";
+			  if (mimeType == "image/svg+xml")
+				UT_UTF8String_sprintf(fname, "%s/%s_%d.svg", fname.utf8_str(), leaf, loc);
+			  else
+				UT_UTF8String_sprintf(fname, "%s/%s_%d.mathml", fname.utf8_str(), leaf, loc);
+			  FREEP(base);
+			}
 			else // PNG Image
 			{  
 			  char * temp = _stripSuffix(UT_go_basename(szName), '_');

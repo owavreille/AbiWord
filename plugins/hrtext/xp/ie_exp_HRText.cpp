@@ -474,15 +474,14 @@ void s_HRText_Listener::_outputData(const UT_UCS4Char * data, UT_uint32 length)
 		    pC[0]='?';
 		    m_wctomb.initialize();
 		}
-		pData++;		
-		if (mbLen>1)		
+		pData++;
+		if (mbLen < 1 || mbLen > static_cast<int>(sizeof(pC)))
 		{
-			sBuf += pC;
+			mbLen = 1;
+			pC[0] = '?';
 		}
-		else
-		{
-			sBuf += static_cast<char>(pC[0]);
-		}
+		for (int byte = 0; byte < mbLen; byte++)
+			sBuf += pC[byte];
 	}
 
 	m_pie->write(sBuf.c_str(),sBuf.size());

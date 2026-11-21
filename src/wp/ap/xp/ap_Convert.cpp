@@ -144,16 +144,18 @@ public:
 					m_bPrintedFirstPage = true;
 
 
-			if (m_bPrintedFirstPage) {
+			if (m_bPrintedFirstPage && pDocLayout->countPages() > 0) {
 
 				dg_DrawArgs da;
 				da.pG = m_pGraphics;
+				const UT_sint32 pageCount = pDocLayout->countPages();
 
-				for (UT_sint32 k = 1; (k <= pDocLayout->countPages()); k++)
+				for (UT_sint32 k = 1; k <= pageCount; k++)
 				{
-					UT_uint32 iHeight = pDocLayout->getHeight() / pDocLayout->countPages();
+					UT_uint32 iHeight = pDocLayout->getHeight() / pageCount;
 					m_pGraphics->m_iRasterPosition = (k-1)*iHeight;
-					m_pGraphics->startPage(m_szFile.utf8_str(), m_iter++, printView.getPageSize().isPortrait(), pDocLayout->getWidth(), iHeight);
+					if (!m_pGraphics->startPage(m_szFile.utf8_str(), m_iter++, printView.getPageSize().isPortrait(), pDocLayout->getWidth(), iHeight))
+						break;
 					printView.drawPage(k-1, &da);
 				}
 			}

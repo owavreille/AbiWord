@@ -281,7 +281,7 @@ void AP_Win32Dialog_CollaborationAddAccount::_populateWindowData()
 		AccountHandler* pHandler = pConstructor();
 		UT_continue_if_fail(pHandler);
 
-		UT_sint32 index = m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONADDACCOUNT_TYPECOMBO, (LPCSTR) AP_Win32App::s_fromUTF8ToWinLocale(pHandler->getDisplayType().utf8_str()).c_str());
+		UT_sint32 index = m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONADDACCOUNT_TYPECOMBO, pHandler->getDisplayType().utf8_str());
 		if (index >= 0)
 		{
 			UT_DEBUGMSG(("Added handler to index %d\n", index));

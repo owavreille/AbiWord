@@ -165,25 +165,37 @@ public:
 		  g_strfreev(page_descriptions);
       }
     
+    const UT_sint32 pageCount = pDocLayout->countPages();
+    if (pageCount < 1)
+      {
+		DELETEP(print_graphics);
+		DELETEP(pDocLayout);
+		DELETEP(printView);
+		return UT_ERROR;
+      }
+
     if (pages.empty())
       {
-		  for (UT_sint32 i = 1; i <= pDocLayout->countPages(); i++)
+		  for (UT_sint32 i = 1; i <= pageCount; i++)
 			  {
 				  pages.insert(i);
 			  }
       }    
 	
-    s_actuallyPrint (getDoc(), print_graphics,
+    const bool printed = s_actuallyPrint (getDoc(), print_graphics,
 					 printView, getFileName(), 
 					 1, true, 
-					 pDocLayout->getWidth(), pDocLayout->getHeight() / pDocLayout->countPages(), 
+					 pDocLayout->getWidth(), pDocLayout->getHeight() / pageCount, 
 					 pages);
+    const cairo_status_t drawn = cairo_status(cr);
 	
     DELETEP(print_graphics);
 
     DELETEP(pDocLayout);
     DELETEP(printView);
     DELETEP(print_graphics);
+    if (!printed || drawn != CAIRO_STATUS_SUCCESS)
+		return UT_ERROR;
     return UT_OK;
   }
 };

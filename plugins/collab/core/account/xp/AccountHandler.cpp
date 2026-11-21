@@ -247,6 +247,12 @@ Packet* AccountHandler::_createPacket(const std::string& packet, BuddyPtr pBuddy
 	
 	// serialize packet
 	isa << *newPacket;
+	if (isa.failed())
+	{
+		UT_DEBUGMSG(("Discarding packet, truncated payload for class %d\n", classId));
+		DELETEP(newPacket);
+		return NULL;
+	}
 	
 	return newPacket;
 }

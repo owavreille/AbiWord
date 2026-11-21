@@ -39,6 +39,11 @@ public:
 		: Synchronizer(std::bind(&Session::_signal, this)),
 		socket(io_service),
 		queue_protector(),
+		packet_size(0),
+		packet_data(nullptr),
+		packet_size_write(0),
+		packet_data_write(nullptr),
+		write_active(false),
 		m_ef(ef)
 	{
 	}
@@ -69,9 +74,22 @@ public:
 
 	void push(int size, char* data)
 	{
+		bool overflow = false;
 		{
 			abicollab::scoped_lock lock(queue_protector);
-			incoming.push_back( std::pair<int, char*>(size, data) );
+			size_t queued = 0;
+			for (std::deque< std::pair<int, char*> >::const_iterator it = incoming.begin(); it != incoming.end(); ++it)
+				queued += static_cast<size_t>(it->first > 0 ? it->first : 0);
+			if (incoming.size() >= 32 || queued > MAX_PACKET_DATA_SIZE)
+				overflow = true;
+			else
+				incoming.push_back( std::pair<int, char*>(size, data) );
+		}
+		if (overflow)
+		{
+			g_free(data);
+			disconnect();
+			return;
 		}
 		Synchronizer::signal();
 	}
@@ -81,15 +99,13 @@ public:
 	*/
 	bool pop(int& size, char** data)
 	{
-		if (incoming.size() == 0)
+		abicollab::scoped_lock lock(queue_protector);
+		if (incoming.empty())
 			return false;
-		{
-			abicollab::scoped_lock lock(queue_protector);
-			std::pair<int, char*> p = incoming.front();
-			size = p.first;
-			*data = p.second;
-			incoming.pop_front();
-		}
+		std::pair<int, char*> p = incoming.front();
+		size = p.first;
+		*data = p.second;
+		incoming.pop_front();
 		return true;
 	}
 
@@ -104,24 +120,33 @@ public:
 
 	void asyncWrite(int size, const char* data)
 	{
-		// TODO: this is a race condition, mutex this
-		bool writeInProgress = outgoing.size() > 0;
+		if (size < 0 || (size > 0 && !data))
+			return;
+		char* store_data = reinterpret_cast<char*>(g_malloc(size ? size : 1));
+		if (!store_data)
+			return;
+		if (size)
+			memcpy(store_data, data, size);
 
-		// FIXME: inefficient memory copy
-		char* store_data = reinterpret_cast<char*>(g_malloc(size));
-		memcpy(store_data, data, size);
-		outgoing.push_back(std::pair<int, char*>(size, store_data));
-
-		if (!writeInProgress)
+		bool start = false;
 		{
-			packet_size_write = size;
-			packet_data_write = store_data;
-
-			UT_DEBUGMSG(("sending datablock of length: %d\n", packet_size_write));
-			boost::asio::async_write(socket,
-				boost::asio::buffer(&packet_size_write, 4),
-				boost::bind(&Session::asyncWriteHeaderHandler, shared_from_this(), boost::asio::placeholders::error));
+			abicollab::scoped_lock lock(queue_protector);
+			start = !write_active;
+			outgoing.push_back(std::pair<int, char*>(size, store_data));
+			if (start)
+			{
+				write_active = true;
+				packet_size_write = size;
+				packet_data_write = store_data;
+			}
 		}
+		if (!start)
+			return;
+
+		UT_DEBUGMSG(("sending datablock of length: %d\n", size));
+		boost::asio::async_write(socket,
+			boost::asio::buffer(&packet_size_write, 4),
+			boost::bind(&Session::asyncWriteHeaderHandler, shared_from_this(), boost::asio::placeholders::error));
 	}
 
 	/*
@@ -146,6 +171,19 @@ public:
 			socket.close(ecc);
 			if (ecc) {
 				UT_DEBUGMSG(("Error closing socket: %s\n", ecc.message().c_str()));
+			}
+		}
+		{
+			abicollab::scoped_lock lock(queue_protector);
+			for (std::deque< std::pair<int, char*> >::iterator it = incoming.begin(); it != incoming.end(); ++it)
+				g_free(it->second);
+			incoming.clear();
+			if (!write_active)
+			{
+				for (std::deque< std::pair<int, char*> >::iterator it = outgoing.begin(); it != outgoing.end(); ++it)
+					g_free(it->second);
+				outgoing.clear();
+				packet_data_write = nullptr;
 			}
 		}
 		UT_DEBUGMSG(("Socket closed, signalling mainloop\n"));
@@ -185,7 +223,12 @@ private:
 
 		UT_DEBUGMSG(("going to read datablock of length: %d\n", packet_size));
 		// now continue reading the packet data
-		packet_data = reinterpret_cast<char*>(g_malloc(packet_size));
+		packet_data = reinterpret_cast<char*>(g_malloc(packet_size ? packet_size : 1));
+		if (!packet_data)
+		{
+			disconnect();
+			return;
+		}
 		boost::asio::async_read(socket,
 			boost::asio::buffer(packet_data, packet_size),
 			boost::bind(&Session::asyncReadHandler, shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::bytes_transferred));
@@ -197,6 +240,8 @@ private:
 		if (error)
 		{
 			UT_DEBUGMSG(("asyncReadHandler generic error\n"));
+			g_free(packet_data);
+			packet_data = nullptr;
 			disconnect();
 			return;
 		}
@@ -204,6 +249,8 @@ private:
 		if (bytes_transferred != std::size_t(packet_size))
 		{
 			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+			g_free(packet_data);
+			packet_data = nullptr;
 			disconnect(); // TODO: should not happen, handle this
 			return;
 		}
@@ -232,28 +279,48 @@ private:
 	void asyncWriteHandler(const boost::system::error_code& ec)
 	{
 		UT_DEBUGMSG(("Session::asyncWriteHandler()\n"));
-		FREEP(packet_data_write);
+		char* finished = nullptr;
+		std::deque< std::pair<int, char*> > drop;
+		bool more = false;
+		{
+			abicollab::scoped_lock lock(queue_protector);
+			finished = packet_data_write;
+			if (!outgoing.empty() && outgoing.front().second == finished)
+				outgoing.pop_front();
+			if (ec)
+			{
+				drop.swap(outgoing);
+				packet_data_write = nullptr;
+				write_active = false;
+			}
+			else if (!outgoing.empty())
+			{
+				more = true;
+				packet_size_write = outgoing.front().first;
+				packet_data_write = outgoing.front().second;
+			}
+			else
+			{
+				packet_data_write = nullptr;
+				write_active = false;
+			}
+		}
+		g_free(finished);
+		for (std::deque< std::pair<int, char*> >::iterator it = drop.begin(); it != drop.end(); ++it)
+			g_free(it->second);
 		if (ec)
 		{
 			UT_DEBUGMSG(("asyncWriteHandler generic error\n"));
 			disconnect();
 			return;
 		}
+		if (!more)
+			return;
 
-		// TODO: this is a race condition, mutex this
-		outgoing.pop_front();
-		if (outgoing.size() > 0)
-		{
-			std::pair<int, char*> p = outgoing.front();
-			packet_size_write = p.first;
-			packet_data_write = p.second;
-
-			UT_DEBUGMSG(("sending datablock of length: %d\n", packet_size_write));
-
-			boost::asio::async_write(socket,
-				boost::asio::buffer(&packet_size_write, 4),
-				boost::bind(&Session::asyncWriteHeaderHandler, shared_from_this(), boost::asio::placeholders::error));
-		}
+		UT_DEBUGMSG(("sending datablock of length: %d\n", packet_size_write));
+		boost::asio::async_write(socket,
+			boost::asio::buffer(&packet_size_write, 4),
+			boost::bind(&Session::asyncWriteHeaderHandler, shared_from_this(), boost::asio::placeholders::error));
 	}
 
 	boost::asio::ip::tcp::socket					socket;
@@ -266,6 +333,7 @@ private:
 
 	int										packet_size_write; // state needed for async writes
 	char*									packet_data_write; // state needed for async writes
+	bool									write_active;
 
 	std::function<void (std::shared_ptr<Session>)>		m_ef;
 };

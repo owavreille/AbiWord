@@ -218,13 +218,11 @@ GR_Win32Graphics::GR_Win32Graphics(HDC hdc, HWND hwnd)
 
 void GR_Win32Graphics::setPrintDC(HDC dc)
 {
-	if(!m_bPrint)
+	if(!m_bPrint && dc != m_printHDC)
 	{
-		// only do this for screen graphics
+		if(m_printHDC && m_printHDC != m_defPrintHDC)
+			DeleteDC(m_printHDC);
 		m_printHDC = dc;
-
-		// now make our views to rebuild themselves ...
-		// (the win32 graphics currently cannot take advantate of the print dc, so we do nothing
 	}
 }
 
@@ -1261,7 +1259,14 @@ bool GR_Win32Graphics::startPage(const char * /*szPageLabel*/, UT_uint32 /*pageN
 
 	if (m_bStartPage)
 	{
-		EndPage(m_hdc);
+		if (!m_bIsPreview && EndPage(m_hdc) <= 0)
+		{
+			m_bStartPage = false;
+			m_bPrintCancelled = true;
+			return false;
+		}
+		if (m_bIsPreview)
+			EndPage(m_hdc);
 		// EndPage has closed the page. A later failure must not leave the flag set,
 		// or endPrint() calls EndPage a second time.
 		m_bStartPage = false;
@@ -1282,7 +1287,11 @@ bool GR_Win32Graphics::startPage(const char * /*szPageLabel*/, UT_uint32 /*pageN
 
 		// call DocumentProperties() on the DEVMODE to ensure changes propagate down into
 		// the private part
-		fixDevMode(m_hDevMode);
+		if (!fixDevMode(m_hDevMode))
+		{
+			m_bPrintCancelled = true;
+			return false;
+		}
 		
 		pDevMode = (DEVMODEW*) GlobalLock(m_hDevMode);
 		if (pDevMode)
@@ -1338,9 +1347,12 @@ bool GR_Win32Graphics::endPrint(void)
       ok = AbortDoc(m_hdc) > 0;
     else
     {
-      if (m_bStartPage)
-        EndPage(m_hdc);
-      ok = EndDoc(m_hdc) > 0;
+      if (m_bStartPage && EndPage(m_hdc) <= 0)
+        ok = false;
+      if (ok)
+        ok = EndDoc(m_hdc) > 0;
+      else
+        AbortDoc(m_hdc);
     }
   }
   m_bStartPage = false;

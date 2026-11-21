@@ -23,6 +23,7 @@
  */
 
 #include <stdio.h>
+#include <setjmp.h>
 
 extern "C" {
 #include <jpeglib.h>
@@ -43,6 +44,17 @@ struct bytebuf_jpeg_source_mgr {
 };
 
 typedef bytebuf_jpeg_source_mgr* bytebuf_jpeg_source_ptr;
+
+struct jpeg_error_jmp {
+	struct jpeg_error_mgr pub;
+	jmp_buf jump;
+};
+
+static void _jpegErrorExit(j_common_ptr cinfo)
+{
+	jpeg_error_jmp *err = reinterpret_cast<jpeg_error_jmp *>(cinfo->err);
+	longjmp(err->jump, 1);
+}
 
 static void _JPEG_ByteBufSrc(j_decompress_ptr cinfo, const UT_ConstByteBufPtr & sourceBuf);
 static void _JPEG_destroy_decompress(j_decompress_ptr cinfo);
@@ -99,11 +111,22 @@ static void _jpegInitSource (j_decompress_ptr cinfo)
 static boolean _jpegFillInputBuffer (j_decompress_ptr cinfo)
 {
 	bytebuf_jpeg_source_ptr src = reinterpret_cast<bytebuf_jpeg_source_ptr>(cinfo->src);
+	const UT_uint32 length = src->sourceBuf->getLength();
 
-	// WARNING ! this assumes that the ByteBuf will NOT change during JPEG reading.
-	src->pub.next_input_byte = src->sourceBuf->getPointer (src->pos);
-	src->pub.bytes_in_buffer = src->sourceBuf->getLength ();
+	// The whole buffer is handed over once. A later call means the decoder
+	// ran past the end, so insert an EOI instead of replaying the same bytes.
+	// libjpeg's default error_exit would otherwise call exit().
+	if (src->pos < length)
+	{
+		src->pub.next_input_byte = src->sourceBuf->getPointer(src->pos);
+		src->pub.bytes_in_buffer = length - src->pos;
+		src->pos = length;
+		return static_cast<boolean>(true);
+	}
 
+	static const JOCTET eoi[2] = { 0xFF, JPEG_EOI };
+	src->pub.next_input_byte = eoi;
+	src->pub.bytes_in_buffer = 2;
 	return static_cast<boolean>(true);
 }
 
@@ -155,9 +178,19 @@ bool UT_JPEG_getDimensions(const UT_ConstByteBufPtr & pBB, UT_sint32& iImageWidt
                                       UT_sint32& iImageHeight)
 {
 	struct jpeg_decompress_struct cinfo;
-	struct jpeg_error_mgr jerr;
+	jpeg_error_jmp jerr;
+	memset(&cinfo, 0, sizeof(cinfo));
 
-	cinfo.err = jpeg_std_error(&jerr);
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = _jpegErrorExit;
+	if (setjmp(jerr.jump))
+	{
+		if (cinfo.src)
+			_JPEG_destroy_decompress(&cinfo);
+		else
+			jpeg_destroy_decompress(&cinfo);
+		return false;
+	}
 	jpeg_create_decompress(&cinfo);
 
 	/* set the data source */
@@ -187,9 +220,21 @@ bool UT_JPEG_getRGBData(const UT_ConstByteBufPtr & pBB, UT_Byte* pDest,
 	UT_return_val_if_fail(pDest, false);
 
 	struct jpeg_decompress_struct cinfo;
-	struct jpeg_error_mgr jerr;
+	jpeg_error_jmp jerr;
+	UT_Byte * volatile pSavedCmyk = nullptr;
+	memset(&cinfo, 0, sizeof(cinfo));
 
-	cinfo.err = jpeg_std_error(&jerr);
+	cinfo.err = jpeg_std_error(&jerr.pub);
+	jerr.pub.error_exit = _jpegErrorExit;
+	if (setjmp(jerr.jump))
+	{
+		FREEP(pSavedCmyk);
+		if (cinfo.src)
+			_JPEG_destroy_decompress(&cinfo);
+		else
+			jpeg_destroy_decompress(&cinfo);
+		return false;
+	}
 	jpeg_create_decompress(&cinfo);
 
 	/* set the data source */
@@ -206,7 +251,10 @@ bool UT_JPEG_getRGBData(const UT_ConstByteBufPtr & pBB, UT_Byte* pDest,
 
 	UT_Byte* pCYMK = nullptr;
 	if (cinfo.output_components == 4)
+	{
 		pCYMK = reinterpret_cast<UT_Byte*>(g_malloc(row_stride));
+		pSavedCmyk = pCYMK;
+	}
 
 	for (UT_uint32 row = 0; row < cinfo.output_height; row++)
 	{

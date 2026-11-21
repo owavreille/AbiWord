@@ -3496,7 +3496,7 @@ PD_DocumentRDF::getSPARQL_LimitedToXMLIDList( const std::set< std::string >& xml
     for( std::set< std::string >::const_iterator iter = xmlids.begin();
          iter != xmlids.end(); ++iter )
     {
-        ss << joiner << " str(?rdflink) = \"" << *iter << "\" ";
+        ss << joiner << " str(?rdflink) = \"" << sparqlLiteral(*iter) << "\" ";
         joiner = " || ";
     }
     ss << " ) \n";

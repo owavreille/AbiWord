@@ -129,6 +129,7 @@ void GR_Win32CairoImage::adoptSurface(cairo_surface_t *surface, bool hasAlpha)
 
 bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 {
+	png_bytep volatile pngRow = nullptr;
 	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
 	if (!png)
 		return false;
@@ -140,6 +141,7 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 	}
 	if (setjmp(png_jmpbuf(png)))
 	{
+		g_free(pngRow);
 		png_destroy_read_struct(&png, &info, nullptr);
 		if (m_surface)
 		{
@@ -174,7 +176,7 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 	png_set_strip_16(png);
 	png_set_gray_to_rgb(png);
 	png_set_bgr(png);
-	png_set_interlace_handling(png);
+	const int passes = png_set_interlace_handling(png);
 	png_read_update_info(png, info);
 
 	const bool hasAlpha = png_get_channels(png, info) == 4;
@@ -189,36 +191,44 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 
 	unsigned char* pixels = cairo_image_surface_get_data(m_surface);
 	const int stride = cairo_image_surface_get_stride(m_surface);
-	png_bytep row = nullptr;
 	if (!hasAlpha)
-		row = static_cast<png_bytep>(g_try_malloc(width * 3));
-	if (!hasAlpha && !row)
+		pngRow = static_cast<png_bytep>(g_try_malloc(width * 3));
+	if (!hasAlpha && !pngRow)
 	{
 		png_destroy_read_struct(&png, &info, nullptr);
 		return false;
 	}
 
-	for (png_uint_32 y = 0; y < height; y++)
+	// Adam7 needs one full pass per interlace stage. png_combine_row writes
+	// into the same row, so earlier passes must stay until the last one.
+	for (int pass = 0; pass < passes; pass++)
 	{
-		unsigned char* dest = pixels + y * stride;
-		if (hasAlpha)
+		const bool last = pass + 1 == passes;
+		for (png_uint_32 y = 0; y < height; y++)
 		{
-			png_read_row(png, dest, nullptr);
-			premultiply(dest, width);
-		}
-		else
-		{
-			png_read_row(png, row, nullptr);
+			unsigned char* dest = pixels + y * stride;
+			if (hasAlpha)
+				png_read_row(png, dest, nullptr);
+			else
+				png_read_row(png, pngRow, nullptr);
+			if (!last)
+				continue;
+			if (hasAlpha)
+			{
+				premultiply(dest, width);
+				continue;
+			}
 			for (png_uint_32 x = 0; x < width; x++)
 			{
-				dest[x * 4 + 0] = row[x * 3 + 0];
-				dest[x * 4 + 1] = row[x * 3 + 1];
-				dest[x * 4 + 2] = row[x * 3 + 2];
+				dest[x * 4 + 0] = pngRow[x * 3 + 0];
+				dest[x * 4 + 1] = pngRow[x * 3 + 1];
+				dest[x * 4 + 2] = pngRow[x * 3 + 2];
 				dest[x * 4 + 3] = 255;
 			}
 		}
 	}
-	g_free(row);
+	g_free(pngRow);
+	pngRow = nullptr;
 	cairo_surface_mark_dirty(m_surface);
 	png_read_end(png, info);
 	png_destroy_read_struct(&png, &info, nullptr);

@@ -1134,13 +1134,15 @@ void s_WML_Listener::_handleDataItems(void)
 				 * but I don't think so. */
 			}
 
-			if (mimeType == "image/svg+xml")
+			if (mimeType == "image/svg+xml" || mimeType == "application/mathml+xml")
 			{
-				UT_UTF8String_sprintf(fname, "%s/%s_%d.svg", fname.utf8_str(), szName, loc);
-			}
-			else if (mimeType == "application/mathml+xml")
-			{
-				UT_UTF8String_sprintf(fname, "%s/%s_%d.mathml", fname.utf8_str(), szName, loc);
+				char * base = UT_go_basename(szName);
+				const char * leaf = base ? base : "object";
+				if (mimeType == "image/svg+xml")
+					UT_UTF8String_sprintf(fname, "%s/%s_%d.svg", fname.utf8_str(), leaf, loc);
+				else
+					UT_UTF8String_sprintf(fname, "%s/%s_%d.mathml", fname.utf8_str(), leaf, loc);
+				FREEP(base);
 			}
 			else if (mimeType == "image/png")// PNG Image
 			{

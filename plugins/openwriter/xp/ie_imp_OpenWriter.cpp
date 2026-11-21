@@ -1573,16 +1573,17 @@ private:
 
     GsfInfile * pictures_dir = GSF_INFILE(gsf_infile_child_by_name(getImporter()->getOO(), "Pictures"));
 
-	if (m_bOpenDocument) {
-	    // 9 == strlen("Pictures/");
-	    error = loadStream(pictures_dir, href+9, img_buf);
-	    g_object_unref (G_OBJECT (pictures_dir));
+	const char * prefix = m_bOpenDocument ? "Pictures/" : "#Pictures/";
+	const size_t prefixLen = strlen(prefix);
+	if (strlen(href) < prefixLen || strncmp(href, prefix, prefixLen) != 0)
+	{
+	    if (pictures_dir)
+		g_object_unref (G_OBJECT (pictures_dir));
+	    return;
 	}
-	else {
-	    // 10 == strlen("#Pictures/");
-	    error = loadStream(pictures_dir, href+10, img_buf);
+	error = loadStream(pictures_dir, href + prefixLen, img_buf);
+	if (pictures_dir)
 	    g_object_unref (G_OBJECT (pictures_dir));
-	}
 
     if (error != UT_OK)
       return;

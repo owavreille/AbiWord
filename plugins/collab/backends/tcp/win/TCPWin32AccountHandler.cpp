@@ -17,6 +17,7 @@
  * 02110-1301 USA.
  */
 
+#include <cstdlib>
 #include <boost/lexical_cast.hpp>
 #include "TCPWin32AccountHandler.h"
 
@@ -228,10 +229,10 @@ void TCPWin32AccountHandler::storeProperties()
 {
 	UT_DEBUGMSG(("TCPWin32AccountHandler::storeProperties()\n"));
 	char sServer[256];
-	memset(sServer, 0, 256);
+	memset(sServer, 0, sizeof(sServer));
 	
-	char sPort[8];
-	memset(sPort, 0, 8);
+	char sPort[16];
+	memset(sPort, 0, sizeof(sPort));
 	
 	bool serve = _isCheckedHwnd(m_hServerRadio);
 	if (!serve)
@@ -240,7 +241,7 @@ void TCPWin32AccountHandler::storeProperties()
 		if (m_hServerEntry)
 		{
 			
-			if (_getControlTextHwnd(m_hServerEntry, 256, sServer) != -1)
+			if (_getControlTextHwnd(m_hServerEntry, sizeof(sServer), sServer) != -1)
 			{
 				sServer[255]=0;
 				addProperty("server", sServer);
@@ -250,10 +251,12 @@ void TCPWin32AccountHandler::storeProperties()
 	
 	if (m_hPortEntry)
 	{
-		if (_getControlTextHwnd(m_hPortEntry, 8, sPort) != -1)
+		if (_getControlTextHwnd(m_hPortEntry, sizeof(sPort), sPort) != -1)
 		{
-			sPort[7]=0;
-			addProperty("port", sPort);
+			char* end = nullptr;
+			const unsigned long port = strtoul(sPort, &end, 10);
+			if (end && *end == '\0' && port >= 1 && port <= 65535)
+				addProperty("port", sPort);
 		}
 	}
 
@@ -287,6 +290,16 @@ bool TCPWin32AccountHandler::_isCheckedHwnd(HWND hCtrl)
 
 int TCPWin32AccountHandler::_getControlTextHwnd(HWND hCtrl, int iLen, const char * p_szBuf)
 {
-	UT_return_val_if_fail(hCtrl, -1);
-	return SendMessage(hCtrl, WM_GETTEXT, iLen, (LPARAM) p_szBuf);
+	UT_return_val_if_fail(hCtrl && p_szBuf && iLen > 1, -1);
+	// WM_GETTEXT under UNICODE writes wchar_t. The destination is a UTF-8 byte buffer.
+	wchar_t* wide = new wchar_t[iLen];
+	wide[0] = 0;
+	SendMessageW(hCtrl, WM_GETTEXT, static_cast<WPARAM>(iLen), reinterpret_cast<LPARAM>(wide));
+	gchar* utf8 = g_utf16_to_utf8(reinterpret_cast<const gunichar2*>(wide), -1, nullptr, nullptr, nullptr);
+	delete [] wide;
+	if (!utf8)
+		return -1;
+	g_strlcpy(const_cast<char*>(p_szBuf), utf8, static_cast<gsize>(iLen));
+	g_free(utf8);
+	return 0;
 }

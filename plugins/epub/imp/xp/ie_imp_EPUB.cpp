@@ -221,8 +221,13 @@ UT_Error IE_Imp_EPUB::uncompress()
     for (std::map<std::string, std::string>::iterator i =
             m_manifestItems.begin(); i != m_manifestItems.end(); i++)
     {
+        const std::string& href = (*i).second;
+        if (href.empty() || href[0] == '/' || href[0] == '\\'
+            || href.find("..") != std::string::npos
+            || href.find(':') != std::string::npos)
+            continue;
         gchar *itemFileName = UT_go_filename_from_uri(
-                (m_tmpDir + G_DIR_SEPARATOR_S + (*i).second).c_str());
+                (m_tmpDir + G_DIR_SEPARATOR_S + href).c_str());
         gchar** aname =
                 g_strsplit((*i).second.c_str(), G_DIR_SEPARATOR_S, 0);
 

@@ -8647,6 +8647,7 @@ bool s_actuallyPrint(PD_Document *doc,  GR_Graphics *pGraphics,
 	//
 	s_pLoadingDoc = static_cast<AD_Document *>(doc);
 
+	bool printed = false;
 	if(pGraphics->startPrint())
 	{
 	  fp_PageSize ps = pPrintView->getPageSize();
@@ -8727,14 +8728,13 @@ bool s_actuallyPrint(PD_Document *doc,  GR_Graphics *pGraphics,
 						}
 				}
 		}
-		pGraphics->endPrint();
-
 		if(pFrame)
 		  pFrame->setStatusMessage (""); // reset/0 out status bar
+		printed = keepPrinting && pGraphics->endPrint();
 	}
 	s_pLoadingDoc = nullptr;
 
-	return true;
+	return printed;
 }
 
 #ifdef ENABLE_PRINT
