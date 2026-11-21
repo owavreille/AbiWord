@@ -56,7 +56,8 @@ void libabiword_init (int argc, char **argv)
 void libabiword_init_noargs ()
 {
 	if (!_abiword_app) {
-		static char *argv[] = {"libabiword", nullptr};
+		static char program[] = "libabiword";
+		static char *argv[] = {program, nullptr};
 		_abiword_app = new AP_UnixApp(PACKAGE);
 		XAP_Args XArgs(1, argv);
 		AP_Args Args = AP_Args(&XArgs, PACKAGE, _abiword_app);

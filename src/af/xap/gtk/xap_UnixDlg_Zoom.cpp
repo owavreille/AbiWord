@@ -232,7 +232,7 @@ GtkWidget * XAP_UnixDialog_Zoom::_constructWindow(void)
 	localizeLabelMarkup(GTK_WIDGET(gtk_builder_get_object(builder, "lbZoom")), pSS, XAP_STRING_ID_DLG_Zoom_RadioFrameCaption);
 
 	localizeButton(m_radio200, pSS, XAP_STRING_ID_DLG_Zoom_200);
-	g_object_set_data (G_OBJECT (m_radio200), WIDGET_ID_TAG_KEY, GINT_TO_POINTER(XAP_Frame::z_200));
+	g_object_set_data (G_OBJECT (m_radio200), WIDGET_ID_TAG_KEY, abi_tag_pointer(XAP_Frame::z_200));
 
 	localizeButton(m_radio100, pSS, XAP_STRING_ID_DLG_Zoom_100);
 	g_object_set_data (G_OBJECT (m_radio100), WIDGET_ID_TAG_KEY, GINT_TO_POINTER(XAP_Frame::z_100));
