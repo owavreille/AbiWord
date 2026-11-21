@@ -67,6 +67,7 @@ private:
 	std::list<OXMLi_ListenerState*> m_states;
 	UT_Error m_parseStatus;
 	OXMLi_Namespace_Common* m_namespaces;
+	int m_fallbackDepth;
 
 	void pushState(OXMLi_ListenerState * s);
 	void popState();

@@ -23,6 +23,9 @@
 // Class definition include
 #include "OXML_Section.h"
 
+#include <stdio.h>
+#include <stdlib.h>
+
 // Internal includes
 #include "OXML_Types.h"
 #include "OXML_Element.h"
@@ -355,6 +358,7 @@ UT_Error OXML_Section::serializeHeader(IE_Exp_OpenXML* exporter)
 	OXML_ElementVector::size_type i;
 	for (i = 0; i < m_children.size(); i++)
 	{
+		m_children[i]->setTarget(TARGET_HEADER);
 		ret = m_children[i]->serialize(exporter);
 		if(ret != UT_OK)
 			return ret;
@@ -440,8 +444,9 @@ UT_Error OXML_Section::serializeFootnote(IE_Exp_OpenXML* exporter)
 
 	ret = exporter->startFootnote(footnoteId);
 	if(ret != UT_OK)
-		return ret;	
+		return ret;
 
+	setTarget(TARGET_FOOTNOTE);
 	OXML_ElementVector::size_type i;
 	for (i = 0; i < m_children.size(); i++)
 	{
@@ -468,8 +473,9 @@ UT_Error OXML_Section::serializeEndnote(IE_Exp_OpenXML* exporter)
 
 	ret = exporter->startEndnote(endnoteId);
 	if(ret != UT_OK)
-		return ret;	
+		return ret;
 
+	setTarget(TARGET_ENDNOTE);
 	OXML_ElementVector::size_type i;
 	for (i = 0; i < m_children.size(); i++)
 	{
@@ -479,6 +485,122 @@ UT_Error OXML_Section::serializeEndnote(IE_Exp_OpenXML* exporter)
 	}
 
 	return exporter->finishEndnote();
+}
+
+static std::string oxmlCommentParaId(const char* id)
+{
+	unsigned long value = 1;
+	if (id && *id)
+	{
+		char* end = nullptr;
+		value = strtoul(id, &end, 10);
+		if (end == id)
+		{
+			value = 0;
+			for (const unsigned char* p = reinterpret_cast<const unsigned char*>(id); *p; ++p)
+				value = value * 131u + *p;
+		}
+	}
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%08lX", value & 0xfffffffful);
+	return buf;
+}
+
+static void oxmlAppendProp(std::string& props, const char* name, const char* value)
+{
+	if (!value || !*value)
+		return;
+	if (!props.empty())
+		props += "; ";
+	props += name;
+	props += ": ";
+	props += value;
+}
+
+UT_Error OXML_Section::serializeComment(IE_Exp_OpenXML* exporter)
+{
+	UT_Error ret = UT_OK;
+	const gchar* commentId = nullptr;
+	if (getAttribute("annotation-id", commentId) != UT_OK || !commentId)
+		commentId = m_id.c_str();
+
+	std::string paraId = oxmlCommentParaId(commentId);
+	const gchar* stored = nullptr;
+	if (getAttribute("para-id", stored) == UT_OK && stored && *stored)
+		paraId = stored;
+	else
+		setAttribute("para-id", paraId.c_str());
+
+	ret = exporter->startComment(commentId, this);
+	if (ret != UT_OK)
+		return ret;
+
+	int lastParagraph = -1;
+	for (OXML_ElementVector::size_type i = 0; i < m_children.size(); ++i)
+	{
+		if (m_children[i]->getTag() == P_TAG)
+			lastParagraph = static_cast<int>(i);
+	}
+	if (lastParagraph < 0)
+	{
+		exporter->setNextParagraphParaId(paraId.c_str());
+		ret = exporter->startParagraph(TARGET_COMMENT);
+		if (ret != UT_OK)
+			return ret;
+		ret = exporter->finishParagraph(TARGET_COMMENT);
+		if (ret != UT_OK)
+			return ret;
+	}
+	for (OXML_ElementVector::size_type i = 0; i < m_children.size(); ++i)
+	{
+		if (static_cast<int>(i) == lastParagraph)
+			exporter->setNextParagraphParaId(paraId.c_str());
+		m_children[i]->setTarget(TARGET_COMMENT);
+		ret = m_children[i]->serialize(exporter);
+		if (ret != UT_OK)
+			return ret;
+	}
+	return exporter->finishComment(this);
+}
+
+UT_Error OXML_Section::addToPTAsAnnotation(PD_Document * pDocument)
+{
+	std::string props;
+	const gchar* value = nullptr;
+	if (getAttribute("annotation-author", value) == UT_OK)
+		oxmlAppendProp(props, "annotation-author", value);
+	if (getAttribute("annotation-date", value) == UT_OK)
+		oxmlAppendProp(props, "annotation-date", value);
+	if (getAttribute("annotation-initials", value) == UT_OK)
+		oxmlAppendProp(props, "annotation-initials", value);
+	if (getAttribute("annotation-parent", value) == UT_OK)
+		oxmlAppendProp(props, "annotation-parent", value);
+	if (getAttribute("annotation-resolved", value) == UT_OK)
+		oxmlAppendProp(props, "annotation-resolved", value);
+	if (getAttribute("annotation-title", value) == UT_OK)
+		oxmlAppendProp(props, "annotation-title", value);
+
+	PP_PropertyVector attr = { "annotation-id", m_id };
+	if (!props.empty())
+	{
+		attr.push_back(PT_PROPS_ATTRIBUTE_NAME);
+		attr.push_back(props);
+	}
+	if (!pDocument->appendStrux(PTX_SectionAnnotation, attr))
+		return UT_ERROR;
+
+	if (m_children.empty())
+	{
+		if (!pDocument->appendStrux(PTX_Block, PP_NOPROPS))
+			return UT_ERROR;
+	}
+	for (OXML_ElementVector::size_type i = 0; i < m_children.size(); ++i)
+	{
+		UT_Error ret = m_children[i]->addToPT(pDocument);
+		if (ret != UT_OK)
+			return ret;
+	}
+	return pDocument->appendStrux(PTX_EndAnnotation, PP_NOPROPS) ? UT_OK : UT_ERROR;
 }
 
 UT_Error OXML_Section::addToPT(PD_Document * pDocument)
@@ -648,6 +770,11 @@ UT_Error OXML_Section::_setReferenceIds()
 void OXML_Section::setTarget(int target)
 {
 	m_target = target;
+	for (OXML_ElementVector::size_type i = 0; i < m_children.size(); ++i)
+	{
+		if (m_children[i])
+			m_children[i]->setTarget(target);
+	}
 }
 
 UT_Error OXML_Section::setPageMargins(const std::string & top, const std::string & left, const std::string & right, const std::string & bottom)

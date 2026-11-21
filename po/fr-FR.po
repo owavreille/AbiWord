@@ -2961,6 +2961,14 @@ msgstr "É&diter les éléments sémantiques"
 msgid "Edit Annotation"
 msgstr "Editer l'annotation"
 
+#. DLG_Annotation_Reply_LBL
+msgid "Reply to:"
+msgstr "Réponse à :"
+
+#. DLG_Annotation_Resolved_LBL
+msgid "Resolved"
+msgstr "Traité"
+
 #. MENU_LABEL_EDIT_LATEXEQUATION
 #: po/tmp/ap_String_Id.h
 msgid "Edit Equation"
@@ -9325,6 +9333,51 @@ msgstr ""
 #: po/tmp/xap_String_Id.h
 msgid "Tight text wrapping"
 msgstr "Habillage du texte serré"
+
+#. DLG_Image_Adjust
+#: po/tmp/xap_String_Id.h
+msgid "Picture adjustments"
+msgstr "Réglages de l'image"
+
+#. DLG_Image_Opacity
+#: po/tmp/xap_String_Id.h
+msgid "Opacity:"
+msgstr "Opacité :"
+
+#. DLG_Image_Brightness
+#: po/tmp/xap_String_Id.h
+msgid "Brightness:"
+msgstr "Luminosité :"
+
+#. DLG_Image_Crop
+#: po/tmp/xap_String_Id.h
+msgid "Crop"
+msgstr "Rognage"
+
+#. DLG_Image_CropTop
+#: po/tmp/xap_String_Id.h
+msgid "Top:"
+msgstr "Haut :"
+
+#. DLG_Image_CropBottom
+#: po/tmp/xap_String_Id.h
+msgid "Bottom:"
+msgstr "Bas :"
+
+#. DLG_Image_CropLeft
+#: po/tmp/xap_String_Id.h
+msgid "Left:"
+msgstr "Gauche :"
+
+#. DLG_Image_CropRight
+#: po/tmp/xap_String_Id.h
+msgid "Right:"
+msgstr "Droite :"
+
+#. DLG_Image_CropUnit
+#: po/tmp/xap_String_Id.h
+msgid "% of the picture"
+msgstr "% de l'image"
 
 #. MSG_HistoryPartRestore3
 #: po/tmp/xap_String_Id.h

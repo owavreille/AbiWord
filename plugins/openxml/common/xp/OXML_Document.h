@@ -38,6 +38,7 @@
 
 // External includes
 #include <string>
+#include <set>
 
 /* \class OXML_Document
  * This class represents the data model representation of the OpenXML document.
@@ -77,6 +78,13 @@ public:
 	OXML_SharedSection getEndnote(const std::string & id) const;
 	UT_Error addEndnote(const OXML_SharedSection & obj);
 	UT_Error clearEndnotes();
+
+	OXML_SharedSection getComment(const std::string & id) const;
+	UT_Error addComment(const OXML_SharedSection & obj);
+	UT_Error clearComments();
+	void markCommentOpened(const std::string & id);
+	bool wasCommentOpened(const std::string & id) const;
+	void setCommentExtra(const std::string & paraId, const std::string & parentParaId, const std::string & done);
 
 	//! Returns a reference to the FIRST header with corresponding ID OR empty SharedSection if none found.
 	OXML_SharedSection getHeader(const std::string & id) const;
@@ -137,6 +145,8 @@ private:
 	OXML_SectionMap m_footers;
 	OXML_SectionMap m_footnotes;
 	OXML_SectionMap m_endnotes;
+	OXML_SectionMap m_comments;
+	std::set<std::string> m_openComments;
 
 	OXML_StyleMap m_styles_by_id;
 	OXML_StyleMap m_styles_by_name;

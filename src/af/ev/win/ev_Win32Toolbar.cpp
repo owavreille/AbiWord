@@ -355,14 +355,26 @@ static HFONT s_fontSample(const wchar_t * face)
 	if (!face || !face[0])
 		return nullptr;
 
-	const std::wstring key(face);
+	int sampleDpi = 96;
+	HDC sampleDC = GetDC(nullptr);
+	if (sampleDC)
+	{
+		int caps = GetDeviceCaps(sampleDC, LOGPIXELSY);
+		if (caps >= 96)
+			sampleDpi = caps;
+		ReleaseDC(nullptr, sampleDC);
+	}
+
+	wchar_t dpiSuffix[16];
+	swprintf(dpiSuffix, 16, L"@%d", sampleDpi);
+	const std::wstring key = std::wstring(face) + dpiSuffix;
 	std::map<std::wstring, HFONT>::iterator found = cache.find(key);
 	if (found != cache.end())
 		return found->second;
 
 	LOGFONTW lf;
 	memset(&lf, 0, sizeof(lf));
-	lf.lfHeight = 16;
+	lf.lfHeight = -MulDiv(12, sampleDpi, 96);
 	lf.lfWeight = FW_NORMAL;
 	lf.lfCharSet = DEFAULT_CHARSET;
 	lf.lfOutPrecision = OUT_DEFAULT_PRECIS;
@@ -735,8 +747,38 @@ bool EV_Win32Toolbar::synthesize(void)
 	//
 	// Now bitmaps are cut down to requested size if too large - HB
 	
-	const WORD MY_MAXIMUM_BITMAP_X = 24;
-	const WORD MY_MAXIMUM_BITMAP_Y = 24;
+	int iconDpi = 96;
+	HMODULE user32 = GetModuleHandleW(L"user32.dll");
+	if (user32 && hwndParent)
+	{
+		typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
+		GetDpiForWindowFn getDpi = reinterpret_cast<GetDpiForWindowFn>(
+			reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForWindow")));
+		if (getDpi)
+		{
+			UINT got = getDpi(hwndParent);
+			if (got >= 96)
+				iconDpi = (int)got;
+		}
+	}
+	if (iconDpi == 96 && hwndParent)
+	{
+		HDC screen = GetDC(hwndParent);
+		if (screen)
+		{
+			int caps = GetDeviceCaps(screen, LOGPIXELSX);
+			if (caps >= 96)
+				iconDpi = caps;
+			ReleaseDC(hwndParent, screen);
+		}
+	}
+	int iconPx = (24 * iconDpi + 48) / 96;
+	if (iconPx < 24)
+		iconPx = 24;
+	if (iconPx > 64)
+		iconPx = 64;
+	const WORD MY_MAXIMUM_BITMAP_X = (WORD)iconPx;
+	const WORD MY_MAXIMUM_BITMAP_Y = (WORD)iconPx;
 
 	if( bIcons )
 		SendMessageW(m_hwnd, TB_SETBITMAPSIZE, 0,
@@ -972,7 +1014,8 @@ bool EV_Win32Toolbar::synthesize(void)
 						// for every window; the container deletes that copy at exit.
 						static std::map<std::string, HBITMAP> sharedIcons;
 						const char * iconName = pLabel->getIconName();
-						const std::string iconKey = iconName ? iconName : "";
+						const std::string iconKey = std::string(iconName ? iconName : "")
+							+ "@" + std::to_string(static_cast<int>(MY_MAXIMUM_BITMAP_X));
 						std::map<std::string, HBITMAP>::iterator found = sharedIcons.find(iconKey);
 						HBITMAP hBitmap = nullptr;
 						if (found != sharedIcons.end())

@@ -159,6 +159,38 @@
               </packing>
             </child>
             <child>
+              <object class="GtkLabel" id="lbReply">
+                <property name="visible">1</property>
+                <property name="label" translatable="yes">Reply to:</property>
+                <property name="xalign">0</property>
+              </object>
+              <packing>
+                <property name="left-attach">0</property>
+                <property name="top-attach">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkComboBoxText" id="cbReply">
+                <property name="visible">1</property>
+                <property name="can-focus">1</property>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">3</property>
+              </packing>
+            </child>
+            <child>
+              <object class="GtkCheckButton" id="cbResolved">
+                <property name="visible">1</property>
+                <property name="can-focus">1</property>
+                <property name="label" translatable="yes">Resolved</property>
+              </object>
+              <packing>
+                <property name="left-attach">1</property>
+                <property name="top-attach">4</property>
+              </packing>
+            </child>
+            <child>
               <object class="GtkLabel" id="lbDescription">
                 <property name="visible">1</property>
                 <property name="valign">start</property>

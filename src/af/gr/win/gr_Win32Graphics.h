@@ -189,6 +189,7 @@ public:
 	// Drawing and invalidation must target that child, not the container
 	// hidden behind it.
 	void setWindow(HWND hwnd);
+	void refreshDeviceScale();
 	// Layout units to client pixels, including the scroll offset.
 	void layoutToClient(UT_sint32 x, UT_sint32 y, int & cx, int & cy) const;
 
@@ -244,6 +245,7 @@ public:
 	virtual void			clearArea(UT_sint32, UT_sint32, UT_sint32, UT_sint32) override;
 
 	virtual void			drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest) override;
+	virtual void			drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest, const GR_ImageTune& tune) override;
 	virtual GR_Image*		createNewImage(const char* pszName, const UT_ConstByteBufPtr & pBB, const std::string& mimetype,
 						       UT_sint32 iDisplayWidth, UT_sint32 iDisplayHeight, GR_Image::GRType iType = GR_Image::GRT_Raster) override;
 

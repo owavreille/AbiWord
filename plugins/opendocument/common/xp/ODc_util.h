@@ -25,6 +25,7 @@
 // Converts specified date from MM-DD-YYYY to YYYY-MM-DD(ISO8601)
 // or vice versa and returns new string representation
 std::string ODc_reorderDate(const std::string &dateStr, bool fromISO);
+std::string ODc_annotationDate(const std::string &dateStr, bool toISO);
 
 
 #endif	/* ODC_UTIL_H */

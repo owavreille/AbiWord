@@ -139,7 +139,7 @@ bool ODe_DocumentData::doPostListeningWork() {
     pStylesVector = m_contentAutoStyles.getParagraphStyles();
     count = pStylesVector->getItemCount();
     for (i=0; i<count; i++) {
-        m_stylesXMLFontDecls.addFont( (*pStylesVector)[i]->getFontName() );
+        m_contentXMLFontDecls.addFont( (*pStylesVector)[i]->getFontName() );
     }
 
     pStylesVector = m_contentAutoStyles.getTextStyles();
@@ -248,7 +248,8 @@ bool ODe_DocumentData::writeStylesXML(GsfOutfile* pOdt) const {
     " xmlns:ooow=\"http://openoffice.org/2004/writer\""
     " xmlns:oooc=\"http://openoffice.org/2004/calc\""
     " xmlns:dom=\"http://www.w3.org/2001/xml-events\""
-    " office:version=\"1.1\">\n"};
+    " xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\""
+    " office:version=\"1.3\">\n"};
     
     ODe_writeToStream(pStylesStream, preamble, G_N_ELEMENTS(preamble));
     
@@ -314,7 +315,8 @@ bool ODe_DocumentData::writeContentXML(GsfOutfile* pOdt) {
     " xmlns:xforms=\"http://www.w3.org/2002/xforms\""
     " xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\""
     " xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\""
-    " office:version=\"1.1\">\n"};
+    " xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\""
+    " office:version=\"1.3\">\n"};
     
     ODe_writeToStream(pContentStream, preamble, G_N_ELEMENTS(preamble));
     
@@ -324,6 +326,12 @@ bool ODe_DocumentData::writeContentXML(GsfOutfile* pOdt) {
     
     ODe_writeUTF8String(pContentStream, " <office:body>\n"
                                         "  <office:text>\n");
+
+    if (!m_trackedChangeRegions.empty()) {
+        ODe_writeUTF8String(pContentStream, "<text:tracked-changes>");
+        ODe_writeUTF8String(pContentStream, m_trackedChangeRegions);
+        ODe_writeUTF8String(pContentStream, "</text:tracked-changes>\n");
+    }
        
     ODe_gsf_output_write(pContentStream, gsf_output_size (m_pOfficeTextTemp),
 			 gsf_output_memory_get_bytes (GSF_OUTPUT_MEMORY (m_pOfficeTextTemp)));

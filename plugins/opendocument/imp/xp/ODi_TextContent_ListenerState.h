@@ -95,6 +95,8 @@ private:
 
     void _insertBookmark (const gchar * name, const gchar * type, const gchar* xmlid = nullptr);
     void _flush ();
+    void _appendTrackedText(const UT_UCS4String& text);
+    std::string _revisionToken(const char* id, char kind);
     void _startParagraphElement (const gchar* pName,
                                  const gchar** ppParagraphAtts,
                                  ODi_ListenerStateAction& rAction);
@@ -188,9 +190,13 @@ private:
     bool m_bPendingAnnotation;
     bool m_bPendingAnnotationAuthor;
     bool m_bPendingAnnotationDate;
+    bool m_bPendingAnnotationInitials;
     UT_uint32 m_iAnnotation;
     std::string m_sAnnotationAuthor;
     std::string m_sAnnotationDate;
+    std::string m_sAnnotationInitials;
+    std::string m_sAnnotationParent;
+    std::string m_sAnnotationResolved;
     std::string m_sAnnotationName;
     std::string m_sAnnotationXMLID;
     std::set< std::string > m_openAnnotationNames;
@@ -213,4 +219,14 @@ private:
     
     UT_uint32 m_columnsCount;
     UT_uint32 m_columnIndex;
+
+    bool m_inTrackedChanges = false;
+    bool m_inChangeInfo = false;
+    char m_currentChangeKind = 0;
+    std::string m_currentChangeId;
+    std::string m_openRevision;
+    std::map<std::string, std::string> m_deletedText;
+    std::map<std::string, char> m_changeKind;
+    std::map<std::string, int> m_revisionIds;
+    int m_nextRevisionId = 0;
 };

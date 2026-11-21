@@ -95,9 +95,12 @@ public:
 	/*! The parser automatically adds the information to the OXML_Document singleton.
 	*/
 	UT_Error parseDocumentEndnotes();
+	UT_Error parseDocumentComments();
+	UT_Error parseDocumentCommentsExtended();
 
 	UT_ConstByteBufPtr parseImageStream(const char * id);
 	std::string getPartName(const char * id);
+	std::string readPartText(const char * id);
 
 private:
 	OXMLi_PackageManager();

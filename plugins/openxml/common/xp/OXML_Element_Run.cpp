@@ -63,6 +63,37 @@ UT_Error OXML_Element_Run::serializeChildren(IE_Exp_OpenXML* exporter)
 UT_Error OXML_Element_Run::serialize(IE_Exp_OpenXML* exporter)
 {
 	UT_Error err = UT_OK;
+	const gchar* revision = nullptr;
+	const gchar* sdtId = nullptr;
+	const gchar* sdtAlias = nullptr;
+	const gchar* sdtTag = nullptr;
+	bool deletion = false;
+	bool contentControl = getAttribute("sdt-id", sdtId) == UT_OK && sdtId && *sdtId;
+	bool revised = getAttribute("revision", revision) == UT_OK && revision && *revision;
+	if (revised)
+		deletion = revision[0] == '-';
+	if (contentControl)
+	{
+		getAttribute("sdt-alias", sdtAlias);
+		getAttribute("sdt-tag", sdtTag);
+		err = exporter->startContentControl(TARGET, sdtId, sdtAlias, sdtTag, false);
+		if (err != UT_OK)
+			return err;
+	}
+	if (revised)
+	{
+		const char* raw = revision;
+		if (*raw == '+' || *raw == '-' || *raw == '!')
+			++raw;
+		std::string id;
+		while (*raw >= '0' && *raw <= '9')
+			id += *raw++;
+		if (id.empty())
+			id = "1";
+		err = exporter->startRevision(TARGET, deletion, id.c_str());
+		if (err != UT_OK)
+			return err;
+	}
 
 	err = exporter->startRun(TARGET);
 	if(err != UT_OK)
@@ -76,7 +107,18 @@ UT_Error OXML_Element_Run::serialize(IE_Exp_OpenXML* exporter)
 	if(err != UT_OK)
 		return err;
 
-	return exporter->finishRun(TARGET);
+	err = exporter->finishRun(TARGET);
+	if (err != UT_OK)
+		return err;
+	if (revised)
+	{
+		err = exporter->finishRevision(TARGET, deletion);
+		if (err != UT_OK)
+			return err;
+	}
+	if (contentControl)
+		return exporter->finishContentControl(TARGET);
+	return UT_OK;
 }
 
 UT_Error OXML_Element_Run::serializeProperties(IE_Exp_OpenXML* exporter)

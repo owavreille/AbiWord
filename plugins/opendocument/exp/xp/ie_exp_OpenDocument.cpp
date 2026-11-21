@@ -266,14 +266,6 @@ UT_Error IE_Exp_OpenDocument::_writeDocument(void)
 		return UT_ERROR;
 	}
 
-
-	if (!ODe_ManifestWriter::writeManifest(getDoc(), m_odt))
-	{
-		ODe_gsf_output_close(GSF_OUTPUT(m_odt));
-		return UT_ERROR;
-	}
-
-
     // Gather all paragraph style names used by heading paragraphs
     // (ie. all paragraph styles that are used to build up TOCs).
 
@@ -337,6 +329,7 @@ UT_Error IE_Exp_OpenDocument::_writeDocument(void)
     
 	DELETEP(pAbiDocListener);
 	DELETEP(pAbiDocListenerImpl);
+    docData.m_trackedChangeRegions = auxData.m_trackedChangeRegions;
     
 	if (!docData.doPostListeningWork())
 	{
@@ -344,13 +337,6 @@ UT_Error IE_Exp_OpenDocument::_writeDocument(void)
 		return UT_ERROR;
 	}
 
-    // Write RDF.
-    if (!ODe_RDFWriter::writeRDF(getDoc(), m_odt, auxData.m_additionalRDF ))
-	{
-		ODe_gsf_output_close(GSF_OUTPUT(m_odt));
-		return UT_ERROR;
-	}
-    
     // Write content and styles
         
 	if (!docData.writeStylesXML(m_odt))
@@ -359,6 +345,20 @@ UT_Error IE_Exp_OpenDocument::_writeDocument(void)
 		return UT_ERROR;
 	}
 	if (!docData.writeContentXML(m_odt))
+	{
+		ODe_gsf_output_close(GSF_OUTPUT(m_odt));
+		return UT_ERROR;
+	}
+
+	// RDF is complete only after the document has been walked. The
+	// manifest lists that file, so it is written last.
+	if (!ODe_RDFWriter::writeRDF(getDoc(), m_odt, auxData.m_additionalRDF))
+	{
+		ODe_gsf_output_close(GSF_OUTPUT(m_odt));
+		return UT_ERROR;
+	}
+
+	if (!ODe_ManifestWriter::writeManifest(getDoc(), m_odt))
 	{
 		ODe_gsf_output_close(GSF_OUTPUT(m_odt));
 		return UT_ERROR;

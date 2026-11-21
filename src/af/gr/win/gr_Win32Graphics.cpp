@@ -244,6 +244,30 @@ HDC GR_Win32Graphics::swapDC(HDC hdc)
 	return previous;
 }
 
+void GR_Win32Graphics::refreshDeviceScale()
+{
+	if (!m_hdc || m_bPrint)
+		return;
+	int logY = GetDeviceCaps(m_hdc, LOGPIXELSY);
+	int logX = GetDeviceCaps(m_hdc, LOGPIXELSX);
+	if (!logY)
+		return;
+	if (logY == m_nLogPixelsY && logX == (int)(m_fXYRatio * m_nLogPixelsY + 0.5))
+		return;
+	_releasePersistentBuffer();
+	SelectObject(m_hdc, GetStockObject(BLACK_PEN));
+	CACHE_PEN * pens = m_pArPens;
+	for (int n = 0; n < m_nArPenPos; ++n, ++pens)
+	{
+		if (pens->hPen)
+			DeleteObject(pens->hPen);
+		pens->hPen = nullptr;
+	}
+	m_nArPenPos = 0;
+	m_nLogPixelsY = logY;
+	m_fXYRatio = (double)logX / (double)logY;
+}
+
 void GR_Win32Graphics::setWindow(HWND hwnd)
 {
 	if (!hwnd || m_bPrint || hwnd == m_hwnd)
@@ -1602,7 +1626,11 @@ static GR_Win32AlphaBlendFn s_alphaBlendFn(void)
 		tried = true;
 		HMODULE dll = LoadLibraryW(L"msimg32.dll");
 		if (dll)
+		{
 			fn = reinterpret_cast<GR_Win32AlphaBlendFn>(reinterpret_cast<void *>(GetProcAddress(dll, "AlphaBlend")));
+			if (!fn)
+				FreeLibrary(dll);
+		}
 	}
 	return fn;
 }
@@ -1621,7 +1649,7 @@ static void s_premultiplyStraight(UT_Byte *pixels, UT_uint32 count)
 
 /* Screen: blend the straight BGRA DIB over the page that was already painted. */
 static bool s_alphaBlendImage(HDC hdc, int xDest, int yDest, int destW, int destH,
-	const UT_Byte *src, int srcW, int srcH)
+	const UT_Byte *src, int srcW, int srcH, int constantAlpha)
 {
 	if (!hdc || !src || destW <= 0 || destH <= 0 || srcW <= 0 || srcH <= 0)
 		return false;
@@ -1660,7 +1688,7 @@ static bool s_alphaBlendImage(HDC hdc, int xDest, int yDest, int destW, int dest
 	BLENDFUNCTION blendfn;
 	blendfn.BlendOp = AC_SRC_OVER;
 	blendfn.BlendFlags = 0;
-	blendfn.SourceConstantAlpha = 255;
+	blendfn.SourceConstantAlpha = (BYTE)constantAlpha;
 	blendfn.AlphaFormat = AC_SRC_ALPHA;
 	const BOOL ok = blend(hdc, xDest, yDest, destW, destH, mem, 0, 0, srcW, srcH, blendfn);
 	if (prev)
@@ -1758,7 +1786,7 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 		const int srcH = pDIB->bmiHeader.biHeight;
 		const int destW = pImg->getDisplayWidth();
 		const int destH = pImg->getDisplayHeight();
-		if (!paper && s_alphaBlendImage(m_hdc, xDest, yDest, destW, destH, pBits, srcW, srcH))
+		if (!paper && s_alphaBlendImage(m_hdc, xDest, yDest, destW, destH, pBits, srcW, srcH, 255))
 			return;
 		if (s_stretchAlphaOnWhite(m_hdc, xDest, yDest, destW, destH, pBits, srcW, srcH))
 			return;
@@ -1786,6 +1814,110 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 		UT_DebugOnly<DWORD> err = GetLastError();
 		UT_DEBUGMSG(("StretchDIBits failed with err %d\n", err));
 	}
+}
+
+void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest, const GR_ImageTune& tune)
+{
+	if (!pImg || !tune.isAdjusted() || pImg->getType() != GR_Image::GRT_Raster)
+	{
+		drawImage(pImg, xDest, yDest);
+		return;
+	}
+
+	GR_Win32Image* pWin32Img = static_cast<GR_Win32Image*>(pImg);
+	BITMAPINFO* pDIB = pWin32Img->getDIB();
+	if (!pDIB || pDIB->bmiHeader.biWidth == 0 || pDIB->bmiHeader.biHeight == 0)
+	{
+		drawImage(pImg, xDest, yDest);
+		return;
+	}
+
+	const int srcW = pDIB->bmiHeader.biWidth > 0 ? pDIB->bmiHeader.biWidth : -pDIB->bmiHeader.biWidth;
+	const int srcH = pDIB->bmiHeader.biHeight > 0 ? pDIB->bmiHeader.biHeight : -pDIB->bmiHeader.biHeight;
+	const bool bottomUp = pDIB->bmiHeader.biHeight > 0;
+	const int bpp = pDIB->bmiHeader.biBitCount / 8;
+	if ((bpp != 3 && bpp != 4) || srcW <= 0 || srcH <= 0)
+	{
+		drawImage(pImg, xDest, yDest);
+		return;
+	}
+
+	int left = tune.cropLeft * srcW / 100;
+	int right = tune.cropRight * srcW / 100;
+	int top = tune.cropTop * srcH / 100;
+	int bottom = tune.cropBottom * srcH / 100;
+	if (left < 0) left = 0;
+	if (right < 0) right = 0;
+	if (top < 0) top = 0;
+	if (bottom < 0) bottom = 0;
+	if (left + right >= srcW)
+		right = srcW - left - 1;
+	if (top + bottom >= srcH)
+		bottom = srcH - top - 1;
+	const int cropW = srcW - left - right;
+	const int cropH = srcH - top - bottom;
+	if (cropW <= 0 || cropH <= 0)
+		return;
+
+	const int srcStride = ((srcW * bpp + 3) & ~3);
+	UT_uint32 colorBytes = pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
+	const UT_Byte* srcBits = reinterpret_cast<const UT_Byte*>(pDIB) + pDIB->bmiHeader.biSize + colorBytes;
+
+	const size_t outBytes = (size_t)cropW * (size_t)cropH * 4;
+	UT_Byte* out = static_cast<UT_Byte*>(UT_calloc(1, (UT_uint32)outBytes));
+	if (!out)
+		return;
+
+	const int bright = tune.brightness;
+	const int opacity = tune.opacity < 0 ? 0 : (tune.opacity > 100 ? 100 : tune.opacity);
+	for (int y = 0; y < cropH; ++y)
+	{
+		const int visualY = top + y;
+		const int memY = bottomUp ? (srcH - 1 - visualY) : visualY;
+		const UT_Byte* srow = srcBits + (size_t)memY * (size_t)srcStride + (size_t)left * (size_t)bpp;
+		UT_Byte* drow = out + (size_t)(cropH - 1 - y) * (size_t)cropW * 4;
+		for (int x = 0; x < cropW; ++x)
+		{
+			int b = srow[x * bpp + 0];
+			int g = srow[x * bpp + 1];
+			int r = srow[x * bpp + 2];
+			int a = bpp == 4 ? srow[x * bpp + 3] : 255;
+			if (bright != 0)
+			{
+				const int delta = bright * 255 / 100;
+				b += delta; g += delta; r += delta;
+				if (b < 0) b = 0; else if (b > 255) b = 255;
+				if (g < 0) g = 0; else if (g > 255) g = 255;
+				if (r < 0) r = 0; else if (r > 255) r = 255;
+			}
+			a = a * opacity / 100;
+			drow[x * 4 + 0] = (UT_Byte)b;
+			drow[x * 4 + 1] = (UT_Byte)g;
+			drow[x * 4 + 2] = (UT_Byte)r;
+			drow[x * 4 + 3] = (UT_Byte)a;
+		}
+	}
+
+	xDest = (UT_sint32)((double)_tduX(xDest) * m_fXYRatio);
+	yDest = _tduY(yDest);
+	if (queryProperties(GR_Graphics::DGP_PAPER))
+	{
+		UT_sint32 nPageHeight = GetDeviceCaps(m_hdc, PHYSICALHEIGHT);
+		if (nPageHeight > 0)
+			yDest = (yDest % nPageHeight);
+	}
+
+	const int destW = pImg->getDisplayWidth();
+	const int destH = pImg->getDisplayHeight();
+	const DWORD kind = GetObjectType(m_hdc);
+	const bool paper = queryProperties(GR_Graphics::DGP_PAPER)
+		|| kind == OBJ_ENHMETADC || kind == OBJ_METADC;
+	bool drawn = false;
+	if (!paper)
+		drawn = s_alphaBlendImage(m_hdc, xDest, yDest, destW, destH, out, cropW, cropH, 255);
+	if (!drawn)
+		s_stretchAlphaOnWhite(m_hdc, xDest, yDest, destW, destH, out, cropW, cropH);
+	FREEP(out);
 }
 
 HWND GR_Win32Graphics::getHwnd(void) const

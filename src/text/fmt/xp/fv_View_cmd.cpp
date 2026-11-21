@@ -4506,6 +4506,19 @@ bool FV_View::cmdEditAnnotationWithDialog(UT_uint32 aID)
 	pDialog->setTitle(sTitle2);
 	pDialog->setAuthor(sAuthor2);
 	pDialog->setDescription(sText);
+	std::string sParent;
+	std::string sResolved;
+	getAnnotationParent(aID, sParent);
+	getAnnotationResolved(aID, sResolved);
+	pDialog->setParent(sParent);
+	pDialog->setResolved(sResolved);
+	std::vector<std::string> replyIds;
+	std::vector<std::string> replyLabels;
+	getAnnotationReplyChoices(replyIds, replyLabels, aID);
+	std::vector<AP_Dialog_Annotation::AnnotationChoice> choices;
+	for (size_t i = 0; i < replyIds.size() && i < replyLabels.size(); ++i)
+		choices.push_back({replyIds[i], replyLabels[i]});
+	pDialog->setAnnotationChoices(choices);
 	
 	// run the dialog
 	
@@ -4530,11 +4543,15 @@ bool FV_View::cmdEditAnnotationWithDialog(UT_uint32 aID)
 //		bool bReplaceSelection = false;
 		
 		b = setAnnotationText(aID,sDescr,sAuthor,sTitle);
+		setAnnotationParent(aID, pDialog->getParent());
+		setAnnotationResolved(aID, pDialog->getResolved());
 	}
 	else if (bApply)
 	{
 		pAL = insertAnnotationDescription(aID, pDialog);
 		UT_return_val_if_fail(pAL, false);
+		setAnnotationParent(aID, pDialog->getParent());
+		setAnnotationResolved(aID, pDialog->getResolved());
 	}
 	// release the dialog
 	pDialogFactory->releaseDialog(pDialog);

@@ -21,6 +21,7 @@
 #pragma once
 
 #include <string>
+#include <vector>
 
 #include "xap_Frame.h"
 #include "xap_Dialog.h"
@@ -64,6 +65,18 @@ public:
 	DCL_PROP(Title)
 	DCL_PROP(Author)
 	DCL_PROP(Description)
+	DCL_PROP(Parent)
+	DCL_PROP(Resolved)
+
+public:
+	struct AnnotationChoice {
+		std::string id;
+		std::string label;
+	};
+	void setAnnotationChoices(const std::vector<AnnotationChoice>& choices) { m_annotationChoices = choices; }
+	const std::vector<AnnotationChoice>& getAnnotationChoices() const { return m_annotationChoices; }
+private:
+	std::vector<AnnotationChoice> m_annotationChoices;
 
 
  protected:

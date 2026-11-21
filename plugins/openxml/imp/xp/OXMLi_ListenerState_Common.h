@@ -26,6 +26,25 @@
 // Internal includes
 #include <OXMLi_ListenerState.h>
 #include <OXMLi_Types.h>
+#include <stack>
+#include <string>
+
+class OXML_Element;
+
+struct OXMLi_RevisionMark
+{
+	std::string token;
+};
+
+struct OXMLi_ContentControl
+{
+	std::string id;
+	std::string alias;
+	std::string tag;
+	bool inProperties;
+	bool inContent;
+	bool block;
+};
 
 /* \class OXMLi_ListenerState_Common
  * \brief This ListenerState parses all the tags that are common to multiple parts.
@@ -46,6 +65,13 @@ private:
 	bool m_eqField;
 	bool m_pageNumberField;
 	bool m_fldChar;
+	std::stack<OXMLi_RevisionMark> m_revisions;
+	std::stack<OXMLi_ContentControl> m_controls;
+	int m_nextRevision;
+	int m_nextControl;
+
+	void _applyRevision(OXML_Element* elem);
+	void _applyControl(OXML_Element* elem, bool block);
 };
 
 #endif //_OXMLI_LISTENERSTATE_COMMON_H_

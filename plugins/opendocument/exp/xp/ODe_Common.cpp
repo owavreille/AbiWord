@@ -36,6 +36,34 @@
 #include <string.h>
 
 #include <sstream>
+#include <string>
+
+#include <glib.h>
+
+// ODF 1.3 length units are cm, mm, in, pt, pc and px. AbiWord names a pica "pi".
+static UT_UTF8String ode_odfValue(const UT_UTF8String& value)
+{
+    const char* v = value.utf8_str();
+    if (!v || !*v)
+        return value;
+
+    std::string out(v);
+    for (size_t i = 0; i + 1 < out.size(); ++i)
+    {
+        if (g_ascii_tolower(out[i]) != 'p' || g_ascii_tolower(out[i + 1]) != 'i')
+            continue;
+        bool atUnitEnd = (i + 2 == out.size()) || !g_ascii_isalnum(out[i + 2]);
+        bool afterNumber = i > 0 && (g_ascii_isdigit(out[i - 1]) || out[i - 1] == '.');
+        if (atUnitEnd && afterNumber)
+        {
+            out[i] = 'p';
+            out[i + 1] = 'c';
+        }
+    }
+    if (out == v)
+        return value;
+    return UT_UTF8String(out.c_str());
+}
 
 /**
  * 
@@ -116,10 +144,11 @@ void ODe_writeAttribute(UT_UTF8String& rOutput,
                         const UT_UTF8String& rValue) {
                                         
     if (!rValue.empty()) {
+        const UT_UTF8String written = ode_odfValue(rValue);
         rOutput += " ";
         rOutput += pName;
         rOutput += "=\"";
-        rOutput += rValue;
+        rOutput += written;
         rOutput += "\"";
     }
 }
@@ -132,10 +161,11 @@ void ODe_writeAttribute(UT_UTF8String& rOutput,
                         const gchar* pName,
                         const gchar* pValue) {
     if (strlen(pValue) > 0) {
+        const UT_UTF8String written = ode_odfValue(UT_UTF8String(pValue));
         rOutput += " ";
         rOutput += pName;
         rOutput += "=\"";
-        rOutput += pValue;
+        rOutput += written;
         rOutput += "\"";
     }
 }

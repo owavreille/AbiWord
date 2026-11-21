@@ -89,7 +89,7 @@ void AbiCollab_Regression::_findRegressionFiles(std::vector<std::string>& files)
 # else
 
 // TODO: needs win32 implementation using FindFirstFile
-void AbiCollab_Regression::_findRegressionFiles(std::vector<std::string>& files)
+void AbiCollab_Regression::_findRegressionFiles(std::vector<std::string>&)
 {
 }
 

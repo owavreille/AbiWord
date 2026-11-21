@@ -283,27 +283,27 @@ UT_Error OXML_Element_Field::serialize(IE_Exp_OpenXML* exporter)
 			if(err != UT_OK)
 				return UT_OK;
 		
-			err = exporter->startRun(TARGET_DOCUMENT);
+			err = exporter->startRun(TARGET);
 			if(err != UT_OK)
 				return err;
 
-			err = exporter->startRunProperties(TARGET_DOCUMENT);
+			err = exporter->startRunProperties(TARGET);
 			if(err != UT_OK)
 				return err;
 
-			err = exporter->setSuperscript(TARGET_DOCUMENT);
+			err = exporter->setSuperscript(TARGET);
 			if(err != UT_OK)
 				return err;
 
-			err = exporter->finishRunProperties(TARGET_DOCUMENT);
+			err = exporter->finishRunProperties(TARGET);
 			if(err != UT_OK)
 				return err;
 			
-			err = exporter->setEndnoteReference(endnoteId);			
+			err = exporter->setEndnoteReference(TARGET, endnoteId);
 			if(err != UT_OK)
 				return err;
 
-			return exporter->finishRun(TARGET_DOCUMENT);			
+			return exporter->finishRun(TARGET);			
 		}
 		case fd_Field::FD_Endnote_Anchor:
 		{
@@ -340,27 +340,27 @@ UT_Error OXML_Element_Field::serialize(IE_Exp_OpenXML* exporter)
 			if(err != UT_OK)
 				return UT_OK;
 		
-			err = exporter->startRun(TARGET_DOCUMENT);
+			err = exporter->startRun(TARGET);
 			if(err != UT_OK)
 				return err;
 
-			err = exporter->startRunProperties(TARGET_DOCUMENT);
+			err = exporter->startRunProperties(TARGET);
 			if(err != UT_OK)
 				return err;
 
-			err = exporter->setSuperscript(TARGET_DOCUMENT);
+			err = exporter->setSuperscript(TARGET);
 			if(err != UT_OK)
 				return err;
 
-			err = exporter->finishRunProperties(TARGET_DOCUMENT);
+			err = exporter->finishRunProperties(TARGET);
 			if(err != UT_OK)
 				return err;
 			
-			err = exporter->setFootnoteReference(footnoteId);			
+			err = exporter->setFootnoteReference(TARGET, footnoteId);
 			if(err != UT_OK)
 				return err;
 
-			return exporter->finishRun(TARGET_DOCUMENT);
+			return exporter->finishRun(TARGET);
 		}
 		case fd_Field::FD_Footnote_Anchor:
 		{

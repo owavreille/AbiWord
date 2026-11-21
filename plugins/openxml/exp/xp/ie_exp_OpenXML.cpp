@@ -26,7 +26,12 @@
 
 // Abiword includes
 #include "ut_std_string.h"
+#include "OXML_Section.h"
+#include "OXML_Document.h"
 #include <cstdlib>
+#include <cstdio>
+#include <cstring>
+#include <cctype>
 
 /**
  * Constructor
@@ -50,6 +55,7 @@ IE_Exp_OpenXML::IE_Exp_OpenXML (PD_Document * pDocument)
 	footerStream(nullptr),
 	footnoteStream(nullptr),
 	endnoteStream(nullptr),
+	commentStream(nullptr),
 	isOverline(false),
 	m_pendingTarget(TARGET_DOCUMENT),
 	m_capturePPr(false),
@@ -117,6 +123,10 @@ UT_Error IE_Exp_OpenXML::startDocument()
 		return error;
 
 	error = startFootnotes();
+	if(error != UT_OK)
+		return error;
+
+	error = startComments();
 	if(error != UT_OK)
 		return error;
 
@@ -218,6 +228,10 @@ UT_Error IE_Exp_OpenXML::finishDocument()
 	if(error != UT_OK)
 		return error;
 
+	error = finishComments();
+	if(error != UT_OK)
+		return error;
+
 	if(!gsf_output_close(GSF_OUTPUT(root)))
 	{
 		UT_DEBUGMSG(("FRT: ERROR, zip root file couldn't be closed\n"));
@@ -266,7 +280,20 @@ UT_Error IE_Exp_OpenXML::finishSectionProperties()
  */
 UT_Error IE_Exp_OpenXML::startParagraph(int target)
 {
+	if (!m_nextParaId.empty())
+	{
+		std::string tag = "<w:p w14:paraId=\"";
+		tag += m_nextParaId;
+		tag += "\">";
+		m_nextParaId.clear();
+		return writeTargetStream(target, tag.c_str());
+	}
 	return writeTargetStream(target, "<w:p>");
+}
+
+void IE_Exp_OpenXML::setNextParagraphParaId(const char* id)
+{
+	m_nextParaId = id ? id : "";
 }
 
 /**
@@ -280,6 +307,45 @@ UT_Error IE_Exp_OpenXML::finishParagraph(int target)
 /**
  * Starts exporting the OXML_Element_Text object
  */
+UT_Error IE_Exp_OpenXML::startRevision(int target, bool deletion, const char* id)
+{
+	std::string str(deletion ? "<w:del " : "<w:ins ");
+	str += "w:id=\"";
+	str += id ? id : "1";
+	str += "\" w:author=\"AbiWord\" w:date=\"1970-01-01T00:00:00Z\">";
+	return writeTargetStream(target, str.c_str());
+}
+
+UT_Error IE_Exp_OpenXML::finishRevision(int target, bool deletion)
+{
+	return writeTargetStream(target, deletion ? "</w:del>" : "</w:ins>");
+}
+
+UT_Error IE_Exp_OpenXML::startContentControl(int target, const char* id, const char* alias, const char* tag, bool block)
+{
+	auto escape = [](const char* value) {
+		UT_UTF8String text(value ? value : "");
+		text.escapeXML();
+		return std::string(text.utf8_str());
+	};
+	std::string str("<w:sdt><w:sdtPr>");
+	if (alias && *alias)
+		str += "<w:alias w:val=\"" + escape(alias) + "\"/>";
+	if (tag && *tag)
+		str += "<w:tag w:val=\"" + escape(tag) + "\"/>";
+	str += "<w:id w:val=\"";
+	str += (id && *id) ? id : "1";
+	str += "\"/>";
+	str += block ? "<w:richText/>" : "<w:text/>";
+	str += "</w:sdtPr><w:sdtContent>";
+	return writeTargetStream(target, str.c_str());
+}
+
+UT_Error IE_Exp_OpenXML::finishContentControl(int target)
+{
+	return writeTargetStream(target, "</w:sdtContent></w:sdt>");
+}
+
 UT_Error IE_Exp_OpenXML::startText(int target)
 {
 	if(isOverline)
@@ -356,27 +422,27 @@ UT_Error IE_Exp_OpenXML::finishText(int target)
 /**
  * Starts exporting the OXML_Element_Math object
  */
-UT_Error IE_Exp_OpenXML::startMath()
+UT_Error IE_Exp_OpenXML::startMath(int target)
 {
-    return writeTargetStream(TARGET_DOCUMENT, "<m:oMathPara>");
+    return writeTargetStream(target, "<m:oMathPara>");
 }
 
 /**
  * Writes the actual content of OXML_Element_Math object
  */
-UT_Error IE_Exp_OpenXML::writeMath(const char* omml)
+UT_Error IE_Exp_OpenXML::writeMath(int target, const char* omml)
 {
     std::string str;
-    str.assign(omml);
-    return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+    str.assign(omml ? omml : "");
+    return writeTargetStream(target, str.c_str());
 }
 
 /**
  * Finishes exporting the OXML_Element_Math object
  */
-UT_Error IE_Exp_OpenXML::finishMath()
+UT_Error IE_Exp_OpenXML::finishMath(int target)
 {
-    return writeTargetStream(TARGET_DOCUMENT, "</m:oMathPara>");
+    return writeTargetStream(target, "</m:oMathPara>");
 }
 
 /**
@@ -532,17 +598,17 @@ UT_Error IE_Exp_OpenXML::finishParagraphProperties(int target)
 /**
  * Starts exporting the OXML_Element_Table object
  */
-UT_Error IE_Exp_OpenXML::startTable()
+UT_Error IE_Exp_OpenXML::startTable(int target)
 {
-	return writeTargetStream(TARGET_DOCUMENT, "<w:tbl>");
+	return writeTargetStream(target, "<w:tbl>");
 }
 
 /**
  * Finishes exporting the OXML_Element_Table object
  */
-UT_Error IE_Exp_OpenXML::finishTable()
+UT_Error IE_Exp_OpenXML::finishTable(int target)
 {
-	return writeTargetStream(TARGET_DOCUMENT, "</w:tbl>");
+	return writeTargetStream(target, "</w:tbl>");
 }
 
 /**
@@ -724,33 +790,33 @@ UT_Error IE_Exp_OpenXML::finishNumberingLevel(int target)
 /**
  * Starts exporting the OXML_Element_Row object
  */
-UT_Error IE_Exp_OpenXML::startRow()
+UT_Error IE_Exp_OpenXML::startRow(int target)
 {
-	return writeTargetStream(TARGET_DOCUMENT, "<w:tr>");
+	return writeTargetStream(target, "<w:tr>");
 }
 
 /**
  * Finishes exporting the OXML_Element_Row object
  */
-UT_Error IE_Exp_OpenXML::finishRow()
+UT_Error IE_Exp_OpenXML::finishRow(int target)
 {
-	return writeTargetStream(TARGET_DOCUMENT, "</w:tr>");
+	return writeTargetStream(target, "</w:tr>");
 }
 
 /**
  * Starts exporting the OXML_Element_Cell object
  */
-UT_Error IE_Exp_OpenXML::startCell()
+UT_Error IE_Exp_OpenXML::startCell(int target)
 {
-	return writeTargetStream(TARGET_DOCUMENT, "<w:tc>");
+	return writeTargetStream(target, "<w:tc>");
 }
 
 /**
  * Finishes exporting the OXML_Element_Cell object
  */
-UT_Error IE_Exp_OpenXML::finishCell()
+UT_Error IE_Exp_OpenXML::finishCell(int target)
 {
-	return writeTargetStream(TARGET_DOCUMENT, "</w:tc>");
+	return writeTargetStream(target, "</w:tc>");
 }
 
 /**
@@ -772,62 +838,62 @@ UT_Error IE_Exp_OpenXML::finishCellProperties(int target)
 /**
  * Starts exporting the OXML_Element_Hyperlink object
  */
-UT_Error IE_Exp_OpenXML::startExternalHyperlink(const gchar* id)
+UT_Error IE_Exp_OpenXML::startExternalHyperlink(int target, const gchar* id)
 {
 	std::string str("<w:hyperlink r:id=\"");
-	str += id;
+	str += id ? id : "";
 	str += "\">";
-	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
  * Starts exporting the OXML_Element_Hyperlink object
  */
-UT_Error IE_Exp_OpenXML::startInternalHyperlink(const gchar* anchor)
+UT_Error IE_Exp_OpenXML::startInternalHyperlink(int target, const gchar* anchor)
 {
-	UT_UTF8String sEscAnchor = anchor;
+	UT_UTF8String sEscAnchor = anchor ? anchor : "";
 	sEscAnchor.escapeXML();
 
 	std::string str("<w:hyperlink w:anchor=\"");
 	str += sEscAnchor.utf8_str();
 	str += "\">";
-	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
  * Finishes exporting the OXML_Element_Hyperlink object
  */
-UT_Error IE_Exp_OpenXML::finishHyperlink()
+UT_Error IE_Exp_OpenXML::finishHyperlink(int target)
 {
-	return writeTargetStream(TARGET_DOCUMENT, "</w:hyperlink>");
+	return writeTargetStream(target, "</w:hyperlink>");
 }
 
 /**
  * Exports the OXML_Element_BookmarkStart object
  */
-UT_Error IE_Exp_OpenXML::startBookmark(const gchar* id, const gchar* name)
+UT_Error IE_Exp_OpenXML::startBookmark(int target, const gchar* id, const gchar* name)
 {
-	UT_UTF8String sEscName = name;
+	UT_UTF8String sEscName = name ? name : "";
 	sEscName.escapeXML();
 
 	std::string str("<w:bookmarkStart w:id=\"");
-	str += id;
+	str += id ? id : "0";
 	str += "\" ";
 	str += "w:name=\"";
 	str += sEscName.utf8_str();
 	str += "\"/>";
-	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
  * Exports the OXML_Element_BookmarkFinish object
  */
-UT_Error IE_Exp_OpenXML::finishBookmark(const gchar* id)
+UT_Error IE_Exp_OpenXML::finishBookmark(int target, const gchar* id)
 {
 	std::string str("<w:bookmarkEnd w:id=\"");
-	str += id;
+	str += id ? id : "0";
 	str += "\"/>";
-	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
@@ -961,6 +1027,8 @@ GsfOutput* IE_Exp_OpenXML::getTargetStream(int target)
 			return footnoteStream;
 		case TARGET_ENDNOTE:
 			return endnoteStream;
+		case TARGET_COMMENT:
+			return commentStream;
 		default:
 			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
 			return documentStream;
@@ -1324,7 +1392,24 @@ UT_Error IE_Exp_OpenXML::setHyperlinkRelation(int target, const char* id, const 
 	str += "TargetMode=\"";
 	str += mode;
 	str += "\"/>";
-	return writeTargetStream(target, str.c_str());
+
+	std::string relFile;
+	if (target == TARGET_HEADER && !m_currentHeaderId.empty())
+		relFile = "header" + m_currentHeaderId + ".xml.rels";
+	else if (target == TARGET_FOOTER && !m_currentFooterId.empty())
+		relFile = "footer" + m_currentFooterId + ".xml.rels";
+	else if (target == TARGET_FOOTNOTE)
+		relFile = "footnotes.xml.rels";
+	else if (target == TARGET_ENDNOTE)
+		relFile = "endnotes.xml.rels";
+	else if (target == TARGET_COMMENT)
+		relFile = "comments.xml.rels";
+	if (!relFile.empty())
+	{
+		m_partRelations[relFile] += str;
+		return UT_OK;
+	}
+	return writeTargetStream(TARGET_DOCUMENT_RELATION, str.c_str());
 }
 
 /**
@@ -1780,8 +1865,13 @@ static std::string noteIdForWord(const char* id)
 {
 	char* end = nullptr;
 	long value = id ? strtol(id, &end, 10) : 1;
-	if (!id || end == id)
-		value = 1;
+	if (!id || end == id || *end != '\0')
+	{
+		unsigned long hash = 2166136261ul;
+		for (const unsigned char* p = reinterpret_cast<const unsigned char*>(id ? id : "x"); *p; ++p)
+			hash = (hash ^ *p) * 16777619ul;
+		value = static_cast<long>((hash % 900000000ul) + 2);
+	}
 	if (value <= 0)
 		value += 1000000;
 	return std::to_string(value);
@@ -1820,6 +1910,171 @@ UT_Error IE_Exp_OpenXML::startEndnote(const char* id)
 UT_Error IE_Exp_OpenXML::finishEndnote()
 {
 	return writeTargetStream(TARGET_ENDNOTE, "</w:endnote>");
+}
+
+static std::string oxmlEscape(const char* text)
+{
+	std::string out;
+	if (!text)
+		return out;
+	for (const unsigned char* p = reinterpret_cast<const unsigned char*>(text); *p; ++p)
+	{
+		if (*p == '&')
+			out += "&amp;";
+		else if (*p == '<')
+			out += "&lt;";
+		else if (*p == '>')
+			out += "&gt;";
+		else if (*p == '"')
+			out += "&quot;";
+		else
+			out += static_cast<char>(*p);
+	}
+	return out;
+}
+
+static bool oxmlValidDateTime(const std::string& value)
+{
+	int year = 0, month = 0, day = 0, hour = 0, minute = 0, second = 0;
+	char zone = 0;
+	int count = sscanf(value.c_str(), "%d-%d-%dT%d:%d:%d%c", &year, &month, &day, &hour, &minute, &second, &zone);
+	return count >= 6 && year >= 1900 && month >= 1 && month <= 12 && day >= 1 && day <= 31
+		&& hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59 && second >= 0 && second <= 60;
+}
+
+static std::string oxmlCommentDate(const char* text)
+{
+	const char* fallback = "1970-01-01T00:00:00Z";
+	if (!text || !*text)
+		return fallback;
+	std::string value(text);
+	if (oxmlValidDateTime(value))
+		return value;
+	int year = 0, month = 0, day = 0;
+	if (sscanf(value.c_str(), "%d-%d-%d", &year, &month, &day) == 3 && year > 1900
+		&& month >= 1 && month <= 12 && day >= 1 && day <= 31)
+	{
+		char buf[40];
+		snprintf(buf, sizeof(buf), "%04d-%02d-%02dT00:00:00Z", year, month, day);
+		return buf;
+	}
+	if (sscanf(value.c_str(), "%d-%d-%d", &month, &day, &year) == 3 && year > 1900
+		&& month >= 1 && month <= 12 && day >= 1 && day <= 31)
+	{
+		char buf[40];
+		snprintf(buf, sizeof(buf), "%04d-%02d-%02dT00:00:00Z", year, month, day);
+		return buf;
+	}
+	return fallback;
+}
+
+static std::string oxmlInitials(const char* author, const char* stored)
+{
+	if (stored && *stored)
+		return stored;
+	std::string out;
+	bool word = true;
+	for (const char* p = author ? author : ""; *p && out.size() < 3; ++p)
+	{
+		if (*p == ' ' || *p == '\t')
+			word = true;
+		else if (word)
+		{
+			out += *p;
+			word = false;
+		}
+	}
+	return out.empty() ? "A" : out;
+}
+
+UT_Error IE_Exp_OpenXML::startComment(const char* id, OXML_Section* section)
+{
+	const gchar* author = nullptr;
+	const gchar* date = nullptr;
+	const gchar* initials = nullptr;
+	if (section)
+	{
+		section->getAttribute("annotation-author", author);
+		section->getAttribute("annotation-date", date);
+		section->getAttribute("annotation-initials", initials);
+	}
+	std::string str = "<w:comment w:id=\"";
+	str += noteIdForWord(id);
+	str += "\" w:author=\"";
+	str += oxmlEscape(author ? author : "");
+	str += "\" w:date=\"";
+	str += oxmlEscape(oxmlCommentDate(date).c_str());
+	str += "\" w:initials=\"";
+	str += oxmlEscape(oxmlInitials(author, initials).c_str());
+	str += "\">";
+	return writeTargetStream(TARGET_COMMENT, str.c_str());
+}
+
+UT_Error IE_Exp_OpenXML::finishComment(OXML_Section* section)
+{
+	UT_Error err = writeTargetStream(TARGET_COMMENT, "</w:comment>");
+	if (err != UT_OK || !section)
+		return err;
+	const gchar* para = nullptr;
+	const gchar* parent = nullptr;
+	const gchar* resolved = nullptr;
+	section->getAttribute("para-id", para);
+	section->getAttribute("annotation-parent", parent);
+	section->getAttribute("annotation-resolved", resolved);
+	std::string parentPara;
+	if (parent && *parent)
+	{
+		OXML_Document* doc = OXML_Document::getInstance();
+		OXML_SharedSection parentSection = doc ? doc->getComment(parent) : OXML_SharedSection();
+		const gchar* stored = nullptr;
+		if (parentSection && parentSection->getAttribute("para-id", stored) == UT_OK && stored)
+			parentPara = stored;
+	}
+	std::string paraId = (para && strlen(para) == 8) ? para : "00000001";
+	for (char c : paraId)
+	{
+		if (!isxdigit(static_cast<unsigned char>(c)))
+			paraId = "00000001";
+	}
+	if (paraId == "00000000")
+		paraId = "00000001";
+	m_commentEx += "<w15:commentEx w15:paraId=\"";
+	m_commentEx += paraId;
+	m_commentEx += "\"";
+	if (parentPara.size() == 8 && parentPara != "00000000" && parentPara != paraId)
+	{
+		bool hex = true;
+		for (char c : parentPara)
+			hex = hex && isxdigit(static_cast<unsigned char>(c));
+		if (hex)
+		{
+			m_commentEx += " w15:paraIdParent=\"";
+			m_commentEx += parentPara;
+			m_commentEx += "\"";
+		}
+	}
+	m_commentEx += " w15:done=\"";
+	m_commentEx += (resolved && (*resolved == '1' || !strcmp(resolved, "true"))) ? "1" : "0";
+	m_commentEx += "\"/>";
+	return UT_OK;
+}
+
+UT_Error IE_Exp_OpenXML::startCommentRange(int target, const char* id)
+{
+	std::string str = "<w:commentRangeStart w:id=\"";
+	str += noteIdForWord(id);
+	str += "\"/>";
+	return writeTargetStream(target, str.c_str());
+}
+
+UT_Error IE_Exp_OpenXML::finishCommentRange(int target, const char* id)
+{
+	std::string str = "<w:commentRangeEnd w:id=\"";
+	str += noteIdForWord(id);
+	str += "\"/><w:r><w:commentReference w:id=\"";
+	str += noteIdForWord(id);
+	str += "\"/></w:r>";
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
@@ -2195,14 +2450,14 @@ UT_Error IE_Exp_OpenXML::setHeaderReference(const char* id, const char* type)
 /**
  * Set the footnote reference
  */
-UT_Error IE_Exp_OpenXML::setFootnoteReference(const char* id)
+UT_Error IE_Exp_OpenXML::setFootnoteReference(int target, const char* id)
 {
 	std::string str("");
 	str += "<w:footnoteReference ";
 	str += "w:id=\"";
 	str += noteIdForWord(id);
 	str += "\"/>";
-	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
@@ -2218,14 +2473,14 @@ UT_Error IE_Exp_OpenXML::setFootnoteRef()
 /**
  * Set the endnote reference
  */
-UT_Error IE_Exp_OpenXML::setEndnoteReference(const char* id)
+UT_Error IE_Exp_OpenXML::setEndnoteReference(int target, const char* id)
 {
 	std::string str("");
 	str += "<w:endnoteReference ";
 	str += "w:id=\"";
 	str += noteIdForWord(id);
 	str += "\"/>";
-	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
@@ -2357,6 +2612,9 @@ void IE_Exp_OpenXML::_cleanup ()
 
 	if(endnoteStream && !gsf_output_is_closed(endnoteStream))
 		gsf_output_close(endnoteStream);
+
+	if(commentStream && !gsf_output_is_closed(commentStream))
+		gsf_output_close(commentStream);
 
 	if(settingsStream && !gsf_output_is_closed(settingsStream))
 		gsf_output_close(settingsStream);
@@ -2601,6 +2859,10 @@ UT_Error IE_Exp_OpenXML::startContentTypes()
 	str += "ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml\"/>";
 	str += "<Override PartName=\"/word/endnotes.xml\" ";
 	str += "ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml\"/>";
+	str += "<Override PartName=\"/word/comments.xml\" ";
+	str += "ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml\"/>";
+	str += "<Override PartName=\"/word/commentsExtended.xml\" ";
+	str += "ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml\"/>";
 
 	return writeTargetStream(TARGET_CONTENT, str.c_str());
 }
@@ -2759,6 +3021,12 @@ UT_Error IE_Exp_OpenXML::startWordRelations()
 	str += "<Relationship Id=\"rId5\" ";
 	str += "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes\" ";
 	str += "Target=\"endnotes.xml\"/>";
+	str += "<Relationship Id=\"rIdComment\" ";
+	str += "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments\" ";
+	str += "Target=\"comments.xml\"/>";
+	str += "<Relationship Id=\"rIdCommentEx\" ";
+	str += "Type=\"http://schemas.microsoft.com/office/2011/relationships/commentsExtended\" ";
+	str += "Target=\"commentsExtended.xml\"/>";
 
 	return writeTargetStream(TARGET_DOCUMENT_RELATION, str.c_str());
 
@@ -2807,6 +3075,22 @@ UT_Error IE_Exp_OpenXML::finishWordRelations()
 	{
 		UT_DEBUGMSG(("FRT: ERROR, document.xml.rels file couldn't be closed\n"));	
 		return UT_SAVE_EXPORTERROR;		
+	}
+
+	for (std::map<std::string, std::string>::iterator rel = m_partRelations.begin();
+		 rel != m_partRelations.end(); ++rel)
+	{
+		GsfOutput* partRel = gsf_outfile_new_child(wordRelsDir, rel->first.c_str(), FALSE);
+		if (!partRel)
+			return UT_SAVE_EXPORTERROR;
+		std::string body("<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>");
+		body += "<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">";
+		body += rel->second;
+		body += "</Relationships>";
+		gboolean wrote = gsf_output_write(partRel, body.size(), reinterpret_cast<const guint8*>(body.data()));
+		gboolean closed = gsf_output_close(partRel);
+		if (!wrote || !closed)
+			return UT_SAVE_EXPORTERROR;
 	}
 
 	return UT_OK;
@@ -3247,6 +3531,71 @@ UT_Error IE_Exp_OpenXML::finishEndnotes()
 	return UT_OK;
 }
 
+UT_Error IE_Exp_OpenXML::startComments()
+{
+	commentStream = gsf_output_memory_new();
+	if (!commentStream)
+		return UT_SAVE_EXPORTERROR;
+	UT_Error 	err = writeXmlHeader(commentStream);
+	if (err != UT_OK)
+	{
+		gsf_output_close(commentStream);
+		commentStream = nullptr;
+		return err;
+	}
+	m_commentEx.clear();
+	std::string str("<w:comments ");
+	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" ";
+	str += "xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\">";
+	return writeTargetStream(TARGET_COMMENT, str.c_str());
+}
+
+UT_Error IE_Exp_OpenXML::finishComments()
+{
+	UT_Error err = writeTargetStream(TARGET_COMMENT, "</w:comments>");
+	if (err != UT_OK)
+		return err;
+	GsfOutput* commentFile = gsf_outfile_new_child(wordDir, "comments.xml", FALSE);
+	if (!commentFile)
+		return UT_SAVE_EXPORTERROR;
+	if (!gsf_output_write(commentFile, gsf_output_size(commentStream),
+			gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(commentStream))))
+	{
+		gsf_output_close(commentFile);
+		return UT_SAVE_EXPORTERROR;
+	}
+	if (!gsf_output_close(commentStream) || !gsf_output_close(commentFile))
+		return UT_SAVE_EXPORTERROR;
+
+	GsfOutput* extra = gsf_output_memory_new();
+	GsfOutput* extraFile = gsf_outfile_new_child(wordDir, "commentsExtended.xml", FALSE);
+	if (!extra || !extraFile)
+	{
+		if (extra)
+			gsf_output_close(extra);
+		if (extraFile)
+			gsf_output_close(extraFile);
+		return UT_SAVE_EXPORTERROR;
+	}
+	err = writeXmlHeader(extra);
+	if (err != UT_OK)
+	{
+		gsf_output_close(extra);
+		gsf_output_close(extraFile);
+		return err;
+	}
+	std::string body = "<w15:commentsEx xmlns:w15=\"http://schemas.microsoft.com/office/word/2012/wordml\">";
+	body += m_commentEx;
+	body += "</w15:commentsEx>";
+	bool wrote = gsf_output_write(extra, body.size(), reinterpret_cast<const guint8*>(body.c_str()))
+		&& gsf_output_write(extraFile, gsf_output_size(extra), gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(extra)));
+	bool closedExtra = gsf_output_close(extra) != 0;
+	bool closedFile = gsf_output_close(extraFile) != 0;
+	if (!wrote || !closedExtra || !closedFile)
+		return UT_SAVE_EXPORTERROR;
+	return UT_OK;
+}
+
 /**
  * Write the simple xml header to the file
  * This function should be called before anything written to file
@@ -3382,6 +3731,7 @@ UT_Error IE_Exp_OpenXML::startHeaderStream(const char* id)
 
 	std::string strId("");
 	strId += id;
+	m_currentHeaderId = strId;
 	headerStreams[strId] = headerStream;
 	
 	return writeTargetStream(TARGET_HEADER, str.c_str());
@@ -3412,6 +3762,7 @@ UT_Error IE_Exp_OpenXML::startFooterStream(const char* id)
 
 	std::string strId("");
 	strId += id;
+	m_currentFooterId = strId;
 	footerStreams[strId] = footerStream;
 	
 	return writeTargetStream(TARGET_FOOTER, str.c_str());

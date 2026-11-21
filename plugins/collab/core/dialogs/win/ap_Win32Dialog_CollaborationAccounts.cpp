@@ -30,7 +30,7 @@
 
 #include "ap_Win32Dialog_CollaborationAccounts.h"
 
-BOOL CALLBACK AP_Win32Dialog_CollaborationAccounts::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK AP_Win32Dialog_CollaborationAccounts::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
@@ -96,7 +96,7 @@ void AP_Win32Dialog_CollaborationAccounts::runModal(XAP_Frame * pFrame)
 	LPCTSTR lpTemplate = MAKEINTRESOURCE(AP_RID_DIALOG_COLLABORATIONACCOUNTS);
 	int result = DialogBoxParam( m_hInstance, lpTemplate,
 		static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
-		(DLGPROC)s_dlgProc, (LPARAM)this );
+		s_dlgProc, (LPARAM)this );
 	switch (result)
 	{
 		case 0:
@@ -110,7 +110,7 @@ void AP_Win32Dialog_CollaborationAccounts::runModal(XAP_Frame * pFrame)
 	};
 }
 
-void AP_Win32Dialog_CollaborationAccounts::signal(const Event& event, BuddyPtr pSource)
+void AP_Win32Dialog_CollaborationAccounts::signal(const Event& event, BuddyPtr)
 {
 	UT_DEBUGMSG(("AP_Win32Dialog_CollaborationAccounts::signal()\n"));
 	switch (event.getClassType())
@@ -127,12 +127,13 @@ void AP_Win32Dialog_CollaborationAccounts::signal(const Event& event, BuddyPtr p
 	}
 }
 
-BOOL AP_Win32Dialog_CollaborationAccounts::_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationAccounts::_onInitDialog(HWND hWnd, WPARAM, LPARAM)
 {
-	// Set up common controls
 	INITCOMMONCONTROLSEX icc;
 	icc.dwSize=sizeof(INITCOMMONCONTROLSEX);
 	icc.dwICC=ICC_LISTVIEW_CLASSES;
+	if (!InitCommonControlsEx(&icc))
+		return false;
 
 	m_hAccountList = GetDlgItem(hWnd, AP_RID_DIALOG_COLLABORATIONACCOUNTS_ACCOUNT_LIST);
 
@@ -141,19 +142,19 @@ BOOL AP_Win32Dialog_CollaborationAccounts::_onInitDialog(HWND hWnd, WPARAM wPara
 	// column 0
 	LVCOLUMNW lvc;
 	lvc.mask = LVCF_WIDTH | LVCF_TEXT; 
-    lvc.pszText = L"Online";	
+	lvc.pszText = const_cast<LPWSTR>(L"Online");
 	lvc.cx = 50;
 	ListView_InsertColumn(m_hAccountList, 0, &lvc);
 
 	// column 1
 	lvc.mask = LVCF_WIDTH | LVCF_TEXT; 
-    lvc.pszText = L"Account";	
+	lvc.pszText = const_cast<LPWSTR>(L"Account");
 	lvc.cx = 180;
 	ListView_InsertColumn(m_hAccountList, 1, &lvc);
 
 	// column 2
 	lvc.mask = LVCF_WIDTH | LVCF_TEXT; 
-    lvc.pszText = L"Type";
+	lvc.pszText = const_cast<LPWSTR>(L"Type");
 	lvc.cx = 200;
 	ListView_InsertColumn(m_hAccountList, 2, &lvc);
 
@@ -217,9 +218,8 @@ void AP_Win32Dialog_CollaborationAccounts::_populateWindowData()
 }
 
 // return true if we process the command, false otherwise
-BOOL AP_Win32Dialog_CollaborationAccounts::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationAccounts::_onCommand(HWND hWnd, WPARAM wParam, LPARAM)
 {
-	WORD wNotifyCode = HIWORD(wParam);
 	WORD wId = LOWORD(wParam);
 
 	switch (wId)
@@ -282,7 +282,7 @@ BOOL AP_Win32Dialog_CollaborationAccounts::_onCommand(HWND hWnd, WPARAM wParam, 
 	}	
 }
 
-BOOL AP_Win32Dialog_CollaborationAccounts::_onNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationAccounts::_onNotify(HWND, WPARAM wParam, LPARAM lParam)
 {
 	LPNMHDR nmhdr = (LPNMHDR)lParam; 
 	UT_return_val_if_fail(nmhdr, false);

@@ -268,10 +268,12 @@ bool ODe_Style_PageLayout::write(GsfOutput* pODT,
     ODe_writeAttribute(output, "fo:background-color", m_backgroundColor);
 
     if(m_backgroundImage.length()) {
+        UT_UTF8String href = m_backgroundImage;
+        href.escapeXML();
         output += ">\n";
         output += UT_UTF8String_sprintf("%s  <style:background-image ",rSpacesOffset.utf8_str());
         output += "xlink:href=\"Pictures/";
-        output += m_backgroundImage;
+        output += href;
         output += "\" xlink:type=\"simple\" xlink:show=\"embed\" xlink:actuate=\"onLoad\" style:repeat=\"stretch\"/>\n";
         output += UT_UTF8String_sprintf("%s </style:page-layout-properties>\n",rSpacesOffset.utf8_str());
     } else {

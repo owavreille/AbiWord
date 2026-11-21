@@ -58,7 +58,7 @@ UT_Error OXML_Element_Cell::serialize(IE_Exp_OpenXML* exporter)
 {
 	UT_Error err = UT_OK;
 
-	err = exporter->startCell();
+	err = exporter->startCell(TARGET);
 	if(err != UT_OK)
 		return err;
 
@@ -70,7 +70,7 @@ UT_Error OXML_Element_Cell::serialize(IE_Exp_OpenXML* exporter)
 	if(err != UT_OK)
 		return err;
 
-	return exporter->finishCell();
+	return exporter->finishCell(TARGET);
 }
 
 UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
@@ -81,7 +81,7 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 	const gchar* color = nullptr;
 	const gchar* size = nullptr;
 
-	err = exporter->startCellProperties(TARGET_DOCUMENT);
+	err = exporter->startCellProperties(TARGET);
 	if(err != UT_OK)
 		return err;
 
@@ -89,26 +89,26 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 	UT_sint32 vspan = getBottom()-getTop();
 	bool isVertCont = getTop() == -1;
 
-	err = exporter->setColumnWidth(TARGET_DOCUMENT, m_table->getColumnWidth(getLeft()).c_str());
+	err = exporter->setColumnWidth(TARGET, m_table->getColumnWidth(getLeft()).c_str());
 	if(err != UT_OK)
 		return err;
 
 	if(hspan > 1)
 	{
-		err = exporter->setGridSpan(TARGET_DOCUMENT, hspan);
+		err = exporter->setGridSpan(TARGET, hspan);
 		if(err != UT_OK)
 			return err;
 	}
 
 	if(vspan > 1 && !isVertCont)
 	{
-		err = exporter->setVerticalMerge(TARGET_DOCUMENT, "restart");
+		err = exporter->setVerticalMerge(TARGET, "restart");
 		if(err != UT_OK)
 			return err;
 	}
 	else if(isVertCont)
 	{
-		err = exporter->setVerticalMerge(TARGET_DOCUMENT, "continue");
+		err = exporter->setVerticalMerge(TARGET, "continue");
 		if(err != UT_OK)
 			return err;
 	}
@@ -138,7 +138,7 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 		}
 	}
 
-	err = exporter->startCellBorderProperties(TARGET_DOCUMENT);
+	err = exporter->startCellBorderProperties(TARGET);
 	if(err != UT_OK)
 		return err;
 
@@ -164,7 +164,7 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 		size = szValue;
 	}
 
-	err = exporter->setTableBorder(TARGET_DOCUMENT, "left", borderType, color, size);
+	err = exporter->setTableBorder(TARGET, "left", borderType, color, size);
 	if(err != UT_OK)
 		return err;
 
@@ -189,7 +189,7 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 	{
 		size = szValue;
 	}
-	err = exporter->setTableBorder(TARGET_DOCUMENT, "right", borderType, color, size);
+	err = exporter->setTableBorder(TARGET, "right", borderType, color, size);
 	if(err != UT_OK)
 		return err;
 
@@ -216,7 +216,7 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 		{
 			size = szValue;
 		}
-		err = exporter->setTableBorder(TARGET_DOCUMENT, "top", borderType, color, size);
+		err = exporter->setTableBorder(TARGET, "top", borderType, color, size);
 		if(err != UT_OK)
 			return err;
 	}
@@ -244,18 +244,18 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 		{
 			size = szValue;
 		}
-		err = exporter->setTableBorder(TARGET_DOCUMENT, "bottom", borderType, color, size);
+		err = exporter->setTableBorder(TARGET, "bottom", borderType, color, size);
 		if(err != UT_OK)
 			return err;
 	}
 
-	err = exporter->finishCellBorderProperties(TARGET_DOCUMENT);
+	err = exporter->finishCellBorderProperties(TARGET);
 	if(err != UT_OK)
 		return err;
 
 	if(background)
 	{
-		err = exporter->setBackgroundColor(TARGET_DOCUMENT, background);
+		err = exporter->setBackgroundColor(TARGET, background);
 		if(err != UT_OK)
 			return err;
 	}
@@ -269,7 +269,7 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 		m_table->addMissingCell(m_row->getRowNumber()+1, missingCell);
 	}
 
-	return exporter->finishCellProperties(TARGET_DOCUMENT);
+	return exporter->finishCellProperties(TARGET);
 }
 
 

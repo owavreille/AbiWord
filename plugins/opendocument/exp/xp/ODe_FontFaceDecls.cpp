@@ -25,6 +25,8 @@
 // Internal includes
 #include "ODe_Common.h"
 
+#include <string.h>
+
 
 /**
  * Destructor
@@ -51,10 +53,26 @@ void ODe_FontFaceDecls::addFont(const UT_UTF8String& rFontName) {
          !m_fontDecls.contains(rFontName.utf8_str(), pFontDecl) ) {
         
         pFontDecl = new UT_UTF8String();
+        UT_UTF8String name(rFontName);
+        name.escapeXML();
+        UT_UTF8String family(rFontName);
+        const char* raw = family.utf8_str();
+        if (raw && (strchr(raw, ' ') || strchr(raw, ',') || strchr(raw, '\'') || strchr(raw, '"'))) {
+            UT_UTF8String quoted = "'";
+            for (const char* p = raw; *p; ++p) {
+                if (*p == '\'')
+                    quoted += "\\'";
+                else
+                    quoted += *p;
+            }
+            quoted += "'";
+            family = quoted;
+        }
+        family.escapeXML();
         UT_UTF8String_sprintf(*pFontDecl,
             "  <style:font-face style:name=\"%s\" svg:font-family=\"%s\"/>\n",
-            rFontName.utf8_str(),
-            rFontName.utf8_str());
+            name.utf8_str(),
+            family.utf8_str());
         
         // TODO: Do something useful here instead of just this name-family
         //       mapping.

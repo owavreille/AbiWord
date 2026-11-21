@@ -92,6 +92,16 @@ UT_Error IE_Imp_OpenXML::_loadFile (GsfInput * oo_src)
 		UT_DEBUGMSG(("OpenXML import: failed to parse the document endnotes\n"));
 	}
 
+	if (UT_OK != (ret = mgr->parseDocumentComments()))
+	{
+		UT_DEBUGMSG(("OpenXML import: no comments part\n"));
+	}
+
+	if (UT_OK != (ret = mgr->parseDocumentCommentsExtended()))
+	{
+		UT_DEBUGMSG(("OpenXML import: no extended comments part\n"));
+	}
+
 	if (UT_OK != (ret = mgr->parseDocumentTheme()))
 	{
 		UT_DEBUGMSG(("OpenXML import: failed to parse the document theme\n"));

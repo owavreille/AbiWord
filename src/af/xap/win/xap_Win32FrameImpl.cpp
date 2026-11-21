@@ -1066,6 +1066,25 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		} /* switch (((LPNMHDR) lParam)->code) */
 		break;
 
+	case 0x02E0: // WM_DPICHANGED
+	{
+		if (pView)
+		{
+			GR_Win32Graphics * pG = static_cast<GR_Win32Graphics *>(pView->getGraphics());
+			if (pG)
+				pG->refreshDeviceScale();
+		}
+		const RECT * suggested = reinterpret_cast<const RECT *>(lParam);
+		if (suggested)
+		{
+			SetWindowPos(hwnd, nullptr, suggested->left, suggested->top,
+				suggested->right - suggested->left,
+				suggested->bottom - suggested->top,
+				SWP_NOZORDER | SWP_NOACTIVATE);
+		}
+		return 0;
+	}
+
 	case WM_SIZE:
 	{
 		if (s_FrameSizing)

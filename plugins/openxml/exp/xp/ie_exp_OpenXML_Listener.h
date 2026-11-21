@@ -33,12 +33,15 @@
 #include "OXML_Element_Image.h"
 #include "OXML_Element_Hyperlink.h"
 #include "OXML_Element_Bookmark.h"
+#include "OXML_Element_Comment.h"
 #include "OXML_Element_Field.h"
 #include "OXML_Element_TextBox.h"
 #include "OXML_Element_Math.h"
 #include "OXML_List.h"
 #include "OXML_Image.h"
 #include "ie_Table.h"
+
+#include <vector>
 
 class OXML_Document;
 class OXML_Element_Paragraph;
@@ -86,6 +89,7 @@ private:
 	OXML_Element_Hyperlink* hyperlink;
 	OXML_Element_TextBox* textbox;
 
+	std::vector<std::string> m_openCommentIds;
 	bool bInPositionedImage;
 	bool bInHyperlink;
 	bool bInTextbox;

@@ -38,6 +38,7 @@
 #include "gr_Painter.h"
 #include "fp_Run.h"
 #include "fp_AnnotationRun.h"
+#include "ut_string_class.h"
 /*!
   Create Footnote container
   \param iType Container type
@@ -505,6 +506,24 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 		da.yoff = pDA->yoff + pContainer->getY();
 		pContainer->draw(&da);
 	}
+	GR_Graphics* pG = getGraphics();
+	if (pG)
+	{
+		std::string heading;
+		if (pAL2->getAuthor())
+			heading = pAL2->getAuthor();
+		if (pAL2->getDate() && pAL2->getDate()[0])
+		{
+			if (!heading.empty())
+				heading += " ";
+			heading += pAL2->getDate();
+		}
+		if (!heading.empty())
+		{
+			UT_UCS4String text(heading);
+			pG->drawChars(text.ucs4_str(), 0, text.size(), pDA->xoff + getX(), pDA->yoff + getY());
+		}
+	}
 	_drawBoundaries(pDA);
 }
 
@@ -550,7 +569,7 @@ void fp_AnnotationContainer::layout(void)
 {
 	_setMaxContainerHeight(0);
 	UT_sint32 iY = 0, iPrevY = 0;
-	iY= 0;
+	iY = getGraphics() ? getGraphics()->tlu(16) : 16;
 	fl_DocSectionLayout * pDSL = getDocSectionLayout();
 	UT_sint32 iMaxFootHeight = 0;
 	iMaxFootHeight = pDSL->getActualColumnHeight();

@@ -41,6 +41,18 @@ OXML_Element_Paragraph::~OXML_Element_Paragraph()
 UT_Error OXML_Element_Paragraph::serialize(IE_Exp_OpenXML* exporter)
 {
 	UT_Error err = UT_OK;
+	const gchar* sdtId = nullptr;
+	const gchar* sdtAlias = nullptr;
+	const gchar* sdtTag = nullptr;
+	bool contentControl = getAttribute("sdt-id", sdtId) == UT_OK && sdtId && *sdtId;
+	if (contentControl)
+	{
+		getAttribute("sdt-alias", sdtAlias);
+		getAttribute("sdt-tag", sdtTag);
+		err = exporter->startContentControl(TARGET, sdtId, sdtAlias, sdtTag, true);
+		if (err != UT_OK)
+			return err;
+	}
 
 	err = exporter->startParagraph(TARGET);
 	if(err != UT_OK)
@@ -54,7 +66,12 @@ UT_Error OXML_Element_Paragraph::serialize(IE_Exp_OpenXML* exporter)
 	if(err != UT_OK)
 		return err;
 
-	return exporter->finishParagraph(TARGET);
+	err = exporter->finishParagraph(TARGET);
+	if (err != UT_OK)
+		return err;
+	if (contentControl)
+		return exporter->finishContentControl(TARGET);
+	return UT_OK;
 }
 
 UT_Error OXML_Element_Paragraph::serializeChildren(IE_Exp_OpenXML* exporter)

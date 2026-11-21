@@ -51,6 +51,7 @@
 #define TARGET_SETTINGS 8
 #define TARGET_FOOTNOTE 9
 #define TARGET_ENDNOTE 10
+#define TARGET_COMMENT 11
 
 class OXML_Document;
 
@@ -71,11 +72,15 @@ public:
 	UT_Error startParagraph(int target);
 	UT_Error finishParagraph(int target);
 	UT_Error startText(int target);
+	UT_Error startRevision(int target, bool deletion, const char* id);
+	UT_Error finishRevision(int target, bool deletion);
+	UT_Error startContentControl(int target, const char* id, const char* alias, const char* tag, bool block);
+	UT_Error finishContentControl(int target);
 	UT_Error writeText(int target, const UT_UCS4Char* text, bool list);
 	UT_Error finishText(int target);
-	UT_Error startMath();
-	UT_Error writeMath(const char* omml);
-	UT_Error finishMath();
+	UT_Error startMath(int target);
+	UT_Error writeMath(int target, const char* omml);
+	UT_Error finishMath(int target);
 	UT_Error startRun(int target);
 	UT_Error finishRun(int target);
 	UT_Error startRunProperties(int target);
@@ -92,8 +97,8 @@ public:
 	UT_Error finishRunDefaultProperties();
 	UT_Error startParagraphDefaultProperties();
 	UT_Error finishParagraphDefaultProperties();
-	UT_Error startTable();
-	UT_Error finishTable();
+	UT_Error startTable(int target);
+	UT_Error finishTable(int target);
 	UT_Error startTableProperties(int target);
 	UT_Error finishTableProperties(int target);
 	UT_Error startTableBorderProperties(int target);
@@ -114,25 +119,30 @@ public:
 	UT_Error finishNumbering(int target);
 	UT_Error startNumberingLevel(int target, UT_uint32 level);
 	UT_Error finishNumberingLevel(int target);
-	UT_Error startRow();
-	UT_Error finishRow();
+	UT_Error startRow(int target);
+	UT_Error finishRow(int target);
 	UT_Error startRowProperties(int target);
 	UT_Error finishRowProperties(int target);
-	UT_Error startCell();
-	UT_Error finishCell();
+	UT_Error startCell(int target);
+	UT_Error finishCell(int target);
 	UT_Error startTableGrid(int target);
 	UT_Error finishTableGrid(int target);
-	UT_Error startExternalHyperlink(const gchar* id);
-	UT_Error startInternalHyperlink(const gchar* anchor);
+	UT_Error startExternalHyperlink(int target, const gchar* id);
+	UT_Error startInternalHyperlink(int target, const gchar* anchor);
 	UT_Error setHeaderRelation(const char* relId, const char* headerId);
 	UT_Error setFooterRelation(const char* relId, const char* footerId);
-	UT_Error finishHyperlink();
-	UT_Error startBookmark(const gchar* id, const gchar* name);
-	UT_Error finishBookmark(const gchar* id);
+	UT_Error finishHyperlink(int target);
+	UT_Error startBookmark(int target, const gchar* id, const gchar* name);
+	UT_Error finishBookmark(int target, const gchar* id);
 	UT_Error startFootnote(const gchar* id);
 	UT_Error finishFootnote();
 	UT_Error startEndnote(const gchar* id);
 	UT_Error finishEndnote();
+	UT_Error startComment(const char* id, class OXML_Section* section);
+	UT_Error finishComment(class OXML_Section* section);
+	UT_Error startCommentRange(int target, const char* id);
+	UT_Error finishCommentRange(int target, const char* id);
+	void setNextParagraphParaId(const char* id);
 	UT_Error setBold(int target);
 	UT_Error setItalic(int target);
 	UT_Error setUnderline(int target);
@@ -177,9 +187,9 @@ public:
 	UT_Error setSimpleField(int target, const char* instr, const char* value);
 	UT_Error setHeaderReference(const char* id, const char* type);
 	UT_Error setFooterReference(const char* id, const char* type);
-	UT_Error setFootnoteReference(const char* id);
+	UT_Error setFootnoteReference(int target, const char* id);
 	UT_Error setFootnoteRef();
-	UT_Error setEndnoteReference(const char* id);
+	UT_Error setEndnoteReference(int target, const char* id);
 	UT_Error setEndnoteRef();
 	UT_Error startHeaderStream(const char* id);
 	UT_Error finishHeaderStream();
@@ -219,9 +229,15 @@ private:
 	GsfOutput* footerStream; //word/footerXX.xml
 	GsfOutput* footnoteStream; //word/footnotes.xml
 	GsfOutput* endnoteStream; //word/endnotes.xml
+	GsfOutput* commentStream; //word/comments.xml
+	std::string m_commentEx;
+	std::string m_nextParaId;
 	std::map<std::string, GsfOutput*> mediaStreams; // all image filename, stream pairs
 	std::map<std::string, GsfOutput*> headerStreams; //all header id, stream pairs
 	std::map<std::string, GsfOutput*> footerStreams; //all footer id, stream pairs
+	std::map<std::string, std::string> m_partRelations;
+	std::string m_currentHeaderId;
+	std::string m_currentFooterId;
 
 	bool isOverline;
 	std::string m_pendingInd;
@@ -286,6 +302,7 @@ private:
 	UT_Error startSettings();
 	UT_Error startFootnotes();
 	UT_Error startEndnotes();
+	UT_Error startComments();
 	UT_Error finishNumbering();
 	UT_Error finishStyles();
 	UT_Error finishContentTypes();
@@ -298,6 +315,7 @@ private:
 	UT_Error finishSettings();
 	UT_Error finishFootnotes();
 	UT_Error finishEndnotes();
+	UT_Error finishComments();
 	UT_Error writeXmlHeader(GsfOutput* file);
 
 	const gchar* convertToPoints(const gchar* str);

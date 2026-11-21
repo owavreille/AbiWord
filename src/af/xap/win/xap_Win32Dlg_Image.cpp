@@ -18,6 +18,7 @@
  */
 
 #include <windows.h>
+#include <stdio.h>
 
 #include "ut_string.h"
 #include "ut_assert.h"
@@ -100,6 +101,15 @@ BOOL XAP_Win32Dialog_Image::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 	_DS(IMAGE_LBL_TYPE,			DLG_Image_WrapType);
 	_DS(IMAGE_RADIO_SQUARE,			DLG_Image_SquareWrap);
 	_DS(IMAGE_RADIO_TIGHT,			DLG_Image_TightWrap);
+	_DS(IMAGE_LBL_ADJUST,			DLG_Image_Adjust);
+	_DS(IMAGE_LBL_OPACITY,			DLG_Image_Opacity);
+	_DS(IMAGE_LBL_BRIGHTNESS,			DLG_Image_Brightness);
+	_DS(IMAGE_LBL_CROP,			DLG_Image_Crop);
+	_DS(IMAGE_LBL_CROP_TOP,			DLG_Image_CropTop);
+	_DS(IMAGE_LBL_CROP_BOTTOM,			DLG_Image_CropBottom);
+	_DS(IMAGE_LBL_CROP_LEFT,			DLG_Image_CropLeft);
+	_DS(IMAGE_LBL_CROP_RIGHT,			DLG_Image_CropRight);
+	_DS(IMAGE_LBL_CROP_UNIT,			DLG_Image_CropUnit);
 
 	// Initialize controls
 	setControlText( XAP_RID_DIALOG_IMAGE_EBX_HEIGHT, getHeightString() );
@@ -107,6 +117,19 @@ BOOL XAP_Win32Dialog_Image::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 	setControlText(XAP_RID_DIALOG_IMAGE_EBX_TITLE, getTitle().utf8_str());
 	setControlText(XAP_RID_DIALOG_IMAGE_EBX_DESCRIPTION, getDescription().utf8_str());
 	checkButton( XAP_RID_DIALOG_IMAGE_CHK_ASPECT, getPreserveAspect());
+	char number[16];
+	snprintf(number, sizeof(number), "%d", getOpacity());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_OPACITY, number);
+	snprintf(number, sizeof(number), "%d", getBrightness());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_BRIGHTNESS, number);
+	snprintf(number, sizeof(number), "%d", getCropTop());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_TOP, number);
+	snprintf(number, sizeof(number), "%d", getCropBottom());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_BOTTOM, number);
+	snprintf(number, sizeof(number), "%d", getCropLeft());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_LEFT, number);
+	snprintf(number, sizeof(number), "%d", getCropRight());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_RIGHT, number);
 
 	// Initialize text wrapping radio buttons
 	if(getWrapping() == WRAP_INLINE)
@@ -236,6 +259,20 @@ BOOL XAP_Win32Dialog_Image::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 		getControlText(XAP_RID_DIALOG_IMAGE_EBX_DESCRIPTION,buf,BUFSIZE);
 		setDescription(buf);
 
+		UT_Win32LocaleString number;
+		getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_OPACITY, number);
+		setOpacity(atoi(number.utf8_str().utf8_str()));
+		getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_BRIGHTNESS, number);
+		setBrightness(atoi(number.utf8_str().utf8_str()));
+		getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_TOP, number);
+		setCropTop(atoi(number.utf8_str().utf8_str()));
+		getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_BOTTOM, number);
+		setCropBottom(atoi(number.utf8_str().utf8_str()));
+		getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_LEFT, number);
+		setCropLeft(atoi(number.utf8_str().utf8_str()));
+		getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_RIGHT, number);
+		setCropRight(atoi(number.utf8_str().utf8_str()));
+
 		setAnswer( a_OK );
 		EndDialog(hWnd,0);
 		return 1;
@@ -293,6 +330,20 @@ BOOL XAP_Win32Dialog_Image::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 
 BOOL XAP_Win32Dialog_Image::_onDeltaPos(NM_UPDOWN * pnmud)
 {
+	UT_Win32LocaleString numberText;
+	getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_OPACITY, numberText);
+	setOpacity(atoi(numberText.utf8_str().utf8_str()));
+	getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_BRIGHTNESS, numberText);
+	setBrightness(atoi(numberText.utf8_str().utf8_str()));
+	getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_TOP, numberText);
+	setCropTop(atoi(numberText.utf8_str().utf8_str()));
+	getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_BOTTOM, numberText);
+	setCropBottom(atoi(numberText.utf8_str().utf8_str()));
+	getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_LEFT, numberText);
+	setCropLeft(atoi(numberText.utf8_str().utf8_str()));
+	getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_RIGHT, numberText);
+	setCropRight(atoi(numberText.utf8_str().utf8_str()));
+
 	switch( pnmud->hdr.idFrom )
 	{
 	case XAP_RID_DIALOG_IMAGE_SPN_WIDTH:
@@ -321,9 +372,43 @@ BOOL XAP_Win32Dialog_Image::_onDeltaPos(NM_UPDOWN * pnmud)
 		setControlText( XAP_RID_DIALOG_IMAGE_EBX_WIDTH, getWidthString() );
 		return 1;
 
+	case XAP_RID_DIALOG_IMAGE_SPN_OPACITY:
+		stepOpacity(pnmud->iDelta > 0);
+		break;
+	case XAP_RID_DIALOG_IMAGE_SPN_BRIGHTNESS:
+		stepBrightness(pnmud->iDelta > 0);
+		break;
+	case XAP_RID_DIALOG_IMAGE_SPN_CROP_TOP:
+		stepCropTop(pnmud->iDelta > 0);
+		break;
+	case XAP_RID_DIALOG_IMAGE_SPN_CROP_BOTTOM:
+		stepCropBottom(pnmud->iDelta > 0);
+		break;
+	case XAP_RID_DIALOG_IMAGE_SPN_CROP_LEFT:
+		stepCropLeft(pnmud->iDelta > 0);
+		break;
+	case XAP_RID_DIALOG_IMAGE_SPN_CROP_RIGHT:
+		stepCropRight(pnmud->iDelta > 0);
+		break;
+
 	default:
 		return 0;
 	}
+
+	char number[16];
+	snprintf(number, sizeof(number), "%d", getOpacity());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_OPACITY, number);
+	snprintf(number, sizeof(number), "%d", getBrightness());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_BRIGHTNESS, number);
+	snprintf(number, sizeof(number), "%d", getCropTop());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_TOP, number);
+	snprintf(number, sizeof(number), "%d", getCropBottom());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_BOTTOM, number);
+	snprintf(number, sizeof(number), "%d", getCropLeft());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_LEFT, number);
+	snprintf(number, sizeof(number), "%d", getCropRight());
+	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_RIGHT, number);
+	return 1;
 }
 
 void XAP_Win32Dialog_Image::wrappingChanged(void)

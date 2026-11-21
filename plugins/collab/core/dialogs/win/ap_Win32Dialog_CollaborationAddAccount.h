@@ -37,8 +37,8 @@ public:
 	AP_Win32Dialog_CollaborationAddAccount(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	static XAP_Dialog * 		static_constructor(XAP_DialogFactory * pFactory, XAP_Dialog_Id id);
 
-	void						runModal(XAP_Frame * pFrame);
-	static BOOL CALLBACK		s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	void						runModal(XAP_Frame * pFrame) override;
+	static INT_PTR CALLBACK		s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	static LRESULT CALLBACK		s_detailsProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -51,8 +51,8 @@ public:
 protected:
 	XAP_Win32DialogHelper *		m_pWin32Dialog;
 
-	virtual void*				_getEmbeddingParent();
-	virtual AccountHandler*		_getActiveAccountHandler();
+	void*						_getEmbeddingParent() override;
+	AccountHandler*				_getActiveAccountHandler();
 
 	// Handles
 	HINSTANCE 					m_hInstance;

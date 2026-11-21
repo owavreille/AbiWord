@@ -28,6 +28,7 @@
 #include "OXMLi_PackageManager.h"
 #include "OXML_Document.h"
 #include "OXML_Element.h"
+#include "OXML_Element_Comment.h"
 #include "OXML_Element_Run.h"
 #include "OXML_Element_Text.h"
 #include "OXML_Element_Field.h"
@@ -45,6 +46,7 @@
 
 // External includes
 #include <cstring>
+#include <cstdio>
 
 OXMLi_ListenerState_Common::OXMLi_ListenerState_Common() : 
 	OXMLi_ListenerState(), 
@@ -52,9 +54,31 @@ OXMLi_ListenerState_Common::OXMLi_ListenerState_Common() :
 	m_pendingSectBreakType(NEXTPAGE_BREAK),
 	m_eqField(false),
 	m_pageNumberField(false),
-	m_fldChar(false)
+	m_fldChar(false),
+	m_nextRevision(0),
+	m_nextControl(0)
 {
 
+}
+
+void OXMLi_ListenerState_Common::_applyRevision(OXML_Element* elem)
+{
+	if (elem && !m_revisions.empty())
+		elem->setAttribute("revision", m_revisions.top().token.c_str());
+}
+
+void OXMLi_ListenerState_Common::_applyControl(OXML_Element* elem, bool block)
+{
+	if (!elem || m_controls.empty())
+		return;
+	const OXMLi_ContentControl& ctrl = m_controls.top();
+	if (!ctrl.inContent || ctrl.block != block || ctrl.id.empty())
+		return;
+	elem->setAttribute("sdt-id", ctrl.id.c_str());
+	if (!ctrl.alias.empty())
+		elem->setAttribute("sdt-alias", ctrl.alias.c_str());
+	if (!ctrl.tag.empty())
+		elem->setAttribute("sdt-tag", ctrl.tag.c_str());
 }
 
 OXMLi_ListenerState_Common::~OXMLi_ListenerState_Common()
@@ -90,25 +114,91 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 	} else if(nameMatches(rqst->pName, NS_W_KEY, "p")) {
 		//New paragraph...
 		OXML_SharedElement elem(new OXML_Element_Paragraph(""));
+		_applyControl(elem.get(), true);
 		rqst->stck->push(elem);
 
 		rqst->handled = true;
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "r")) {
 		//New text run...
 		OXML_SharedElement elem(new OXML_Element_Run(""));
+		_applyRevision(elem.get());
+		_applyControl(elem.get(), false);
 		rqst->stck->push(elem);
 
 		rqst->handled = true;
 
-	} else if (nameMatches(rqst->pName, NS_W_KEY, "t")) {
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "t") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "delText")) {
 		if(m_fldChar && m_pageNumberField) // page number is already set with field element correctly.
 		{
 			rqst->handled = true;
 			return;
 		}
 		//New text...
+		if (!rqst->stck->empty())
+			_applyRevision(rqst->stck->top().get());
 		OXML_SharedElement elem(new OXML_Element_Text("", 0));
+		_applyRevision(elem.get());
 		rqst->stck->push(elem);
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "ins") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "del") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "moveTo") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "moveFrom")) {
+		const bool deletion = nameMatches(rqst->pName, NS_W_KEY, "del") ||
+			nameMatches(rqst->pName, NS_W_KEY, "moveFrom");
+		const gchar* id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
+		OXMLi_RevisionMark mark;
+		mark.token = deletion ? "-" : "+";
+		if (id && *id)
+			mark.token += id;
+		else
+		{
+			char buf[16];
+			snprintf(buf, sizeof buf, "%d", ++m_nextRevision);
+			mark.token += buf;
+		}
+		m_revisions.push(mark);
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "sdt")) {
+		OXMLi_ContentControl ctrl;
+		ctrl.inProperties = false;
+		ctrl.inContent = false;
+		char buf[16];
+		snprintf(buf, sizeof buf, "%d", ++m_nextControl);
+		ctrl.id = buf;
+		std::string parent = rqst->context->empty() ? std::string() : rqst->context->back();
+		ctrl.block = !(contextMatches(parent, NS_W_KEY, "p") ||
+			contextMatches(parent, NS_W_KEY, "hyperlink") ||
+			contextMatches(parent, NS_W_KEY, "ins") ||
+			contextMatches(parent, NS_W_KEY, "del") ||
+			contextMatches(parent, NS_W_KEY, "moveTo") ||
+			contextMatches(parent, NS_W_KEY, "moveFrom") ||
+			contextMatches(parent, NS_W_KEY, "sdtContent"));
+		m_controls.push(ctrl);
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "sdtPr")) {
+		if (!m_controls.empty())
+			m_controls.top().inProperties = true;
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "sdtContent")) {
+		if (!m_controls.empty())
+			m_controls.top().inContent = true;
+		rqst->handled = true;
+	} else if (!m_controls.empty() && m_controls.top().inProperties &&
+			   (nameMatches(rqst->pName, NS_W_KEY, "alias") ||
+			    nameMatches(rqst->pName, NS_W_KEY, "tag") ||
+			    nameMatches(rqst->pName, NS_W_KEY, "id"))) {
+		const gchar* val = attrMatches(NS_W_KEY, "val", rqst->ppAtts);
+		if (val)
+		{
+			if (nameMatches(rqst->pName, NS_W_KEY, "alias"))
+				m_controls.top().alias = val;
+			else if (nameMatches(rqst->pName, NS_W_KEY, "tag"))
+				m_controls.top().tag = val;
+			else
+				m_controls.top().id = val;
+		}
 		rqst->handled = true;
 
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "sectPr")) {
@@ -734,6 +824,27 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 		}
 		rqst->handled = true;
 
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "commentRangeStart")
+		|| nameMatches(rqst->pName, NS_W_KEY, "commentReference")) {
+		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
+		if (id)
+		{
+			OXML_Element_Comment* comment = new OXML_Element_Comment(id);
+			comment->setType(nameMatches(rqst->pName, NS_W_KEY, "commentRangeStart") ? "start" : "reference");
+			OXML_SharedElement elem(comment);
+			rqst->stck->push(elem);
+		}
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "commentRangeEnd")) {
+		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
+		if (id)
+		{
+			OXML_Element_Comment* comment = new OXML_Element_Comment(id);
+			comment->setType("end");
+			OXML_SharedElement elem(comment);
+			rqst->stck->push(elem);
+		}
+		rqst->handled = true;
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "bookmarkEnd")) {
 		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
 		if(id)
@@ -805,7 +916,27 @@ void OXMLi_ListenerState_Common::endElement (OXMLi_EndElementRequest * rqst)
 		UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );
 
 		rqst->handled = true;
-	} else if (nameMatches(rqst->pName, NS_W_KEY, "t")) {
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "ins") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "del") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "moveTo") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "moveFrom")) {
+		if (!m_revisions.empty())
+			m_revisions.pop();
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "sdt")) {
+		if (!m_controls.empty())
+			m_controls.pop();
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "sdtPr")) {
+		if (!m_controls.empty())
+			m_controls.top().inProperties = false;
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "sdtContent")) {
+		if (!m_controls.empty())
+			m_controls.top().inContent = false;
+		rqst->handled = true;
+	} else if (nameMatches(rqst->pName, NS_W_KEY, "t") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "delText")) {
 		if(m_fldChar && m_pageNumberField) // page number is already set with field element correctly.
 		{
 			rqst->handled = true;
@@ -886,7 +1017,10 @@ void OXMLi_ListenerState_Common::endElement (OXMLi_EndElementRequest * rqst)
 		UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );
 		rqst->handled = true;
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "bookmarkStart") ||
-				nameMatches(rqst->pName, NS_W_KEY, "bookmarkEnd")) {
+				nameMatches(rqst->pName, NS_W_KEY, "bookmarkEnd") ||
+				nameMatches(rqst->pName, NS_W_KEY, "commentRangeStart") ||
+				nameMatches(rqst->pName, NS_W_KEY, "commentRangeEnd") ||
+				nameMatches(rqst->pName, NS_W_KEY, "commentReference")) {
 		UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );
 		rqst->handled = true;		
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "pageBreakBefore")) {

@@ -118,6 +118,25 @@ public:
 		return m_description;
 	}
 
+	void setOpacity(int opacity);
+	void setBrightness(int brightness);
+	void setCropLeft(int percent);
+	void setCropRight(int percent);
+	void setCropTop(int percent);
+	void setCropBottom(int percent);
+	int getOpacity() const { return m_opacity; }
+	int getBrightness() const { return m_brightness; }
+	int getCropLeft() const { return m_cropLeft; }
+	int getCropRight() const { return m_cropRight; }
+	int getCropTop() const { return m_cropTop; }
+	int getCropBottom() const { return m_cropBottom; }
+	void stepOpacity(bool up);
+	void stepBrightness(bool up);
+	void stepCropLeft(bool up);
+	void stepCropRight(bool up);
+	void stepCropTop(bool up);
+	void stepCropBottom(bool up);
+
 
  protected:
 	void setAnswer ( tAnswer ans ) { m_answer = ans; }
@@ -147,4 +166,10 @@ public:
 	POSITION_TO m_iPositionTo;
 	bool m_bInHdrFtr;
 	bool m_bTightWrap;
+	int m_opacity;
+	int m_brightness;
+	int m_cropLeft;
+	int m_cropRight;
+	int m_cropTop;
+	int m_cropBottom;
 };

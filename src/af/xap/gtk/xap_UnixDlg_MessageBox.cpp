@@ -83,17 +83,17 @@ void XAP_UnixDialog_MessageBox::runModal(XAP_Frame * pFrame)
     {
     case b_O:
 	// just put up an information box
-        message = gtk_message_dialog_new(toplevel, dflFlags,
-                                         GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
-                                         "%s", m_message.c_str());
+        message = abiMessageDialogNew(toplevel, dflFlags,
+                                      GTK_MESSAGE_INFO, GTK_BUTTONS_OK,
+                                      m_message.c_str());
 	break;
 
     case b_YN:
 	// YES - NO - most certainly a question
-        message = gtk_message_dialog_new(toplevel, dflFlags,
-                                         GTK_MESSAGE_QUESTION,
-                                         GTK_BUTTONS_YES_NO,
-                                         "%s", m_message.c_str());
+        message = abiMessageDialogNew(toplevel, dflFlags,
+                                      GTK_MESSAGE_QUESTION,
+                                      GTK_BUTTONS_YES_NO,
+                                      m_message.c_str());
 	if (m_defaultAnswer == XAP_Dialog_MessageBox::a_YES) {
 	    gtk_dialog_set_default_response(GTK_DIALOG(message), GTK_RESPONSE_YES);
 	} else {
@@ -105,9 +105,9 @@ void XAP_UnixDialog_MessageBox::runModal(XAP_Frame * pFrame)
     {
 	// YES - NO - CANCEL
 	// this is only used for saving files.
-        message = gtk_message_dialog_new(toplevel, dflFlags,
-                                         GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
-                                         "%s", m_message.c_str());
+        message = abiMessageDialogNew(toplevel, dflFlags,
+                                      GTK_MESSAGE_QUESTION, GTK_BUTTONS_NONE,
+                                      m_message.c_str());
 
         std::string no, cancel, save;
         const XAP_StringSet * pSS = pApp->getStringSet();

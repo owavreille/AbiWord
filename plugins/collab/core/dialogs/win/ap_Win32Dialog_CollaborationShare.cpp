@@ -30,7 +30,7 @@
 
 #include "ap_Win32Dialog_CollaborationShare.h"
 
-BOOL CALLBACK AP_Win32Dialog_CollaborationShare::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK AP_Win32Dialog_CollaborationShare::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	AP_Win32Dialog_CollaborationShare * pThis;
 	switch (msg)
@@ -94,7 +94,7 @@ void AP_Win32Dialog_CollaborationShare::runModal(XAP_Frame * pFrame)
 	
 	int result = DialogBoxParam( m_hInstance, lpTemplate,
 		static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
-		(DLGPROC)s_dlgProc, (LPARAM)this );
+		s_dlgProc, (LPARAM)this );
 	switch (result) {
 	case 0:
 		// MSDN: If the function fails because the hWndParent parameter is invalid, the return value is zero.
@@ -111,7 +111,7 @@ void AP_Win32Dialog_CollaborationShare::runModal(XAP_Frame * pFrame)
 
 /*****************************************************************/
 
-BOOL AP_Win32Dialog_CollaborationShare::_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationShare::_onInitDialog(HWND hWnd, WPARAM, LPARAM)
 {
 	// Set up common controls
 	INITCOMMONCONTROLSEX icc;
@@ -147,7 +147,7 @@ BOOL AP_Win32Dialog_CollaborationShare::_onInitDialog(HWND hWnd, WPARAM wParam, 
 	return true;
 }
 
-BOOL AP_Win32Dialog_CollaborationShare::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationShare::_onCommand(HWND hWnd, WPARAM wParam, LPARAM)
 {
 	WORD wNotifyCode = HIWORD(wParam);
 	WORD wId = LOWORD(wParam);
@@ -213,7 +213,9 @@ void AP_Win32Dialog_CollaborationShare::_populateWindowData()
 				m_vAccountCombo.insert(m_vAccountCombo.begin()+index, pAccount);
 			}
 			else
+			{
 				UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+			}
 		}
 		EnableWindow(m_hAccountCombo, true);
 	}
@@ -301,9 +303,9 @@ AccountHandler* AP_Win32Dialog_CollaborationShare::_getActiveAccountHandler()
 	return m_vAccountCombo[index];
 }
 
-void AP_Win32Dialog_CollaborationShare::_setAccountHint(const UT_UTF8String& sHint)
+void AP_Win32Dialog_CollaborationShare::_setAccountHint(const UT_UTF8String&)
 {
-	UT_DEBUGMSG(("AP_Win32Dialog_CollaborationShare::_setAccountHint() - sHint: %s\n", sHint.utf8_str()));
+	UT_DEBUGMSG(("AP_Win32Dialog_CollaborationShare::_setAccountHint()\n"));
 
 	UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED);
 }

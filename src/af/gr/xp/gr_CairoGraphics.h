@@ -84,6 +84,7 @@ class GR_CairoRasterImage
 public:
 	virtual GR_Image * createImageSegment(GR_Graphics * pG,const UT_Rect & rec) override;
 	virtual void cairoSetSource(cairo_t *) = 0;
+	virtual cairo_surface_t* getCairoSurface() const { return nullptr; }
 protected:
 	// called by createImageSegment()
 	virtual GR_CairoRasterImage *makeSubimage(const std::string & n,
@@ -252,6 +253,7 @@ public:
 	virtual void polygon(const UT_RGBColor& c, const UT_Point *pts, UT_uint32 nPoints) override;
 	virtual void clearArea(UT_sint32, UT_sint32, UT_sint32, UT_sint32) override;
 	virtual void drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest) override;
+	virtual void drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest, const GR_ImageTune& tune) override;
 	virtual void xorLine(UT_sint32, UT_sint32, UT_sint32, UT_sint32) override;
 	virtual void polyLine(const UT_Point * pts, UT_uint32 nPoints) override;
 	virtual void fillRect(const UT_RGBColor& c,

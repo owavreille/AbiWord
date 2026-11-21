@@ -475,13 +475,38 @@ void abiSetupModelessDialog(GtkDialog * me, XAP_Frame * pFrame, XAP_Dialog * pDl
  */
 GtkWidget * abiDialogNew(const char * role, gboolean resizable)
 {
-  GtkWidget * dlg = gtk_dialog_new () ;
+#if GTK_CHECK_VERSION(3, 12, 0)
+  GtkWidget * dlg = GTK_WIDGET(g_object_new(GTK_TYPE_DIALOG,
+                                            "use-header-bar", TRUE,
+                                            nullptr));
+#else
+  GtkWidget * dlg = gtk_dialog_new();
+#endif
   if ( role )
     gtk_window_set_role ( GTK_WINDOW(dlg), role ) ;
   gtk_window_set_resizable ( GTK_WINDOW(dlg), resizable ) ;
-  XAP_gtk_widget_set_margin(dlg, 5);
-  gtk_box_set_spacing ( GTK_BOX ( gtk_dialog_get_content_area(GTK_DIALOG (dlg))), 2 ) ;
+  GtkWidget * content = gtk_dialog_get_content_area(GTK_DIALOG(dlg));
+  XAP_gtk_widget_set_margin(content, 12);
+  gtk_box_set_spacing ( GTK_BOX(content), 6 ) ;
   return dlg ;
+}
+
+GtkWidget * abiMessageDialogNew(GtkWindow * parent, GtkDialogFlags flags,
+	GtkMessageType type, GtkButtonsType buttons, const char * text)
+{
+#if GTK_CHECK_VERSION(3, 12, 0)
+  return GTK_WIDGET(g_object_new(GTK_TYPE_MESSAGE_DIALOG,
+                                 "use-header-bar", TRUE,
+                                 "message-type", type,
+                                 "buttons", buttons,
+                                 "text", text ? text : "",
+                                 "modal", (flags & GTK_DIALOG_MODAL) != 0,
+                                 "destroy-with-parent", (flags & GTK_DIALOG_DESTROY_WITH_PARENT) != 0,
+                                 "transient-for", parent,
+                                 nullptr));
+#else
+  return gtk_message_dialog_new(parent, flags, type, buttons, "%s", text ? text : "");
+#endif
 }
 
 /*!
@@ -731,11 +756,8 @@ void setLabelMarkup(GtkWidget * widget, const gchar * str)
  */
 void messageBoxOK(const char * message)
 {
-	GtkWidget * msg = gtk_message_dialog_new ( nullptr,
-						   GTK_DIALOG_MODAL,
-						   GTK_MESSAGE_INFO,
-						   GTK_BUTTONS_OK,
-						   "%s", message ) ;
+	GtkWidget * msg = abiMessageDialogNew(nullptr, GTK_DIALOG_MODAL,
+					      GTK_MESSAGE_INFO, GTK_BUTTONS_OK, message);
 
 	gtk_window_set_title(GTK_WINDOW(msg), "AbiWord");
 	gtk_window_set_role(GTK_WINDOW(msg), "message dialog");

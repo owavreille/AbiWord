@@ -166,6 +166,7 @@ bool UT_getEthernetAddress(UT_EthernetAddress &A)
 		int ret;
 		int dtmp;
 		int j = 0;
+		UT_UNUSED(j);
 		bool bFound = false;
 
 		/* Load the SNMP dll and get the addresses of the functions

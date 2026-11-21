@@ -39,12 +39,12 @@ public:
 	static AccountHandler*					static_constructor();
 
 	// dialog management
-	virtual void							embedDialogWidgets(void* pEmbeddingParent);
-	virtual void							removeDialogWidgets(void* pEmbeddingParent);
-	virtual void							loadProperties();
-	virtual void							storeProperties();
-	virtual BOOL							_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
-	virtual bool							shouldProcessFocus();
+	void									embedDialogWidgets(void* pEmbeddingParent) override;
+	void									removeDialogWidgets(void* pEmbeddingParent) override;
+	void									loadProperties() override;
+	void									storeProperties() override;
+	BOOL									_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
+	bool									shouldProcessFocus() override;
 
 private:
 	XAP_Win32DialogHelper *					m_pWin32Dialog;

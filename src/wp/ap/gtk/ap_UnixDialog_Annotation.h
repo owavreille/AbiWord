@@ -51,6 +51,10 @@ class AP_UnixDialog_Annotation: public AP_Dialog_Annotation
 	GtkWidget * m_entryTitle;
 	GtkWidget * m_entryAuthor;
 	GtkWidget * m_textDescription;
+	GtkWidget * m_comboReply;
+	GtkWidget * m_checkResolved;
+
+	void _grabReplyAndResolved();
 };
 
 #endif /* AP_UNIXDIALOG_ANNOTATION_H */

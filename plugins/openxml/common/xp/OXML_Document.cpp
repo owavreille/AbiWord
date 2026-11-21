@@ -26,6 +26,9 @@
 #include "pd_Document.h"
 
 #include "OXML_Document.h"
+
+#include <stdio.h>
+#include <stdlib.h>
 #include "OXML_Section.h"
 #include "OXML_Style.h"
 #include "OXML_Types.h"
@@ -69,6 +72,7 @@ OXML_Document::OXML_Document()
 	clearSections();
 	clearFootnotes();
 	clearEndnotes();
+	clearComments();
 }
 
 OXML_Document::~OXML_Document()
@@ -79,6 +83,7 @@ OXML_Document::~OXML_Document()
 	clearSections();
 	clearFootnotes();
 	clearEndnotes();
+	clearComments();
 }
 
 OXML_SharedStyle OXML_Document::getStyleById(const std::string & id) const
@@ -278,6 +283,59 @@ UT_Error OXML_Document::addEndnote(const OXML_SharedSection & obj)
 
 	m_endnotes[obj->getId()] = obj;
 	return UT_OK;
+}
+
+OXML_SharedSection OXML_Document::getComment(const std::string & id) const
+{
+	OXML_SectionMap::const_iterator it = m_comments.find(id);
+	return it != m_comments.end() ? it->second : OXML_SharedSection();
+}
+
+UT_Error OXML_Document::addComment(const OXML_SharedSection & obj)
+{
+	UT_return_val_if_fail(obj, UT_ERROR);
+	m_comments[obj->getId()] = obj;
+	return UT_OK;
+}
+
+UT_Error OXML_Document::clearComments()
+{
+	m_comments.clear();
+	m_openComments.clear();
+	return UT_OK;
+}
+
+void OXML_Document::markCommentOpened(const std::string & id)
+{
+	m_openComments.insert(id);
+}
+
+bool OXML_Document::wasCommentOpened(const std::string & id) const
+{
+	return m_openComments.find(id) != m_openComments.end();
+}
+
+void OXML_Document::setCommentExtra(const std::string & paraId, const std::string & parentParaId, const std::string & done)
+{
+	if (paraId.empty())
+		return;
+	std::string id;
+	std::string parentId;
+	for (OXML_SectionMap::iterator it = m_comments.begin(); it != m_comments.end(); ++it)
+	{
+		const gchar* stored = nullptr;
+		if (it->second->getAttribute("para-id", stored) == UT_OK && stored && paraId == stored)
+			id = it->first;
+		if (!parentParaId.empty() && it->second->getAttribute("para-id", stored) == UT_OK && stored && parentParaId == stored)
+			parentId = it->first;
+	}
+	OXML_SharedSection comment = getComment(id);
+	if (!comment)
+		return;
+	if (!parentId.empty())
+		comment->setAttribute("annotation-parent", parentId.c_str());
+	if (done == "1" || done == "true" || done == "on")
+		comment->setAttribute("annotation-resolved", "1");
 }
 
 UT_Error OXML_Document::clearEndnotes()
@@ -540,6 +598,25 @@ UT_Error OXML_Document::serialize(IE_Exp_OpenXML* exporter)
 	OXML_SectionMap::iterator it8;
 	for (it8 = m_endnotes.begin(); it8 != m_endnotes.end(); it8++) {
 		ret = it8->second->serializeEndnote(exporter);
+		if (ret != UT_OK)
+			return ret;
+	}
+
+	OXML_SectionMap::iterator it9;
+	for (it9 = m_comments.begin(); it9 != m_comments.end(); it9++) {
+		const gchar* stored = nullptr;
+		if (it9->second->getAttribute("para-id", stored) != UT_OK || !stored || !*stored)
+		{
+			unsigned long value = strtoul(it9->first.c_str(), nullptr, 10);
+			if (!value)
+				value = 1;
+			char buf[16];
+			snprintf(buf, sizeof(buf), "%08lX", value & 0xfffffffful);
+			it9->second->setAttribute("para-id", buf);
+		}
+	}
+	for (it9 = m_comments.begin(); it9 != m_comments.end(); it9++) {
+		ret = it9->second->serializeComment(exporter);
 		if (ret != UT_OK)
 			return ret;
 	}

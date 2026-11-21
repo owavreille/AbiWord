@@ -92,6 +92,9 @@ public:
     // Any RDF that is generated during the save that should be stored into the
     // ODT file and then thrown away.
     PD_RDFModelHandle m_additionalRDF;
+
+    UT_UTF8String m_trackedChangeRegions;
+    unsigned int m_nextTrackedChange = 0;
 };
 
 #endif /*ODE_AUXILIARYDATA_H_*/

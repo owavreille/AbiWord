@@ -55,7 +55,13 @@ XAP_Dialog * AP_UnixDialog_Annotation::static_constructor(XAP_DialogFactory * pF
 
 AP_UnixDialog_Annotation::AP_UnixDialog_Annotation(XAP_DialogFactory * pDlgFactory,
 										 XAP_Dialog_Id id)
-	: AP_Dialog_Annotation(pDlgFactory,id)
+	: AP_Dialog_Annotation(pDlgFactory,id),
+	  m_windowMain(nullptr),
+	  m_entryTitle(nullptr),
+	  m_entryAuthor(nullptr),
+	  m_textDescription(nullptr),
+	  m_comboReply(nullptr),
+	  m_checkResolved(nullptr)
 {
 }
 
@@ -121,6 +127,7 @@ void AP_UnixDialog_Annotation::eventOK ()
 		setDescription ( editable_txt ) ;
 	}
 	g_free(editable_txt);
+	_grabReplyAndResolved();
 }
 
 void AP_UnixDialog_Annotation::eventApply ()
@@ -146,6 +153,14 @@ void AP_UnixDialog_Annotation::eventApply ()
 		setDescription ( editable_txt ) ;
 		g_free(editable_txt);
 	}
+	_grabReplyAndResolved();
+}
+
+void AP_UnixDialog_Annotation::_grabReplyAndResolved()
+{
+	const gchar* parent = gtk_combo_box_get_active_id(GTK_COMBO_BOX(m_comboReply));
+	setParent(parent ? parent : "");
+	setResolved(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(m_checkResolved)) ? "1" : "0");
 }
 
 #undef GRAB_ENTRY_TEXT
@@ -164,6 +179,8 @@ GtkWidget * AP_UnixDialog_Annotation::_constructWindow ()
 	m_entryTitle = GTK_WIDGET(gtk_builder_get_object(builder, "enTitle"));
 	m_entryAuthor = GTK_WIDGET(gtk_builder_get_object(builder, "enAuthor"));
 	m_textDescription = GTK_WIDGET(gtk_builder_get_object(builder, "tvDescription"));
+	m_comboReply = GTK_WIDGET(gtk_builder_get_object(builder, "cbReply"));
+	m_checkResolved = GTK_WIDGET(gtk_builder_get_object(builder, "cbResolved"));
 	
 	// set the dialog title
 	std::string s;
@@ -174,6 +191,9 @@ GtkWidget * AP_UnixDialog_Annotation::_constructWindow ()
 	localizeLabel(GTK_WIDGET(gtk_builder_get_object(builder, "lbTitle")), pSS, AP_STRING_ID_DLG_Annotation_Title_LBL);
 	localizeLabel(GTK_WIDGET(gtk_builder_get_object(builder, "lbAuthor")), pSS, AP_STRING_ID_DLG_Annotation_Author_LBL);
 	localizeLabel(GTK_WIDGET(gtk_builder_get_object(builder, "lbDescription")), pSS, AP_STRING_ID_DLG_Annotation_Description_LBL);
+	localizeLabel(GTK_WIDGET(gtk_builder_get_object(builder, "lbReply")), pSS, AP_STRING_ID_DLG_Annotation_Reply_LBL);
+	pSS->getValueUTF8(AP_STRING_ID_DLG_Annotation_Resolved_LBL, s);
+	gtk_button_set_label(GTK_BUTTON(m_checkResolved), s.c_str());
 	
 	// signals
 	g_signal_connect(G_OBJECT(m_entryTitle), "focus-out-event", G_CALLBACK(s_focus_out), static_cast<gpointer>(this));
@@ -203,6 +223,14 @@ GtkWidget * AP_UnixDialog_Annotation::_constructWindow ()
 	
 	#undef SET_ENTRY_TXT
 	
+	gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(m_comboReply), "", "");
+	const std::vector<AnnotationChoice>& choices = getAnnotationChoices();
+	for (size_t i = 0; i < choices.size(); ++i)
+		gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(m_comboReply), choices[i].id.c_str(), choices[i].label.c_str());
+	if (!gtk_combo_box_set_active_id(GTK_COMBO_BOX(m_comboReply), getParent().c_str()))
+		gtk_combo_box_set_active(GTK_COMBO_BOX(m_comboReply), 0);
+	gtk_toggle_button_set_active(GTK_TOGGLE_BUTTON(m_checkResolved), getResolved() == "1");
+
 	prop = getDescription ();
 	if ( !prop.empty() )
 	{

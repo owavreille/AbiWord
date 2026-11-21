@@ -46,7 +46,7 @@ static gboolean s_glib_mainloop_callback(GIOChannel * /*channel*/, GIOCondition 
 int Synchronizer::sm_iMessageWindows = 0;
 ATOM sm_iClass = 0;
 
-LRESULT CALLBACK Synchronizer::s_wndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) // Win32-only
+LRESULT CALLBACK Synchronizer::s_wndProc(HWND hWnd, UINT msg, WPARAM, LPARAM lParam) // Win32-only
 {
 	Synchronizer * pThis;
 	int swlresult;
@@ -169,10 +169,10 @@ void Synchronizer::_unregisterWndClass() // Win32-only
 #ifdef _WIN32
 Synchronizer::Synchronizer(std::function<void ()> signalhandler) // Win32 Implementation
 	: m_signalhandler(signalhandler),
- 	m_hWnd(0),
+ 	m_hWnd(nullptr),
 	m_bIsProcessing(false),
 	m_iDeferredMessages(0),
-	m_bIsDestroyed(NULL)
+	m_bIsDestroyed(nullptr)
 {
 	UT_DEBUGMSG(("Synchronizer()\n"));
 	AbiCollabSessionManager * pSessionManager = AbiCollabSessionManager::getManager();
@@ -194,14 +194,14 @@ Synchronizer::Synchronizer(std::function<void ()> signalhandler) // Win32 Implem
 			CW_USEDEFAULT,
 			CW_USEDEFAULT,
 			HWND_MESSAGE,
-			NULL,
+			nullptr,
 			hInstance,
 			(void *) this
 		);
 	UT_DEBUGMSG(("Created message window: HWND 0x%x\n", m_hWnd));
 	switch ((INT_PTR)m_hWnd)
 	{
-		case NULL:
+		case 0:
 			UT_DEBUGMSG(("Win32 error: %d.\n", GetLastError()));
 			break;
 		default:
@@ -255,7 +255,7 @@ Synchronizer::~Synchronizer() // Win32 Implementation
 	if (m_hWnd)
 	{
 		DestroyWindow(m_hWnd);
-		m_hWnd = 0;
+		m_hWnd = nullptr;
 		sm_iMessageWindows--;
 	}
 	else
@@ -297,8 +297,11 @@ void Synchronizer::signal() // Win32 Implementation
 {
 	UT_DEBUGMSG(("Synchronizer::signal()\n"));
 	// send a message to the main loop
-	int result = PostMessage(m_hWnd, WM_ABI_SYNCHRONIZER, 0, 0);
-	UT_ASSERT(result != 0);
+	const BOOL posted = PostMessage(m_hWnd, WM_ABI_SYNCHRONIZER, 0, 0);
+	if (posted == 0)
+	{
+		UT_DEBUGMSG(("Synchronizer::signal PostMessage failed\n"));
+	}
 }
 
 #else

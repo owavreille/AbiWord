@@ -32,7 +32,7 @@
 // which is why we have the static dialog pointer below
 static AP_Win32Dialog_CollaborationEditAccount* s_pThis = NULL;
 
-BOOL CALLBACK AP_Win32Dialog_CollaborationEditAccount::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK AP_Win32Dialog_CollaborationEditAccount::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
@@ -89,7 +89,7 @@ AP_Win32Dialog_CollaborationEditAccount::AP_Win32Dialog_CollaborationEditAccount
 	m_pWin32Dialog(NULL),
 	m_hInstance(NULL),
 	m_hOk(NULL),
-	m_pOldDetailsProc(NULL),
+	m_pOldDetailsProc(0),
 	m_hWnd(NULL),
 	m_hDetails(NULL),
 	m_hDetailsHook(NULL)
@@ -113,7 +113,7 @@ void AP_Win32Dialog_CollaborationEditAccount::runModal(XAP_Frame * pFrame)
 	LPCTSTR lpTemplate = MAKEINTRESOURCE(AP_RID_DIALOG_COLLABORATIONEDITACCOUNT);
 	int result = DialogBoxParam( m_hInstance, lpTemplate,
 		static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
-		(DLGPROC)s_dlgProc, (LPARAM)this );
+		s_dlgProc, (LPARAM)this );
 	switch (result)
 	{
 		case 0:
@@ -133,7 +133,7 @@ void AP_Win32Dialog_CollaborationEditAccount::runModal(XAP_Frame * pFrame)
 }
 
 /*****************************************************************/
-BOOL AP_Win32Dialog_CollaborationEditAccount::_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationEditAccount::_onInitDialog(HWND hWnd, WPARAM, LPARAM)
 {
 	// Store handles for easy access
 	m_hWnd = hWnd;
@@ -166,9 +166,8 @@ BOOL AP_Win32Dialog_CollaborationEditAccount::_onInitDialog(HWND hWnd, WPARAM wP
 }
 
 // return true if we process the command, false otherwise
-BOOL AP_Win32Dialog_CollaborationEditAccount::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationEditAccount::_onCommand(HWND hWnd, WPARAM wParam, LPARAM)
 {
-	WORD wNotifyCode = HIWORD(wParam);
 	WORD wId = LOWORD(wParam);
 
 	AccountHandler* pHandler;
@@ -196,7 +195,7 @@ BOOL AP_Win32Dialog_CollaborationEditAccount::_onCommand(HWND hWnd, WPARAM wPara
 	}
 }
 
-BOOL AP_Win32Dialog_CollaborationEditAccount::_onDetailsCommand(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationEditAccount::_onDetailsCommand(HWND hWnd, UINT, WPARAM wParam, LPARAM lParam)
 {
 	AccountHandler* pAccountHandler = getAccountHandler();
 	UT_return_val_if_fail(pAccountHandler, false);

@@ -42,7 +42,7 @@ UT_Error OXML_Element_Row::serialize(IE_Exp_OpenXML* exporter)
 	UT_Error err = UT_OK;
 
 	m_rowNumber = table->getCurrentRowNumber();
-	err = exporter->startRow();
+	err = exporter->startRow(TARGET);
 	if(err != UT_OK)
 		return err;
 
@@ -54,7 +54,7 @@ UT_Error OXML_Element_Row::serialize(IE_Exp_OpenXML* exporter)
 	if(err != UT_OK)
 		return err;
 
-	return exporter->finishRow();
+	return exporter->finishRow(TARGET);
 }
 
 UT_Error OXML_Element_Row::serializeChildren(IE_Exp_OpenXML* exporter)

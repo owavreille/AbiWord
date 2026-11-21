@@ -537,14 +537,7 @@ bool ABI_Collab_Export::insertStrux(fl_ContainerLayout* sfh,
 {
 	if(pfnBindHandles)
 	{
-// Ugly hack for MSVC and GCC comlilant warnings
-#ifdef __GNUC__
-	#warning not sure
-#else
-	#pragma message("WARNING: not sure")
-#endif
-
-		fl_ContainerLayout* sfhNew = sfh; // WAS static_cast<fl_ContainerLayout*>(this);
+		fl_ContainerLayout* sfhNew = sfh;
 		pfnBindHandles(sdh,lid,sfhNew);
 	}
 

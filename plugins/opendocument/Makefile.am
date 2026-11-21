@@ -39,6 +39,12 @@ opendocument_la_SOURCES = \
         common/xp/crypto/memxor.h \
         common/xp/crypto/sha1.c \
         common/xp/crypto/sha1.h \
+        common/xp/crypto/sha256.c \
+        common/xp/crypto/sha256.h \
+        common/xp/crypto/blowfish.c \
+        common/xp/crypto/blowfish.h \
+        common/xp/crypto/aes256.c \
+        common/xp/crypto/aes256.h \
         common/xp/ie_impexp_OpenDocument.cpp \
         common/xp/ODc_Crypto.cpp \
         common/xp/ODc_Crypto.h \

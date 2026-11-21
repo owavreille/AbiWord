@@ -62,13 +62,13 @@ UT_Error OXML_Element_Bookmark::serialize(IE_Exp_OpenXML* exporter)
 	{
 		if(strcmp(type, "start") == 0)
 		{
-			err = exporter->startBookmark(getId().c_str(), name);
+			err = exporter->startBookmark(TARGET, getId().c_str(), name);
 			if(err != UT_OK)
 				return err;
 		}
 		else if(strcmp(type, "end") == 0)
 		{
-			err = exporter->finishBookmark(getId().c_str());
+			err = exporter->finishBookmark(TARGET, getId().c_str());
 			if(err != UT_OK)
 				return err;
 		}

@@ -31,6 +31,9 @@
 
 // External includes
 #include <stdio.h>
+#include <map>
+#include <set>
+#include <string>
 
 // Internal classes
 class ODe_AutomaticStyles;
@@ -174,6 +177,13 @@ private:
     UT_sint32 m_iCurrentTOC;
 
     UT_UTF8String& appendAttribute( UT_UTF8String& ret, const char* key, const char* value );
+
+    std::map<std::string, char> m_revisionKinds;
+    std::map<std::string, UT_UTF8String> m_revisionText;
+    std::set<std::string> m_revisionMarkers;
+    std::string m_spanRevisionId;
+    char m_spanRevisionKind = 0;
+    bool m_changeStartOpen = false;
 };
 
 #endif /*ODE_TEXT_LISTENER_H_*/

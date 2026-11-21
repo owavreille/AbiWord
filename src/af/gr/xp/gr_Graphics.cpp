@@ -698,6 +698,14 @@ void GR_Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest)
      pImg->render(this, xDest, yDest);
 }
 
+void GR_Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest, const GR_ImageTune& tune)
+{
+	if (!tune.isAdjusted())
+		drawImage(pImg, xDest, yDest);
+	else
+		drawImage(pImg, xDest, yDest);
+}
+
 /*!
     This method is just like drawChars() except it treats yoff as position of the font
     baseline. The default implementation simply subtracts the ascent of the current font

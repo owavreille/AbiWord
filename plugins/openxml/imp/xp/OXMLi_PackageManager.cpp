@@ -165,6 +165,24 @@ UT_Error OXMLi_PackageManager::parseDocumentEndnotes()
 	return parseChildByType(doc, ENDNOTES_PART, &listener); 
 }
 
+UT_Error OXMLi_PackageManager::parseDocumentComments()
+{
+	GsfInput * doc = _getDocumentStream();
+	UT_return_val_if_fail(doc != nullptr, UT_ERROR);
+	OXMLi_StreamListener listener;
+	listener.setupStates(COMMENTS_PART);
+	return parseChildByType(doc, COMMENTS_PART, &listener);
+}
+
+UT_Error OXMLi_PackageManager::parseDocumentCommentsExtended()
+{
+	GsfInput * doc = _getDocumentStream();
+	UT_return_val_if_fail(doc != nullptr, UT_ERROR);
+	OXMLi_StreamListener listener;
+	listener.setupStates(COMMENTSEX_PART);
+	return parseChildByType(doc, COMMENTSEX_PART, &listener);
+}
+
 GsfInput* OXMLi_PackageManager::getChildById( GsfInput * parent, const char * id )
 {
 	return gsf_open_pkg_open_rel_by_id(parent, id, nullptr);
@@ -208,6 +226,9 @@ const char * OXMLi_PackageManager::_getFullType( OXML_PartType type )
 		break;
 	case COMMENTS_PART:
 		ret = COMMENTS_REL_TYPE;
+		break;
+	case COMMENTSEX_PART:
+		ret = COMMENTSEX_REL_TYPE;
 		break;
 	case DOCSETTINGS_PART:
 		ret = DOCSETTINGS_REL_TYPE;
@@ -350,6 +371,92 @@ UT_ConstByteBufPtr OXMLi_PackageManager::parseImageStream(const char * id)
 /**
  * This function is needed for external targets. Ex: hyperlinks, bookmarks.
  */
+static std::string abi_local_name(const std::string& name)
+{
+	std::string::size_type colon = name.rfind(':');
+	if (colon == std::string::npos)
+		return name;
+	return name.substr(colon + 1);
+}
+
+static std::string abi_extract_chart_text(const std::string& xml)
+{
+	std::string result;
+	for (std::string::size_type i = 0; i < xml.size(); ++i)
+	{
+		if (xml[i] != '<')
+			continue;
+		if (i + 1 < xml.size() && (xml[i + 1] == '/' || xml[i + 1] == '?' || xml[i + 1] == '!'))
+			continue;
+		std::string::size_type name_start = i + 1;
+		std::string::size_type name_end = name_start;
+		while (name_end < xml.size() && xml[name_end] != ' ' && xml[name_end] != '\t' &&
+			   xml[name_end] != '\n' && xml[name_end] != '\r' && xml[name_end] != '>' && xml[name_end] != '/')
+			++name_end;
+		std::string local = abi_local_name(xml.substr(name_start, name_end - name_start));
+		std::string::size_type tag_end = xml.find('>', name_end);
+		if (tag_end == std::string::npos)
+			break;
+		bool empty = tag_end > name_start && xml[tag_end - 1] == '/';
+		i = tag_end;
+		if (empty || (local != "t" && local != "v"))
+			continue;
+		std::string::size_type text_end = xml.find('<', tag_end + 1);
+		if (text_end == std::string::npos)
+			break;
+		std::string piece = xml.substr(tag_end + 1, text_end - tag_end - 1);
+		std::string clean;
+		for (std::string::size_type c = 0; c < piece.size(); ++c)
+		{
+			if (piece.compare(c, 5, "&amp;") == 0) { clean += '&'; c += 4; }
+			else if (piece.compare(c, 4, "&lt;") == 0) { clean += '<'; c += 3; }
+			else if (piece.compare(c, 4, "&gt;") == 0) { clean += '>'; c += 3; }
+			else if (piece.compare(c, 6, "&quot;") == 0) { clean += '"'; c += 5; }
+			else if (piece.compare(c, 6, "&apos;") == 0) { clean += '\''; c += 5; }
+			else if (piece[c] == '\n' || piece[c] == '\r' || piece[c] == '\t') clean += ' ';
+			else clean += piece[c];
+		}
+		std::string::size_type a = 0;
+		std::string::size_type b = clean.size();
+		while (a < b && clean[a] == ' ') ++a;
+		while (b > a && clean[b - 1] == ' ') --b;
+		if (a == b)
+			continue;
+		if (!result.empty())
+			result += " ";
+		result.append(clean, a, b - a);
+		if (result.size() > 4000)
+			break;
+		i = text_end - 1;
+	}
+	return result;
+}
+
+std::string OXMLi_PackageManager::readPartText(const char * id)
+{
+	if (!id || !*id)
+		return std::string();
+	GsfInput * parent = _getDocumentStream();
+	if (!parent)
+		return std::string();
+	GsfInput * stream = getChildById(parent, id);
+	if (!stream)
+		return std::string();
+	const gsf_off_t cap = 2 * 1024 * 1024;
+	if (gsf_input_size(stream) <= 0 || gsf_input_size(stream) > cap)
+	{
+		g_object_unref(G_OBJECT(stream));
+		return std::string();
+	}
+	UT_ByteBufPtr buffer(new UT_ByteBuf);
+	buffer->insertFromInput(0, stream);
+	g_object_unref(G_OBJECT(stream));
+	if (!buffer->getLength())
+		return std::string();
+	std::string xml(reinterpret_cast<const char*>(buffer->getPointer(0)), buffer->getLength());
+	return abi_extract_chart_text(xml);
+}
+
 std::string OXMLi_PackageManager::getPartName(const char * id)
 {
 	if (!id || !*id)

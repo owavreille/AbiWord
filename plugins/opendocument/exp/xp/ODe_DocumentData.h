@@ -78,6 +78,7 @@ public:
     // after having written the entire <office:text>, but, on
     // content.xml, <office:automatic-styles> must appear *before* <office:text>.
     GsfOutput* m_pOfficeTextTemp;
+    UT_UTF8String m_trackedChangeRegions;
 
 private:
     void handleDefaultTabInterval(ODe_Style_Style* pStyle);
