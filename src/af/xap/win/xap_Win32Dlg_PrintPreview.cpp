@@ -169,6 +169,18 @@ typedef GpStatus (WINGDIPAPI* GdipGraphicsClearFunc) (GpGraphics *graphics, ARGB
 typedef GpStatus (WINGDIPAPI* GdipBitmapSetResolutionFunc) (GpBitmap* bitmap, float xdpi, float ydpi);
 typedef GpStatus (WINGDIPAPI* GdipGetImageHorizontalResolutionFunc) (GpImage *image, float *resolution);
 typedef GpStatus (WINGDIPAPI* GdipGetImageVerticalResolutionFunc) (GpImage *image, float *resolution);
+struct BitmapData
+{
+  UINT Width;
+  UINT Height;
+  INT Stride;
+  PixelFormat PixelFormat;
+  void *Scan0;
+  UINT_PTR Reserved;
+};
+
+typedef GpStatus (WINGDIPAPI* GdipBitmapLockBitsFunc) (GpBitmap *bitmap, const RECT *rect, UINT flags, PixelFormat format, BitmapData *locked);
+typedef GpStatus (WINGDIPAPI* GdipBitmapUnlockBitsFunc) (GpBitmap *bitmap, BitmapData *locked);
 
 static GdiplusStartupFunc GdiplusStartup = nullptr;
 static GdiplusShutdownFunc GdiplusShutdown = nullptr;
@@ -194,6 +206,8 @@ static GdipGraphicsClearFunc GdipGraphicsClear = nullptr;
 static GdipBitmapSetResolutionFunc GdipBitmapSetResolution = nullptr;
 static GdipGetImageHorizontalResolutionFunc GdipGetImageHorizontalResolution = nullptr;
 static GdipGetImageVerticalResolutionFunc GdipGetImageVerticalResolution = nullptr;
+static GdipBitmapLockBitsFunc GdipBitmapLockBits = nullptr;
+static GdipBitmapUnlockBitsFunc GdipBitmapUnlockBits = nullptr;
 
 static GDIPCONST CLSID tiff_clsid = { 0x557cf405, 0x1a04, 0x11d3, { 0x9a, 0x73, 0x0, 0x0, 0xf8, 0x1e, 0xf3, 0x2e } };
 static GDIPCONST GUID EncoderSaveFlag = { 0x292266FC, 0xac40, 0x47bf, { 0x8c, 0xfc, 0xa8, 0x5b, 0x89, 0xa6,0x55, 0xde } };
@@ -297,6 +311,8 @@ gdip_init (void)
   LOOKUP (GdipBitmapSetResolution);
   LOOKUP (GdipGetImageHorizontalResolution);
   LOOKUP (GdipGetImageVerticalResolution);
+  LOOKUP (GdipBitmapLockBits);
+  LOOKUP (GdipBitmapUnlockBits);
 
 #undef LOOKUP
 
@@ -323,9 +339,49 @@ gdip_init (void)
     } \
   } G_STMT_END
 
+// PlayEnhMetaFile maps the picture onto the destination rectangle. A bitmap
+// the size of the screen (often 96 dpi) is what made the TIFF look soft.
+// 300 dpi is a print resolution. The long side stays capped so an A0 page
+// cannot allocate a bitmap of several hundred megabytes.
+static const double s_previewDpi = 300.0;
+static const guint s_previewMaxSide = 8192;
+
+static void
+s_previewPixelSize (const RECT & page, guint & width, guint & height, float & dpiX, float & dpiY)
+{
+  double widthMm = (double)(page.right - page.left) / 100.0;
+  double heightMm = (double)(page.bottom - page.top) / 100.0;
+  if (widthMm < 1.0)
+    widthMm = 210.0;
+  if (heightMm < 1.0)
+    heightMm = 297.0;
+
+  width = (guint)(widthMm / 25.4 * s_previewDpi + 0.5);
+  height = (guint)(heightMm / 25.4 * s_previewDpi + 0.5);
+  if (width < 1)
+    width = 1;
+  if (height < 1)
+    height = 1;
+
+  const guint longSide = (width > height) ? width : height;
+  if (longSide > s_previewMaxSide)
+    {
+      const double scale = (double)s_previewMaxSide / (double)longSide;
+      width = (guint)((double)width * scale);
+      height = (guint)((double)height * scale);
+      if (width < 1)
+        width = 1;
+      if (height < 1)
+        height = 1;
+    }
+
+  dpiX = (float)((double)width * 25.4 / widthMm);
+  dpiY = (float)((double)height * 25.4 / heightMm);
+}
+
 // The highest-resolution printer made an A3 preview allocate a bitmap of
-// several hundred megabytes and abort. The screen DC keeps the raster at
-// the size of the page on screen.
+// several hundred megabytes and abort. Recording still uses the screen DC.
+// The TIFF is painted afterwards at s_previewDpi.
 static HDC s_previewReferenceDC ()
 {
   HDC dc = CreateDCW (L"DISPLAY", nullptr, nullptr, nullptr);
@@ -659,84 +715,81 @@ public:
 	if (!metafile)
 	  return;
 
-	// must be a Bitmap for the multi-page stuff to work
-	GpImage *meta = nullptr;
+	// saveaddimage() needs a bitmap. PlayEnhMetaFile replays the
+	// vectors into that bitmap, so the page is not a scaled screenshot.
+	// https://learn.microsoft.com/en-us/windows/win32/api/wingdi/nf-wingdi-playenhmetafile
+	guint destW = 0, destH = 0;
+	float dpiX = (float)s_previewDpi, dpiY = (float)s_previewDpi;
+	s_previewPixelSize (page_rect, destW, destH, dpiX, dpiY);
+	d (g_print ("w: %d | h: %d\n", destW, destH));
 
-	// jump through hoops to convert a metafile to a bitmap
-	// saveaddimage() won't work if the base image or the
-	// new image is a metafile.
-	GpImage *m = nullptr;
-	status = GdipCreateMetafileFromEmf(metafile, TRUE, &m);
-	ASSERT_GDIP_SUCCESS (status, GdipCreateMetafileFromEmf);
-	if (status != 0 || !m)
+	BITMAPINFO bi;
+	memset (&bi, 0, sizeof (bi));
+	bi.bmiHeader.biSize = sizeof (BITMAPINFOHEADER);
+	bi.bmiHeader.biWidth = (LONG)destW;
+	bi.bmiHeader.biHeight = -((LONG)destH);
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+
+	void *bits = nullptr;
+	HBITMAP dib = CreateDIBSection (nullptr, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+	HDC mem = dib ? CreateCompatibleDC (nullptr) : nullptr;
+	if (!dib || !mem)
 	  {
+	    if (mem)
+	      DeleteDC (mem);
+	    if (dib)
+	      DeleteObject (dib);
 	    DeleteEnhMetaFile (metafile);
 	    return;
 	  }
-	
-	guint width = 0, height = 0;
-	if (GdipGetImageWidth(m, &width) != 0 || GdipGetImageHeight(m, &height) != 0
-	    || width == 0 || height == 0)
+
+	HGDIOBJ previous = SelectObject (mem, dib);
+	RECT paint = { 0, 0, (LONG)destW, (LONG)destH };
+	HBRUSH white = CreateSolidBrush (RGB (255, 255, 255));
+	FillRect (mem, &paint, white);
+	DeleteObject (white);
+	SetStretchBltMode (mem, HALFTONE);
+	SetBrushOrgEx (mem, 0, 0, nullptr);
+	const BOOL played = PlayEnhMetaFile (mem, metafile, &paint);
+	SelectObject (mem, previous);
+	DeleteDC (mem);
+	DeleteEnhMetaFile (metafile);
+	if (!played)
 	  {
-	    GdipDisposeImage(m);
+	    DeleteObject (dib);
 	    return;
 	  }
 
-	// A high-DPI screen makes an A4 metafile taller than 4096 pixels.
-	// Dropping the page left the preview with nothing to open. Scale it
-	// down instead; the TIFF only has to be readable.
-	guint destW = width;
-	guint destH = height;
-	const guint cap = 4096;
-	if (destW > cap || destH > cap)
-	  {
-	    double scale = (double)cap / (double)((destW > destH) ? destW : destH);
-	    destW = (guint)((double)width * scale);
-	    destH = (guint)((double)height * scale);
-	    if (destW < 1)
-	      destW = 1;
-	    if (destH < 1)
-	      destH = 1;
-	  }
-
-	d (g_print ("w: %d | h: %d\n", destW, destH));
-
-	status = GdipCreateBitmapFromScan0 (destW, destH, 0, PixelFormat32bppARGB, nullptr, &meta);
+	GpImage *meta = nullptr;
+	status = GdipCreateBitmapFromScan0 ((INT)destW, (INT)destH, 0, PixelFormat32bppRGB, nullptr, &meta);
 	ASSERT_GDIP_SUCCESS (status, GdipCreateBitmapFromScan0);
 	if (status != 0 || !meta)
 	  {
-	    GdipDisposeImage(m);
+	    DeleteObject (dib);
 	    return;
 	  }
 
-	status = GdipBitmapSetResolution (meta, (float)metafile_xres, (float)metafile_yres);
-	ASSERT_GDIP_SUCCESS (status, GdipBitmapSetResolution);
-
-	GpGraphics *g = nullptr;
-	status = GdipGetImageGraphicsContext (meta, &g);
-	ASSERT_GDIP_SUCCESS (status, GdipGetImageGraphicsContext);
-	if (status != 0 || !g)
+	// 32bppRGB keeps the page opaque. A 32bpp HBITMAP would be read as
+	// transparent because GDI leaves the alpha byte at zero.
+	BitmapData locked;
+	memset (&locked, 0, sizeof (locked));
+	status = GdipBitmapLockBits (meta, nullptr, 3 /* ImageLockModeRead | ImageLockModeWrite */, PixelFormat32bppRGB, &locked);
+	if (status != 0 || !locked.Scan0)
 	  {
-	    GdipDisposeImage(meta);
-	    GdipDisposeImage(m);
+	    DeleteObject (dib);
+	    GdipDisposeImage (meta);
 	    return;
 	  }
-	
-	// gotta clear the bitmap
-	status = GdipGraphicsClear(g, 0xffffffff);
-	ASSERT_GDIP_SUCCESS (status, GdipGraphicsClear);
-	
-	if (destW == width && destH == height)
-	  status = GdipDrawImageI(g, m, 0, 0);
-	else
-	  status = GdipDrawImageRectI(g, m, 0, 0, (INT)destW, (INT)destH);
-	ASSERT_GDIP_SUCCESS (status, GdipDrawImage);
-	
-	status = GdipFlush(g, 1);
-	ASSERT_GDIP_SUCCESS (status, GdipFlush);
-	
-	GdipDeleteGraphics(g);
-	GdipDisposeImage(m);
+	const INT srcStride = (INT)destW * 4;
+	for (guint y = 0; y < destH; y++)
+	  memcpy ((BYTE *)locked.Scan0 + y * locked.Stride, (BYTE *)bits + y * srcStride, srcStride);
+	GdipBitmapUnlockBits (meta, &locked);
+	DeleteObject (dib);
+
+	status = GdipBitmapSetResolution (meta, dpiX, dpiY);
+	ASSERT_GDIP_SUCCESS (status, GdipBitmapSetResolution);
 
 	if (!m_multiPageTiff)
 	  {
