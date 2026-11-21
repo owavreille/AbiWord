@@ -38,7 +38,7 @@ jobs:
             gtk3-devel cairo-devel pango-devel librsvg2-devel \
             goffice-devel enchant2-devel \
             libjpeg-turbo-devel libpng-devel zlib-devel pcre2-devel \
-            valgrind-devel \
+            valgrind valgrind-devel \
             xorg-x11-server-Xvfb
 
       - name: Compiler et lancer la suite
