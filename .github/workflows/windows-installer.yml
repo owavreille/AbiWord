@@ -3,6 +3,7 @@
 # qui produit abiword.exe, libabiword-3.1.dll, OpenDocument, OpenXML
 # et la correction Enchant/Hunspell. NSIS 3.13 est ensuite compilé sur Ubuntu :
 # les stubs viennent de l'archive officielle, makensis est natif.
+# Un push sur main remplace l'installateur de la release v3.1-windows.
 
 name: Installateur Windows
 
@@ -225,8 +226,79 @@ jobs:
           path: dist/AbiWord-*-windows-x64-setup.exe
           retention-days: 30
 
-      - name: Joindre l'installateur à la release
-        if: github.event_name == 'release'
+      - name: Publier l'installateur
+        if: github.ref == 'refs/heads/main' || github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${{ github.event.release.tag_name }}" "$SETUP" --clobber
+          SOURCE_SHA: ${{ github.sha }}
+          RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || 'v3.1-windows' }}
+          UPDATE_NOTES: ${{ github.ref == 'refs/heads/main' && 'yes' || 'no' }}
+        run: |
+          base=$(basename "$SETUP")
+          digest=$(sha256sum "$SETUP" | awk '{print $1}')
+          bytes=$(wc -c < "$SETUP" | tr -d ' ')
+          (
+            cd "$(dirname "$SETUP")"
+            sha256sum "$base"
+          ) > "${SETUP}.sha256"
+          gh release upload "$RELEASE_TAG" "$SETUP" "${SETUP}.sha256" --clobber
+          if [ "$UPDATE_NOTES" != "yes" ]; then
+            exit 0
+          fi
+          size=$(printf '%s' "$bytes" | python3 -c 'import sys; print(f"{int(sys.stdin.read()):,}".replace(",", " "))')
+          gh release view "$RELEASE_TAG" --json body --jq .body > /tmp/release-notes.md
+          DIGEST="$digest" SIZE="$size" NAME="$base" SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
+          import os, re
+          digest = os.environ["DIGEST"]
+          size = os.environ["SIZE"]
+          name = os.environ["NAME"]
+          sha = os.environ["SOURCE_SHA"]
+          notes = open("/tmp/release-notes.md", encoding="utf-8").read()
+          notes, n_src = re.subn(
+              r"(?m)^Code source de l'installateur : `[^`]+`\.$",
+              f"Code source de l'installateur : `{sha}`.",
+              notes, count=1)
+          notes, n_file = re.subn(
+              r"(?m)^Installateur : `[^`]+` \([^)]+ octets\)\.$",
+              f"Installateur : `{name}` ({size} octets).",
+              notes, count=1)
+          notes, n_hash = re.subn(
+              r"(?m)^SHA-256 : `[0-9a-fA-F]+`$",
+              f"SHA-256 : `{digest}`",
+              notes, count=1)
+          if n_src != 1 or n_file != 1 or n_hash != 1:
+              raise SystemExit("notes de release : lignes de l'installateur introuvables")
+          open("/tmp/release-notes.md", "w", encoding="utf-8").write(notes)
+          PY
+          gh release edit "$RELEASE_TAG" --notes-file /tmp/release-notes.md
+          git fetch --depth=1 origin main
+          git checkout -B publish-installer FETCH_HEAD
+          DIGEST="$digest" SIZE="$size" SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
+          import os, re
+          digest = os.environ["DIGEST"]
+          size = os.environ["SIZE"]
+          sha = os.environ["SOURCE_SHA"]
+          readme = open("README.md", encoding="utf-8").read()
+          readme, a = re.subn(
+              r"\| Taille \| [^|\n]*octets \|",
+              f"| Taille | {size} octets |", readme, count=1)
+          readme, b = re.subn(
+              r"\| SHA-256 \| `[^`]+` \|",
+              f"| SHA-256 | `{digest}` |", readme, count=1)
+          readme, c = re.subn(
+              r"\| Code source de ce binaire \| `[^`]+` \|",
+              f"| Code source de ce binaire | `{sha}` |", readme, count=1)
+          if a != 1 or b != 1 or c != 1:
+              raise SystemExit("README : lignes de l'installateur introuvables")
+          open("README.md", "w", encoding="utf-8").write(readme)
+          PY
+          git add README.md
+          if git diff --cached --quiet; then
+            echo "Le README cite déjà cet installateur."
+            exit 0
+          fi
+          git -c user.name='github-actions[bot]' \
+              -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
+              commit -m "Mettre à jour la taille et le condensat de l'installateur publié." \
+              -m "Le binaire vient de ${SOURCE_SHA}."
+          git push origin HEAD:main
