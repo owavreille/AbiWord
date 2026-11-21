@@ -415,6 +415,12 @@ void AccountHandler::_handlePacket(Packet* packet, BuddyPtr buddy)
 					// to make sense for the generic case. The person sharing the 
 					// document by default owns the document (and is thus allowed
 					// to modify the ACL).
+					if (!pDoc->getAuthorByInt(jsre->getAuthorId()))
+					{
+						delete pDoc;
+						pDoc = nullptr;
+						break;
+					}
 					pManager->joinSession(jsre->getSessionId(), pDoc, jsre->m_sDocumentId, jsre->m_iRev, jsre->getAuthorId(), buddy, this, false, NULL);
 				}
 				else 

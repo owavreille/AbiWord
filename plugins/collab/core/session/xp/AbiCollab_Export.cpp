@@ -303,7 +303,7 @@ ChangeRecordSessionPacket* ABI_Collab_Export::_buildPacket( const PX_ChangeRecor
 			(pAP)->getAttribute(PT_DATAITEM_ATTRIBUTE_NAME,pszDataName);
 			if(pszDataName == NULL)
 			{
-				UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+				delete packet;
 				return NULL;
 			}
 			if(g_str_has_prefix(pszDataName,"snapshot-png-") == TRUE)
@@ -317,11 +317,21 @@ ChangeRecordSessionPacket* ABI_Collab_Export::_buildPacket( const PX_ChangeRecor
 			UT_ConstByteBufPtr pBuf;
             std::string mime_type;
 			PD_DataItemHandle pHandle = NULL;
-			m_pDoc->getDataItemDataByName(pszDataName, pBuf, &mime_type, &pHandle);
-			// put into our vector
+			if (!m_pDoc->getDataItemDataByName(pszDataName, pBuf, &mime_type, &pHandle) || !pBuf)
+			{
+				delete packet;
+				return NULL;
+			}
 			size_t length = pBuf->getLength();
+			const UT_Byte* data = length ? pBuf->getPointer(0) : nullptr;
+			if (length && !data)
+			{
+				delete packet;
+				return NULL;
+			}
 			packet->m_vecData.resize( length );
-			memcpy( &packet->m_vecData[0], pBuf->getPointer(0), length );
+			if (length)
+				memcpy( &packet->m_vecData[0], data, length );
 			if (!mime_type.empty()) 
 			{
 				packet->m_bTokenSet = true;
@@ -424,7 +434,7 @@ bool ABI_Collab_Export::_isGlobEnd(UT_Byte istart, UT_Byte istop)
 		return true;
 	
 	if((istart == PX_ChangeRecord_Glob::PXF_MultiStepStart) &&
-	   (PX_ChangeRecord_Glob::PXF_MultiStepEnd))
+	   (istop == PX_ChangeRecord_Glob::PXF_MultiStepEnd))
 		return true;
 	
 	return false;

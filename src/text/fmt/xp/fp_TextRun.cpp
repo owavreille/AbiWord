@@ -2123,8 +2123,9 @@ bool fp_TextRun::_refreshDrawBuffer()
 		GR_ShapingInfo si(text,iLen, m_pLanguage, iVisDir,
 						  m_pRenderInfo ? m_pRenderInfo->m_eShapingResult : GRSR_Unknown,
 						  _getFont(), m_pItem, getTextTransform(), lastWasSpace);		
-		getGraphics()->shape(si, m_pRenderInfo);
-		
+		if (!getGraphics()->shape(si, m_pRenderInfo))
+			return false;
+
 		UT_ASSERT(m_pRenderInfo && m_pRenderInfo->m_eShapingResult != GRSR_Error );
 
 		// if we are on a non-bidi OS, we have to reverse any RTL runs

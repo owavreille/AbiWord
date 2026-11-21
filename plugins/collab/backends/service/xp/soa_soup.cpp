@@ -97,17 +97,26 @@ namespace soup_soa {
 	static void _got_chunk_cb(SoupMessage *msg, SoaSoupSession* user_data);
 #endif
 	static bool _invoke(const std::string& url, const soa::method_invocation& mi, SoaSoupSession& sess, std::string& result);
+	static bool _setSoapRequest(SoupMessage* msg, const std::string& soap_msg)
+	{
+		if (!msg)
+			return false;
+		const char* body = soap_msg.empty() ? "" : soap_msg.c_str();
+#ifdef SOUP24
+		soup_message_set_request(msg, "text/xml", SOUP_MEMORY_STATIC, body, soap_msg.size());
+#else
+		soup_message_set_request(msg, "text/xml", SOUP_BUFFER_USER_OWNED, body, soap_msg.size());
+#endif
+		return true;
+	}
 	
 	/* public functions */
 	
 	soa::GenericPtr invoke(const std::string& url, const soa::method_invocation& mi, const std::string& ssl_ca_file) {
 		std::string soap_msg = mi.str();
 		SoupMessage* msg = soup_message_new ("POST", url.c_str());
-#ifdef SOUP24
-		soup_message_set_request(msg, "text/xml", SOUP_MEMORY_STATIC, &soap_msg[0], soap_msg.size());
-#else
-		soup_message_set_request(msg, "text/xml", SOUP_BUFFER_USER_OWNED, &soap_msg[0], soap_msg.size());
-#endif
+		if (!_setSoapRequest(msg, soap_msg))
+			return soa::GenericPtr();
 		SoaSoupSession sess(msg, ssl_ca_file);
 		std::string result;
 		if (!_invoke(url, mi, sess, result))
@@ -119,13 +128,10 @@ namespace soup_soa {
 						   std::function<void (SoupSession*, SoupMessage*, uint32_t)> progress_cb) {
 		std::string soap_msg = mi.str();
 		SoupMessage* msg = soup_message_new ("POST", url.c_str());
+		if (!_setSoapRequest(msg, soap_msg))
+			return soa::GenericPtr();
 		SoaSoupSession sess(msg, ssl_ca_file, progress_cb);
 		g_signal_connect(G_OBJECT (msg), "got-chunk", G_CALLBACK(_got_chunk_cb), (gpointer)(&sess));
-#ifdef SOUP24
-		soup_message_set_request(msg, "text/xml", SOUP_MEMORY_STATIC, &soap_msg[0], soap_msg.size());
-#else
-		soup_message_set_request(msg, "text/xml", SOUP_BUFFER_USER_OWNED, &soap_msg[0], soap_msg.size());
-#endif
 		std::string result;
 		if (!_invoke(url, mi, sess, result))
 			return soa::GenericPtr();
@@ -135,11 +141,8 @@ namespace soup_soa {
 	bool invoke(const std::string& url, const soa::method_invocation& mi, const std::string& ssl_ca_file, std::string& result) {
 		std::string soap_msg = mi.str();
 		SoupMessage* msg = soup_message_new ("POST", url.c_str());
-#ifdef SOUP24
-		soup_message_set_request(msg, "text/xml", SOUP_MEMORY_STATIC, &soap_msg[0], soap_msg.size());
-#else
-		soup_message_set_request(msg, "text/xml", SOUP_BUFFER_USER_OWNED, &soap_msg[0], soap_msg.size());
-#endif
+		if (!_setSoapRequest(msg, soap_msg))
+			return false;
 		SoaSoupSession sess(msg, ssl_ca_file);
 		return _invoke(url, mi, sess, result);
 	}
@@ -148,13 +151,10 @@ namespace soup_soa {
 						   std::function<void (SoupSession*, SoupMessage*, uint32_t)> progress_cb, std::string& result) {
 		std::string soap_msg = mi.str();
 		SoupMessage* msg = soup_message_new ("POST", url.c_str());
+		if (!_setSoapRequest(msg, soap_msg))
+			return false;
 		SoaSoupSession sess(msg, ssl_ca_file, progress_cb);
 		g_signal_connect(G_OBJECT (msg), "got-chunk", G_CALLBACK(_got_chunk_cb), (gpointer)(&sess));
-#ifdef SOUP24
-		soup_message_set_request(msg, "text/xml", SOUP_MEMORY_STATIC, &soap_msg[0], soap_msg.size());
-#else
-		soup_message_set_request(msg, "text/xml", SOUP_BUFFER_USER_OWNED, &soap_msg[0], soap_msg.size());
-#endif
 		return _invoke(url, mi, sess, result);
 	}
 	

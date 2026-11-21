@@ -1013,6 +1013,12 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 	static WCHAR wcInChars[GRWIN32USP_CHARBUFF_SIZE]; 
 	WCHAR *pInChars = &wcInChars[0];
 	bool bDeleteChars = false;      // using static buffer
+	struct InCharsOwner {
+		WCHAR** p;
+		bool* owned;
+		~InCharsOwner() { if (owned && *owned && p && *p) delete [] *p; }
+	} inCharsOwner = { &pInChars, &bDeleteChars };
+	(void)inCharsOwner;
 
 	if(si.m_iLength > GRWIN32USP_CHARBUFF_SIZE)
 	{
@@ -1140,6 +1146,7 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 					RI->m_pIndices = nullptr;
 					RI->m_pVisAttr = nullptr;
 					RI->m_iIndicesSize = 0;
+					RI->m_iIndicesCount = 0;
 				}
 				delete [] pGlyphs;
 				delete [] pVa;
@@ -1168,7 +1175,15 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 
 		}while(hRes == E_OUTOFMEMORY);
 
-		UT_return_val_if_fail(hRes == 0, false);
+		if (hRes != 0)
+		{
+			if (bDeleteGlyphs && pGlyphs != RI->m_pIndices)
+			{
+				delete [] pGlyphs;
+				delete [] pVa;
+			}
+			return false;
+		}
 	}
 	else if(hRes)
 	{
@@ -1296,11 +1311,6 @@ bool GR_Win32USPGraphics::shape(GR_ShapingInfo & si, GR_RenderInfo *& ri)
 	RI->m_eShapingResult = GRSR_ContextSensitiveAndLigatures;
 #endif
 	
-	if(bDeleteChars)
-	{
-		delete [] pInChars;
-	}
-
 	if(RI->s_pOwnerChar == RI)
 	{
 		// this might not be strictly necessary, but it is safer to do so
@@ -1487,9 +1497,13 @@ void GR_Win32USPGraphics::renderChars(GR_RenderInfo & ri)
 
 	if(RI.m_iOffset != 0)
 	{
-		// we need to work out glyph offset
+		if (!RI.m_pClust || iOffset >= RI.m_iCharCount)
+			return;
 		iGlyphOffset = RI.m_pClust[iOffset];
 	}
+
+	if (iGlyphOffset > RI.m_iIndicesCount)
+		return;
 
 	if(RI.m_iOffset + RI.m_iLength == (UT_sint32)RI.m_iCharCount)
 	{
@@ -1500,9 +1514,18 @@ void GR_Win32USPGraphics::renderChars(GR_RenderInfo & ri)
 	{
 		// work out glyph length
 		iOffset = bReverse ? RI.m_iCharCount - (RI.m_iOffset + RI.m_iLength) - 1 : RI.m_iOffset + RI.m_iLength;
+		if (!RI.m_pClust || iOffset >= RI.m_iCharCount)
+			return;
 		UT_uint32 iOffsetEnd = RI.m_pClust[iOffset];
+		if (iOffsetEnd < iGlyphOffset || iOffsetEnd > RI.m_iIndicesCount)
+			return;
 		iGlyphCount = iOffsetEnd - iGlyphOffset;
 	}
+
+	if (!RI.m_pIndices || !RI.s_pAdvances || !RI.s_pGoffsets)
+		return;
+	if (iGlyphOffset > RI.s_iAdvancesSize || iGlyphCount > RI.s_iAdvancesSize - iGlyphOffset)
+		return;
 
 	if(RI.m_bInvalidateFontCache)
 	{
@@ -1652,6 +1675,8 @@ void GR_Win32USPGraphics::measureRenderedCharWidths(GR_RenderInfo & ri)
 	GR_Win32USPFont * pFont = (GR_Win32USPFont *)RI.m_pFont;
 	GR_Win32USPItem * pItem = (GR_Win32USPItem *)RI.m_pItem;
 	UT_return_if_fail(pFont && pItem );
+	if (!RI.m_pIndices || !RI.m_pVisAttr || RI.m_iIndicesCount > RI.m_iIndicesSize)
+		return;
 
 	if(!RI.m_pAdvances)
 		RI.m_pAdvances = new int[RI.m_iIndicesSize];

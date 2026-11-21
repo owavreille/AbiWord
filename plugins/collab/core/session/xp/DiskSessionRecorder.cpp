@@ -139,14 +139,14 @@ bool DiskSessionRecorder::getPackets(const std::string& filename, bool& bLocally
 			
 			unsigned char packetClass;
 			is << packetClass;
-			// NOTE: we can safely cast to a session packet, as only session packets are recorded
-			// TODO: add a safety check
-			SessionPacket* newPacket = static_cast<SessionPacket*>(Packet::createPacket( (PClassType)packetClass ));
-			if (!newPacket)
+			Packet* created = Packet::createPacket( (PClassType)packetClass );
+			if (!created || !SessionPacket::isInstanceOf(*created))
 			{
+				delete created;
 				UT_DEBUGMSG(("unknown packet class %d\n", packetClass ));
 				UT_return_val_if_fail(false,false);
 			}
+			SessionPacket* newPacket = static_cast<SessionPacket*>(created);
 			is << *newPacket;
 			
 			packets.push_back(new RecordedPacket(incoming, hasBuddy, buddyName, timestamp, newPacket));

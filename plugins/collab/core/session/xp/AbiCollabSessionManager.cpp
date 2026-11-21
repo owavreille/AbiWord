@@ -857,7 +857,11 @@ void AbiCollabSessionManager::joinSession(const std::string& sSessionId, PD_Docu
 	UT_return_if_fail(pCollaborator);
 	UT_return_if_fail(pDoc);
 	UT_return_if_fail(pAclAccount);
-	
+	// The author id comes from the peer. Refuse it before the session exists
+	// when that id is not an author of the document we just received.
+	pp_Author * pA = pDoc->getAuthorByInt(iAuthorId);
+	UT_return_if_fail(pA);
+
 	if (pAclAccount->getStorageType() == "com.abisource.abiword.abicollab.backend.sugar")
 	{
 		// HACK, remove this some day: the sugar backend should just pass us a frame to use
@@ -877,10 +881,6 @@ void AbiCollabSessionManager::joinSession(const std::string& sSessionId, PD_Docu
 	event.addRecipient(pCollaborator);
 	signal(event);
 
-	// the author object representing us should already be present in the document
-	// that was sent to us; fetch it using the author id the master gave us
-	pp_Author * pA = pDoc->getAuthorByInt(iAuthorId);
-	UT_return_if_fail(pA);
 	pDoc->setMyAuthorInt(iAuthorId);
 }
 

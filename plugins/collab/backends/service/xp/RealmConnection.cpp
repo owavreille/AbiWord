@@ -333,8 +333,15 @@ UserJoinedPacketPtr RealmConnection::_receiveUserJoinedPacket()
 			boost::asio::buffer(&m, sizeof(m)) }};
 		boost::asio::read(m_socket, buf);
 
-		std::shared_ptr<std::string> userinfo_ptr(new std::string(payload_size - 2, '\0'));
-		boost::asio::read(m_socket, boost::asio::buffer(&(*userinfo_ptr)[0], userinfo_ptr->size()));
+		// Same ceiling as PayloadPacket::complete. payload_size includes the
+		// connection id and the master byte already read above.
+		const uint32_t payload_cap = 64u * 1024u * 1024u;
+		if (payload_size < 2 || payload_size > payload_cap)
+			return UserJoinedPacketPtr();
+		const uint32_t info_size = payload_size - 2;
+		std::shared_ptr<std::string> userinfo_ptr(new std::string(info_size, '\0'));
+		if (info_size)
+			boost::asio::read(m_socket, boost::asio::buffer(&(*userinfo_ptr)[0], info_size));
 
 		return UserJoinedPacketPtr(new rpv1::UserJoinedPacket(conn_id, static_cast<bool>(m), userinfo_ptr));
 	} catch (boost::system::system_error se) {
@@ -378,6 +385,7 @@ void RealmConnection::_complete_packet(realm::protocolv1::PacketPtr packet_ptr)
 	{
 		case -1:
 			UT_DEBUGMSG(("Error determining packet (type: 0x%x) completion state!\n", packet_ptr->type()));
+			_disconnect();
 			return;
 		case 0:
 			{

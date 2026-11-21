@@ -303,8 +303,7 @@ UT_Error IE_Imp_Psion::_loadFile(GsfInput * fp)
 	// Try to parse the file contents into psiconv internal data structures
 	res = psiconv_parse(config,buf,&psionfile);
 
-	// Tidy up
-	g_object_unref(G_OBJECT(fp));
+	// The caller (IE_Imp::loadFile or importFile) releases the stream.
 	psiconv_config_free(config);
 	psiconv_buffer_free(buf);
 
@@ -1110,11 +1109,11 @@ UT_Error IE_Imp_Psion::readParagraphs(const psiconv_text_and_layout psiontext,
 
 		// There may be text left after iterating through all inlines.
 		// This remaining text gets the paragraph base_character layout.
-		if (loc < psiconv_unicode_strlen(paragraph->text)) {
+		const int textLen = psiconv_unicode_strlen(paragraph->text);
+		if (loc >= 0 && loc < textLen) {
 			// Get the remaining characters into text
 			text.clear();
-			if ((res = prepareCharacters(paragraph->text+loc,
-			                       psiconv_unicode_strlen(paragraph->text - loc),text)))
+			if ((res = prepareCharacters(paragraph->text + loc, textLen - loc, text)))
 				return res;
 
 			// Yes, text may be empty!
