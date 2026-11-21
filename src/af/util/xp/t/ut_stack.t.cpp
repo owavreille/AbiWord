@@ -19,7 +19,10 @@
 
 
 #include "tf_test.h"
-#include "ut_stack.h"
+
+// Nothing else in the shared library references these types, so the
+// linker drops ut_stack.o. Compile it into the test instead.
+#include "ut_stack.cpp"
 
 #define TFSUITE "core.af.util.stack"
 
