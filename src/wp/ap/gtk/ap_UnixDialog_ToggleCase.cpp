@@ -142,7 +142,7 @@ void AP_UnixDialog_ToggleCase::_constructWindowContents (GtkWidget *vbox1)
   gtk_widget_show (toggleCase);
   gtk_box_pack_start (GTK_BOX (vbox1), toggleCase, FALSE, FALSE, 0);
 
-  g_object_set_data (G_OBJECT(sentenceCase), "user_data", GINT_TO_POINTER(CASE_SENTENCE));
+  g_object_set_data (G_OBJECT(sentenceCase), "user_data", abi_tag_pointer(CASE_SENTENCE));
   g_object_set_data (G_OBJECT(lowerCase), "user_data", GINT_TO_POINTER(CASE_LOWER));
   g_object_set_data (G_OBJECT(upperCase), "user_data", GINT_TO_POINTER(CASE_UPPER));
   g_object_set_data (G_OBJECT(firstUpperCase), "user_data", GINT_TO_POINTER(CASE_FIRST_CAPITAL));

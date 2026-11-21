@@ -29,7 +29,8 @@ void UT_UUIDGenerator__test(UT_UUIDGenerator* self)
   UT_DEBUGMSG(("------------------------- Testing uuid hash() ---------------------------\n"));
   std::vector<test_record> v;
   const UT_uint32 iMax = 512000;
-  const UT_uint32 iMsg = 5000;
+  const UT_uint32 iMsg = 5000; // used by the progress prints below when enabled
+  (void) iMsg;
   const UT_uint32 iTest = 10;
   UT_uint32 iColHTotal = 0;
   UT_uint32 iDeltaMinH = 0xffffffff;

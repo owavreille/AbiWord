@@ -143,8 +143,8 @@ if TOOLKIT_GTK_ALL
 servicefiledir = $(datadir)/dbus-1/services
 servicefile_in_file = telepathy/unix/org.freedesktop.Telepathy.Client.AbiCollab.service.in
 servicefile_DATA = $(servicefile_in_file:.service.in=.service)
-%.service: %.service.in Makefile
-	$(AM_V_GEN)sed -e "s|[@]bindir[@]|$(bindir)|" $< > $@
+$(servicefile_DATA): $(servicefile_in_file) Makefile
+	$(AM_V_GEN)sed -e "s|[@]bindir[@]|$(bindir)|" $(servicefile_in_file) > $@
 
 clientfiledir = $(datarootdir)/telepathy/clients
 clientfile_DATA = telepathy/unix/AbiCollab.client

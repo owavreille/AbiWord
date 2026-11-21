@@ -1037,6 +1037,7 @@ static UT_sint32 s_iLastXScrollOffset = -1;
 static void s_LoadingCursorCallback(UT_Worker * pTimer )
 {
 	UT_ASSERT(pTimer);
+	(void) pTimer;
 	xxx_UT_DEBUGMSG(("Update Screen on load Frame %x \n",s_pLoadingFrame));
 	XAP_Frame * pFrame = s_pLoadingFrame;
 	UT_uint32 iPageCount = 0;

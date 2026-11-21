@@ -24,6 +24,10 @@
 // linker drops ut_stack.o. Compile it into the test instead.
 #include "ut_stack.cpp"
 
+#if defined(__GNUC__)
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 #define TFSUITE "core.af.util.stack"
 
 TFTEST_MAIN("UT_Stack basics")

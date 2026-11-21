@@ -33,6 +33,13 @@ class XAP_FrameHelper;
 class XAP_App;
 class XAP_Dialog;
 
+// An enumerator whose value is zero is a null pointer constant. Passing it
+// through an integer parameter keeps the stored tag without that conversion.
+static inline gpointer abi_tag_pointer(int value)
+{
+	return reinterpret_cast<gpointer>(static_cast<gintptr>(value));
+}
+
 // This macro sets up stack pointers to be used with the ConvertToUnixString
 // macro.
 #define SETUP_UNIX_STRING  	gchar * newstr = nullptr;

@@ -188,7 +188,7 @@ GtkWidget * AP_UnixDialog_PageNumbers::_constructWindow (void)
 
 	GtkWidget * radioHeader = GTK_WIDGET(gtk_builder_get_object(builder, "rbHeader"));
 	localizeButton(radioHeader, pSS, AP_STRING_ID_DLG_PageNumbers_Header);
-	g_object_set_data(G_OBJECT(radioHeader), "user_data", GINT_TO_POINTER(AP_Dialog_PageNumbers::id_HDR));
+	g_object_set_data(G_OBJECT(radioHeader), "user_data", abi_tag_pointer(AP_Dialog_PageNumbers::id_HDR));
 
 	GtkWidget * radioFooter = GTK_WIDGET(gtk_builder_get_object(builder, "rbFooter"));
 	localizeButton(GTK_WIDGET(gtk_builder_get_object(builder, "rbFooter")), pSS, AP_STRING_ID_DLG_PageNumbers_Footer);
@@ -206,7 +206,7 @@ GtkWidget * AP_UnixDialog_PageNumbers::_constructWindow (void)
 
 	GtkWidget * radioRight = GTK_WIDGET(gtk_builder_get_object(builder, "rbRight"));
 	localizeButton(radioRight, pSS, AP_STRING_ID_DLG_PageNumbers_Right);
-	g_object_set_data(G_OBJECT(radioRight), "user_data", GINT_TO_POINTER(AP_Dialog_PageNumbers::id_RALIGN));
+	g_object_set_data(G_OBJECT(radioRight), "user_data", abi_tag_pointer(AP_Dialog_PageNumbers::id_RALIGN));
 
 	localizeLabelMarkup(GTK_WIDGET(gtk_builder_get_object(builder, "lbPreview")), pSS, AP_STRING_ID_DLG_PageNumbers_Preview);
 

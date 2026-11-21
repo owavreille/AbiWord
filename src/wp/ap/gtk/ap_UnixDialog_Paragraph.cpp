@@ -432,7 +432,7 @@ GtkWidget * AP_UnixDialog_Paragraph::_constructWindowContents(GtkWidget *windowM
 	gtk_widget_show (hboxAlignment);
 	listAlignment = GTK_COMBO_BOX(gtk_combo_box_new ());
 	XAP_makeGtkComboBoxText(listAlignment, G_TYPE_INT);
-	g_object_set_data(G_OBJECT(listAlignment), WIDGET_ID_TAG, (gpointer) id_MENU_ALIGNMENT);
+	g_object_set_data(G_OBJECT(listAlignment), WIDGET_ID_TAG, abi_tag_pointer(id_MENU_ALIGNMENT));
 	gtk_widget_show (GTK_WIDGET(listAlignment));
 	gtk_box_pack_start (GTK_BOX (hboxAlignment), GTK_WIDGET(listAlignment), FALSE, FALSE, 0);
 	gtk_grid_attach(GTK_GRID(boxSpacing), hboxAlignment, 1, 0, 1, 1);
