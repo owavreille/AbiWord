@@ -85,7 +85,19 @@ public:
 	{}
 
 	virtual std::string str() const override {
-		return value_;
+		std::string out;
+		out.reserve(value_.size());
+		for (size_t i = 0; i < value_.size(); ++i)
+		{
+			switch (value_[i])
+			{
+			case '&': out += "&amp;"; break;
+			case '<': out += "&lt;"; break;
+			case '>': out += "&gt;"; break;
+			default: out += value_[i]; break;
+			}
+		}
+		return out;
 	}
 
 private:
@@ -240,7 +252,6 @@ public:
 
 	std::string str() const {
 		std::string ret;
-		// TODO: XML escape args/values
 		for (std::vector< std::shared_ptr<function_arg> >::const_iterator cit = args.begin(); cit != args.end(); cit++) {
 			const function_arg& arg = **cit;
 			ret += "<" + arg.name() + " " + "xsi:type=\"" + soap_type(arg.type()) + "\"" +
