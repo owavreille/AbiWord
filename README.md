@@ -10,9 +10,9 @@ Installateur : [AbiWord 3.1 pour Windows](https://github.com/owavreille/AbiWord/
 | | |
 | --- | --- |
 | Fichier | `AbiWord-3.1-windows-x64-setup.exe` |
-| Taille | 26 302 275 octets |
-| SHA-256 | `223588875c7e286be4c1633255f3c12dbde11d0f144754de440d6d73bca2edf2` |
-| Code source de ce binaire | `20c9234ad988404e5b856dc92c6846f1c87f7cba` |
+| Taille | 26 305 958 octets |
+| SHA-256 | `1d0d8a6bccee1ac488dde894aa994c0ad1545faf1383b87c2761280b2486f3c7` |
+| Code source de ce binaire | `f353215b3415e68eb8d37ea111efa8226ae95169` |
 
 Le même condensat est joint à la release dans `AbiWord-3.1-windows-x64-setup.exe.sha256`.
 
