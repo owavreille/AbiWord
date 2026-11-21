@@ -49,9 +49,9 @@ pt2Constructor ap_Dialog_CollaborationAddBuddy_Constructor = &AP_Win32Dialog_Col
 
 AP_Win32Dialog_CollaborationAddBuddy::AP_Win32Dialog_CollaborationAddBuddy(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id)
 	: AP_Dialog_CollaborationAddBuddy(pDlgFactory, id),
-	m_hInstance(0),
-	m_hOK(0),
-	m_hCancel(0)
+	m_hInstance(nullptr),
+	m_hOK(nullptr),
+	m_hCancel(nullptr)
 	
 {
 	AbiCollabSessionManager * pSessionManager= AbiCollabSessionManager::getManager();

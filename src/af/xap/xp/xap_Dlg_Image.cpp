@@ -41,7 +41,13 @@ XAP_Dialog_Image::XAP_Dialog_Image(XAP_DialogFactory * pDlgFactory, XAP_Dialog_I
 	m_iWrappingType(WRAP_INLINE),	
     m_iPositionTo(POSITION_TO_PARAGRAPH),
     m_bInHdrFtr(false),
-    m_bTightWrap(false)
+    m_bTightWrap(false),
+    m_opacity(100),
+    m_brightness(0),
+    m_cropLeft(0),
+    m_cropRight(0),
+    m_cropTop(0),
+    m_cropBottom(0)
 {
 }
 
@@ -322,6 +328,75 @@ void  XAP_Dialog_Image::setPreferedUnits(UT_Dimension dim)
 UT_Dimension XAP_Dialog_Image::getPreferedUnits(void)
 {
 	return m_PreferedUnits;
+}
+
+static int s_clampImage(int value, int low, int high)
+{
+	if (value < low)
+		return low;
+	if (value > high)
+		return high;
+	return value;
+}
+
+void XAP_Dialog_Image::setOpacity(int opacity)
+{
+	m_opacity = s_clampImage(opacity, 0, 100);
+}
+
+void XAP_Dialog_Image::setBrightness(int brightness)
+{
+	m_brightness = s_clampImage(brightness, -100, 100);
+}
+
+void XAP_Dialog_Image::setCropLeft(int percent)
+{
+	m_cropLeft = s_clampImage(percent, 0, 80);
+}
+
+void XAP_Dialog_Image::setCropRight(int percent)
+{
+	m_cropRight = s_clampImage(percent, 0, 80);
+}
+
+void XAP_Dialog_Image::setCropTop(int percent)
+{
+	m_cropTop = s_clampImage(percent, 0, 80);
+}
+
+void XAP_Dialog_Image::setCropBottom(int percent)
+{
+	m_cropBottom = s_clampImage(percent, 0, 80);
+}
+
+void XAP_Dialog_Image::stepOpacity(bool up)
+{
+	setOpacity(m_opacity + (up ? 1 : -1));
+}
+
+void XAP_Dialog_Image::stepBrightness(bool up)
+{
+	setBrightness(m_brightness + (up ? 1 : -1));
+}
+
+void XAP_Dialog_Image::stepCropLeft(bool up)
+{
+	setCropLeft(m_cropLeft + (up ? 1 : -1));
+}
+
+void XAP_Dialog_Image::stepCropRight(bool up)
+{
+	setCropRight(m_cropRight + (up ? 1 : -1));
+}
+
+void XAP_Dialog_Image::stepCropTop(bool up)
+{
+	setCropTop(m_cropTop + (up ? 1 : -1));
+}
+
+void XAP_Dialog_Image::stepCropBottom(bool up)
+{
+	setCropBottom(m_cropBottom + (up ? 1 : -1));
 }
 
 

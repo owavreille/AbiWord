@@ -37,6 +37,7 @@
 #include "OXMLi_ListenerState_Field.h"
 #include "OXMLi_ListenerState_Footnote.h"
 #include "OXMLi_ListenerState_Endnote.h"
+#include "OXMLi_ListenerState_Comment.h"
 #include "OXMLi_ListenerState_Image.h"
 #include "OXMLi_ListenerState_Textbox.h"
 #include "OXMLi_ListenerState_Valid.h"
@@ -51,7 +52,8 @@ OXMLi_StreamListener::OXMLi_StreamListener() :
 	m_pSectStack(new OXMLi_SectionStack()),
 	m_context(new OXMLi_ContextVector()),
 	m_parseStatus(UT_OK),
-	m_namespaces(new OXMLi_Namespace_Common())
+	m_namespaces(new OXMLi_Namespace_Common()),
+	m_fallbackDepth(0)
 {
 	clearStates();
 }
@@ -130,6 +132,16 @@ void OXMLi_StreamListener::setupStates(OXML_PartType type, const char * partId)
 		this->pushState(state);
 		state = new OXMLi_ListenerState_Common();
 		this->pushState(state);
+		break;
+	case COMMENTS_PART:
+		state = new OXMLi_ListenerState_Comment();
+		this->pushState(state);
+		state = new OXMLi_ListenerState_Common();
+		this->pushState(state);
+		break;
+	case COMMENTSEX_PART:
+		state = new OXMLi_ListenerState_Comment();
+		this->pushState(state);
 		break;	
 	case NUMBERING_PART:
 		state = new OXMLi_ListenerState_Numbering();
@@ -172,6 +184,12 @@ void OXMLi_StreamListener::startElement (const gchar* pName, const gchar** ppAtt
 
 	std::map<std::string, std::string>* atts = m_namespaces->processAttributes(pName, ppAtts);
 	std::string name = m_namespaces->processName(pName);
+	bool fallback = name == "VE:Fallback" || (name.size() >= 9 && name.compare(name.size() - 9, 9, ":Fallback") == 0);
+	if (m_fallbackDepth > 0 || fallback)
+	{
+		m_fallbackDepth++;
+		return;
+	}
 
 	OXMLi_StartElementRequest rqst = { name, atts, m_pElemStack, m_pSectStack, m_context, false, false };
 
@@ -192,6 +210,12 @@ void OXMLi_StreamListener::endElement (const gchar* pName)
 {
 	UT_return_if_fail(!m_states.empty() || m_parseStatus == UT_OK);
 
+	if (m_fallbackDepth > 0)
+	{
+		m_fallbackDepth--;
+		return;
+	}
+
 	m_context->pop_back();
 	std::string name = m_namespaces->processName(pName);
 
@@ -210,6 +234,8 @@ void OXMLi_StreamListener::endElement (const gchar* pName)
 void OXMLi_StreamListener::charData (const gchar* pBuffer, int length)
 {
 	UT_return_if_fail(!m_states.empty() || m_parseStatus == UT_OK);
+	if (m_fallbackDepth > 0)
+		return;
 
 	OXMLi_CharDataRequest rqst = { pBuffer, length, m_pElemStack, m_context, false, false };
 	std::list<OXMLi_ListenerState*>::iterator it=m_states.begin();

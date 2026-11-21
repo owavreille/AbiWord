@@ -44,8 +44,8 @@ public:
 	AP_Win32Dialog_CollaborationShare(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	static XAP_Dialog * 		static_constructor(XAP_DialogFactory * pFactory, XAP_Dialog_Id id);
 
-	void						runModal(XAP_Frame * pFrame);
-	static BOOL CALLBACK		s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	void						runModal(XAP_Frame * pFrame) override;
+	static INT_PTR CALLBACK		s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
 
@@ -53,10 +53,10 @@ private:
 	XAP_Win32DialogHelper *	m_pWin32Dialog;
 
 	void					_populateWindowData();
-	void					_populateBuddyModel(bool refresh);
-	void					_refreshWindow();
-	AccountHandler*			_getActiveAccountHandler();
-	void					_setAccountHint(const UT_UTF8String& sHint);
+	void					_populateBuddyModel(bool refresh) override;
+	void					_refreshWindow() override;
+	AccountHandler*			_getActiveAccountHandler() override;
+	void					_setAccountHint(const UT_UTF8String& sHint) override;
 	void					_getSelectedBuddies(std::vector<std::string>& vACL);
 	void					_freeBuddyList();
 

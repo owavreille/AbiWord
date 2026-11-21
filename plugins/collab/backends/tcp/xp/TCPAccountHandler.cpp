@@ -455,7 +455,9 @@ bool TCPAccountHandler::send(const Packet* packet)
 				pbs.second->asyncWrite(data.size(), data.c_str());
 			}
 			else
+			{
 				UT_ASSERT(UT_NOT_REACHED);
+			}
 		}
 	}
 	return true;

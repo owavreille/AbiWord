@@ -1,0 +1,74 @@
+--- wv-1.2.9/wvConfig.c	2026-11-21 22:44:48
++++ wv-1.2.9/wvConfig.c	2026-11-21 22:44:48
+@@ -3613,8 +3613,8 @@
+ 	memset(&hdl, 0, sizeof(hdl));
+ 
+ 	hdl.getEntity = _getEntity;
+-	hdl.startElement = exstartElement;
+-	hdl.endElement = exendElement;
++	hdl.startElement = (startElementSAXFunc) exstartElement;
++	hdl.endElement = (endElementSAXFunc) exendElement;
+ 	hdl.characters = excharData;
+ 
+ 	ctxt = xmlCreateMemoryParserCtxt ((const char *) buf, len);
+--- wv-1.2.9/decrypt95.c	2026-11-21 22:44:48
++++ wv-1.2.9/decrypt95.c	2026-11-21 22:44:48
+@@ -173,7 +173,7 @@
+     gsf_output_close (mainfd);
+ 
+     wvStream_memory_create(&ps->mainfd, 
+-			   g_memdup (gsf_output_memory_get_bytes (GSF_OUTPUT_MEMORY (mainfd)), gsf_output_size (mainfd)),
++			   g_memdup2 (gsf_output_memory_get_bytes (GSF_OUTPUT_MEMORY (mainfd)), gsf_output_size (mainfd)),
+ 			   gsf_output_size (mainfd));
+ 
+     g_object_unref (G_OBJECT (mainfd));
+--- wv-1.2.9/decrypt97.c	2026-11-21 22:44:48
++++ wv-1.2.9/decrypt97.c	2026-11-21 22:44:48
+@@ -275,10 +275,10 @@
+     wvStream_close (ps->mainfd);
+  
+     wvStream_memory_create(&ps->tablefd0, 
+-			   g_memdup (gsf_output_memory_get_bytes (GSF_OUTPUT_MEMORY (outtable)), gsf_output_size (outtable)),
++			   g_memdup2 (gsf_output_memory_get_bytes (GSF_OUTPUT_MEMORY (outtable)), gsf_output_size (outtable)),
+ 			   gsf_output_size (outtable));
+     wvStream_memory_create(&ps->mainfd, 
+-			   g_memdup (gsf_output_memory_get_bytes (GSF_OUTPUT_MEMORY (outmain)), gsf_output_size (outmain)),
++			   g_memdup2 (gsf_output_memory_get_bytes (GSF_OUTPUT_MEMORY (outmain)), gsf_output_size (outmain)),
+ 			   gsf_output_size (outmain));
+ 
+     g_object_unref (G_OBJECT (outtable));
+--- wv-1.2.9/wvSummary.c	2026-11-21 22:44:48
++++ wv-1.2.9/wvSummary.c	2026-11-21 22:44:48
+@@ -31,6 +31,7 @@
+ #include <gsf/gsf-infile.h>
+ #include <gsf/gsf-infile-msole.h>
+ #include <gsf/gsf-msole-utils.h>
++#include <gsf/gsf-doc-meta-data.h>
+ #include <gsf/gsf-docprop-vector.h>
+ #include <gsf/gsf-meta-names.h>
+ 
+@@ -115,12 +116,12 @@
+     fprintf (stdout, "\t%s = ", _name);
+   
+   if (VAL_IS_GSF_DOCPROP_VECTOR ((GValue *)val)) {
+-    GValueArray *va = gsf_value_get_docprop_varray (val);
++    GArray *va = gsf_value_get_docprop_array (val);
+     unsigned i;
+     
+     fprintf(stdout, "[");
+-    for (i = 0 ; i < va->n_values; i++) {
+-      tmp = g_strdup_value_contents (g_value_array_get_nth (va, i));
++    for (i = 0 ; i < va->len; i++) {
++      tmp = g_strdup_value_contents (&g_array_index (va, GValue, i));
+       if(i != 0)
+ 	fprintf(stdout, ", ");
+       fprintf (stdout, "(%u, %s)", i, tmp);
+@@ -146,7 +147,7 @@
+     GsfDocMetaData *meta_data = gsf_doc_meta_data_new ();
+     GError    *err = NULL;    
+ 
+-    err = gsf_msole_metadata_read (stream, meta_data);
++    err = gsf_doc_meta_data_read_from_msole (meta_data, stream);
+     if (err != NULL) {
+       g_warning ("Error getting metadata for %s->%s: %s", 
+ 		 file_name, stream_name, err->message);

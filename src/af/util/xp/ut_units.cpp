@@ -120,7 +120,7 @@ UT_Dimension UT_determineDimension(const char * sz, UT_Dimension fallback)
       else if (g_ascii_strcasecmp(p,"mm") == 0)
 	return DIM_MM;
       
-      else if (g_ascii_strcasecmp(p,"pi") == 0)
+      else if (g_ascii_strcasecmp(p,"pi") == 0 || g_ascii_strcasecmp(p,"pc") == 0)
 	return DIM_PI;
       
       else if (g_ascii_strcasecmp(p,"pt") == 0)

@@ -131,6 +131,9 @@ bool IE_Exp_OpenXML_Listener::populate(fl_ContainerLayout* /* sfh */, const PX_C
 					{
 						if(element_text->setAttribute(szName, szValue) != UT_OK)
 							return false;
+						if((!strcmp(szName, "revision") || !strncmp(szName, "sdt-", 4)) &&
+							element_run->setAttribute(szName, szValue) != UT_OK)
+							return false;
 					}
 				}
 			}
@@ -429,6 +432,29 @@ bool IE_Exp_OpenXML_Listener::populate(fl_ContainerLayout* /* sfh */, const PX_C
 						return element_run->appendElement(shared_element_image) == UT_OK;
 					}
 					return true;
+				}
+
+				case PTO_Annotation:
+				{
+					const gchar* number = nullptr;
+					bool start = bHaveProp && pAP && pAP->getAttribute("annotation", number) && number && *number;
+					std::string commentId = start ? number : (m_openCommentIds.empty() ? "1" : m_openCommentIds.back());
+					OXML_Element_Comment* marker = new OXML_Element_Comment(commentId);
+					if (start)
+					{
+						marker->setType("start");
+						m_openCommentIds.push_back(commentId);
+					}
+					else
+					{
+						marker->setType("end");
+						if (!m_openCommentIds.empty())
+							m_openCommentIds.pop_back();
+					}
+					OXML_SharedElement shared_marker(static_cast<OXML_Element*>(marker));
+					if (!paragraph)
+						return true;
+					return paragraph->appendElement(shared_marker) == UT_OK;
 				}
 
 				case PTO_Bookmark:
@@ -1066,11 +1092,44 @@ bool IE_Exp_OpenXML_Listener::populateStrux(pf_Frag_Strux* sdh, const PX_ChangeR
 				bInTextbox = false;
 			return true;
 		}
-		case PTX_SectionMarginnote:
 		case PTX_SectionAnnotation:
+		{
+			savedSection = section;
+			savedParagraph = paragraph;
+			const gchar* id = nullptr;
+			if (!(bHaveProp && pAP && pAP->getAttribute("annotation-id", id) && id && *id))
+				id = m_openCommentIds.empty() ? "1" : m_openCommentIds.back().c_str();
+			section = new OXML_Section(id);
+			section->setTarget(TARGET_COMMENT);
+			section->setAttribute("annotation-id", id);
+			if (bHaveProp && pAP)
+			{
+				const gchar* value = nullptr;
+				if (pAP->getProperty("annotation-author", value) && value)
+					section->setAttribute("annotation-author", value);
+				if (pAP->getProperty("annotation-date", value) && value)
+					section->setAttribute("annotation-date", value);
+				if (pAP->getProperty("annotation-initials", value) && value)
+					section->setAttribute("annotation-initials", value);
+				if (pAP->getProperty("annotation-parent", value) && value)
+					section->setAttribute("annotation-parent", value);
+				if (pAP->getProperty("annotation-resolved", value) && value)
+					section->setAttribute("annotation-resolved", value);
+				if (pAP->getProperty("annotation-title", value) && value)
+					section->setAttribute("annotation-title", value);
+			}
+			OXML_SharedSection shared_section(section);
+			return document->addComment(shared_section) == UT_OK;
+		}
+		case PTX_EndAnnotation:
+		{
+			section = savedSection;
+			paragraph = savedParagraph;
+			return true;
+		}
+		case PTX_SectionMarginnote:
 		case PTX_SectionTOC:
 		case PTX_EndMarginnote:
-		case PTX_EndAnnotation:
 		case PTX_EndTOC:
 		default:
 			return true;

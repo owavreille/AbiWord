@@ -38,6 +38,7 @@
 #include "ODi_ElementStack.h"
 #include "ODi_TableOfContent_ListenerState.h"
 #include "ODi_Abi_Data.h"
+#include <cstdio>
 #include "ut_growbuf.h"
 #include "pf_Frag.h"
 #include "ie_exp_RTF.h"
@@ -93,6 +94,7 @@ ODi_TextContent_ListenerState::ODi_TextContent_ListenerState (
                   m_bPendingAnnotation(false),
                   m_bPendingAnnotationAuthor(false),
                   m_bPendingAnnotationDate(false),
+                  m_bPendingAnnotationInitials(false),
                   m_iAnnotation(0),
 		  m_bPageReferencePending(false),
 		  m_iPageNum(0),
@@ -134,6 +136,21 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
                                           const gchar** ppAtts,
                                           ODi_ListenerStateAction& rAction)
 {
+    if (m_inTrackedChanges) {
+        if (!strcmp(pName, "text:changed-region")) {
+            const gchar* id = UT_getAttribute("text:id", ppAtts);
+            m_currentChangeId = id ? id : "";
+            m_currentChangeKind = 0;
+        } else if (!strcmp(pName, "text:insertion") || !strcmp(pName, "text:format-change")) {
+            m_currentChangeKind = '+';
+        } else if (!strcmp(pName, "text:deletion")) {
+            m_currentChangeKind = '-';
+        } else if (!strcmp(pName, "office:change-info")) {
+            m_inChangeInfo = true;
+        }
+        return;
+    }
+
     if (strcmp(pName, "text:section" ) != 0 ) {
         _flushPendingParagraphBreak();
     }
@@ -282,7 +299,7 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
         // Otherwise the spaces will appear in the wrong position.
         _flush();
         
-        m_pAbiDocument->appendSpan(string.ucs4_str(), string.size());
+        _appendTrackedText(string);
 	m_bContentWritten = true;
        
     } else if (!strcmp(pName, "text:tab")) {
@@ -294,7 +311,7 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
         // Otherwise the spaces will appear in the wrong position.
         _flush();
         
-        m_pAbiDocument->appendSpan(string.ucs4_str(), string.size());
+        _appendTrackedText(string);
 	m_bContentWritten = true; 
 
     } else if (!strcmp(pName, "text:table-of-content")) {
@@ -493,9 +510,25 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
         m_bAcceptingText = false;
 
     } else if (!strcmp(pName, "text:tracked-changes")){
-		 UT_DEBUGMSG(("Ignoring text:tracked-changes \n"));
-		 rAction.ignoreElement(-1);
-       
+        m_inTrackedChanges = true;
+	} else if (!strcmp(pName, "text:change-start")) {
+        const gchar* id = UT_getAttribute("text:change-id", ppAtts);
+        _flush();
+        m_openRevision = _revisionToken(id, '+');
+	} else if (!strcmp(pName, "text:change-end")) {
+        _flush();
+        m_openRevision.clear();
+	} else if (!strcmp(pName, "text:change")) {
+        const gchar* id = UT_getAttribute("text:change-id", ppAtts);
+        _flush();
+        std::map<std::string, std::string>::iterator found = m_deletedText.find(id ? id : "");
+        if (found != m_deletedText.end() && !found->second.empty()) {
+            UT_UCS4String deleted(found->second.c_str(), static_cast<int>(found->second.size()), false);
+            std::string saved = m_openRevision;
+            m_openRevision = _revisionToken(id, '-');
+            _appendTrackedText(deleted);
+            m_openRevision = saved;
+        }
 	} else if (!strcmp(pName, "style:header") ||
                !strcmp(pName, "style:footer") ||
                !strcmp(pName, "style:header-left") ||
@@ -909,8 +942,15 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
             std::string id;
             m_sAnnotationAuthor.clear();
             m_sAnnotationDate.clear();
+            m_sAnnotationInitials.clear();
+            m_sAnnotationParent.clear();
+            m_sAnnotationResolved.clear();
             m_sAnnotationName.clear();
             m_sAnnotationXMLID.clear();
+            if( const gchar* parent = UT_getAttribute("loext:parent-name", ppAtts))
+                m_sAnnotationParent = parent;
+            if( const gchar* resolved = UT_getAttribute("loext:resolved", ppAtts))
+                m_sAnnotationResolved = resolved;
             if( const gchar* s = UT_getAttribute("office:name", ppAtts))
             {
                 m_sAnnotationName = s;
@@ -957,6 +997,13 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
             m_bAcceptingText = false;
         }
 
+    } else if (!strcmp(pName, "meta:creator-initials")) {
+
+        if (m_bPendingAnnotation) {
+            m_bPendingAnnotationInitials = true;
+            m_bAcceptingText = false;
+        }
+
     } else if (!strcmp(pName, "text:soft-page-break")){
         // soft page breaks are NOT manual page breaks, we must ignore them,
         // see http://bugzilla.abisource.com/show_bug.cgi?id=13661
@@ -974,6 +1021,24 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
 void ODi_TextContent_ListenerState::endElement (const gchar* pName,
                                                ODi_ListenerStateAction& rAction)
 {
+    if (!strcmp(pName, "text:tracked-changes")) {
+        m_inTrackedChanges = false;
+        m_inChangeInfo = false;
+        m_currentChangeKind = 0;
+        m_currentChangeId.clear();
+    }
+    if (m_inTrackedChanges) {
+        if (!strcmp(pName, "office:change-info"))
+            m_inChangeInfo = false;
+        if (!strcmp(pName, "text:changed-region") && !m_currentChangeId.empty() && m_currentChangeKind)
+            m_changeKind[m_currentChangeId] = m_currentChangeKind;
+        if ((m_currentChangeKind == '-') &&
+            (!strcmp(pName, "text:p") || !strcmp(pName, "text:h")) &&
+            !m_deletedText[m_currentChangeId].empty())
+            m_deletedText[m_currentChangeId] += " ";
+        return;
+    }
+
     UT_ASSERT(m_elementParsingLevel >= 0);
     
     if (!strcmp(pName, "text:table-of-content")) {
@@ -1180,6 +1245,12 @@ void ODi_TextContent_ListenerState::endElement (const gchar* pName,
             m_bPendingAnnotationDate = false;
             m_bAcceptingText = true;
         }
+    } else if (!strcmp(pName, "meta:creator-initials")) {
+
+        if (m_bPendingAnnotationInitials) {
+            m_bPendingAnnotationInitials = false;
+            m_bAcceptingText = true;
+        }
     }
     else if (!strcmp(pName, "draw:frame")) {
       m_bPageReferencePending = false;
@@ -1339,6 +1410,12 @@ void ODi_TextContent_ListenerState::charData (
     if (!pBuffer || !length)
         return; // nothing to do
 
+    if (m_inTrackedChanges) {
+        if (m_currentChangeKind == '-' && !m_inChangeInfo)
+            m_deletedText[m_currentChangeId].append(pBuffer, length);
+        return;
+    }
+
     if (m_bAcceptingText) 
     {
 #ifdef DEBUG
@@ -1366,7 +1443,11 @@ void ODi_TextContent_ListenerState::charData (
     } 
     else if (m_bPendingAnnotationDate) 
     {
-        m_sAnnotationDate = std::string(pBuffer, length);
+        m_sAnnotationDate = ODc_annotationDate(std::string(pBuffer, length), true);
+    }
+    else if (m_bPendingAnnotationInitials)
+    {
+        m_sAnnotationInitials = std::string(pBuffer, length);
     }
     else if (m_bPendingNoteCitation) {  
         m_noteCitation = std::string(pBuffer, length);
@@ -1399,11 +1480,43 @@ void ODi_TextContent_ListenerState::_insertBookmark (const gchar* pName,
 /**
  * 
  */
+void ODi_TextContent_ListenerState::_appendTrackedText(const UT_UCS4String& text)
+{
+    if (text.size() == 0)
+        return;
+    if (!m_openRevision.empty()) {
+        PP_PropertyVector fmt = m_vecInlineFmt;
+        fmt.push_back("revision");
+        fmt.push_back(m_openRevision);
+        m_pAbiDocument->appendFmt(fmt);
+        m_pAbiDocument->appendSpan(text.ucs4_str(), text.size());
+        m_pAbiDocument->appendFmt(m_vecInlineFmt.empty() ? PP_NOPROPS : m_vecInlineFmt);
+    } else {
+        m_pAbiDocument->appendSpan(text.ucs4_str(), text.size());
+    }
+}
+
+std::string ODi_TextContent_ListenerState::_revisionToken(const char* id, char kind)
+{
+    std::string key = id ? id : "";
+    int number = 0;
+    std::map<std::string, int>::iterator found = m_revisionIds.find(key);
+    if (found == m_revisionIds.end()) {
+        number = ++m_nextRevisionId;
+        m_revisionIds[key] = number;
+    } else {
+        number = found->second;
+    }
+    char buf[32];
+    snprintf(buf, sizeof buf, "%c%d", kind == '-' ? '-' : '+', number);
+    return buf;
+}
+
 void ODi_TextContent_ListenerState::_flush ()
 {
     if (m_charData.size () > 0 && m_bAcceptingText)
     {
-        m_pAbiDocument->appendSpan (m_charData.ucs4_str(), m_charData.size ());
+        _appendTrackedText(m_charData);
         m_charData.clear ();
         m_bContentWritten = true;
     } 
@@ -2126,8 +2239,30 @@ void ODi_TextContent_ListenerState::_insertAnnotation() {
             props += "; ";
         }
         props += "annotation-date: ";
-        props += ODc_reorderDate(m_sAnnotationDate, true);
+        props += m_sAnnotationDate;
         m_sAnnotationDate.clear();
+    }
+
+    if (!m_sAnnotationInitials.empty()) {
+        if (!props.empty())
+            props += "; ";
+        props += "annotation-initials: ";
+        props += m_sAnnotationInitials;
+        m_sAnnotationInitials.clear();
+    }
+    if (!m_sAnnotationParent.empty()) {
+        if (!props.empty())
+            props += "; ";
+        props += "annotation-parent: ";
+        props += m_sAnnotationParent;
+        m_sAnnotationParent.clear();
+    }
+    if (!m_sAnnotationResolved.empty()
+        && (m_sAnnotationResolved == "true" || m_sAnnotationResolved == "1")) {
+        if (!props.empty())
+            props += "; ";
+        props += "annotation-resolved: 1";
+        m_sAnnotationResolved.clear();
     }
 
     //

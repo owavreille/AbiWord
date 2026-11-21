@@ -95,6 +95,19 @@ void ODi_ManifestStream_ListenerState::startElement (const gchar* pName,
         m_pCryptoInfo->m_checksum = pVal ? pVal : "";
         pVal = UT_getAttribute ("manifest:checksum-type", ppAtts);
         m_pCryptoInfo->m_checksumType = pVal ? pVal : "";
+        m_pCryptoInfo->m_derivedKeySize = 0;
+        m_pCryptoInfo->m_startKeySize = 0;
+        m_pCryptoInfo->m_startKeyName.clear();
+    }
+
+    if (!strcmp(pName, "manifest:start-key-generation")) {
+        UT_return_if_fail(m_pCryptoInfo);
+        pVal = UT_getAttribute("manifest:start-key-generation-name", ppAtts);
+        m_pCryptoInfo->m_startKeyName = pVal ? pVal : "";
+        pVal = UT_getAttribute("manifest:key-size", ppAtts);
+        UT_uint32 parsed = 0;
+        if (abi_manifest_u32(pVal, 64, &parsed))
+            m_pCryptoInfo->m_startKeySize = parsed;
     }
 
     if (!strcmp(pName, "manifest:algorithm")) {
@@ -120,6 +133,11 @@ void ODi_ManifestStream_ListenerState::startElement (const gchar* pName,
 
         pVal = UT_getAttribute ("manifest:salt", ppAtts);
         m_pCryptoInfo->m_salt = pVal ? pVal : "";
+
+        pVal = UT_getAttribute("manifest:key-size", ppAtts);
+        UT_uint32 parsedKey = 0;
+        if (abi_manifest_u32(pVal, 64, &parsedKey))
+            m_pCryptoInfo->m_derivedKeySize = parsedKey;
 	}
 }
 

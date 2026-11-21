@@ -2601,6 +2601,129 @@ void GR_CairoGraphics::drawImage(GR_Image* pImg,
 	cairo_restore(m_cr);
 }
 
+static int s_tuneEdge(int percent, int size)
+{
+	if (percent < 0)
+		percent = 0;
+	if (percent > 90)
+		percent = 90;
+	return percent * size / 100;
+}
+
+static void s_brighten(int& channel, int delta)
+{
+	channel += delta;
+	if (channel < 0)
+		channel = 0;
+	else if (channel > 255)
+		channel = 255;
+}
+
+void GR_CairoGraphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest, const GR_ImageTune& tune)
+{
+	if (!m_cr || !pImg || !tune.isAdjusted() || pImg->getType() != GR_Image::GRT_Raster)
+	{
+		drawImage(pImg, xDest, yDest);
+		return;
+	}
+
+	GR_CairoRasterImage* raster = static_cast<GR_CairoRasterImage*>(pImg);
+	cairo_surface_t* src = raster->getCairoSurface();
+	if (!src || cairo_surface_get_type(src) != CAIRO_SURFACE_TYPE_IMAGE)
+	{
+		drawImage(pImg, xDest, yDest);
+		return;
+	}
+
+	cairo_surface_flush(src);
+	const cairo_format_t format = cairo_image_surface_get_format(src);
+	const int srcW = cairo_image_surface_get_width(src);
+	const int srcH = cairo_image_surface_get_height(src);
+	if (srcW <= 0 || srcH <= 0 || (format != CAIRO_FORMAT_ARGB32 && format != CAIRO_FORMAT_RGB24))
+	{
+		drawImage(pImg, xDest, yDest);
+		return;
+	}
+
+	int left = s_tuneEdge(tune.cropLeft, srcW);
+	int right = s_tuneEdge(tune.cropRight, srcW);
+	int top = s_tuneEdge(tune.cropTop, srcH);
+	int bottom = s_tuneEdge(tune.cropBottom, srcH);
+	if (left + right >= srcW)
+		right = srcW - left - 1;
+	if (top + bottom >= srcH)
+		bottom = srcH - top - 1;
+	const int cropW = srcW - left - right;
+	const int cropH = srcH - top - bottom;
+	if (cropW <= 0 || cropH <= 0)
+		return;
+
+	cairo_surface_t* tuned = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, cropW, cropH);
+	if (!tuned || cairo_surface_status(tuned) != CAIRO_STATUS_SUCCESS)
+	{
+		if (tuned)
+			cairo_surface_destroy(tuned);
+		drawImage(pImg, xDest, yDest);
+		return;
+	}
+
+	const int srcStride = cairo_image_surface_get_stride(src);
+	const int dstStride = cairo_image_surface_get_stride(tuned);
+	const unsigned char* srcData = cairo_image_surface_get_data(src);
+	unsigned char* dstData = cairo_image_surface_get_data(tuned);
+	const int delta = tune.brightness * 255 / 100;
+	const bool premultiplied = format == CAIRO_FORMAT_ARGB32;
+	for (int y = 0; y < cropH; ++y)
+	{
+		const unsigned char* srow = srcData + (size_t)(top + y) * (size_t)srcStride + (size_t)left * 4;
+		unsigned char* drow = dstData + (size_t)y * (size_t)dstStride;
+		for (int x = 0; x < cropW; ++x)
+		{
+			int b = srow[x * 4 + 0];
+			int g = srow[x * 4 + 1];
+			int r = srow[x * 4 + 2];
+			int a = premultiplied ? srow[x * 4 + 3] : 255;
+			if (premultiplied && a > 0 && a < 255)
+			{
+				b = b * 255 / a;
+				g = g * 255 / a;
+				r = r * 255 / a;
+			}
+			if (delta != 0)
+			{
+				s_brighten(b, delta);
+				s_brighten(g, delta);
+				s_brighten(r, delta);
+			}
+			if (!premultiplied)
+				a = 255;
+			drow[x * 4 + 0] = (unsigned char)(b * a / 255);
+			drow[x * 4 + 1] = (unsigned char)(g * a / 255);
+			drow[x * 4 + 2] = (unsigned char)(r * a / 255);
+			drow[x * 4 + 3] = (unsigned char)a;
+		}
+	}
+	cairo_surface_mark_dirty(tuned);
+
+	int opacity = tune.opacity;
+	if (opacity < 0)
+		opacity = 0;
+	else if (opacity > 100)
+		opacity = 100;
+
+	_setProps();
+	cairo_save(m_cr);
+	_resetClip();
+	cairo_translate(m_cr, _tdudX(xDest), _tdudY(yDest));
+	cairo_scale(m_cr, (double)pImg->getDisplayWidth() / (double)cropW,
+		(double)pImg->getDisplayHeight() / (double)cropH);
+	cairo_set_source_surface(m_cr, tuned, 0, 0);
+	cairo_pattern_set_extend(cairo_get_source(m_cr), CAIRO_EXTEND_NONE);
+	cairo_paint_with_alpha(m_cr, opacity / 100.0);
+	cairo_restore(m_cr);
+	cairo_surface_destroy(tuned);
+}
+
 void GR_CairoGraphics::setFont(const GR_Font * pFont)
 {
 	UT_return_if_fail( pFont && pFont->getType() == GR_FONT_UNIX_PANGO);

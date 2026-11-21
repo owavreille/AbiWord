@@ -2140,30 +2140,33 @@ void fp_Page::_reformatAnnotations(void)
 	fp_Column* pFirstColumnLeader = getNthColumnLeader(0);
 	fl_DocSectionLayout* pFirstSectionLayout = (pFirstColumnLeader->getDocSectionLayout());
 	UT_ASSERT(m_pOwner == pFirstSectionLayout);
-	UT_sint32 iBottomMargin = pFirstSectionLayout->getBottomMargin();
-	UT_uint32 pageHeight = getHeight() - iBottomMargin;
-	UT_uint32 iAnnotationHeight = 0;
-	UT_sint32 i = 0;
-	for (i = 0; i < countAnnotationContainers(); i++)
-	{
-		iAnnotationHeight += getNthAnnotationContainer(i)->getHeight();
-	}
-
-	pageHeight -= iAnnotationHeight;
-	xxx_UT_DEBUGMSG(("got page height %d, footnote height %d\n", pageHeight, iAnnotationHeight));
-	for (i = 0; i < countAnnotationContainers(); i++)
+	GR_Graphics* pG = getGraphics();
+	UT_sint32 margin = pFirstSectionLayout->getRightMargin();
+	UT_sint32 width = margin - (pG ? pG->tlu(8) : 8);
+	if (width < (pG ? pG->tlu(72) : 72))
+		width = pG ? pG->tlu(96) : 96;
+	UT_sint32 x = getWidth() - margin + (pG ? pG->tlu(4) : 4);
+	UT_sint32 nextY = pFirstSectionLayout->getTopMargin();
+	UT_sint32 gap = pG ? pG->tlu(6) : 6;
+	for (UT_sint32 i = 0; i < countAnnotationContainers(); i++)
 	{
 		fp_AnnotationContainer * pAC = getNthAnnotationContainer(i);
-		fl_DocSectionLayout* pSL = (getNthColumnLeader(0)->getDocSectionLayout());
-
-		if((m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB) &&
-		   !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
-			pAC->setX(m_pView->getTabToggleAreaWidth());
-		else
-			pAC->setX(pSL->getLeftMargin());
-
-		pAC->setY(pageHeight);
-		pageHeight += getNthAnnotationContainer(i)->getHeight();
+		if (!pAC)
+			continue;
+		pAC->setWidth(width);
+		UT_sint32 y = nextY;
+		fl_AnnotationLayout* pAL = static_cast<fl_AnnotationLayout*>(pAC->getSectionLayout());
+		fp_AnnotationRun* pRun = pAL ? pAL->getAnnotationRun() : nullptr;
+		if (pRun && pRun->getLine() && pRun->getLine()->getColumn())
+		{
+			fp_Line* pLine = pRun->getLine();
+			y = pLine->getColumn()->getY() + pLine->getY();
+		}
+		if (y < nextY)
+			y = nextY;
+		pAC->setX(x);
+		pAC->setY(y);
+		nextY = y + pAC->getHeight() + gap;
 	}
 }
 

@@ -52,6 +52,7 @@ public:
 
 	void clearArea(UT_sint32 x, UT_sint32 y, UT_sint32 w, UT_sint32 h);
 	void drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest);
+	void drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest, const GR_ImageTune& tune);
 	void polygon(const UT_RGBColor& c, const UT_Point *pts, UT_uint32 nPoints);
 	void polyLine(const UT_Point * pts, UT_uint32 nPoints);
 	void drawGlyph(UT_uint32 glyph_idx, UT_sint32 xoff, UT_sint32 yoff);

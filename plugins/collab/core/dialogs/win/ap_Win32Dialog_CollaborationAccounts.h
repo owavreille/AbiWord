@@ -37,13 +37,13 @@ public:
 	AP_Win32Dialog_CollaborationAccounts(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 
 	static XAP_Dialog * 	static_constructor(XAP_DialogFactory * pFactory, XAP_Dialog_Id id);
-	void					runModal(XAP_Frame * pFrame);
-	static BOOL CALLBACK	s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	void					runModal(XAP_Frame * pFrame) override;
+	static INT_PTR CALLBACK	s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	BOOL 					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL 					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL					_onNotify(HWND hWnd, WPARAM wParam, LPARAM lParam);
 
-	virtual void			signal(const Event& event, BuddyPtr pSource);
+	void					signal(const Event& event, BuddyPtr pSource) override;
 
 private:
 	void					_populateWindowData();

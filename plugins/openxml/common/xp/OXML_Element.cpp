@@ -170,4 +170,9 @@ UT_Error OXML_Element::addToPT(PD_Document * pDocument)
 void OXML_Element::setTarget(int target)
 {
 	TARGET = target;
+	for (OXML_ElementVector::size_type i = 0; i < m_children.size(); ++i)
+	{
+		if (m_children[i])
+			m_children[i]->setTarget(target);
+	}
 }

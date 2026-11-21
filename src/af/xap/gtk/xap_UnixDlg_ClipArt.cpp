@@ -76,7 +76,8 @@ fill_store (XAP_UnixDialog_ClipArt *self)
 		std::string s;
 		pSS->getValueUTF8(XAP_STRING_ID_DLG_CLIPART_Error, s);
 
-		GtkWidget *err = gtk_message_dialog_new (GTK_WINDOW (dlg), GTK_DIALOG_DESTROY_WITH_PARENT, GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s", s.c_str());
+		GtkWidget *err = abiMessageDialogNew(GTK_WINDOW(dlg), GTK_DIALOG_DESTROY_WITH_PARENT,
+			GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, s.c_str());
 		gtk_dialog_run (GTK_DIALOG (err));
 		gtk_widget_destroy(err); // TOPLEVEL
 		err = nullptr;

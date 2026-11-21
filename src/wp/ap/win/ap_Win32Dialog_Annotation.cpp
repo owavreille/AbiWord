@@ -66,7 +66,7 @@ void AP_Win32Dialog_Annotation::runModal(XAP_Frame * pFrame)
 #define _DS(c,s)	setDlgItemText(AP_RID_DIALOG_ANNOTATION_##c,pSS->getValue(AP_STRING_ID_##s))
 #define _DSX(c,s)	setDlgItemText(AP_RID_DIALOG_ANNOTATION_##c,pSS->getValue(XAP_STRING_ID_##s))
 
-BOOL AP_Win32Dialog_Annotation::_onInitDialog(HWND /*hWnd*/, WPARAM /*wParam*/, LPARAM /*lParam*/)
+BOOL AP_Win32Dialog_Annotation::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*lParam*/)
 {
 	const XAP_StringSet * pSS = m_pApp->getStringSet();
 
@@ -78,10 +78,28 @@ BOOL AP_Win32Dialog_Annotation::_onInitDialog(HWND /*hWnd*/, WPARAM /*wParam*/, 
 	_DS(TEXT_TITLE,			DLG_Annotation_Title_LBL);
 	_DS(TEXT_AUTHOR,		DLG_Annotation_Author_LBL);
 	_DS(TEXT_DESCRIPTION,	DLG_Annotation_Description_LBL);
+	_DS(TEXT_REPLY,			DLG_Annotation_Reply_LBL);
+	_DS(CHECK_RESOLVED,		DLG_Annotation_Resolved_LBL);
 
 	_set_text(AP_RID_DIALOG_ANNOTATION_EDIT_TITLE, getTitle ());
 	_set_text(AP_RID_DIALOG_ANNOTATION_EDIT_AUTHOR, getAuthor ());
 	_set_text(AP_RID_DIALOG_ANNOTATION_EDIT_DESCRIPTION, getDescription ());
+
+	HWND combo = GetDlgItem(hWnd, AP_RID_DIALOG_ANNOTATION_COMBO_REPLY);
+	SendMessageW(combo, CB_ADDSTRING, 0, (LPARAM)L"");
+	int selected = 0;
+	const std::vector<AnnotationChoice>& choices = getAnnotationChoices();
+	for (size_t i = 0; i < choices.size(); ++i)
+	{
+		UT_Win32LocaleString label;
+		label.fromUTF8(choices[i].label.c_str());
+		SendMessageW(combo, CB_ADDSTRING, 0, (LPARAM)label.c_str());
+		if (!getParent().empty() && choices[i].id == getParent())
+			selected = static_cast<int>(i) + 1;
+	}
+	SendMessageW(combo, CB_SETCURSEL, selected, 0);
+	CheckDlgButton(hWnd, AP_RID_DIALOG_ANNOTATION_CHECK_RESOLVED,
+		getResolved() == "1" ? BST_CHECKED : BST_UNCHECKED);
 
 	centerDialog();
 	return 1;							// 1 == we did not call SetFocus()
@@ -110,6 +128,14 @@ BOOL AP_Win32Dialog_Annotation::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lP
 
 			_get_text(AP_RID_DIALOG_ANNOTATION_EDIT_DESCRIPTION, text);
 			setDescription(text);
+
+			HWND combo = GetDlgItem(hWnd, AP_RID_DIALOG_ANNOTATION_COMBO_REPLY);
+			int selected = static_cast<int>(SendMessageW(combo, CB_GETCURSEL, 0, 0));
+			if (selected > 0 && static_cast<size_t>(selected - 1) < getAnnotationChoices().size())
+				setParent(getAnnotationChoices()[selected - 1].id);
+			else
+				setParent("");
+			setResolved(IsDlgButtonChecked(hWnd, AP_RID_DIALOG_ANNOTATION_CHECK_RESOLVED) == BST_CHECKED ? "1" : "0");
 
 			setAnswer(a_OK);
 			EndDialog(hWnd,0);

@@ -40,7 +40,7 @@ UT_Error OXML_Element_Table::serialize(IE_Exp_OpenXML* exporter)
 {
 	UT_Error err = UT_OK;
 
-	err = exporter->startTable();
+	err = exporter->startTable(TARGET);
 	if(err != UT_OK)
 		return err;
 
@@ -61,7 +61,7 @@ UT_Error OXML_Element_Table::serialize(IE_Exp_OpenXML* exporter)
 	if(err != UT_OK)
 		return err;
 
-	return exporter->finishTable();
+	return exporter->finishTable(TARGET);
 }
 
 UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
@@ -103,18 +103,18 @@ UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
 		}
 	}
 
-	err = exporter->startTableProperties(TARGET_DOCUMENT);
+	err = exporter->startTableProperties(TARGET);
 	if(err != UT_OK)
 		return err;
 
 	if(getProperty("background-color", szValue) == UT_OK)
 	{
-		err = exporter->setBackgroundColor(TARGET_DOCUMENT, szValue);
+		err = exporter->setBackgroundColor(TARGET, szValue);
 		if(err != UT_OK)
 			return err;
 	}
 
-	err = exporter->startTableBorderProperties(TARGET_DOCUMENT);
+	err = exporter->startTableBorderProperties(TARGET);
 	if(err != UT_OK)
 		return err;
 
@@ -144,7 +144,7 @@ UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
 		size = szValue;
 	}
 
-	err = exporter->setTableBorder(TARGET_DOCUMENT, "left", borderType, color, size);
+	err = exporter->setTableBorder(TARGET, "left", borderType, color, size);
 	if(err != UT_OK)
 		return err;
 
@@ -169,7 +169,7 @@ UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
 	{
 		size = szValue;
 	}
-	err = exporter->setTableBorder(TARGET_DOCUMENT, "right", borderType, color, size);
+	err = exporter->setTableBorder(TARGET, "right", borderType, color, size);
 	if(err != UT_OK)
 		return err;
 
@@ -194,7 +194,7 @@ UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
 	{
 		size = szValue;
 	}
-	err = exporter->setTableBorder(TARGET_DOCUMENT, "top", borderType, color, size);
+	err = exporter->setTableBorder(TARGET, "top", borderType, color, size);
 	if(err != UT_OK)
 		return err;
 
@@ -219,31 +219,31 @@ UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
 	{
 		size = szValue;
 	}
-	err = exporter->setTableBorder(TARGET_DOCUMENT, "bottom", borderType, color, size);
+	err = exporter->setTableBorder(TARGET, "bottom", borderType, color, size);
 	if(err != UT_OK)
 		return err;
 
 
-	err = exporter->finishTableBorderProperties(TARGET_DOCUMENT);
+	err = exporter->finishTableBorderProperties(TARGET);
 	if(err != UT_OK)
 		return err;
 
-	err = exporter->finishTableProperties(TARGET_DOCUMENT);
+	err = exporter->finishTableProperties(TARGET);
 	if(err != UT_OK)
 		return err;
 
 	if(!columnWidth.empty())
 	{
-		err = exporter->startTableGrid(TARGET_DOCUMENT);
+		err = exporter->startTableGrid(TARGET);
 		if(err != UT_OK)
 			return err;
 		for(size_t col = 0; col < columnWidth.size(); ++col)
 		{
-			err = exporter->setGridCol(TARGET_DOCUMENT, columnWidth[col].c_str());
+			err = exporter->setGridCol(TARGET, columnWidth[col].c_str());
 			if(err != UT_OK)
 				return err;
 		}
-		err = exporter->finishTableGrid(TARGET_DOCUMENT);
+		err = exporter->finishTableGrid(TARGET);
 		if(err != UT_OK)
 			return err;
 	}
@@ -277,7 +277,7 @@ UT_Error OXML_Element_Table::addChildrenToPT(PD_Document * pDocument)
 	for (i = 0; i < children.size(); i++)
 	{
 		m_currentRowNumber = i;
-		if(children[i]->getTag() != BOOK_TAG)
+		if(children[i]->getTag() != BOOK_TAG && children[i]->getTag() != CMT_TAG)
 		{
 			temp = children[i]->addToPT(pDocument);
 			if (temp != UT_OK)
@@ -308,7 +308,7 @@ UT_Error OXML_Element_Table::addToPT(PD_Document * pDocument)
 			children[i]->setProperty("background-color", bgColor); //apply directly to row
 		}
 					
-		if(children[i]->getTag() == BOOK_TAG)
+		if(children[i]->getTag() == BOOK_TAG || children[i]->getTag() == CMT_TAG)
 		{
 			ret = children[i]->addToPT(pDocument);
 			if (ret != UT_OK)

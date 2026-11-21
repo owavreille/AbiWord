@@ -50,7 +50,7 @@ UT_Error OXML_Element_Math::serialize(IE_Exp_OpenXML* exporter)
 {
     UT_Error err = UT_OK;
 	
-    err = exporter->startMath();
+    err = exporter->startMath(TARGET);
     if(err != UT_OK)
         return err;
     
@@ -60,12 +60,12 @@ UT_Error OXML_Element_Math::serialize(IE_Exp_OpenXML* exporter)
 
     if(convertMathMLtoOMML(sMathML, sOMML))
     {
-        err = exporter->writeMath(sOMML.c_str());
+        err = exporter->writeMath(TARGET, sOMML.c_str());
         if(err != UT_OK)
             return err;
     }
     
-    return exporter->finishMath();
+    return exporter->finishMath(TARGET);
 }
 
 UT_Error OXML_Element_Math::addToPT(PD_Document * pDocument)

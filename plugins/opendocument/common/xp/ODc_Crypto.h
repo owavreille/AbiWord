@@ -43,6 +43,9 @@ public:
 	std::string		m_keyType;
 	UT_uint32		m_iterCount;
 	std::string		m_salt;
+	UT_uint32		m_derivedKeySize = 0;
+	UT_uint32		m_startKeySize = 0;
+	std::string		m_startKeyName;
 };
 
 class ODc_Crypto {
@@ -53,5 +56,7 @@ public:
 private:
 	static UT_Error performDecrypt(GsfInput* pStream,	unsigned char* salt, UT_uint32 salt_length, UT_uint32 iter_count,
                                    unsigned char* ivec, gsize ivec_length, const std::string& password, UT_uint32 decrypted_size,
-                                   const std::string& checksum, const std::string& checksumType, GsfInput** pDecryptedInput);
+                                   const std::string& checksum, const std::string& checksumType, bool aes,
+                                   UT_uint32 derived_key_size, UT_uint32 start_key_size, const std::string& start_key_name,
+                                   GsfInput** pDecryptedInput);
 };

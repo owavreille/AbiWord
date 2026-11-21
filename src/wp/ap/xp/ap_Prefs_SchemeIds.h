@@ -56,7 +56,7 @@
 #define AP_PREF_DEFAULT_AutoGrammarCheck  		"0"
 
 #define AP_PREF_KEY_DisplayAnnotations		    "DisplayAnnotations"			/* enable display of annotations (0,1) */
-#define AP_PREF_DEFAULT_DisplayAnnotations  		"0"
+#define AP_PREF_DEFAULT_DisplayAnnotations  		"1"
 
 #define AP_PREF_KEY_DisplayRDFAnchors		    "DisplayRDFAnchors"			/* enable display of RDF anchors (0,1) */
 #define AP_PREF_DEFAULT_DisplayRDFAnchors  		"0"

@@ -32,7 +32,7 @@
 
 #include "ap_Win32Dialog_CollaborationJoin.h"
 
-BOOL CALLBACK AP_Win32Dialog_CollaborationJoin::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK AP_Win32Dialog_CollaborationJoin::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	AP_Win32Dialog_CollaborationJoin * pThis;
 	switch (msg)
@@ -100,7 +100,7 @@ void AP_Win32Dialog_CollaborationJoin::runModal(XAP_Frame * pFrame)
 	
 	int result = DialogBoxParam( m_hInstance, lpTemplate,
 		static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
-		(DLGPROC)s_dlgProc, (LPARAM)this );
+		s_dlgProc, (LPARAM)this );
 	switch (result) {
 	case 0:
 		// MSDN: If the function fails because the hWndParent parameter is invalid, the return value is zero.
@@ -116,7 +116,7 @@ void AP_Win32Dialog_CollaborationJoin::runModal(XAP_Frame * pFrame)
 
 /*****************************************************************/
 
-BOOL AP_Win32Dialog_CollaborationJoin::_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationJoin::_onInitDialog(HWND hWnd, WPARAM, LPARAM)
 {
 	// Store handles for easy access
 	// Reminder: hDlg is in our DialogHelper
@@ -146,7 +146,7 @@ BOOL AP_Win32Dialog_CollaborationJoin::_onInitDialog(HWND hWnd, WPARAM wParam, L
 	return true;
 }
 
-BOOL AP_Win32Dialog_CollaborationJoin::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationJoin::_onCommand(HWND hWnd, WPARAM wParam, LPARAM)
 {
 	WORD wId = LOWORD(wParam);
 	
@@ -177,7 +177,7 @@ BOOL AP_Win32Dialog_CollaborationJoin::_onCommand(HWND hWnd, WPARAM wParam, LPAR
 	}
 }
 
-BOOL AP_Win32Dialog_CollaborationJoin::_onNotify(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationJoin::_onNotify(HWND, WPARAM, LPARAM lParam)
 {
 	switch (((LPNMHDR)lParam)->code)
 	{
@@ -361,6 +361,7 @@ void AP_Win32Dialog_CollaborationJoin::_addDocument(BuddyPtr pBuddy, DocHandle* 
 	// add the document to the buddy
 	HTREEITEM htiDoc = _addDocumentToBuddy(item, pBuddy, pDocHandle);
 	UT_ASSERT_HARMLESS(htiDoc);
+	UT_UNUSED(htiDoc);
 }
 
 static void s_treeview_delete_lparam(HWND hTreeView, HTREEITEM hItem)

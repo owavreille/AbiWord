@@ -54,6 +54,8 @@ openxml_la_SOURCES = \
 	common/xp/OXML_Element_Hyperlink.h \
 	common/xp/OXML_Element_Bookmark.cpp \
 	common/xp/OXML_Element_Bookmark.h \
+	common/xp/OXML_Element_Comment.cpp \
+	common/xp/OXML_Element_Comment.h \
 	common/xp/OXML_Element_Field.cpp \
 	common/xp/OXML_Element_Field.h \
 	common/xp/OXML_Element_TextBox.cpp \
@@ -104,6 +106,8 @@ openxml_la_SOURCES = \
 	imp/xp/OXMLi_ListenerState_Footnote.h \
 	imp/xp/OXMLi_ListenerState_Endnote.cpp \
 	imp/xp/OXMLi_ListenerState_Endnote.h \
+	imp/xp/OXMLi_ListenerState_Comment.cpp \
+	imp/xp/OXMLi_ListenerState_Comment.h \
 	imp/xp/OXMLi_ListenerState_Image.cpp \
 	imp/xp/OXMLi_ListenerState_Image.h \
 	imp/xp/OXMLi_ListenerState_Textbox.cpp \

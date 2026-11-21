@@ -74,6 +74,30 @@ class GR_Graphics;
 class GR_Painter;
 class GR_Caret;
 
+/* Opacity is 0..100 (100 is solid). Brightness is -100..100.
+ * Each crop is a percentage of the source picture, taken from that edge.
+ */
+struct ABI_EXPORT GR_ImageTune
+{
+	int opacity;
+	int brightness;
+	int cropLeft;
+	int cropRight;
+	int cropTop;
+	int cropBottom;
+
+	GR_ImageTune()
+		: opacity(100), brightness(0), cropLeft(0), cropRight(0), cropTop(0), cropBottom(0)
+	{
+	}
+
+	bool isAdjusted() const
+	{
+		return opacity != 100 || brightness != 0
+			|| cropLeft != 0 || cropRight != 0 || cropTop != 0 || cropBottom != 0;
+	}
+};
+
 enum GrFontType: uint8_t {
 	GR_FONT_UNSET=0,
 	GR_FONT_UNIX,
@@ -807,6 +831,7 @@ class ABI_EXPORT GR_Graphics
 
 	virtual void clearArea(UT_sint32 x, UT_sint32 y, UT_sint32 w, UT_sint32 h) = 0;
 	virtual void drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest);
+	virtual void drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest, const GR_ImageTune& tune);
 	virtual void fillRect(GR_Color3D c, UT_Rect &r) = 0;
 	virtual void fillRect(GR_Color3D c,
 						  UT_sint32 x, UT_sint32 y,

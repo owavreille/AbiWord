@@ -43,6 +43,7 @@ public:
 	virtual bool hasAlpha(void) const override { return m_hasAlpha; }
 	virtual bool isTransparentAt(UT_sint32 x, UT_sint32 y) override;
 	virtual void cairoSetSource(cairo_t *cr) override;
+	virtual cairo_surface_t* getCairoSurface() const override { return m_surface; }
 
 protected:
 	virtual GR_CairoRasterImage *makeSubimage(const std::string & name,

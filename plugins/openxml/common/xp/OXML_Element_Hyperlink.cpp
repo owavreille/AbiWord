@@ -56,18 +56,18 @@ UT_Error OXML_Element_Hyperlink::serialize(IE_Exp_OpenXML* exporter)
 			std::string relId("rId");
 			relId += getId();
 
-			err = exporter->setHyperlinkRelation(TARGET_DOCUMENT_RELATION, relId.c_str(), szValue, "External");
+			err = exporter->setHyperlinkRelation(TARGET, relId.c_str(), szValue, "External");
 			if(err != UT_OK)
 				return err;
 
-			err = exporter->startExternalHyperlink(relId.c_str());
+			err = exporter->startExternalHyperlink(TARGET, relId.c_str());
 			if(err != UT_OK)
 				return err;
 		}
 		else
 		{
 			//hyperlink to a bookmark, internal reference
-			err = exporter->startInternalHyperlink(szValue+1);
+			err = exporter->startInternalHyperlink(TARGET, szValue+1);
 			if(err != UT_OK)
 				return err;
 		}
@@ -76,7 +76,7 @@ UT_Error OXML_Element_Hyperlink::serialize(IE_Exp_OpenXML* exporter)
 		if(err != UT_OK)
 			return err;
 	
-		return exporter->finishHyperlink();
+		return exporter->finishHyperlink(TARGET);
 	}
 
 	return UT_OK;

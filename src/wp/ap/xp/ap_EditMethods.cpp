@@ -10685,6 +10685,13 @@ void insertAnnotation(FV_View * pView, bool bDescr)
 	UT_return_if_fail(pDialog);
 	
 	pDialog->setAuthor(pView->getDocument()->getUserName());
+	std::vector<std::string> replyIds;
+	std::vector<std::string> replyLabels;
+	pView->getAnnotationReplyChoices(replyIds, replyLabels, 0);
+	std::vector<AP_Dialog_Annotation::AnnotationChoice> choices;
+	for (size_t i = 0; i < replyIds.size() && i < replyLabels.size(); ++i)
+		choices.push_back({replyIds[i], replyLabels[i]});
+	pDialog->setAnnotationChoices(choices);
 	
 	if (bDescr)
 	{
@@ -10716,7 +10723,9 @@ void insertAnnotation(FV_View * pView, bool bDescr)
 								sText,  
 								sAuthor,  
 								sTitle,  
-								bApply);  
+								bApply,
+								pDialog->getParent(),
+								pDialog->getResolved());  
 
 		if (bApply)  
 		{  
@@ -11266,6 +11275,11 @@ Defun1(setPosImage)
 	return true;
 }
 
+static void s_appendImageTune(PP_PropertyVector& props, XAP_Dialog_Image* dialog);
+static void s_storeImageTune(std::string& props, XAP_Dialog_Image* dialog);
+static void s_loadImageTune(XAP_Dialog_Image* dialog, const PP_PropertyVector& props);
+static void s_loadImageTune(XAP_Dialog_Image* dialog, const PP_AttrProp* ap);
+
 Defun1(dlgFmtPosImage)
 {
 	CHECK_FRAME;
@@ -11388,8 +11402,9 @@ Defun1(dlgFmtPosImage)
 	}
 	else
 	{
-	  pDialog->setTightWrap(false);
+	pDialog->setTightWrap(false);
 	}
+	s_loadImageTune(pDialog, pAP);
 	pDialog->runModal(pFrame);
 	XAP_Dialog_Image::tAnswer ans = pDialog->getAnswer();
 	bool bOK = (ans == XAP_Dialog_Image::a_OK);
@@ -11412,10 +11427,11 @@ Defun1(dlgFmtPosImage)
 
 	if(pDialog->getWrapping() == WRAP_INLINE)
 	{
-		const PP_PropertyVector properties = {
+		PP_PropertyVector properties = {
 			"width", sWidth.c_str(),
 			"height", sHeight.c_str()
 		};
+		s_appendImageTune(properties, pDialog);
 
 		pView->convertPositionedToInLine(pPosObj);
 		pView->setCharFormat(properties, attribs);
@@ -11459,10 +11475,11 @@ Defun1(dlgFmtPosImage)
 	  {
 	    properties[7] = "column-above-text";
 	  }
-	  else if(newFormatMode == POSITION_TO_PAGE)
+	  else 	  if(newFormatMode == POSITION_TO_PAGE)
 	  {
 	    properties[7] = "page-above-text";
 	  }
+	  s_appendImageTune(properties, pDialog);
 
 	  fp_FrameContainer * pFrameC = static_cast<fp_FrameContainer *>(pPosObj->getFirstContainer());
 	  fv_FrameStrings FrameStrings;
@@ -11514,6 +11531,140 @@ Defun1(dlgFmtPosImage)
 	return true;
 }
 
+
+static std::string s_imageNumber(int value)
+{
+	char buf[16];
+	snprintf(buf, sizeof(buf), "%d", value);
+	return buf;
+}
+
+static void s_appendImageTune(PP_PropertyVector& props, XAP_Dialog_Image* dialog)
+{
+	props.push_back("opacity");
+	props.push_back(s_imageNumber(dialog->getOpacity()));
+	props.push_back("brightness");
+	props.push_back(s_imageNumber(dialog->getBrightness()));
+	props.push_back("crop-left");
+	props.push_back(s_imageNumber(dialog->getCropLeft()));
+	props.push_back("crop-right");
+	props.push_back(s_imageNumber(dialog->getCropRight()));
+	props.push_back("crop-top");
+	props.push_back(s_imageNumber(dialog->getCropTop()));
+	props.push_back("crop-bottom");
+	props.push_back(s_imageNumber(dialog->getCropBottom()));
+}
+
+static void s_storeImageTune(std::string& props, XAP_Dialog_Image* dialog)
+{
+	UT_std_string_setProperty(props, "opacity", s_imageNumber(dialog->getOpacity()));
+	UT_std_string_setProperty(props, "brightness", s_imageNumber(dialog->getBrightness()));
+	UT_std_string_setProperty(props, "crop-left", s_imageNumber(dialog->getCropLeft()));
+	UT_std_string_setProperty(props, "crop-right", s_imageNumber(dialog->getCropRight()));
+	UT_std_string_setProperty(props, "crop-top", s_imageNumber(dialog->getCropTop()));
+	UT_std_string_setProperty(props, "crop-bottom", s_imageNumber(dialog->getCropBottom()));
+}
+
+static int s_vectorInt(const PP_PropertyVector& props, const char* name, int fallback)
+{
+	const std::string& value = PP_getAttribute(name, props);
+	if (value.empty())
+		return fallback;
+	return atoi(value.c_str());
+}
+
+static int s_attrInt(const PP_AttrProp* ap, const char* name, int fallback)
+{
+	const gchar* value = nullptr;
+	if (!ap || !ap->getProperty(name, value) || !value || !*value)
+		return fallback;
+	return atoi(value);
+}
+
+static int s_cropPercentFromInches(const char* crop, const char* size, const char* opposite)
+{
+	if (!crop || !*crop || !size || !*size)
+		return 0;
+	const double cropped = UT_convertToInches(crop);
+	const double visible = UT_convertToInches(size);
+	const double other = (opposite && *opposite) ? UT_convertToInches(opposite) : 0.0;
+	if (cropped <= 0.0 || visible < 0.0)
+		return 0;
+	const double total = visible + cropped + other;
+	if (total <= 0.0001)
+		return 0;
+	int percent = (int)((cropped / total) * 100.0 + 0.5);
+	if (percent < 0)
+		percent = 0;
+	if (percent > 80)
+		percent = 80;
+	return percent;
+}
+
+static void s_loadImageTune(XAP_Dialog_Image* dialog, const PP_PropertyVector& props)
+{
+	dialog->setOpacity(s_vectorInt(props, "opacity", 100));
+	dialog->setBrightness(s_vectorInt(props, "brightness", 0));
+	int left = s_vectorInt(props, "crop-left", -1);
+	int right = s_vectorInt(props, "crop-right", -1);
+	int top = s_vectorInt(props, "crop-top", -1);
+	int bottom = s_vectorInt(props, "crop-bottom", -1);
+	const std::string& width = PP_getAttribute("width", props);
+	const std::string& height = PP_getAttribute("height", props);
+	if (left < 0)
+		left = s_cropPercentFromInches(PP_getAttribute("cropl", props).c_str(), width.c_str(), PP_getAttribute("cropr", props).c_str());
+	if (right < 0)
+		right = s_cropPercentFromInches(PP_getAttribute("cropr", props).c_str(), width.c_str(), PP_getAttribute("cropl", props).c_str());
+	if (top < 0)
+		top = s_cropPercentFromInches(PP_getAttribute("cropt", props).c_str(), height.c_str(), PP_getAttribute("cropb", props).c_str());
+	if (bottom < 0)
+		bottom = s_cropPercentFromInches(PP_getAttribute("cropb", props).c_str(), height.c_str(), PP_getAttribute("cropt", props).c_str());
+	dialog->setCropLeft(left);
+	dialog->setCropRight(right);
+	dialog->setCropTop(top);
+	dialog->setCropBottom(bottom);
+}
+
+static void s_loadImageTune(XAP_Dialog_Image* dialog, const PP_AttrProp* ap)
+{
+	dialog->setOpacity(s_attrInt(ap, "opacity", 100));
+	dialog->setBrightness(s_attrInt(ap, "brightness", 0));
+	const gchar* width = nullptr;
+	const gchar* height = nullptr;
+	const gchar* cropl = nullptr;
+	const gchar* cropr = nullptr;
+	const gchar* cropt = nullptr;
+	const gchar* cropb = nullptr;
+	if (ap)
+	{
+		ap->getProperty("frame-width", width);
+		if (!width)
+			ap->getProperty("width", width);
+		ap->getProperty("frame-height", height);
+		if (!height)
+			ap->getProperty("height", height);
+		ap->getProperty("cropl", cropl);
+		ap->getProperty("cropr", cropr);
+		ap->getProperty("cropt", cropt);
+		ap->getProperty("cropb", cropb);
+	}
+	int left = s_attrInt(ap, "crop-left", -1);
+	int right = s_attrInt(ap, "crop-right", -1);
+	int top = s_attrInt(ap, "crop-top", -1);
+	int bottom = s_attrInt(ap, "crop-bottom", -1);
+	if (left < 0)
+		left = s_cropPercentFromInches(cropl, width, cropr);
+	if (right < 0)
+		right = s_cropPercentFromInches(cropr, width, cropl);
+	if (top < 0)
+		top = s_cropPercentFromInches(cropt, height, cropb);
+	if (bottom < 0)
+		bottom = s_cropPercentFromInches(cropb, height, cropt);
+	dialog->setCropLeft(left);
+	dialog->setCropRight(right);
+	dialog->setCropTop(top);
+	dialog->setCropBottom(bottom);
+}
 
 static bool s_doFormatImageDlg(FV_View * pView, EV_EditMethodCallData * pCallData, bool bCtxtMenu)
 {
@@ -11670,6 +11821,7 @@ static bool s_doFormatImageDlg(FV_View * pView, EV_EditMethodCallData * pCallDat
 	  }
 	  pDialog->setWidth( UT_convertInchesToDimensionString(dim,width));
 	  pDialog->setHeight( UT_convertInchesToDimensionString(dim,height));
+	  s_loadImageTune(pDialog, props_in);
 
 	  WRAPPING_TYPE oldWrap = WRAP_INLINE;
 	  pDialog->runModal(pFrame);
@@ -11690,10 +11842,11 @@ static bool s_doFormatImageDlg(FV_View * pView, EV_EditMethodCallData * pCallDat
 		  if((newWrap == WRAP_INLINE) && (oldWrap == WRAP_INLINE))
 		  {
 			  UT_DEBUGMSG(("DOM: nw:%s nh:%s\n", sWidth.c_str(), sHeight.c_str()));
-			  const PP_PropertyVector properties = {
+			  PP_PropertyVector properties = {
 				  "width", sWidth,
 				  "height", sHeight
 			  };
+			  s_appendImageTune(properties, pDialog);
 
 			  const PP_PropertyVector attribs = {
 				  "title", pDialog->getTitle().utf8_str(),
@@ -11745,6 +11898,7 @@ static bool s_doFormatImageDlg(FV_View * pView, EV_EditMethodCallData * pCallDat
 			  sProp = "frame-height";
 			  sVal = sHeight;
 			  UT_std_string_setProperty(sFrameProps, sProp, sVal);
+			  s_storeImageTune(sFrameProps, pDialog);
 			  double xpos = 0.0;
 			  double ypos= 0.0;
 

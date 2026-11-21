@@ -27,6 +27,7 @@
 //There's probably a better way to do this...
 #define ALTERNATEFORMAT_REL_TYPE "http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk"
 #define COMMENTS_REL_TYPE "http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments"
+#define COMMENTSEX_REL_TYPE "http://schemas.microsoft.com/office/2011/relationships/commentsExtended"
 #define DOCSETTINGS_REL_TYPE "http://schemas.openxmlformats.org/officeDocument/2006/relationships/settings"
 #define DOCUMENT_REL_TYPE "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument"
 #define ENDNOTES_REL_TYPE "http://schemas.openxmlformats.org/officeDocument/2006/relationships/endnotes"
@@ -57,7 +58,8 @@ enum OXML_PartType {
 	STYLES_PART,
 	WEBSETTINGS_PART,
 	IMAGE_PART,
-	THEME_PART //At the end because this part is outside of WordprocessorML specs
+	THEME_PART, //At the end because this part is outside of WordprocessorML specs
+	COMMENTSEX_PART
 };
 
 enum OXML_ElementTag {
@@ -76,7 +78,8 @@ enum OXML_ElementTag {
 	BOOK_TAG,
 	FLD_TAG,
 	TXTBX_TAG,
-	MATH_TAG
+	MATH_TAG,
+	CMT_TAG
 };
 
 enum OXML_ElementType {

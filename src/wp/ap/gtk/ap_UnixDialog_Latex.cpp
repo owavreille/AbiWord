@@ -180,8 +180,7 @@ void AP_UnixDialog_Latex::constructDialog(void)
 	const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
 
 #ifdef HAVE_GO_MATH_EDITOR_NEW
-	m_windowMain = gtk_dialog_new();
-	gtk_button_new_with_label("Close");
+	m_windowMain = abiDialogNew("latex", TRUE);
 	m_wClose = gtk_dialog_add_button(GTK_DIALOG(m_windowMain),"Close",0);
 	m_wInsert = gtk_dialog_add_button(GTK_DIALOG(m_windowMain),"Insert",1);
 	m_wText = go_math_editor_new();

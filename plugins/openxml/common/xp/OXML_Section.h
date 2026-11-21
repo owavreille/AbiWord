@@ -92,6 +92,7 @@ public:
 	UT_Error serializeFooter(IE_Exp_OpenXML* exporter);
 	UT_Error serializeFootnote(IE_Exp_OpenXML* exporter);
 	UT_Error serializeEndnote(IE_Exp_OpenXML* exporter);
+	UT_Error serializeComment(IE_Exp_OpenXML* exporter);
 
 	//! Appends this section and all its content to the Abiword Piecetable.
 	/*! This method is used during the import process.
@@ -101,6 +102,7 @@ public:
 	UT_Error addToPTAsHdrFtr(PD_Document * pDocument);
 	UT_Error addToPTAsFootnote(PD_Document * pDocument);
 	UT_Error addToPTAsEndnote(PD_Document * pDocument);
+	UT_Error addToPTAsAnnotation(PD_Document * pDocument);
 
 	void setTarget(int target);
 	bool hasFirstPageHdrFtr() const;

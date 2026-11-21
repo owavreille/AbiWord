@@ -627,7 +627,8 @@ void GR_Win32USPGraphics::_prepareFontYMetrics()
 	}
 
 	const UT_uint32 expect = (UT_uint32)(m_pFont->getPointSize() * (double)getResolution() / 72.0 + 0.5);
-	if (expect > 0 && m_pFont->getYHDC() && m_pFont->getTextMetric().tmHeight > expect * 2)
+	const LONG height = m_pFont->getTextMetric().tmHeight;
+	if (expect > 0 && m_pFont->getYHDC() && height > static_cast<LONG>(expect) * 2)
 		m_pFont->setYHDC(nullptr);
 }
 

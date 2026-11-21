@@ -39,6 +39,7 @@ testharness_la_SOURCES = \
 	@top_srcdir@/src/text/fmt/xp/t/fl_AutoNum.t.cpp \
 	@top_srcdir@/src/wp/impexp/xp/t/ie_mailmerge.t.cpp \
 	@top_srcdir@/src/wp/impexp/xp/t/ie_Table.t.cpp \
+	@top_srcdir@/src/wp/impexp/xp/t/ie_formats.t.cpp \
 	$(NULL)
 
 endif

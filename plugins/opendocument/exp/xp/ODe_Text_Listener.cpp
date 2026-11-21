@@ -135,6 +135,24 @@ ODe_Text_Listener::~ODe_Text_Listener() {
 
     UT_ASSERT_HARMLESS(m_currentListLevel == 0);
     UT_ASSERT_HARMLESS(m_pCurrentListStyle == nullptr);
+
+    for (std::map<std::string, char>::iterator it = m_revisionKinds.begin();
+         it != m_revisionKinds.end(); ++it) {
+        UT_UTF8String region = "<text:changed-region text:id=\"";
+        region += it->first.c_str();
+        region += "\">";
+        if (it->second == '-') {
+            UT_UTF8String body = m_revisionText[it->first];
+            body.escapeXML();
+            region += "<text:deletion><office:change-info><dc:creator>AbiWord</dc:creator><dc:date>1970-01-01T00:00:00</dc:date></office:change-info><text:p>";
+            region += body;
+            region += "</text:p></text:deletion>";
+        } else {
+            region += "<text:insertion><office:change-info><dc:creator>AbiWord</dc:creator><dc:date>1970-01-01T00:00:00</dc:date></office:change-info></text:insertion>";
+        }
+        region += "</text:changed-region>";
+        m_rAuxiliaryData.m_trackedChangeRegions += region;
+    }
 }
 
 
@@ -187,6 +205,29 @@ void ODe_Text_Listener::openSpan(const PP_AttrProp* pAP) {
     UT_UTF8String styleName;
     bool ok;
     const gchar* pValue;
+
+    m_spanRevisionKind = 0;
+    m_spanRevisionId.clear();
+    m_changeStartOpen = false;
+    const gchar* revision = nullptr;
+    if (pAP && pAP->getAttribute("revision", revision) && revision && *revision) {
+        char idbuf[32];
+        snprintf(idbuf, sizeof idbuf, "ct%u", ++m_rAuxiliaryData.m_nextTrackedChange);
+        m_spanRevisionId = idbuf;
+        m_spanRevisionKind = (revision[0] == '-') ? '-' : '+';
+        m_revisionKinds[m_spanRevisionId] = m_spanRevisionKind;
+    }
+
+    if (m_spanRevisionKind == '-')
+        return;
+
+    if (m_spanRevisionKind == '+') {
+        UT_UTF8String mark = "<text:change-start text:change-id=\"";
+        mark += m_spanRevisionId.c_str();
+        mark += "\"/>";
+        ODe_writeUTF8String(m_pParagraphContent, mark);
+        m_changeStartOpen = true;
+    }
     
     if ( ODe_Style_Style::hasTextStyleProps(pAP) ) {
             
@@ -229,6 +270,14 @@ void ODe_Text_Listener::closeSpan() {
         ODe_writeUTF8String(m_pParagraphContent, "</text:span>");
         m_openedODSpan = false;
     }
+    if (m_changeStartOpen) {
+        UT_UTF8String mark = "<text:change-end text:change-id=\"";
+        mark += m_spanRevisionId.c_str();
+        mark += "\"/>";
+        ODe_writeUTF8String(m_pParagraphContent, mark);
+        m_changeStartOpen = false;
+    }
+    m_spanRevisionKind = 0;
 }
 
 
@@ -488,11 +537,31 @@ void ODe_Text_Listener::openAnnotation(const PP_AttrProp* pAP, const std::string
     }
     
 
+    bool wroteLoext = false;
     if( !name.empty() )
     {
+        escape = name.c_str();
+        escape.escapeXML();
         output += " office:name=\"";
-        output += name.c_str();
+        output += escape;
         output += "\"";
+    }
+    if(pAP && pAP->getProperty("annotation-parent", pValue) && pValue && *pValue)
+    {
+        escape = pValue;
+        escape.escapeXML();
+        output += " xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\"";
+        wroteLoext = true;
+        output += " loext:parent-name=\"";
+        output += escape;
+        output += "\"";
+    }
+    if(pAP && pAP->getProperty("annotation-resolved", pValue) && pValue
+        && (!strcmp(pValue, "1") || !strcmp(pValue, "true")))
+    {
+        if(!wroteLoext)
+            output += " xmlns:loext=\"urn:org:documentfoundation:names:experimental:office:xmlns:loext:1.0\"";
+        output += " loext:resolved=\"true\"";
     }
     output += ">";
     
@@ -506,13 +575,22 @@ void ODe_Text_Listener::openAnnotation(const PP_AttrProp* pAP, const std::string
     }
 
     if(pAP && pAP->getProperty("annotation-date",pValue) && pValue && *pValue) {
-        escape = ODc_reorderDate(pValue, false);
-        escape.escapeXML();
+        std::string isoDate = ODc_annotationDate(pValue, true);
+        if(isoDate.find('T') != std::string::npos) {
+            escape = isoDate.c_str();
+            escape.escapeXML();
+            output += "<dc:date>";
+            output += escape;
+            output += "</dc:date>";
+        }
+    }
 
-        // TODO: is our property a valid date value?
-        output += "<dc:date>";
+    if(pAP && pAP->getProperty("annotation-initials", pValue) && pValue && *pValue) {
+        escape = pValue;
+        escape.escapeXML();
+        output += "<meta:creator-initials>";
         output += escape;
-        output += "</dc:date>";
+        output += "</meta:creator-initials>";
     }
 
 
@@ -531,7 +609,9 @@ void ODe_Text_Listener::closeAnnotation( const std::string& /*name*/ )
 void ODe_Text_Listener::endAnnotation( const std::string& name )
 {
     std::stringstream ss;
-    ss << "<office:annotation-end  office:name=\"" << name << "\"/>";
+    UT_UTF8String escapedName(name);
+    escapedName.escapeXML();
+    ss << "<office:annotation-end office:name=\"" << escapedName.utf8_str() << "\"/>";
     ODe_write( m_pParagraphContent, ss );
 }
 
@@ -830,8 +910,10 @@ void ODe_Text_Listener::openHyperlink(const PP_AttrProp* pAP) {
             UT_UTF8String output = "<text:a ";
             if (bHaveTitle)
             {
+                UT_UTF8String title = pTitle;
+                title.escapeXML();
                 output += "office:title=\"";
-                output += pTitle;
+                output += title;
                 output += "\" ";
             }
             output+="xlink:href=\"";
@@ -880,6 +962,17 @@ void ODe_Text_Listener::closeRDFAnchor(const PP_AttrProp* pAP)
 void ODe_Text_Listener::insertText(const UT_UTF8String& rText) {
 	if (rText.length() == 0)
 		return;
+    if (m_spanRevisionKind == '-') {
+        m_revisionText[m_spanRevisionId] += rText;
+        if (m_revisionMarkers.insert(m_spanRevisionId).second) {
+            UT_UTF8String mark = "<text:change text:change-id=\"";
+            mark += m_spanRevisionId.c_str();
+            mark += "\"/>";
+            ODe_writeUTF8String(m_pParagraphContent, mark);
+        }
+        m_isFirstCharOnParagraph = false;
+        return;
+    }
     ODe_writeUTF8String(m_pParagraphContent, rText);
     m_isFirstCharOnParagraph = false;
 }
@@ -1009,8 +1102,10 @@ void ODe_Text_Listener::insertInlinedImage(const gchar* pImageName,
     if (ok && pValue != nullptr) {
         ODe_writeAttribute(output, "svg:height", pValue);
     }
+    UT_UTF8String imageHref(pImageName ? pImageName : "");
+    imageHref.escapeXML();
     output += "><draw:image xlink:href=\"Pictures/";
-    output += pImageName;
+    output += imageHref;
     output += "\" xlink:type=\"simple\" xlink:show=\"embed\""
               " xlink:actuate=\"onLoad\"/>";
 
@@ -1180,8 +1275,10 @@ void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
         ODe_writeAttribute(output, "svg:height", pValue);
     }
     
+    UT_UTF8String imageHref(pImageName ? pImageName : "");
+    imageHref.escapeXML();
     output += "><draw:image xlink:href=\"Pictures/";
-    output += pImageName;
+    output += imageHref;
     output += "\" xlink:type=\"simple\" xlink:show=\"embed\""
               " xlink:actuate=\"onLoad\"/>";
 

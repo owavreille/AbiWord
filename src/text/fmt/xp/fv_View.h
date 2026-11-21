@@ -648,7 +648,9 @@ public:
 										 const std::string & sDescr,
 										 const std::string & sAuthor,
 										 const std::string & sTitle,
-										 bool bReplace);
+										 bool bReplace,
+										 const std::string & sParent = "",
+										 const std::string & sResolved = "");
 	bool                getAnnotationText(UT_uint32 iAnnotation, std::string & sText) const;
     std::string         getAnnotationText(UT_uint32 iAnnotation) const;
 	bool                setAnnotationText(UT_uint32 iAnnotation, const std::string & sText);
@@ -663,6 +665,13 @@ public:
 	bool                getAnnotationAuthor(UT_uint32 iAnnotation, std::string & sAuthor) const;
     std::string         getAnnotationAuthor(UT_uint32 iAnnotation) const;
 	bool                setAnnotationAuthor(UT_uint32 iAnnotation, const std::string & sAuthor);
+	bool                getAnnotationParent(UT_uint32 iAnnotation, std::string & sParent) const;
+	bool                setAnnotationParent(UT_uint32 iAnnotation, const std::string & sParent);
+	bool                getAnnotationResolved(UT_uint32 iAnnotation, std::string & sResolved) const;
+	bool                setAnnotationResolved(UT_uint32 iAnnotation, const std::string & sResolved);
+	void                getAnnotationReplyChoices(std::vector<std::string>& ids,
+												  std::vector<std::string>& labels,
+												  UT_uint32 exclude) const;
 
 	bool                isAnnotationPreviewActive(void) const { return m_bAnnotationPreviewActive;}
 	void                setAnnotationPreviewActive(bool b) { m_bAnnotationPreviewActive = b;}

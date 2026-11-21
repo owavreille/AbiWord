@@ -139,6 +139,11 @@ void GR_Painter::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest)
 	m_pGr->drawImage (pImg, xDest, yDest);
 }
 
+void GR_Painter::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDest, const GR_ImageTune& tune)
+{
+	m_pGr->drawImage (pImg, xDest, yDest, tune);
+}
+
 void GR_Painter::polygon(const UT_RGBColor& c, const UT_Point *pts, UT_uint32 nPoints)
 {
 	m_pGr->polygon (c, pts, nPoints);

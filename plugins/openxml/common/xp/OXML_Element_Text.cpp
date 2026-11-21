@@ -103,7 +103,12 @@ UT_Error OXML_Element_Text::serialize(IE_Exp_OpenXML* exporter)
 		bList = true;
 	}
 
-	err = exporter->startText(TARGET);
+	const gchar* revision = nullptr;
+	bool deletion = getAttribute("revision", revision) == UT_OK && revision && revision[0] == '-';
+	if (deletion)
+		err = exporter->writeTargetStream(TARGET, "<w:delText xml:space=\"preserve\">");
+	else
+		err = exporter->startText(TARGET);
 	if(err != UT_OK)
 		return err;
 
@@ -113,7 +118,9 @@ UT_Error OXML_Element_Text::serialize(IE_Exp_OpenXML* exporter)
 
 	if(err != UT_OK)
 		return err;
-	
+
+	if (deletion)
+		return exporter->writeTargetStream(TARGET, "</w:delText>");
 	return exporter->finishText(TARGET);
 }
 

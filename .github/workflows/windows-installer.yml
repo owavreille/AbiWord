@@ -97,6 +97,7 @@ jobs:
           tar -xzf /tmp/wv.tar.gz -C /tmp
           cd /tmp/wv-1.2.9
           patch -p1 < "$GITHUB_WORKSPACE/packaging/windows/wv-1.2.9-bounds.patch"
+          patch -p1 < "$GITHUB_WORKSPACE/packaging/windows/wv-1.2.9-warnings.patch"
           ./configure \
             --host=x86_64-w64-mingw32 \
             --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
@@ -192,6 +193,16 @@ jobs:
           echo "NSISDIR=$HOME/nsis-3.13" >> "$GITHUB_ENV"
           NSISDIR="$HOME/nsis-3.13" "$HOME/nsis-3.13/Bin/makensis" -VERSION
 
+      - name: Signer le programme
+        env:
+          WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y osslsigncode file
+          chmod +x packaging/windows/sign-windows.sh
+          packaging/windows/sign-windows.sh dist/windows-x86_64
+
       - name: Créer l'installateur
         run: |
           major=$(sed -n 's/^m4_define(\[abi_version_major\], \[\([0-9]*\)\]).*/\1/p' configure.ac)
@@ -208,26 +219,12 @@ jobs:
             packaging/windows/abiword.nsi
           echo "SETUP=dist/AbiWord-${version}-windows-x64-setup.exe" >> "$GITHUB_ENV"
 
-      - name: Signer l'installateur si un certificat est fourni
+      - name: Signer l'installateur
         env:
           WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
         run: |
-          if [ -z "${WINDOWS_CERT_BASE64}" ]; then
-            echo "Aucun certificat WINDOWS_CERT_BASE64 : l'installateur reste non signé."
-            exit 0
-          fi
-          sudo apt-get install -y osslsigncode
-          echo "$WINDOWS_CERT_BASE64" | base64 -d > /tmp/abiword.pfx
-          osslsigncode sign \
-            -pkcs12 /tmp/abiword.pfx \
-            -pass "$WINDOWS_CERT_PASSWORD" \
-            -n "AbiWord" \
-            -i "https://www.abisource.com/" \
-            -in "$SETUP" \
-            -out "${SETUP}.signed"
-          mv "${SETUP}.signed" "$SETUP"
-          rm -f /tmp/abiword.pfx
+          packaging/windows/sign-windows.sh "$SETUP"
 
       - uses: actions/upload-artifact@v7
         with:
@@ -240,6 +237,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           SOURCE_SHA: ${{ github.sha }}
+          INSTALLER_SIGNED: ${{ env.INSTALLER_SIGNED }}
           RELEASE_TAG: ${{ github.event_name == 'release' && github.event.release.tag_name || 'v3.1-windows' }}
           UPDATE_NOTES: ${{ github.ref == 'refs/heads/main' && 'yes' || 'no' }}
         run: |
@@ -297,7 +295,12 @@ jobs:
           readme, c = re.subn(
               r"\| Code source de ce binaire \| `[^`]+` \|",
               f"| Code source de ce binaire | `{sha}` |", readme, count=1)
-          if a != 1 or b != 1 or c != 1:
+          signed = os.environ.get("INSTALLER_SIGNED") == "yes"
+          signature = "Authenticode SHA-256, horodatée" if signed else "non signée"
+          readme, d = re.subn(
+              r"\| Signature \| [^|\n]* \|",
+              f"| Signature | {signature} |", readme, count=1)
+          if a != 1 or b != 1 or c != 1 or d != 1:
               raise SystemExit("README : lignes de l'installateur introuvables")
           open("README.md", "w", encoding="utf-8").write(readme)
           PY

@@ -56,6 +56,8 @@ void OXMLi_Namespace_Common::reset()
 	m_nsToURI.insert(std::make_pair(NS_WNE_KEY, NS_WNE_URI));
 	m_nsToURI.insert(std::make_pair(NS_PIC_KEY, NS_PIC_URI));
 	m_nsToURI.insert(std::make_pair(NS_XML_KEY, NS_XML_URI));
+	m_nsToURI.insert(std::make_pair(NS_W14_KEY, NS_W14_URI));
+	m_nsToURI.insert(std::make_pair(NS_W15_KEY, NS_W15_URI));
 	
 	m_uriToKey.insert(std::make_pair(NS_R_URI, NS_R_KEY));
 	m_uriToKey.insert(std::make_pair(NS_V_URI, NS_V_KEY));
@@ -70,6 +72,8 @@ void OXMLi_Namespace_Common::reset()
 	m_uriToKey.insert(std::make_pair(NS_WNE_URI, NS_WNE_KEY));
 	m_uriToKey.insert(std::make_pair(NS_PIC_URI, NS_PIC_KEY));
 	m_uriToKey.insert(std::make_pair(NS_XML_URI, NS_XML_KEY));
+	m_uriToKey.insert(std::make_pair(NS_W14_URI, NS_W14_KEY));
+	m_uriToKey.insert(std::make_pair(NS_W15_URI, NS_W15_KEY));
 }
 
 void OXMLi_Namespace_Common::addNamespace(const char* ns, char* uri)

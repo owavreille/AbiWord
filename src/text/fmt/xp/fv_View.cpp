@@ -12783,6 +12783,88 @@ bool FV_View::setAnnotationAuthor(UT_uint32 iAnnotation, const std::string  & sA
 	return true;
 }
 
+static bool abi_annotation_property(PD_Document* doc, fl_AnnotationLayout* pAL, const char* name, std::string& out)
+{
+	if (!doc || !pAL)
+		return false;
+	pf_Frag_Strux* sdh = pAL->getStruxDocHandle();
+	if (!sdh)
+		return false;
+	const PP_AttrProp* pAP = nullptr;
+	if (!doc->getAttrProp(sdh->getIndexAP(), &pAP) || !pAP)
+		return false;
+	const gchar* value = nullptr;
+	if (!pAP->getProperty(name, value) || !value)
+		return false;
+	out = value;
+	return true;
+}
+
+bool FV_View::getAnnotationParent(UT_uint32 iAnnotation, std::string& sParent) const
+{
+	return abi_annotation_property(m_pDoc, getAnnotationLayout(iAnnotation), "annotation-parent", sParent);
+}
+
+bool FV_View::setAnnotationParent(UT_uint32 iAnnotation, const std::string& sParent)
+{
+	fl_AnnotationLayout * pAL = getAnnotationLayout(iAnnotation);
+	if(!pAL)
+		return false;
+	pf_Frag_Strux* sdhAnn = pAL->getStruxDocHandle();
+	PT_DocPosition posAnn = m_pDoc->getStruxPosition(sdhAnn);
+	const PP_PropertyVector propsAnn = {
+		"annotation-parent", sParent
+	};
+	m_pDoc->changeStruxFmt(PTC_AddFmt, posAnn, posAnn, PP_NOPROPS, propsAnn, PTX_SectionAnnotation);
+	return true;
+}
+
+bool FV_View::getAnnotationResolved(UT_uint32 iAnnotation, std::string& sResolved) const
+{
+	return abi_annotation_property(m_pDoc, getAnnotationLayout(iAnnotation), "annotation-resolved", sResolved);
+}
+
+bool FV_View::setAnnotationResolved(UT_uint32 iAnnotation, const std::string& sResolved)
+{
+	fl_AnnotationLayout * pAL = getAnnotationLayout(iAnnotation);
+	if(!pAL)
+		return false;
+	pf_Frag_Strux* sdhAnn = pAL->getStruxDocHandle();
+	PT_DocPosition posAnn = m_pDoc->getStruxPosition(sdhAnn);
+	const PP_PropertyVector propsAnn = {
+		"annotation-resolved", sResolved
+	};
+	m_pDoc->changeStruxFmt(PTC_AddFmt, posAnn, posAnn, PP_NOPROPS, propsAnn, PTX_SectionAnnotation);
+	return true;
+}
+
+void FV_View::getAnnotationReplyChoices(std::vector<std::string>& ids,
+										std::vector<std::string>& labels,
+										UT_uint32 exclude) const
+{
+	ids.clear();
+	labels.clear();
+	FL_DocLayout* layout = getLayout();
+	if (!layout)
+		return;
+	for (UT_uint32 i = 0; i < layout->countAnnotations(); ++i)
+	{
+		fl_AnnotationLayout* ann = layout->getNthAnnotation(static_cast<UT_sint32>(i));
+		if (!ann || (exclude && ann->getAnnotationPID() == exclude))
+			continue;
+		std::string id = UT_std_string_sprintf("%u", ann->getAnnotationPID());
+		std::string label = id;
+		const char* title = ann->getTitle();
+		const char* author = ann->getAuthor();
+		if (title && *title)
+			label += std::string(" - ") + title;
+		else if (author && *author)
+			label += std::string(" - ") + author;
+		ids.push_back(id);
+		labels.push_back(label);
+	}
+}
+
 /*!
  * Insert annotation number iAnnotation across the current selection.
  * The text of the annotation is contained in pStr.
@@ -12794,7 +12876,9 @@ bool FV_View::insertAnnotation(UT_sint32 iAnnotation,
 							   const std::string & sDescr,
 							   const std::string & sAuthor,
 							   const std::string & sTitle,
-							   bool bCopy)
+							   bool bCopy,
+							   const std::string & sParent,
+							   const std::string & sResolved)
 {
 	// can only apply an Annotation to an FL_SECTION_DOC or a Table
 	// TODO allow applying to empty selection (cursor position)
@@ -12954,6 +13038,16 @@ bool FV_View::insertAnnotation(UT_sint32 iAnnotation,
 		"annotation-title", sTitle,
 		"annotation-date", UT_std_string_sprintf("%d-%d-%d", gDate.month, gDate.day, gDate.year)
 	};
+	if (!sParent.empty())
+	{
+		propsAnn.push_back("annotation-parent");
+		propsAnn.push_back(sParent);
+	}
+	if (!sResolved.empty())
+	{
+		propsAnn.push_back("annotation-resolved");
+		propsAnn.push_back(sResolved);
+	}
 	PP_PropertyVector block_atts = {
 		PT_STYLE_ATTRIBUTE_NAME, "Normal"
 	};

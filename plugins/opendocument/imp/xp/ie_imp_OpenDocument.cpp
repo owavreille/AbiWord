@@ -245,6 +245,11 @@ UT_Error IE_Imp_OpenDocument::_handleManifestStream() {
     m_sPassword = "";
 
 	GsfInput* pMetaInf = gsf_infile_child_by_name(m_pGsfInfile, "META-INF");
+    if (!pMetaInf) {
+        // A package should contain META-INF/manifest.xml. Without it the
+        // content stream can still be read, and there is nothing to decrypt.
+        return UT_OK;
+    }
     ODi_ManifestStream_ListenerState manifestListener(*(m_pStreamListener->getElementStack()),
                                            m_cryptoInfo);
 
@@ -672,13 +677,6 @@ UT_Error IE_Imp_OpenDocument::_handleStream ( GsfInfile* pGsfInfile,
 	{
         UT_DEBUGMSG(("Running decrypt on stream %s\n", pStream));
 
-        
-#ifndef HAVE_GCRYPT
-        UT_DEBUGMSG(("Can not decrypt files because of how abiword is compiled!\n"));
-        g_object_unref(G_OBJECT(pInput));
-        return UT_ERROR;
-#endif
-        
         GsfInput* pDecryptedInput = nullptr;
         UT_Error err = ODc_Crypto::decrypt(pInput, (*pos).second, m_sPassword.c_str(), &pDecryptedInput);
         g_object_unref (G_OBJECT (pInput));

@@ -38,7 +38,7 @@ AccountHandler * TCPWin32AccountHandler::static_constructor()
 }
 
 // return true if we process the command, false otherwise
-BOOL TCPWin32AccountHandler::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL TCPWin32AccountHandler::_onCommand(HWND hWnd, WPARAM wParam, LPARAM)
 {
 	if (!m_hServerEntry || !m_hPortEntry)
 		return false; // we are still initializing the dialog
@@ -177,7 +177,7 @@ void TCPWin32AccountHandler::embedDialogWidgets(void* pEmbeddingParent)
 	UT_return_if_fail(m_hAutoconnectCheck);
 	
 	// Font setting code borrowed from XAP_Win32Dlg_About
-	LOGFONTW lf = { 0 };
+	LOGFONTW lf = {};
 	wcscpy(lf.lfFaceName, L"MS Sans Serif");
 	lf.lfHeight = 12;
 	lf.lfWeight = 0;
@@ -195,7 +195,7 @@ void TCPWin32AccountHandler::embedDialogWidgets(void* pEmbeddingParent)
 	_checkButtonHwnd(m_hAutoconnectCheck, true);
 }
 
-#define DESTROY_WINDOW(M) if (M) { int res = DestroyWindow(M); UT_ASSERT_HARMLESS(res); M = 0; }
+#define DESTROY_WINDOW(M) do { if (M) { DestroyWindow(M); M = nullptr; } } while (0)
 
 void TCPWin32AccountHandler::removeDialogWidgets(void* pEmbeddingParent)
 {

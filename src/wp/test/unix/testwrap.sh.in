@@ -6,6 +6,8 @@ G_SLICE=always-malloc
 export G_SLICE
 ABI_TEST_SRC_DIR=@abs_top_srcdir@
 export ABI_TEST_SRC_DIR
+ABI_TEST_PLUGIN_DIR=@abs_top_builddir@/plugins
+export ABI_TEST_PLUGIN_DIR
 
 # Suppressions, mostly fontconfig
 cat <<EOF > supp.txt

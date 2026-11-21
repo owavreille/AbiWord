@@ -28,6 +28,34 @@
 #include <windows.h>
 #include "ap_Win32App.h"
 
+static void abiEnableHighDpi()
+{
+	HMODULE user = GetModuleHandleW(L"user32.dll");
+	if (!user)
+		return;
+	typedef BOOL (WINAPI *SetDpiContext)(HANDLE);
+	SetDpiContext setContext = reinterpret_cast<SetDpiContext>(
+		reinterpret_cast<void *>(GetProcAddress(user, "SetProcessDpiAwarenessContext")));
+	if (setContext && setContext(reinterpret_cast<HANDLE>(static_cast<INT_PTR>(-4))))
+		return;
+	HMODULE shcore = LoadLibraryW(L"shcore.dll");
+	if (shcore)
+	{
+		typedef HRESULT (WINAPI *SetDpiAwareness)(int);
+		SetDpiAwareness setAwareness = reinterpret_cast<SetDpiAwareness>(
+			reinterpret_cast<void *>(GetProcAddress(shcore, "SetProcessDpiAwareness")));
+		if (setAwareness)
+			setAwareness(2);
+		FreeLibrary(shcore);
+		return;
+	}
+	typedef BOOL (WINAPI *SetDpiAware)(void);
+	SetDpiAware setAware = reinterpret_cast<SetDpiAware>(
+		reinterpret_cast<void *>(GetProcAddress(user, "SetProcessDPIAware")));
+	if (setAware)
+		setAware();
+}
+
 int WINAPI wWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
                     LPWSTR /*szCmdLine*/, int iCmdShow)
 {
@@ -55,6 +83,7 @@ int WINAPI wWinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	}
 #endif
 
+	abiEnableHighDpi();
 	// Dummy ANSI command line
 	return AP_Win32App::WinMain("AbiWord", hInstance, hPrevInstance, "abiword.exe", iCmdShow);
 }
@@ -88,6 +117,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	}
 #endif
 
+	abiEnableHighDpi();
 	return AP_Win32App::WinMain("AbiWord", hInstance, hPrevInstance, szCmdLine, iCmdShow);
 }
 

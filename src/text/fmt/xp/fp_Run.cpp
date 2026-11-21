@@ -3770,6 +3770,49 @@ const char * fp_ImageRun::getDataId(void) const
 	return m_pFGraphic->getDataId();
 }
 
+static bool s_imageTuneValue(const PP_AttrProp* ap, const char* name, int& value)
+{
+	const gchar* text = nullptr;
+	if (!ap || !ap->getProperty(name, text) || !text || !*text)
+		return false;
+	value = atoi(text);
+	return true;
+}
+
+static int s_imageTuneClamp(int value, int low, int high)
+{
+	if (value < low)
+		return low;
+	if (value > high)
+		return high;
+	return value;
+}
+
+static GR_ImageTune s_imageTune(fp_Run* run)
+{
+	GR_ImageTune tune;
+	const PP_AttrProp* span = run->getSpanAP();
+	const PP_AttrProp* frame = nullptr;
+	fl_ContainerLayout* box = run->getBlock() ? run->getBlock()->myContainingLayout() : nullptr;
+	if (box && box->getContainerType() == FL_CONTAINER_FRAME)
+		static_cast<fl_FrameLayout*>(box)->getAP(frame);
+
+	int value = 0;
+	if (s_imageTuneValue(span, "opacity", value) || s_imageTuneValue(frame, "opacity", value))
+		tune.opacity = s_imageTuneClamp(value, 0, 100);
+	if (s_imageTuneValue(span, "brightness", value) || s_imageTuneValue(frame, "brightness", value))
+		tune.brightness = s_imageTuneClamp(value, -100, 100);
+	if (s_imageTuneValue(span, "crop-left", value) || s_imageTuneValue(frame, "crop-left", value))
+		tune.cropLeft = s_imageTuneClamp(value, 0, 90);
+	if (s_imageTuneValue(span, "crop-right", value) || s_imageTuneValue(frame, "crop-right", value))
+		tune.cropRight = s_imageTuneClamp(value, 0, 90);
+	if (s_imageTuneValue(span, "crop-top", value) || s_imageTuneValue(frame, "crop-top", value))
+		tune.cropTop = s_imageTuneClamp(value, 0, 90);
+	if (s_imageTuneValue(span, "crop-bottom", value) || s_imageTuneValue(frame, "crop-bottom", value))
+		tune.cropBottom = s_imageTuneClamp(value, 0, 90);
+	return tune;
+}
+
 void fp_ImageRun::_draw(dg_DrawArgs* pDA)
 {
 	GR_Graphics *pG = pDA->pG;
@@ -3881,7 +3924,7 @@ void fp_ImageRun::_draw(dg_DrawArgs* pDA)
 			Fill(pG,xoff,yoff,getWidth(),getHeight());
 		}
 		// draw the image (always)
-		painter.drawImage(m_pImage, xoff, yoff);
+		painter.drawImage(m_pImage, xoff, yoff, s_imageTune(this));
 
 		// if we're the selection, draw some pretty selection markers
 		if (pG->queryProperties(GR_Graphics::DGP_SCREEN))

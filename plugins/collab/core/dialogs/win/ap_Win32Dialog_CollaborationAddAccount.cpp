@@ -34,7 +34,7 @@
 // which is why we have the static dialog pointer below
 static AP_Win32Dialog_CollaborationAddAccount* s_pThis = NULL;
 
-BOOL CALLBACK AP_Win32Dialog_CollaborationAddAccount::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+INT_PTR CALLBACK AP_Win32Dialog_CollaborationAddAccount::s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
 	switch (msg)
 	{
@@ -91,7 +91,7 @@ AP_Win32Dialog_CollaborationAddAccount::AP_Win32Dialog_CollaborationAddAccount(X
 	m_pWin32Dialog(NULL),
 	m_hInstance(NULL),
 	m_hOk(NULL),
-	m_pOldDetailsProc(NULL),
+	m_pOldDetailsProc(0),
 	m_hWnd(NULL),
 	m_hDetails(NULL),
 	m_hDetailsHook(NULL)
@@ -115,7 +115,7 @@ void AP_Win32Dialog_CollaborationAddAccount::runModal(XAP_Frame * pFrame)
 	LPCTSTR lpTemplate = MAKEINTRESOURCE(AP_RID_DIALOG_COLLABORATIONADDACCOUNT);
 	int result = DialogBoxParam( m_hInstance, lpTemplate,
 		static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
-		(DLGPROC)s_dlgProc, (LPARAM)this );
+		s_dlgProc, (LPARAM)this );
 	switch (result)
 	{
 		case 0:
@@ -135,7 +135,7 @@ void AP_Win32Dialog_CollaborationAddAccount::runModal(XAP_Frame * pFrame)
 }
 
 /*****************************************************************/
-BOOL AP_Win32Dialog_CollaborationAddAccount::_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationAddAccount::_onInitDialog(HWND hWnd, WPARAM, LPARAM)
 {
 	// Store handles for easy access
 	m_hWnd = hWnd;
@@ -168,7 +168,7 @@ BOOL AP_Win32Dialog_CollaborationAddAccount::_onInitDialog(HWND hWnd, WPARAM wPa
 }
 
 // return true if we process the command, false otherwise
-BOOL AP_Win32Dialog_CollaborationAddAccount::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationAddAccount::_onCommand(HWND hWnd, WPARAM wParam, LPARAM)
 {
 	WORD wNotifyCode = HIWORD(wParam);
 	WORD wId = LOWORD(wParam);
@@ -189,7 +189,9 @@ BOOL AP_Win32Dialog_CollaborationAddAccount::_onCommand(HWND hWnd, WPARAM wParam
 				_setAccountHandler(pHandler);
 			}
 			else
+			{
 				UT_DEBUGMSG(("No account handler types to select; this makes abicollab kinda pointless...\n"));
+			}
 			
 			return true;
 		}
@@ -217,7 +219,7 @@ BOOL AP_Win32Dialog_CollaborationAddAccount::_onCommand(HWND hWnd, WPARAM wParam
 	}
 }
 
-BOOL AP_Win32Dialog_CollaborationAddAccount::_onDetailsCommand(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+BOOL AP_Win32Dialog_CollaborationAddAccount::_onDetailsCommand(HWND hWnd, UINT, WPARAM wParam, LPARAM lParam)
 {
 	AccountHandler* pAccountHandler = _getActiveAccountHandler();
 	UT_return_val_if_fail(pAccountHandler, false);
@@ -288,7 +290,9 @@ void AP_Win32Dialog_CollaborationAddAccount::_populateWindowData()
 			m_vAccountTypeCombo.insert(m_vAccountTypeCombo.begin()+index, pHandler);
 		}
 		else
+		{
 			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+		}
 	}
 	
 	// if we have at least one account handler, then make sure the first one is selected
@@ -305,7 +309,9 @@ void AP_Win32Dialog_CollaborationAddAccount::_populateWindowData()
 			_setAccountHandler(pHandler);
 		}
 		else
+		{
 			UT_DEBUGMSG(("No account handler types to select; this makes abicollab kinda pointless...\n"));
+		}
 			
 	}
 	else

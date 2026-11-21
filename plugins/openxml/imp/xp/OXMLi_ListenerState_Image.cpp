@@ -26,6 +26,7 @@
 // Internal includes
 #include "OXML_Document.h"
 #include "OXML_FontManager.h"
+#include "OXML_Element_Text.h"
 #include "OXMLi_PackageManager.h"
 
 // AbiWord includes
@@ -35,12 +36,37 @@
 #include "fg_GraphicRaster.h"
 
 // External includes
+#include <map>
 #include <string>
+
+static std::string abi_xml_local_name(const std::string& name)
+{
+	std::string::size_type colon = name.rfind(':');
+	if (colon == std::string::npos)
+		return name;
+	return name.substr(colon + 1);
+}
+
+static void abi_append_drawing_note(OXMLi_ElementStack* stck, const std::string& note)
+{
+	if (!stck || stck->empty() || note.empty())
+		return;
+	OXML_SharedElement top = stck->top();
+	OXML_SharedElement parent = top;
+	if (top && top->getTag() == IMG_TAG && stck->size() >= 2)
+	{
+		stck->pop();
+		parent = stck->top();
+		stck->push(top);
+	}
+	if (!parent)
+		return;
+	parent->appendElement(OXML_SharedElement(new OXML_Element_Text(note.c_str(), static_cast<int>(note.size()))));
+}
 
 OXMLi_ListenerState_Image::OXMLi_ListenerState_Image()
   : OXMLi_ListenerState(),
 	m_style(""),
-	m_isEmbeddedObject(false),
 	m_isInlineImage(false)
 {
 
@@ -50,13 +76,7 @@ void OXMLi_ListenerState_Image::startElement (OXMLi_StartElementRequest * rqst)
 {
 	if(nameMatches(rqst->pName, NS_W_KEY, "object"))
 	{
-		// Abiword doesn't support embedded objects, enable this boolean lock when needed
-		m_isEmbeddedObject = true;
 		rqst->handled = true;
-	}
-	if(m_isEmbeddedObject)
-	{
-		return;
 	}
 
 	if(nameMatches(rqst->pName, NS_W_KEY, "drawing"))
@@ -342,6 +362,40 @@ void OXMLi_ListenerState_Image::startElement (OXMLi_StartElementRequest * rqst)
 			rqst->handled = true;
 		}
 	}
+	else if (abi_xml_local_name(rqst->pName) == "chart" ||
+			 abi_xml_local_name(rqst->pName) == "relIds")
+	{
+		const gchar* id = attrMatches(NS_R_KEY, "id", rqst->ppAtts);
+		if (!id)
+			id = attrMatches(NS_R_KEY, "dm", rqst->ppAtts);
+		if (id)
+		{
+			OXMLi_PackageManager* mgr = OXMLi_PackageManager::getInstance();
+			std::string text = mgr ? mgr->readPartText(id) : std::string();
+			if (!text.empty())
+				abi_append_drawing_note(rqst->stck, text);
+		}
+		rqst->handled = true;
+	}
+	else if (nameMatches(rqst->pName, NS_O_KEY, "OLEObject") ||
+			 abi_xml_local_name(rqst->pName) == "OLEObject")
+	{
+		const gchar* prog = attrMatches(NS_O_KEY, "ProgID", rqst->ppAtts);
+		if (!prog && rqst->ppAtts)
+		{
+			std::map<std::string, std::string>::iterator it = rqst->ppAtts->find("ProgID");
+			if (it != rqst->ppAtts->end())
+				prog = it->second.c_str();
+		}
+		std::string note = "OLE";
+		if (prog && *prog)
+		{
+			note += ": ";
+			note += prog;
+		}
+		abi_append_drawing_note(rqst->stck, note);
+		rqst->handled = true;
+	}
 
 	//TODO: more coming here
 }
@@ -350,12 +404,7 @@ void OXMLi_ListenerState_Image::endElement (OXMLi_EndElementRequest * rqst)
 {
 	if(nameMatches(rqst->pName, NS_W_KEY, "object"))
 	{
-		m_isEmbeddedObject = false;
 		rqst->handled = true;
-		return;
-	}
-	if(m_isEmbeddedObject)
-	{
 		return;
 	}
 
@@ -389,10 +438,6 @@ void OXMLi_ListenerState_Image::endElement (OXMLi_EndElementRequest * rqst)
 
 void OXMLi_ListenerState_Image::charData (OXMLi_CharDataRequest * rqst)
 {
-	if(m_isEmbeddedObject)
-	{
-		return;
-	}
 	if(rqst->stck->empty())
 	{
 		rqst->handled = false;

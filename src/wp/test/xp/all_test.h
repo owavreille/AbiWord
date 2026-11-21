@@ -61,3 +61,5 @@
 #undef TFSUITE
 #include "src/wp/impexp/xp/t/ie_imp_memory.t.cpp"
 #undef TFSUITE
+#include "src/wp/impexp/xp/t/ie_formats.t.cpp"
+#undef TFSUITE

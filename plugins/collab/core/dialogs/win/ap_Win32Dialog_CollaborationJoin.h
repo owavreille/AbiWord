@@ -45,8 +45,8 @@ public:
 	AP_Win32Dialog_CollaborationJoin(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id id);
 	static XAP_Dialog * 		static_constructor(XAP_DialogFactory * pFactory, XAP_Dialog_Id id);
 
-	void						runModal(XAP_Frame * pFrame);
-	static BOOL CALLBACK		s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
+	void						runModal(XAP_Frame * pFrame) override;
+	static INT_PTR CALLBACK		s_dlgProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL 						_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam);
 	BOOL						_onNotify(HWND hWnd, WPARAM wParam, LPARAM lParam);
@@ -57,12 +57,12 @@ private:
 	HTREEITEM				_addBuddyToTree(BuddyPtr pBuddy);
 	HTREEITEM				_addDocumentToBuddy(HTREEITEM buddyItem, BuddyPtr pBuddy, DocHandle* pDocHandle);
 	void					_populateWindowData();
-	void					_refreshWindow();
-	void					_enableBuddyAddition(bool bEnabled);
+	void					_refreshWindow() override;
+	void					_enableBuddyAddition(bool bEnabled) override;
 	ShareListItem*			_getSelectedItem();
 	void					_updateSelection();
 	void					_eventOpen();
-	void					_addDocument(BuddyPtr pBuddy, DocHandle* pDocHandle);
+	void					_addDocument(BuddyPtr pBuddy, DocHandle* pDocHandle) override;
 	void					_freeBuddyList();
 
 	// Handles

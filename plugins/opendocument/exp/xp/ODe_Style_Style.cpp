@@ -36,6 +36,7 @@
 
 // External includes
 #include <ctype.h>
+#include <string.h>
 
 
 /*******************************************************************************
@@ -144,15 +145,40 @@ bool ODe_Style_Style::write(GsfOutput* pODT, const UT_UTF8String& rSpacesOffset)
 
 #define ODE_WRITE_STYLE_PROPS(pStyleProps) \
     if (pStyleProps) { pStyleProps->write(output, subOffset); }
-    
-    ODE_WRITE_STYLE_PROPS(m_pSectionProps);
-    ODE_WRITE_STYLE_PROPS(m_pParagraphProps);
-    ODE_WRITE_STYLE_PROPS(m_pTextProps);
-    ODE_WRITE_STYLE_PROPS(m_pTableProps);
-    ODE_WRITE_STYLE_PROPS(m_pColumnProps);
-    ODE_WRITE_STYLE_PROPS(m_pRowProps);
-    ODE_WRITE_STYLE_PROPS(m_pCellProps);
-    ODE_WRITE_STYLE_PROPS(m_pGraphicProps);
+
+    // ODF 1.3 style-style-content: the children depend on style:family,
+    // and their order is fixed.
+    if (m_family == "text") {
+        ODE_WRITE_STYLE_PROPS(m_pTextProps);
+    } else if (m_family == "paragraph") {
+        ODE_WRITE_STYLE_PROPS(m_pParagraphProps);
+        ODE_WRITE_STYLE_PROPS(m_pTextProps);
+    } else if (m_family == "section") {
+        ODE_WRITE_STYLE_PROPS(m_pSectionProps);
+    } else if (m_family == "table") {
+        ODE_WRITE_STYLE_PROPS(m_pTableProps);
+    } else if (m_family == "table-column") {
+        ODE_WRITE_STYLE_PROPS(m_pColumnProps);
+    } else if (m_family == "table-row") {
+        ODE_WRITE_STYLE_PROPS(m_pRowProps);
+    } else if (m_family == "table-cell") {
+        ODE_WRITE_STYLE_PROPS(m_pCellProps);
+        ODE_WRITE_STYLE_PROPS(m_pParagraphProps);
+        ODE_WRITE_STYLE_PROPS(m_pTextProps);
+    } else if (m_family == "graphic" || m_family == "presentation") {
+        ODE_WRITE_STYLE_PROPS(m_pGraphicProps);
+        ODE_WRITE_STYLE_PROPS(m_pParagraphProps);
+        ODE_WRITE_STYLE_PROPS(m_pTextProps);
+    } else {
+        ODE_WRITE_STYLE_PROPS(m_pSectionProps);
+        ODE_WRITE_STYLE_PROPS(m_pParagraphProps);
+        ODE_WRITE_STYLE_PROPS(m_pTextProps);
+        ODE_WRITE_STYLE_PROPS(m_pTableProps);
+        ODE_WRITE_STYLE_PROPS(m_pColumnProps);
+        ODE_WRITE_STYLE_PROPS(m_pRowProps);
+        ODE_WRITE_STYLE_PROPS(m_pCellProps);
+        ODE_WRITE_STYLE_PROPS(m_pGraphicProps);
+    }
 
 #undef ODE_WRITE_STYLE_PROPS
     
@@ -1681,11 +1707,9 @@ fetchAttributesFromAbiProps(const PP_AttrProp& rAP) {
     ok = rAP.getProperty("text-position", pValue);
     if (ok && pValue != nullptr) {
         if (!strcmp("subscript", pValue)) {
-            // Hard coded, it's ugly but I can't do otherwise.
-            m_textPosition = "-33%";
+            m_textPosition = "sub";
         } else if (!strcmp("superscript", pValue)) {
-            // Hard coded, it's ugly but I can't do otherwise.
-            m_textPosition = "33%";
+            m_textPosition = "super";
         } else {
             UT_ASSERT( !strcmp("normal", pValue) );
             m_textPosition.clear();
@@ -1800,7 +1824,22 @@ write(UT_UTF8String& rOutput, const UT_UTF8String& rSpacesOffset) const {
     ODe_writeAttribute(rOutput, "style:text-line-through-type", m_lineThroughType);
     ODe_writeAttribute(rOutput, "style:text-position", m_textPosition);
     ODe_writeAttribute(rOutput, "style:font-name", m_fontName);
-    ODe_writeAttribute(rOutput, "fo:font-size", m_fontSize);
+    UT_UTF8String fontSize = m_fontSize;
+    if (!fontSize.empty()) {
+        const char* size = fontSize.utf8_str();
+        size_t n = strlen(size);
+        bool hasUnit = n > 0 && size[n - 1] == '%';
+        if (!hasUnit && n >= 2 && g_ascii_isalpha(size[n - 1]) && g_ascii_isalpha(size[n - 2]))
+            hasUnit = true;
+        if (!hasUnit) {
+            bool numeric = n > 0;
+            for (size_t i = 0; numeric && i < n; ++i)
+                numeric = g_ascii_isdigit(size[i]) || size[i] == '.';
+            if (numeric)
+                fontSize += "pt";
+        }
+    }
+    ODe_writeAttribute(rOutput, "fo:font-size", fontSize);
     ODe_writeAttribute(rOutput, "fo:language", m_language);
     ODe_writeAttribute(rOutput, "fo:country", m_country);
     ODe_writeAttribute(rOutput, "fo:font-style", m_fontStyle);
@@ -2250,10 +2289,7 @@ write(UT_UTF8String& rOutput, const UT_UTF8String& rSpacesOffset) const {
     }
     
     rOutput += rSpacesOffset;
-    if(m_backgroundImage.length()==0)
-      rOutput += "<style:table-cell-properties";
-    else
-      rOutput += "<style:table-cell-properties>";
+    rOutput += "<style:table-cell-properties";
 
     ODe_writeAttribute(rOutput, "style:vertical-align", m_verticalAlign);
     ODe_writeAttribute(rOutput, "fo:border-left", m_leftThickness + " solid " + m_leftColor);
@@ -2262,19 +2298,25 @@ write(UT_UTF8String& rOutput, const UT_UTF8String& rSpacesOffset) const {
     ODe_writeAttribute(rOutput, "fo:border-bottom", m_bottomThickness + " solid " + m_bottomColor);
     ODe_writeAttribute(rOutput, "fo:background-color", m_backgroundColor);
 
-    
-    rOutput += "/>\n";
-
-    if(m_backgroundImage.length()>0)
-    {
-      rOutput += "<style:background-image";
-      ODe_writeAttribute(rOutput,"xlink:href",m_backgroundImage);
-      ODe_writeAttribute(rOutput,"xlink:type","simple");
-      ODe_writeAttribute(rOutput,"xlink:actuate","onLoad");
-      ODe_writeAttribute(rOutput,"style:repeat","stretch");
-      rOutput += "/>\n";
-      rOutput += "</style:table-cell-properties>\n";
+    if (m_backgroundImage.empty()) {
+        rOutput += "/>\n";
+        return;
     }
+
+    // style:background-image is a child. xlink:type and xlink:href are required.
+    UT_UTF8String href = m_backgroundImage;
+    href.escapeXML();
+    rOutput += ">\n";
+    rOutput += rSpacesOffset;
+    rOutput += " <style:background-image";
+    ODe_writeAttribute(rOutput, "xlink:href", href);
+    ODe_writeAttribute(rOutput, "xlink:type", "simple");
+    ODe_writeAttribute(rOutput, "xlink:show", "embed");
+    ODe_writeAttribute(rOutput, "xlink:actuate", "onLoad");
+    ODe_writeAttribute(rOutput, "style:repeat", "stretch");
+    rOutput += "/>\n";
+    rOutput += rSpacesOffset;
+    rOutput += "</style:table-cell-properties>\n";
 
 }
 
