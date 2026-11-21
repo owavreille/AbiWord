@@ -62,8 +62,8 @@ class GR_Win32CairoVectorImage : public GR_CairoVectorImage
 {
 public:
 	explicit GR_Win32CairoVectorImage(const char* name)
-		: GR_VectorImage(name)
 	{
+		setName(name ? name : "Win32CairoVectorImage");
 	}
 
 	virtual void cairoSetSource(cairo_t *) override {}
@@ -161,6 +161,8 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 	int bitDepth = 0;
 	int colorType = 0;
 	png_get_IHDR(png, info, &width, &height, &bitDepth, &colorType, nullptr, nullptr, nullptr);
+	(void)bitDepth;
+	(void)colorType;
 	if (width == 0 || height == 0 || width > c_MaxImageSide || height > c_MaxImageSide)
 	{
 		png_destroy_read_struct(&png, &info, nullptr);
