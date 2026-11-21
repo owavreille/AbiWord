@@ -167,7 +167,7 @@ void Synchronizer::_unregisterWndClass() // Win32-only
 //////////////////
 
 #ifdef _WIN32
-Synchronizer::Synchronizer(boost::function<void ()>  signalhandler) // Win32 Implementation
+Synchronizer::Synchronizer(std::function<void ()> signalhandler) // Win32 Implementation
 	: m_signalhandler(signalhandler),
  	m_hWnd(0),
 	m_bIsProcessing(false),

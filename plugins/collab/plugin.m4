@@ -220,6 +220,11 @@ test "$enable_collab" = "auto" && PLUGINS="$PLUGINS collab"
 
 COLLAB_CFLAGS="$COLLAB_CFLAGS "'${PLUGIN_CFLAGS}'
 COLLAB_LIBS="$COLLAB_LIBS "'${PLUGIN_LIBS}'
+dnl Boost.Asio 1.78 refuses _WIN32_WINNT below Windows XP. The rest of
+dnl AbiWord stays at 0x0500; only this plugin asks for Vista.
+if test "$TOOLKIT" = "win"; then
+	COLLAB_CFLAGS="$COLLAB_CFLAGS -U_WIN32_WINNT -D_WIN32_WINNT=0x0600"
+fi
 
 fi # plugin conditional
 

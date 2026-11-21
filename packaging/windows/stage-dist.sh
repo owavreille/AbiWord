@@ -23,6 +23,18 @@ cp "$BUILDDIR/plugins/opendocument/.libs/opendocument.dll" \
 	"$DEST/lib/abiword-3.1/plugins/"
 cp "$BUILDDIR/plugins/openxml/.libs/openxml.dll" \
 	"$DEST/lib/abiword-3.1/plugins/"
+cp "$BUILDDIR/plugins/sdw/.libs/sdw.dll" \
+	"$DEST/lib/abiword-3.1/plugins/"
+cp "$BUILDDIR/plugins/collab/.libs/collab.dll" \
+	"$DEST/lib/abiword-3.1/plugins/"
+if [[ -d "$PREFIX/etc/fonts" ]]; then
+	mkdir -p "$DEST/etc/fonts"
+	cp -a "$PREFIX/etc/fonts/." "$DEST/etc/fonts/"
+fi
+if [[ -d "$PREFIX/etc/pango" ]]; then
+	mkdir -p "$DEST/etc/pango"
+	cp -a "$PREFIX/etc/pango/." "$DEST/etc/pango/"
+fi
 cp "$BUILDDIR"/po/*.strings "$DEST/share/abiword-3.1/strings/"
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 cp "$ROOT/src/wp/ap/win/ToolbarIcons/LICENSE.icons.txt" "$DEST/share/abiword-3.1/"
@@ -60,7 +72,9 @@ is_system() {
 	psapi.dll|dbghelp.dll|mpr.dll|netapi32.dll|userenv.dll|wldap32.dll| \
 	normaliz.dll|dnsapi.dll|mswsock.dll|nsi.dll|powrprof.dll|cfgmgr32.dll| \
 	wintrust.dll|imagehlp.dll|opengl32.dll|glu32.dll|combase.dll|shcore.dll| \
-	propsys.dll|api-ms-*.dll|ext-ms-*.dll)
+	propsys.dll|dwrite.dll|d2d1.dll|windowscodecs.dll|dxgi.dll|d3d11.dll| \
+	d3d9.dll|wininet.dll|winhttp.dll|ncrypt.dll|cryptbase.dll| \
+	api-ms-*.dll|ext-ms-*.dll)
 		return 0
 		;;
 	esac
@@ -109,6 +123,8 @@ copy_tree "$DEST/bin/abiword.exe"
 copy_tree "$DEST/bin/libabiword-3.1.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/opendocument.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/openxml.dll"
+copy_tree "$DEST/lib/abiword-3.1/plugins/sdw.dll"
+copy_tree "$DEST/lib/abiword-3.1/plugins/collab.dll"
 copy_tree "$DEST/lib/enchant-2/enchant_hunspell.dll"
 
 hunspell=$(find "$DEST/bin" -maxdepth 1 -name 'libhunspell*.dll' -print -quit)

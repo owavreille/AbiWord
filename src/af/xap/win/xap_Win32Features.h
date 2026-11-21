@@ -21,8 +21,17 @@
 #ifndef __XAP_WIN32_FEATURES_H__
 #define __XAP_WIN32_FEATURES_H__
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #define XAP_PREFSMENU_UNDER_TOOLS 1
 
 #define XAP_DONT_INLINE_XPM 1
+
+/* Cairo fournit la recherche de police utilisée par l'export PDF. */
+#ifdef WITH_CAIRO
+#define XAP_HAVE_GR_findNearestFont 1
+#endif
 
 #endif

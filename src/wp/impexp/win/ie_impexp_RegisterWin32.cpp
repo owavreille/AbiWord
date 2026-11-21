@@ -20,10 +20,17 @@
 
 
 
+#ifdef HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include "ie_imp.h"
 #include "ie_exp.h"
 #include "ie_impexp_Register.h"
 #include "ie_impGraphic_Win32Native.h"
+#ifdef WITH_CAIRO
+#include "ie_exp_PDF.h"
+#endif
 
 
 /*!
@@ -33,5 +40,8 @@
 void IE_ImpExp_RegisterPlatform ()
 {
     IE_ImpGraphic::registerImporter(new IE_ImpGraphicWin32Native_Sniffer());
+#ifdef WITH_CAIRO
+    IE_Exp::registerExporter(new IE_Exp_PDF_Sniffer());
+#endif
 }
     
