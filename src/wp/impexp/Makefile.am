@@ -138,3 +138,8 @@ libimpexp_la_SOURCES += \
 	qt/ie_impexp_RegisterQt.cpp
 endif
 
+EXTRA_DIST = \
+	xp/t/ie_imp_memory.t.cpp \
+	xp/t/ie_mailmerge.t.cpp \
+	xp/t/ie_Table.t.cpp
+

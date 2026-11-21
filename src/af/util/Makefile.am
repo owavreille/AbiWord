@@ -179,6 +179,8 @@ EXTRA_DIST = \
 	xp/t/ut_std_string.t.cpp \
 	xp/t/ut_string.t.cpp \
 	xp/t/ut_string_class.t.cpp \
+	xp/t/ut_go_file.t.cpp \
+	xp/t/ut_path.t.cpp \
 	xp/t/ut_types.t.cpp \
 	xp/t/ut_units.t.cpp \
 	xp/t/ut_uuid.t.cpp \

@@ -18,6 +18,10 @@
  * 02110-1301 USA.
  */
 
+#include <cstring>
+
+#include <glib.h>
+
 #include "tf_test.h"
 
 #include "fl_AutoNum.h"
@@ -27,7 +31,7 @@
 
 namespace {
 
-static const char *DATA_FILE =
+static const char *AUTONUM_DATA_FILE =
   "/test/wp/table.abw";
 
 }
@@ -35,7 +39,7 @@ static const char *DATA_FILE =
 PD_Document *makeDocument()
 {
   std::string data_file;
-  TFPASS(TF_Test::ensure_test_data(DATA_FILE, data_file));
+  TFPASS(TF_Test::ensure_test_data(AUTONUM_DATA_FILE, data_file));
 
   PD_Document* doc = new PD_Document;
 
@@ -82,4 +86,57 @@ TFTEST_MAIN("fl_AutoNum")
   TFPASS(!attr.empty());
 
   pDoc->unref();
+}
+
+TFTEST_MAIN("fl_AutoNum labels stay inside their buffers")
+{
+  char * letter = fl_AutoNum::dec2ascii(0, 'A');
+  TFPASSEQ(letter, "A");
+  g_free(letter);
+
+  letter = fl_AutoNum::dec2ascii(25, 'A');
+  TFPASSEQ(letter, "Z");
+  g_free(letter);
+
+  letter = fl_AutoNum::dec2ascii(26, 'A');
+  TFPASSEQ(letter, "AA");
+  g_free(letter);
+
+  letter = fl_AutoNum::dec2ascii(-4, 'A');
+  TFPASSEQ(letter, "A");
+  g_free(letter);
+
+  letter = fl_AutoNum::dec2ascii(2000000000, 'A');
+  TFPASS(letter != nullptr);
+  TFPASS(strlen(letter) == 63);
+  g_free(letter);
+
+  char * roman = fl_AutoNum::dec2roman(1, false);
+  TFPASSEQ(roman, "I");
+  g_free(roman);
+
+  roman = fl_AutoNum::dec2roman(4, false);
+  TFPASSEQ(roman, "IV");
+  g_free(roman);
+
+  roman = fl_AutoNum::dec2roman(3999, false);
+  TFPASSEQ(roman, "MMMCMXCIX");
+  g_free(roman);
+
+  roman = fl_AutoNum::dec2roman(4000, false);
+  TFPASSEQ(roman, "4000");
+  g_free(roman);
+
+  roman = fl_AutoNum::dec2roman(4000, true);
+  TFPASSEQ(roman, "4000");
+  g_free(roman);
+
+  roman = fl_AutoNum::dec2roman(-8, false);
+  TFPASSEQ(roman, "");
+  g_free(roman);
+
+  UT_UCS4Char hebrew[100];
+  UT_uint32 point = 0;
+  fl_AutoNum::dec2hebrew(hebrew, &point, 2000000000);
+  TFPASS(point < 100);
 }
