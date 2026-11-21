@@ -298,6 +298,13 @@ UT_Error OXML_Style::serialize(IE_Exp_OpenXML* exporter)
 		err = exporter->finishDocumentDefaultProperties();
 		if(err != UT_OK)
 			return err;
+
+		err = exporter->startStyle("Normal", "", "", "paragraph");
+		if(err != UT_OK)
+			return err;
+		err = exporter->finishStyle();
+		if(err != UT_OK)
+			return err;
 	}
 	else
 	{

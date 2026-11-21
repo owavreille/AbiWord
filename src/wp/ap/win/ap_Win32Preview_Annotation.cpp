@@ -116,12 +116,11 @@ void AP_Win32Preview_Annotation::_createToolTip(HWND hwndParent)
 		{
 			const char *utf8 = title.c_str();
 			const char *cptr = utf8;
-			int clen = 0, cc = 0;
+			int clen = 0;
 			while (gunichar wch = g_utf8_get_char(cptr)) {
 				if (clen >= 98) break;
 				if (wch >= 0x10000) clen += 2;
 				else clen++;
-				cc++;
 				cptr = g_utf8_next_char(cptr);
 			}
 
