@@ -1,0 +1,1162 @@
+diff -ruN wv-1.2.9/atrd.c wv-1.2.9/atrd.c
+--- wv-1.2.9/atrd.c	2009-09-01 10:38:31
++++ wv-1.2.9/atrd.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -42,21 +43,33 @@
+ 		wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *atrd = NULL;
+ 	  *pos = NULL;
+ 	  *noatrd = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *noatrd = (len - 4) / (cbATRD + 4);
++	  if (*noatrd > UINT32_MAX / sizeof (U32) - 1
++	      || *noatrd > UINT32_MAX / sizeof (ATRD) - 1)
++	    {
++		*atrd = NULL;
++		*pos = NULL;
++		*noatrd = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*noatrd + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*noatrd + 1) * sizeof (U32)));
++		*atrd = NULL;
++		*noatrd = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -66,7 +79,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *noatrd * sizeof (ATRD)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*atrd = NULL;
++		*noatrd = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/bkd.c wv-1.2.9/bkd.c
+--- wv-1.2.9/bkd.c	2009-09-01 10:38:31
++++ wv-1.2.9/bkd.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -46,21 +47,33 @@
+ 	       wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *bkd = NULL;
+ 	  *pos = NULL;
+ 	  *nobkd = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nobkd = (len - 4) / (cbBKD + 4);
++	  if (*nobkd > UINT32_MAX / sizeof (U32) - 1
++	      || *nobkd > UINT32_MAX / sizeof (BKD))
++	    {
++		*bkd = NULL;
++		*pos = NULL;
++		*nobkd = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nobkd + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nobkd + 1) * sizeof (U32)));
++		*bkd = NULL;
++		*nobkd = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -70,7 +83,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nobkd * sizeof (BKD)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*bkd = NULL;
++		*nobkd = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/bkf.c wv-1.2.9/bkf.c
+--- wv-1.2.9/bkf.c	2009-09-01 10:38:30
++++ wv-1.2.9/bkf.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -55,21 +56,33 @@
+ 	       wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *bkf = NULL;
+ 	  *pos = NULL;
+ 	  *nobkf = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nobkf = (len - 4) / (cbBKF + 4);
++	  if (*nobkf > UINT32_MAX / sizeof (U32) - 1
++	      || *nobkf > UINT32_MAX / sizeof (BKF))
++	    {
++		*bkf = NULL;
++		*pos = NULL;
++		*nobkf = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nobkf + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nobkf + 1) * sizeof (U32)));
++		*bkf = NULL;
++		*nobkf = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -79,7 +92,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nobkf * sizeof (BKF)));
+-        wvFree (*pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*bkf = NULL;
++		*nobkf = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/bkl.c wv-1.2.9/bkl.c
+--- wv-1.2.9/bkl.c	2009-09-01 10:38:31
++++ wv-1.2.9/bkl.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -39,33 +40,69 @@
+     U32 *posf,nobkf;
+ 
+     U32 i, j;
+-    if (bkllen == 0 || bkflen == 0)
++    if (bkllen < 4 || bkllen > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *bkl = NULL;
+ 	  *pos = NULL;
+ 	  *nobkl = 0;
++	  return (bkllen == 0 ? 0 : 1);
+       }
++    else if (bkflen == 0)
++      {
++	  *bkl = NULL;
++	  *pos = NULL;
++	  *nobkl = 0;
++	  return (0);
++      }
++    else if (bkflen < 4 || bkflen > 32u * 1024u * 1024u)
++      {
++	  *bkl = NULL;
++	  *pos = NULL;
++	  *nobkl = 0;
++	  return (1);
++      }
+     else
+       {
+       /* the plcbkl table contains offsets only, bkl has to be calculated from bkf */
+       *nobkl = (bkllen - 4) / (/*cbBKL +*/ 4);
++	  if (*nobkl > UINT32_MAX / sizeof (U32) - 1)
++	    {
++		*bkl = NULL;
++		*pos = NULL;
++		*nobkl = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nobkl + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nobkl + 1) * sizeof (U32)));
++		*bkl = NULL;
++		*nobkl = 0;
+ 		return (1);
+ 	    }
+ 
+ 	  *nobkl = (*nobkl ? *nobkl : 1);
++	  if (*nobkl > UINT32_MAX / sizeof (BKL))
++	    {
++		wvFree (*pos);
++		*pos = NULL;
++		*bkl = NULL;
++		*nobkl = 0;
++		return (1);
++	    }
+ 	  *bkl = (BKL *) wvMalloc (*nobkl * sizeof (BKL));
+ 	  if (*bkl == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nobkl * sizeof (BKL)));
+-        wvFree (*pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*bkl = NULL;
++		*nobkl = 0;
+ 		return (1);
+ 	    }
+       wvStream_goto (fd, bkloffset);
+@@ -81,7 +118,10 @@
+             wvError (
+              ("call to wvGetBKF_PLCF failed\n"));
+             wvFree (*pos);
++            *pos = NULL;
+             wvFree (*bkl);
++            *bkl = NULL;
++            *nobkl = 0;
+             return (1);
+         }
+ 
+@@ -96,7 +136,10 @@
+               wvError (
+                  ("unmatched closing bookmark\n"));
+               wvFree (*pos);
++              *pos = NULL;
+               wvFree (*bkl);
++              *bkl = NULL;
++              *nobkl = 0;
+               wvFree (bkf);
+               wvFree (posf);
+               return (1);
+diff -ruN wv-1.2.9/bte.c wv-1.2.9/bte.c
+--- wv-1.2.9/bte.c	2009-09-01 10:38:30
++++ wv-1.2.9/bte.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include <string.h>
+ #include "wv.h"
+ 
+@@ -59,23 +60,35 @@
+ 		wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *bte = NULL;
+ 	  *pos = NULL;
+ 	  *nobte = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  wvTrace (("offset is %x, len is %d\n", offset, len));
+ 	  *nobte = (len - 4) / (cb6BTE + 4);
+ 	  wvTrace (("no of bte is %d at %x\n", *nobte, offset));
++	  if (*nobte > UINT32_MAX / sizeof (U32) - 1
++	      || *nobte > UINT32_MAX / sizeof (BTE))
++	    {
++		*bte = NULL;
++		*pos = NULL;
++		*nobte = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nobte + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nobte + 1) * sizeof (U32)));
++		*bte = NULL;
++		*nobte = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -85,7 +98,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nobte * sizeof (BTE)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*bte = NULL;
++		*nobte = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+@@ -108,22 +124,34 @@
+ 	       wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *bte = NULL;
+ 	  *pos = NULL;
+ 	  *nobte = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nobte = (len - 4) / (cbBTE + 4);
+ 	  wvTrace (("no of bte is %d at %x\n", *nobte, offset));
++	  if (*nobte > UINT32_MAX / sizeof (U32) - 1
++	      || *nobte > UINT32_MAX / sizeof (BTE))
++	    {
++		*bte = NULL;
++		*pos = NULL;
++		*nobte = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nobte + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nobte + 1) * sizeof (U32)));
++		*bte = NULL;
++		*nobte = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -134,6 +162,9 @@
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nobte * sizeof (BTE)));
+ 		wvFree (*pos);
++		*pos = NULL;
++		*bte = NULL;
++		*nobte = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/clx.c wv-1.2.9/clx.c
+--- wv-1.2.9/clx.c	2009-09-01 10:38:31
++++ wv-1.2.9/clx.c	2026-11-21 11:22:01
+@@ -111,9 +111,12 @@
+ 		    (U8 **) realloc (clx->grpprl,
+ 				     sizeof (U8 *) * (clx->grpprl_count));
+ 		clx->grpprl[clx->grpprl_count - 1] = (U8 *) wvMalloc (cb);
+-		for (i = 0; i < cb; i++)
+-		    clx->grpprl[clx->grpprl_count - 1][i] = read_8ubit (fd);
+-		j += i;
++		if (clx->grpprl[clx->grpprl_count - 1] != NULL)
++		  {
++		      for (i = 0; i < cb; i++)
++			  clx->grpprl[clx->grpprl_count - 1][i] = read_8ubit (fd);
++		      j += i;
++		  }
+ 	    }
+ 	  else if (clxt == 2)
+ 	    {
+diff -ruN wv-1.2.9/fdoa.c wv-1.2.9/fdoa.c
+--- wv-1.2.9/fdoa.c	2009-09-01 10:38:31
++++ wv-1.2.9/fdoa.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -38,21 +39,39 @@
+ 		wvStream * fd)
+ {
+     U32 i;
+-    if ((len == 0) || (offset == 0))
++    if (offset == 0)
+       {
+ 	  *fdoa = NULL;
+ 	  *pos = NULL;
+ 	  *nofdoa = 0;
+       }
++    else if (len < 4 || len > 32u * 1024u * 1024u)
++      {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
++	  *fdoa = NULL;
++	  *pos = NULL;
++	  *nofdoa = 0;
++	  return (len == 0 ? 0 : 1);
++      }
+     else
+       {
+ 	  *nofdoa = (len - 4) / (cbFDOA + 4);
++	  if (*nofdoa > UINT32_MAX / sizeof (U32) - 1
++	      || *nofdoa > UINT32_MAX / sizeof (FDOA) - 1)
++	    {
++		*fdoa = NULL;
++		*pos = NULL;
++		*nofdoa = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nofdoa + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nofdoa + 1) * sizeof (U32)));
++		*fdoa = NULL;
++		*nofdoa = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -62,7 +81,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nofdoa * sizeof (FDOA)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*fdoa = NULL;
++		*nofdoa = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/ffn.c wv-1.2.9/ffn.c
+--- wv-1.2.9/ffn.c	2009-09-01 10:38:30
++++ wv-1.2.9/ffn.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -226,21 +227,33 @@
+ 	       wvStream * fd)
+ {
+     int i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *frd = NULL;
+ 	  *pos = NULL;
+ 	  *nofrd = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nofrd = (len - 4) / 6;
++	  if (*nofrd > UINT32_MAX / sizeof (U32) - 1
++	      || *nofrd > UINT32_MAX / sizeof (FRD))
++	    {
++		*frd = NULL;
++		*pos = NULL;
++		*nofrd = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nofrd + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nofrd + 1) * sizeof (U32)));
++		*frd = NULL;
++		*nofrd = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -250,7 +263,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nofrd * sizeof (FRD)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*frd = NULL;
++		*nofrd = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/fld.c wv-1.2.9/fld.c
+--- wv-1.2.9/fld.c	2009-09-01 10:38:30
++++ wv-1.2.9/fld.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ /*
+@@ -271,21 +272,33 @@
+ 	       wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *fld = NULL;
+ 	  *pos = NULL;
+ 	  *nofld = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nofld = (len - 4) / 6;
++	  if (*nofld > UINT32_MAX / sizeof (U32) - 1
++	      || *nofld > UINT32_MAX / sizeof (FLD))
++	    {
++		*fld = NULL;
++		*pos = NULL;
++		*nofld = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nofld + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nofld + 1) * sizeof (U32)));
++		*fld = NULL;
++		*nofld = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -295,7 +308,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nofld * sizeof (FLD)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*fld = NULL;
++		*nofld = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/frd.c wv-1.2.9/frd.c
+--- wv-1.2.9/frd.c	2009-09-01 10:38:31
++++ wv-1.2.9/frd.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -36,21 +37,33 @@
+ 	       wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *frd = NULL;
+ 	  *pos = NULL;
+ 	  *nofrd = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nofrd = (len - 4) / 6;
++	  if (*nofrd > UINT32_MAX / sizeof (U32) - 1
++	      || *nofrd > UINT32_MAX / sizeof (FRD))
++	    {
++		*frd = NULL;
++		*pos = NULL;
++		*nofrd = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nofrd + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nofrd + 1) * sizeof (U32)));
++		*frd = NULL;
++		*nofrd = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -60,7 +73,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nofrd * sizeof (FRD)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*frd = NULL;
++		*nofrd = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/fspa.c wv-1.2.9/fspa.c
+--- wv-1.2.9/fspa.c	2009-09-01 10:38:31
++++ wv-1.2.9/fspa.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -74,21 +75,33 @@
+ 		wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *fspa = NULL;
+ 	  *pos = NULL;
+ 	  *nofspa = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nofspa = (len - 4) / 30;
++	  if (*nofspa > UINT32_MAX / sizeof (U32) - 1
++	      || *nofspa > UINT32_MAX / sizeof (FSPA))
++	    {
++		*fspa = NULL;
++		*pos = NULL;
++		*nofspa = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nofspa + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nofspa + 1) * sizeof (U32)));
++		*fspa = NULL;
++		*nofspa = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -98,11 +111,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nofspa * sizeof (FSPA)));
+-
+-		/* I believe it is not always right to free this. Sometimes len == 4 and
+-		 * although *nofspa == 0, the data structure is needed.
+-		 * (Wild guesswork by MV 20.12.2000 -- correct me if I'm wrong)        */
+-		/*                      wvFree(pos); */
++		wvFree (*pos);
++		*pos = NULL;
++		*fspa = NULL;
++		*nofspa = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/ftxbxs.c wv-1.2.9/ftxbxs.c
+--- wv-1.2.9/ftxbxs.c	2009-09-01 10:38:31
++++ wv-1.2.9/ftxbxs.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -54,21 +55,33 @@
+ 		  U32 len, wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *ftxbxs = NULL;
+ 	  *pos = NULL;
+ 	  *noftxbxs = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *noftxbxs = (len - 4) / (cbFTXBXS + 4);
++	  if (*noftxbxs > UINT32_MAX / sizeof (U32) - 1
++	      || *noftxbxs > UINT32_MAX / sizeof (FTXBXS) - 1)
++	    {
++		*ftxbxs = NULL;
++		*pos = NULL;
++		*noftxbxs = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*noftxbxs + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*noftxbxs + 1) * sizeof (U32)));
++		*ftxbxs = NULL;
++		*noftxbxs = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -78,7 +91,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *noftxbxs * sizeof (FTXBXS)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*ftxbxs = NULL;
++		*noftxbxs = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/lst.c wv-1.2.9/lst.c
+--- wv-1.2.9/lst.c	2009-09-01 10:38:31
++++ wv-1.2.9/lst.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ /*
+@@ -136,21 +137,33 @@
+ 		wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *lstf = NULL;
+ 	  *pos = NULL;
+ 	  *nolstf = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nolstf = (len - 4) / (cbLSTF + 4);
++	  if (*nolstf > UINT32_MAX / sizeof (U32) - 1
++	      || *nolstf > UINT32_MAX / sizeof (LSTF))
++	    {
++		*lstf = NULL;
++		*pos = NULL;
++		*nolstf = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nolstf + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nolstf + 1) * sizeof (U32)));
++		*lstf = NULL;
++		*nolstf = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -160,7 +173,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nolstf * sizeof (LSTF)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*lstf = NULL;
++		*nolstf = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/pcd.c wv-1.2.9/pcd.c
+--- wv-1.2.9/pcd.c	2009-09-01 10:38:31
++++ wv-1.2.9/pcd.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ void
+@@ -69,21 +70,33 @@
+ 	       wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *pcd = NULL;
+ 	  *pos = NULL;
+ 	  *nopcd = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *nopcd = (len - 4) / (cbPCD + 4);
++	  if (*nopcd > UINT32_MAX / sizeof (U32) - 1
++	      || *nopcd > UINT32_MAX / sizeof (PCD))
++	    {
++		*pcd = NULL;
++		*pos = NULL;
++		*nopcd = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*nopcd + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*nopcd + 1) * sizeof (U32)));
++		*pcd = NULL;
++		*nopcd = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -93,7 +106,10 @@
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *nopcd * sizeof (PCD)));
+-		wvFree (pos);
++		wvFree (*pos);
++		*pos = NULL;
++		*pcd = NULL;
++		*nopcd = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/sed.c wv-1.2.9/sed.c
+--- wv-1.2.9/sed.c	2009-09-01 10:38:31
++++ wv-1.2.9/sed.c	2026-11-21 11:26:30
+@@ -23,6 +23,7 @@
+ 
+ #include <stdlib.h>
+ #include <stdio.h>
++#include <stdint.h>
+ #include "wv.h"
+ 
+ 
+@@ -40,21 +41,33 @@
+ 	       wvStream * fd)
+ {
+     U32 i;
+-    if (len == 0)
++    if (len < 4 || len > 32u * 1024u * 1024u)
+       {
++	  /* PLCFs larger than 32 MiB are not real; the cap blocks a file-chosen allocation. */
+ 	  *item = NULL;
+ 	  *pos = NULL;
+ 	  *noitem = 0;
++	  return (len == 0 ? 0 : 1);
+       }
+     else
+       {
+ 	  *noitem = (len - 4) / (cbSED + 4);
++	  if (*noitem > UINT32_MAX / sizeof (U32) - 1
++	      || *noitem > UINT32_MAX / sizeof (SED))
++	    {
++		*item = NULL;
++		*pos = NULL;
++		*noitem = 0;
++		return (1);
++	    }
+ 	  *pos = (U32 *) wvMalloc ((*noitem + 1) * sizeof (U32));
+ 	  if (*pos == NULL)
+ 	    {
+ 		wvError (
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  (*noitem + 1) * sizeof (U32)));
++		*item = NULL;
++		*noitem = 0;
+ 		return (1);
+ 	    }
+ 
+@@ -65,6 +78,9 @@
+ 			 ("NO MEM 1, failed to alloc %d bytes\n",
+ 			  *noitem * sizeof (SED)));
+ 		wvFree (*pos);
++		*pos = NULL;
++		*item = NULL;
++		*noitem = 0;
+ 		return (1);
+ 	    }
+ 	  wvStream_goto (fd, offset);
+diff -ruN wv-1.2.9/sprm.c wv-1.2.9/sprm.c
+--- wv-1.2.9/sprm.c	2010-10-09 12:28:40
++++ wv-1.2.9/sprm.c	2026-11-21 11:22:01
+@@ -1116,7 +1116,8 @@
+     if ((apap->istd > istdFirst) && (apap->istd <= istdLast))
+       {
+ 	  wvTrace (("%d %d %d\n", apap->istd, istdFirst, istdLast));
+-	  apap->istd = rgistd[apap->istd - istdFirst];
++	  if (cch > 6 && (apap->istd - istdFirst) < (cch - 6) / 2)
++	      apap->istd = rgistd[apap->istd - istdFirst];
+       }
+     wvFree (rgistd);
+ }
+@@ -1717,7 +1718,8 @@
+ 
+     if ((achp->istd > istdFirst) && (achp->istd <= istdLast))
+       {
+-	  achp->istd = rgistd[achp->istd - istdFirst];
++	  if (cch > 6 && (achp->istd - istdFirst) < (cch - 6) / 2)
++	      achp->istd = rgistd[achp->istd - istdFirst];
+ 	  /*
+ 	     if really a chp style
+ 	     wvAddCHPXFromUPEBucket(achp,&(stsh->std[achp->istd].grupe[0].chpx),stsh);
+diff -ruN wv-1.2.9/sttbf.c wv-1.2.9/sttbf.c
+--- wv-1.2.9/sttbf.c	2009-09-01 10:38:31
++++ wv-1.2.9/sttbf.c	2026-11-21 11:25:56
+@@ -56,19 +56,23 @@
+ {
+     int i, j;
+     U16 slen;
++    U32 used = 0;
+ 
+     anS->s8strings = NULL;
+     anS->u16strings = NULL;
+     anS->extradata = NULL;
++    anS->extendedflag = 0;
++    anS->extradatalen = 0;
++    anS->nostrings = 0;
+ 
+     wvTrace (("sttbf offset is %x,len %d\n", offset, len));
+     if (len == 0)
+-      {
+-	  anS->nostrings = 0;
+-	  return;
+-      }
++	return;
+     wvStream_goto (fd, offset);
++    if (len - used < 2)
++	return;
+     anS->extendedflag = read_16ubit (fd);
++    used += 2;
+     if (anS->extendedflag != 0xFFFF)
+       {
+ 	  /*old U8 strings */
+@@ -77,59 +81,170 @@
+     else
+       {
+ 	  /*U16 chars */
++	  if (len - used < 2)
++	    {
++		anS->nostrings = 0;
++		return;
++	    }
+ 	  anS->nostrings = read_16ubit (fd);
++	  used += 2;
+       }
++    if (len - used < 2)
++      {
++	  anS->nostrings = 0;
++	  return;
++      }
+     anS->extradatalen = read_16ubit (fd);
++    used += 2;
+ 
+     if (anS->extendedflag == 0xFFFF)
+-	anS->u16strings = (U16 **) wvMalloc (sizeof (U16 *) * anS->nostrings);
++      {
++	  anS->u16strings = (U16 **) wvMalloc (sizeof (U16 *) * anS->nostrings);
++	  if (anS->u16strings != NULL)
++	      memset (anS->u16strings, 0, sizeof (U16 *) * anS->nostrings);
++      }
+     else
+-	anS->s8strings = (S8 **) wvMalloc (sizeof (S8 *) * anS->nostrings);
++      {
++	  anS->s8strings = (S8 **) wvMalloc (sizeof (S8 *) * anS->nostrings);
++	  if (anS->s8strings != NULL)
++	      memset (anS->s8strings, 0, sizeof (S8 *) * anS->nostrings);
++      }
++    if (anS->nostrings != 0)
++      {
++	  if (anS->extendedflag == 0xFFFF)
++	    {
++		if (anS->u16strings == NULL)
++		  {
++		      anS->nostrings = 0;
++		      return;
++		  }
++	    }
++	  else if (anS->s8strings == NULL)
++	    {
++		anS->nostrings = 0;
++		return;
++	    }
++      }
+ 
+     if (anS->extradatalen)
+       {
+ 	  anS->extradata = (U8 **) wvMalloc (sizeof (U8 *) * anS->nostrings);
++	  if (anS->extradata != NULL)
++	      memset (anS->extradata, 0, sizeof (U8 *) * anS->nostrings);
++	  if (anS->nostrings != 0 && anS->extradata == NULL)
++	    {
++		wvFree (anS->u16strings);
++		wvFree (anS->s8strings);
++		anS->u16strings = NULL;
++		anS->s8strings = NULL;
++		anS->nostrings = 0;
++		return;
++	    }
+ 	  for (i = 0; i < anS->nostrings; i++)
+-	      anS->extradata[i] = (U8 *) wvMalloc (anS->extradatalen);
++	    {
++		anS->extradata[i] = (U8 *) wvMalloc (anS->extradatalen);
++		if (anS->extradata[i] == NULL)
++		  {
++		      wvReleaseSTTBF (anS);
++		      anS->s8strings = NULL;
++		      anS->u16strings = NULL;
++		      anS->extradata = NULL;
++		      anS->nostrings = 0;
++		      return;
++		  }
++	    }
+       }
+ 
+     if (anS->extendedflag == 0xFFFF)
+       {
+ 	  for (i = 0; i < anS->nostrings; i++)
+ 	    {
++		if (len - used < 2)
++		    break;
+ 		slen = read_16ubit (fd);
++		used += 2;
++		if ((U32) slen * 2 > len - used
++		    || (U32) anS->extradatalen >
++		    (len - used) - (U32) slen * 2)
++		    break;
+ 		if (slen == 0)
+ 		    anS->u16strings[i] = NULL;
+ 		else
+ 		  {
+ 		      anS->u16strings[i] =
+ 			  (U16 *) wvMalloc (sizeof (U16) * (slen + 1));
++		      if (anS->u16strings[i] == NULL)
++			{
++			    wvReleaseSTTBF (anS);
++			    anS->s8strings = NULL;
++			    anS->u16strings = NULL;
++			    anS->extradata = NULL;
++			    anS->nostrings = 0;
++			    return;
++			}
+ 		      for (j = 0; j < slen; j++)
+ 			  anS->u16strings[i][j] = read_16ubit (fd);
+ 		      anS->u16strings[i][j] = 0;
+ 		  }
++		used += (U32) slen * 2;
+ 		if (anS->extradatalen)
+ 		    for (j = 0; j < anS->extradatalen; j++)
+ 			anS->extradata[i][j] = read_8ubit (fd);
++		used += anS->extradatalen;
+ 	    }
++	  if (i < anS->nostrings)
++	    {
++		if (anS->extradata != NULL)
++		  {
++		      for (j = i; j < anS->nostrings; j++)
++			  wvFree (anS->extradata[j]);
++		  }
++		anS->nostrings = (U16) i;
++	    }
+       }
+     else
+       {
+ 	  for (i = 0; i < anS->nostrings; i++)
+ 	    {
++		if (len - used < 1)
++		    break;
+ 		slen = read_8ubit (fd);
++		used += 1;
++		if ((U32) slen > len - used
++		    || (U32) anS->extradatalen > (len - used) - (U32) slen)
++		    break;
+ 		if (slen == 0)
+ 		    anS->s8strings[i] = NULL;
+ 		else
+ 		  {
+ 		      anS->s8strings[i] = (S8 *) wvMalloc (slen + 1);
++		      if (anS->s8strings[i] == NULL)
++			{
++			    wvReleaseSTTBF (anS);
++			    anS->s8strings = NULL;
++			    anS->u16strings = NULL;
++			    anS->extradata = NULL;
++			    anS->nostrings = 0;
++			    return;
++			}
+ 		      for (j = 0; j < slen; j++)
+ 			  anS->s8strings[i][j] = read_8ubit (fd);
+ 		      anS->s8strings[i][j] = 0;
+ 		  }
++		used += slen;
+ 		if (anS->extradatalen)
+ 		    for (j = 0; j < anS->extradatalen; j++)
+ 			anS->extradata[i][j] = read_8ubit (fd);
++		used += anS->extradatalen;
++	    }
++	  if (i < anS->nostrings)
++	    {
++		if (anS->extradata != NULL)
++		  {
++		      for (j = i; j < anS->nostrings; j++)
++			  wvFree (anS->extradata[j]);
++		  }
++		anS->nostrings = (U16) i;
+ 	    }
+       }
+ }

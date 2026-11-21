@@ -1495,9 +1495,14 @@ gchar * IE_Imp_MsWord_97::_getBookmarkName(const wvParseStruct * ps, UT_uint32 p
 	gchar *str;
 	UT_UTF8String sUTF8;
 
+	if(pos >= ps->Sttbfbkmk.nostrings)
+		return nullptr;
+
 	if(ps->Sttbfbkmk.extendedflag == 0xFFFF)
 	{
 		// 16 bit stuff
+		if(!ps->Sttbfbkmk.u16strings)
+			return nullptr;
 		const UT_UCS2Char * p = static_cast<const UT_UCS2Char *>(ps->Sttbfbkmk.u16strings[pos]);
 		if(p) {
 		  UT_uint32 len  = UT_UCS2_strlen(p);
@@ -1514,6 +1519,8 @@ gchar * IE_Imp_MsWord_97::_getBookmarkName(const wvParseStruct * ps, UT_uint32 p
 		// 8 bit stuff
 		// there is a bug in wv, and the table gets incorrectly retrieved
 		// if it contains 8-bit strings
+		if(!ps->Sttbfbkmk.s8strings)
+			return nullptr;
 		if(ps->Sttbfbkmk.s8strings[pos])
 		{
 			UT_uint32 len = strlen(ps->Sttbfbkmk.s8strings[pos]);
@@ -5534,7 +5541,10 @@ int IE_Imp_MsWord_97::_handleBookmarks(const wvParseStruct *ps)
 			// since the name is shared with the start of the bookmark,
 			// we reuse it
 			UT_sint32 iBkf = static_cast<UT_sint32>(bkl[j-i].ibkf) < 0 ? nobkl + static_cast<UT_sint32>(bkl[j-i].ibkf) : bkl[j-i].ibkf;
-			m_pBookmarks[j].name = m_pBookmarks[iBkf].name;
+			if(iBkf < 0 || static_cast<U32>(iBkf) >= nobkf)
+				m_pBookmarks[j].name = nullptr;
+			else
+				m_pBookmarks[j].name = m_pBookmarks[iBkf].name;
 			m_pBookmarks[j].pos  = posl[j - i];
 			m_pBookmarks[j].start = false;
 		}
