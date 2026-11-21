@@ -175,9 +175,9 @@ jobs:
             NSIS_CONFIG_CONST_DATA_PATH=no \
             PREFIX="$HOME/nsis-3.13" \
             install-compiler
-          echo "$HOME/nsis-3.13/bin" >> "$GITHUB_PATH"
+          echo "$HOME/nsis-3.13" >> "$GITHUB_PATH"
           echo "NSISDIR=$HOME/nsis-3.13" >> "$GITHUB_ENV"
-          "$HOME/nsis-3.13/bin/makensis" -VERSION
+          "$HOME/nsis-3.13/makensis" -VERSION
 
       - name: Créer l'installateur
         run: |
