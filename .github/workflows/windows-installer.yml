@@ -1,5 +1,5 @@
 # Compile l'installateur Windows x64 sur GitHub.
-# La compilation croisée reprend l'environnement Fedora 42 / MinGW
+# La compilation croisée reprend l'environnement Fedora 45 / MinGW
 # qui produit abiword.exe, libabiword-3.1.dll, OpenDocument, OpenXML
 # et la correction Enchant/Hunspell. NSIS est lancé ensuite sur Ubuntu,
 # où makensis est un programme natif.
@@ -22,7 +22,7 @@ jobs:
   tests:
     name: Tests natifs
     runs-on: ubuntu-latest
-    container: fedora:42
+    container: fedora:45
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -60,7 +60,7 @@ jobs:
   compile:
     name: Compilation MinGW
     runs-on: ubuntu-latest
-    container: fedora:42
+    container: fedora:45
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
@@ -77,7 +77,7 @@ jobs:
             mingw64-boost mingw64-glib2 mingw64-enchant2 mingw64-hunspell \
             mingw64-fribidi mingw64-libgsf mingw64-libxml2 mingw64-libxslt \
             mingw64-libpng mingw64-libjpeg-turbo mingw64-zlib mingw64-bzip2 \
-            mingw64-icu mingw64-pcre2 mingw64-libgcrypt mingw64-libgpg-error \
+            mingw64-icu mingw64-pcre mingw64-pcre2 mingw64-libgcrypt mingw64-libgpg-error \
             mingw64-win-iconv mingw64-libffi \
             hunspell-fr hunspell-en hunspell-en-GB hunspell-en-US \
             hunspell-de hunspell-es hunspell-it hunspell-pt hunspell-nl \
