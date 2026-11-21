@@ -28,6 +28,24 @@
 // AbiWord includes
 #include "pd_Document.h"
 
+#include <cerrno>
+#include <cstdlib>
+
+static bool abi_manifest_u32(const char* text, UT_uint32 max_value, UT_uint32* out)
+{
+	if (!text || !*text || !out)
+		return false;
+	errno = 0;
+	char* end = nullptr;
+	const long long value = strtoll(text, &end, 10);
+	if (errno != 0 || end == text || (end && *end != '\0'))
+		return false;
+	if (value <= 0 || value > static_cast<long long>(max_value))
+		return false;
+	*out = static_cast<UT_uint32>(value);
+	return true;
+}
+
 
 /**
  * Constructor
@@ -65,12 +83,18 @@ void ODi_ManifestStream_ListenerState::startElement (const gchar* pName,
 		m_sFullPath = pVal ? pVal : "";
 
         pVal = UT_getAttribute ("manifest:size", ppAtts);
-		m_iSize = pVal ? atol(pVal) : -1;
+		UT_uint32 parsedSize = 0;
+		m_iSize = abi_manifest_u32(pVal, ODC_MAX_DECRYPTED_BYTES, &parsedSize)
+			? static_cast<UT_sint64>(parsedSize) : -1;
 	}
 	
     if (!strcmp(pName, "manifest:encryption-data")) {
         DELETEP(m_pCryptoInfo);
         m_pCryptoInfo = new ODc_CryptoInfo();
+        pVal = UT_getAttribute ("manifest:checksum", ppAtts);
+        m_pCryptoInfo->m_checksum = pVal ? pVal : "";
+        pVal = UT_getAttribute ("manifest:checksum-type", ppAtts);
+        m_pCryptoInfo->m_checksumType = pVal ? pVal : "";
     }
 
     if (!strcmp(pName, "manifest:algorithm")) {
@@ -90,7 +114,9 @@ void ODi_ManifestStream_ListenerState::startElement (const gchar* pName,
         m_pCryptoInfo->m_keyType = pVal ? pVal : "";
 
         pVal = UT_getAttribute ("manifest:iteration-count", ppAtts);
-        m_pCryptoInfo->m_iterCount = pVal ? atol(pVal) : -1;
+        UT_uint32 parsedIters = 0;
+        m_pCryptoInfo->m_iterCount = abi_manifest_u32(pVal, ODC_MAX_PBKDF2_ITERATIONS, &parsedIters)
+			? parsedIters : 0;
 
         pVal = UT_getAttribute ("manifest:salt", ppAtts);
         m_pCryptoInfo->m_salt = pVal ? pVal : "";
@@ -108,7 +134,7 @@ void ODi_ManifestStream_ListenerState::endElement (const gchar* pName,
         UT_return_if_fail(m_pCryptoInfo);
 		
         // store the encryption information
-		m_pCryptoInfo->m_decryptedSize = m_iSize;
+		m_pCryptoInfo->m_decryptedSize = (m_iSize > 0) ? static_cast<UT_uint32>(m_iSize) : 0;
         m_cryptoInfo[m_sFullPath] = *m_pCryptoInfo;
         DELETEP(m_pCryptoInfo);
     }

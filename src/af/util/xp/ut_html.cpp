@@ -165,7 +165,10 @@ UT_Error UT_HTML::parse (const char * szFilename)
 					reader->closeFile ();
 					return UT_ERROR;
 				}
-			xmlCtxtUseOptions (ctxt, XML_PARSE_NOENT);
+			xmlCtxtUseOptions (ctxt, XML_PARSE_NONET | XML_PARSE_NOENT);
+#if defined(LIBXML_VERSION) && LIBXML_VERSION >= 21200
+			xmlCtxtSetMaxAmplification (ctxt, 5);
+#endif
 
 			while (!done && !m_bStopped)
 				{

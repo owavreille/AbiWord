@@ -1,0 +1,37 @@
+Notices des bibliothèques livrées avec AbiWord pour Windows
+==========================================================
+
+AbiWord lui-même est distribué selon les termes de la GNU General Public
+License, version 2 ou, au choix, toute version ultérieure. Le texte est
+dans COPYING.
+
+Ce portage n'est pas une publication du projet AbiWord d'origine. Le nom
+AbiWord appartient à ce projet. Le site du projet reste https://www.abisource.com/.
+
+Les bibliothèques ci-dessous sont copiées dans bin\ par l'installateur.
+Leurs sources ne sont pas dans cet arbre : elles viennent des paquets
+MinGW de la compilation, ou des scripts packaging/windows. Chaque
+bibliothèque reste sous sa propre licence.
+
+GLib, GObject, GIO, GModule     LGPL-2.1-or-later
+libxml2, libxslt                MIT
+libgsf                          LGPL-2.1-or-later
+zlib                            zlib License
+libpng                          libpng License
+libjpeg-turbo                   IJG License, BSD-3-Clause, zlib License
+ICU                             Unicode License
+FriBidi                         LGPL-2.1-or-later
+Enchant                         LGPL-2.1-or-later
+Hunspell                        LGPL-2.1-or-later, GPL-2.0-or-later, MPL-1.1
+libgcrypt, libgpg-error         LGPL-2.1-or-later
+bzip2                           bzip2 License
+wvWare                          GPL-2.0-or-later
+Raptor, Rasqal, Redland         LGPL-2.1-or-later, GPL-2.0-or-later, Apache-2.0
+PCRE                            BSD-3-Clause
+PCRE2                           BSD-3-Clause
+GNU libiconv, gettext           LGPL-2.1-or-later
+MinGW-w64 runtime               Zope Public License, exceptions MinGW
+
+Les dictionnaires Hunspell sont des données linguistiques indépendantes,
+chacune avec la licence de son projet. Les icônes Colibre sont CC0 ; le
+détail est dans LICENSE.icons.txt.

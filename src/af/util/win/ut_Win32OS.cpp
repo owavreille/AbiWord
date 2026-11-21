@@ -347,13 +347,11 @@ static void UT_Win32TraceWrite(const char * step)
 		if (n == 0 || n >= MAX_PATH)
 			return;
 		WCHAR path[MAX_PATH];
-		if (wcslen(dir) + 18 >= MAX_PATH)
+		if (GetTempFileNameW(dir, L"abt", 0, path) == 0)
 			return;
-		wcscpy(path, dir);
-		wcscat(path, L"abiword-trace.log");
 		file = CreateFileW(path, FILE_APPEND_DATA,
 						   FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr,
-						   OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
+						   OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, nullptr);
 		if (file == INVALID_HANDLE_VALUE)
 			return;
 	}

@@ -26,6 +26,8 @@
 #include <libxslt/xsltInternals.h>
 #include <libxslt/transform.h>
 #include <libxslt/xsltutils.h>
+#include <libxslt/security.h>
+#include <libxml/parser.h>
 
 static xsltStylesheet * cur = nullptr;
 
@@ -52,14 +54,38 @@ bool convertMathMLtoLaTeX(const UT_UTF8String & sMathML, UT_UTF8String & sLaTeX)
 	}
     }
 
-    doc = xmlParseDoc((const xmlChar*)sMathML.utf8_str());
+    if (sMathML.byteLength() > static_cast<size_t>(G_MAXINT))
+        return false;
+    doc = xmlReadMemory(sMathML.utf8_str(), static_cast<int>(sMathML.byteLength()),
+                        "mathml.xml", nullptr,
+                        XML_PARSE_NONET | XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
     if (!doc)
     {
         xxx_UT_DEBUGMSG(("convertMathMLtoLaTeX: Parsing MathML document failed\n"));
 	return false;
     }
 
-    res = xsltApplyStylesheet(cur, doc, nullptr);
+    xsltSecurityPrefsPtr sec = xsltNewSecurityPrefs();
+    xsltTransformContextPtr tctxt = xsltNewTransformContext(cur, doc);
+    if (!tctxt)
+    {
+        if (sec)
+            xsltFreeSecurityPrefs(sec);
+        xmlFreeDoc(doc);
+        return false;
+    }
+    if (sec)
+    {
+        xsltSetSecurityPrefs(sec, XSLT_SECPREF_WRITE_FILE, xsltSecurityForbid);
+        xsltSetSecurityPrefs(sec, XSLT_SECPREF_CREATE_DIRECTORY, xsltSecurityForbid);
+        xsltSetSecurityPrefs(sec, XSLT_SECPREF_READ_NETWORK, xsltSecurityForbid);
+        xsltSetSecurityPrefs(sec, XSLT_SECPREF_WRITE_NETWORK, xsltSecurityForbid);
+        xsltSetCtxtSecurityPrefs(sec, tctxt);
+    }
+    res = xsltApplyStylesheetUser(cur, doc, nullptr, nullptr, nullptr, tctxt);
+    xsltFreeTransformContext(tctxt);
+    if (sec)
+        xsltFreeSecurityPrefs(sec);
     if (!res)
     {
         xxx_UT_DEBUGMSG(("convertMathMLtoLaTeX: Applying stylesheet failed\n"));

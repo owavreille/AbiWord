@@ -3205,7 +3205,9 @@ bool IE_Imp_RTF::ReadKeyword(unsigned char* pKeyword, UT_sint32* pParam, bool* p
 
 			xxx_UT_DEBUGMSG(("|%c|\n",ch));
 			// Avoid buffer overflow
-			if (count == max_param )
+			// parameter[] has max_param bytes and a NUL is written after the
+			// loop. Stop one byte early so 256 digits cannot land on parameter[256].
+			if (count + 1 >= max_param )
 			{
 				xxx_UT_DEBUGMSG(("Parameter too large. Bogus RTF!\n"));
 				return false;
@@ -3686,6 +3688,27 @@ bool IE_Imp_RTF::HandleField()
   \param isXML whether xmlField is used or not.
   \see IE_Imp_RTF::HandleField
  */
+// StarOffice \import joins this token onto the RTF's directory. An absolute
+// token, or a ".." segment, would make g_build_filename leave that directory.
+static bool abi_rtf_import_name_ok(const char * name)
+{
+	if (!name || !*name)
+		return false;
+	if (g_path_is_absolute(name))
+		return false;
+	if (strstr(name, "://") != nullptr)
+		return false;
+	if (((name[0] >= 'A' && name[0] <= 'Z') || (name[0] >= 'a' && name[0] <= 'z')) && name[1] == ':')
+		return false;
+	for (const char * p = name; *p; ++p)
+	{
+		const bool boundary = (p == name || p[-1] == '/' || p[-1] == '\\');
+		if (boundary && p[0] == '.' && p[1] == '.' && (p[2] == '/' || p[2] == '\\' || p[2] == '\0'))
+			return false;
+	}
+	return true;
+}
+
 gchar *IE_Imp_RTF::_parseFldinstBlock (UT_ByteBuf & _buf, gchar *xmlField, bool & isXML)
 {
 	// this is quite complex as field instructions are not really document in the RTF specs.
@@ -3739,7 +3762,11 @@ gchar *IE_Imp_RTF::_parseFldinstBlock (UT_ByteBuf & _buf, gchar *xmlField, bool 
 	len = _buf.getLength ();
 	const UT_Byte *pBuf = _buf.getPointer (0);
 
-	newBuf =  static_cast<char *>(g_try_malloc (sizeof (char) * (len + 1)));
+	if (len == static_cast<UT_uint32>(-1))
+		return nullptr;
+	newBuf =  static_cast<char *>(g_try_malloc (sizeof (char) * (static_cast<size_t>(len) + 1)));
+	if (!newBuf)
+		return nullptr;
 	memcpy (newBuf, pBuf, len);
 	newBuf [len] = 0;
 	Instr = newBuf;
@@ -4104,10 +4131,17 @@ gchar *IE_Imp_RTF::_parseFldinstBlock (UT_ByteBuf & _buf, gchar *xmlField, bool 
 			{
 				char * fileName = nullptr;
 				char * tok  = strtok (nullptr, " ");
-				fileName = g_build_filename (m_szFileDirName, tok, nullptr);
-				UT_DEBUGMSG (("fileName is %s\n", fileName));
+				if (!abi_rtf_import_name_ok(tok))
+				{
+					UT_DEBUGMSG(("RTF import path rejected\n"));
+				}
+				else
+				{
+					fileName = g_build_filename (m_szFileDirName, tok, nullptr);
+				}
+				UT_DEBUGMSG (("fileName is %s\n", fileName ? fileName : "(rejected)"));
 
-				bool ok = FlushStoredChars ();
+				bool ok = fileName != nullptr && FlushStoredChars ();
 				if (ok)
 				{
 					// insert the image in the piece table AFTER flushing

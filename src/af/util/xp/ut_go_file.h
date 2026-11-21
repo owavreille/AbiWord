@@ -83,6 +83,7 @@ ABI_EXPORT time_t UT_go_file_get_date_accessed (char const *uri);
 ABI_EXPORT time_t UT_go_file_get_date_modified (char const *uri);
 ABI_EXPORT time_t UT_go_file_get_date_changed  (char const *uri);
 
+ABI_EXPORT gboolean UT_go_url_may_open (gchar const *url);
 ABI_EXPORT GError	*UT_go_url_show		(gchar const *url);
 ABI_EXPORT gchar	*UT_go_get_mime_type	(gchar const *uri);
 

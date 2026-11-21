@@ -22,7 +22,14 @@
 // Version
 //
 
-#if defined(RC_INVOKED) && defined(ABI_BUILD_VERSION)
+#if defined(RC_INVOKED)
+
+#ifndef ABI_BUILD_VERSION_MAJOR
+#define ABI_BUILD_VERSION_MAJOR 3
+#define ABI_BUILD_VERSION_MINOR 1
+#define ABI_BUILD_VERSION_MICRO 0
+#define ABI_BUILD_VERSION_STRING "3.1.0"
+#endif
 
 #define _VM ABI_BUILD_VERSION_MAJOR
 #define _VN ABI_BUILD_VERSION_MINOR
@@ -66,7 +73,7 @@ BEGIN
         BLOCK "080904b0"
         BEGIN
             VALUE "Comments", "AbiWord is a free word processing program.\0"
-            VALUE "CompanyName", "http://www.abisource.com\0"
+            VALUE "CompanyName", "Portage non officiel\0"
             VALUE "FileDescription", "AbiWord\0"
             VALUE "FileVersion", _VS
             VALUE "InternalName", "AbiWord\0"

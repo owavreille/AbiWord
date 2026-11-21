@@ -156,12 +156,14 @@ UT_Error IE_Imp_AbiCollab::_openDocument(GsfInput * input, ServiceAccountHandler
 
 bool IE_Imp_AbiCollab::_parse(GsfInput * input, std::string& email, std::string& server, UT_sint64& doc_id, UT_sint64& revision)
 {
-	guint8 const* contents = gsf_input_read(input, gsf_input_size(input), NULL);
+	const gsf_off_t nbytes = gsf_input_size(input);
+	UT_return_val_if_fail(nbytes > 0 && nbytes <= 8 * 1024 * 1024, false);
+	guint8 const* contents = gsf_input_read(input, static_cast<size_t>(nbytes), NULL);
 	UT_return_val_if_fail(contents, false);
 
 	// FIXME: put this in a boost shared ptr
-	xmlDocPtr reader = xmlReadMemory(reinterpret_cast<const char*>(contents), 
-							strlen(reinterpret_cast<const char*>(contents)), nullptr, "UTF-8", 0);
+	xmlDocPtr reader = xmlReadMemory(reinterpret_cast<const char*>(contents),
+							static_cast<int>(nbytes), nullptr, "UTF-8", XML_PARSE_NONET);
 	UT_return_val_if_fail(reader, false);
 	std::shared_ptr<xmlDocPtr> reader_ptr(&reader, XmlDocDeleter());
 	

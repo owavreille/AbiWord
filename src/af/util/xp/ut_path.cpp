@@ -19,10 +19,12 @@
 
 
 #include <stdio.h>
-#ifdef _WIN32
-#include <windows.h>
+#include <fcntl.h>
+#ifndef O_BINARY
+#define O_BINARY 0
 #endif
 
+#include <glib/gstdio.h>
 
 #include "ut_path.h"
 
@@ -40,31 +42,53 @@ UT_UTF8String UT_go_basename(const char* uri)
 
 std::string UT_createTmpFile(const std::string& prefix, const std::string& extension)
 {
-	const gchar *filename = g_build_filename (g_get_tmp_dir (), prefix.c_str(), nullptr);
-	UT_return_val_if_fail(filename, "");
+	// g_file_open_tmp uses mkstemp (O_EXCL). The old name was prefix plus a
+	// value seeded from the clock, then created with fopen, so a local user
+	// could win the race.
+	std::string tmpl;
+	tmpl.reserve(prefix.size() + 6);
+	for (char c : prefix)
+	{
+		if (c == '/' || c == '\\' || c == ':' || c == '.')
+			tmpl.push_back('_');
+		else
+			tmpl.push_back(c);
+	}
+	if (tmpl.empty())
+		tmpl = "abi";
+	tmpl += "XXXXXX";
 
-	std::string sName = filename;
-	FREEP(filename);
-
-	UT_UTF8String rand = UT_UTF8String_sprintf("%X", UT_rand() * 0xFFFFFF);
-	sName += rand.utf8_str();
-	sName += extension;
-
-#ifdef _WIN32
-	const int needed = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, sName.c_str(), -1, nullptr, 0);
-	if (needed <= 0)
+	gchar * name = nullptr;
+	GError * err = nullptr;
+	const gint fd = g_file_open_tmp(tmpl.c_str(), &name, &err);
+	if (fd < 0)
+	{
+		if (err)
+			g_error_free(err);
 		return "";
-	WCHAR * wide = new WCHAR[needed];
-	FILE * f = nullptr;
-	if (MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, sName.c_str(), -1, wide, needed) > 0)
-		f = _wfopen(wide, L"w+b");
-	delete [] wide;
-#else
-	FILE* f = fopen (sName.c_str(), "w+b");
-#endif
-	if (!f)
-		return "";
+	}
+	g_close(fd);
 
-	fclose(f);
-	return sName;
+	std::string result = name ? name : "";
+	g_free(name);
+	if (result.empty())
+		return "";
+	if (extension.find_first_of("/\\:") != std::string::npos)
+	{
+		g_unlink(result.c_str());
+		return "";
+	}
+	if (extension.empty())
+		return result;
+
+	const std::string withExt = result + extension;
+	const int outfd = g_open(withExt.c_str(), O_CREAT | O_EXCL | O_RDWR | O_BINARY, 0600);
+	if (outfd < 0)
+	{
+		g_unlink(result.c_str());
+		return "";
+	}
+	g_close(outfd);
+	g_unlink(result.c_str());
+	return withExt;
 }

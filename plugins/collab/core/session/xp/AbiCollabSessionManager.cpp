@@ -349,11 +349,17 @@ void AbiCollabSessionManager::loadProfile()
 	if (!in)
 		return;
 
-	guint8 const* contents = gsf_input_read(in, gsf_input_size(in), NULL);
+	const gsf_off_t nbytes = gsf_input_size(in);
+	if (nbytes <= 0 || nbytes > 8 * 1024 * 1024)
+	{
+		g_object_unref(G_OBJECT(in));
+		return;
+	}
+	guint8 const* contents = gsf_input_read(in, static_cast<size_t>(nbytes), NULL);
 	if (contents)
 	{
-		xmlDocPtr reader = xmlReadMemory(reinterpret_cast<const char*>(contents), 
-							strlen(reinterpret_cast<const char*>(contents)), nullptr, "UTF-8", 0);
+		xmlDocPtr reader = xmlReadMemory(reinterpret_cast<const char*>(contents),
+							static_cast<int>(nbytes), nullptr, "UTF-8", XML_PARSE_NONET);
 		if (reader)
 		{
 			xmlNode* node = xmlDocGetRootElement(reader);
