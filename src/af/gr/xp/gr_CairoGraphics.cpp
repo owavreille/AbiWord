@@ -3972,6 +3972,7 @@ UT_uint32 adobeDingbatsToUnicode(UT_uint32 c)
 		return c;
 }
 
+#ifndef TOOLKIT_WIN
 void GR_Font::s_getGenericFontProperties(const char * /*szFontName*/,
 										 FontFamilyEnum * pff,
 										 FontPitchEnum * pfp,
@@ -3990,3 +3991,4 @@ void GR_Font::s_getGenericFontProperties(const char * /*szFontName*/,
 	*pfp = FP_Unknown;
 	*pbTrueType = true;
 }
+#endif
