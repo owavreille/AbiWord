@@ -47,7 +47,15 @@ jobs:
           cd build-tests
           ../configure --enable-plugins="opendocument openxml"
           make -j"$(nproc)"
+          set +e
           xvfb-run -a make check
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "----- test-suite.log -----"
+            cat src/wp/test/test-suite.log || true
+            exit "$status"
+          fi
 
   compile:
     name: Compilation MinGW
