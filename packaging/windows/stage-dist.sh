@@ -72,7 +72,9 @@ is_system() {
 	psapi.dll|dbghelp.dll|mpr.dll|netapi32.dll|userenv.dll|wldap32.dll| \
 	normaliz.dll|dnsapi.dll|mswsock.dll|nsi.dll|powrprof.dll|cfgmgr32.dll| \
 	wintrust.dll|imagehlp.dll|opengl32.dll|glu32.dll|combase.dll|shcore.dll| \
-	propsys.dll|api-ms-*.dll|ext-ms-*.dll)
+	propsys.dll|dwrite.dll|d2d1.dll|windowscodecs.dll|dxgi.dll|d3d11.dll| \
+	d3d9.dll|wininet.dll|winhttp.dll|ncrypt.dll|cryptbase.dll| \
+	api-ms-*.dll|ext-ms-*.dll)
 		return 0
 		;;
 	esac
