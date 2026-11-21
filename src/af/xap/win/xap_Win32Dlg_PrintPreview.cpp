@@ -229,6 +229,20 @@ s_remove_utf16_file (gunichar2 * & name)
   name = nullptr;
 }
 
+// Paint is started with ShellExecute and opens the TIFF after we return.
+// The last preview stays on disk until the next one replaces it. Deleting
+// it in the destructor made Paint report that the file does not exist.
+static gunichar2 * s_lastPreviewFile = nullptr;
+
+static void
+s_keep_preview_for_viewer (gunichar2 * & name)
+{
+  if (s_lastPreviewFile)
+    s_remove_utf16_file (s_lastPreviewFile);
+  s_lastPreviewFile = name;
+  name = nullptr;
+}
+
 static void
 gdip_shutdown (void)
 {
@@ -330,7 +344,8 @@ public:
       page_rect(rect),
       metafile_dc(nullptr),
       m_multiPageTiff(nullptr),
-      m_tiffFilename(nullptr)
+      m_tiffFilename(nullptr),
+      m_previewLaunched(false)
   {
     takeOwnershipOfDCAndDocInfo();
 
@@ -352,7 +367,10 @@ public:
     d (g_print ("~GR_Win32PrintPreviewGraphics()\n"));
 	if (m_multiPageTiff)
       GdipDisposeImage (m_multiPageTiff);
-    s_remove_utf16_file (m_tiffFilename);
+    if (m_previewLaunched)
+      s_keep_preview_for_viewer (m_tiffFilename);
+    else
+      s_remove_utf16_file (m_tiffFilename);
     gdip_shutdown ();
 
     // todo: delete DC and docInfo
@@ -613,8 +631,15 @@ public:
 
     d (g_print("endPrint()\n"));
 
+    gchar * utf8 = g_utf16_to_utf8 (m_tiffFilename, -1, nullptr, nullptr, nullptr);
+    const bool exists = utf8 && g_file_test (utf8, G_FILE_TEST_EXISTS);
+    g_free (utf8);
+    if (!exists)
+      return false;
+
     const INT_PTR opened = (INT_PTR)ShellExecuteW(nullptr, L"open", (WCHAR *)m_tiffFilename, nullptr, nullptr, SW_SHOW);
-    return opened > 32;
+    m_previewLaunched = opened > 32;
+    return m_previewLaunched;
   }
 
   void endPage()
@@ -783,6 +808,7 @@ protected:
   HDC metafile_dc;
   GpBitmap *m_multiPageTiff;
   gunichar2 * m_tiffFilename;
+  bool m_previewLaunched;
   int metafile_xres;
   int metafile_yres;
 };
