@@ -2137,7 +2137,16 @@ void ODi_TextContent_ListenerState::_insertAnnotation() {
     //
     if( !m_sAnnotationXMLID.empty() )
     {
-        std::string xmlid = m_sAnnotationXMLID;
+        std::string xmlid;
+        xmlid.reserve(m_sAnnotationXMLID.size());
+        for (unsigned char c : m_sAnnotationXMLID)
+        {
+            if (c < 0x20)
+                continue;
+            if (c == '\\' || c == '"')
+                xmlid.push_back('\\');
+            xmlid.push_back(static_cast<char>(c));
+        }
         std::stringstream sparql;
         sparql << "prefix rdf:   <http://www.w3.org/1999/02/22-rdf-syntax-ns#> \n"
                << "prefix foaf:  <http://xmlns.com/foaf/0.1/>  \n"

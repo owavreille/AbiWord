@@ -104,7 +104,7 @@ void OXMLi_ListenerState_Math::endElement (OXMLi_EndElementRequest * rqst)
             m_pMathBB->append(reinterpret_cast<const UT_Byte *>("</m:oMath>"),10);     
 
             std::string pomml;
-            pomml.assign((const char*)(m_pMathBB->getPointer(0)));
+            pomml.assign((const char*)(m_pMathBB->getPointer(0)), m_pMathBB->getLength());
             std::string pmathml;            
         
             if (!convertOMMLtoMathML(pomml,pmathml))

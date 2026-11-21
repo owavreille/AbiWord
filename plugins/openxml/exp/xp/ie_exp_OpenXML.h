@@ -170,8 +170,8 @@ public:
 	UT_Error setNumberingFormat(int target, const char* format);
 	UT_Error setMultilevelType(int target, const char* type);
 	UT_Error setHyperlinkRelation(int target, const char* id, const char* addr, const char* mode);
-	UT_Error setImage(const char* id, const char* relId, const char* filename, const char* width, const char* height);
-	UT_Error setPositionedImage(const char* id, const char* relId, const char* filename, const char* width, const char* height, const char* xpos, const char* ypos, const char* wrapMode);
+	UT_Error setImage(const char* id, const char* relId, const char* filename, const char* width, const char* height, int target = TARGET_DOCUMENT);
+	UT_Error setPositionedImage(const char* id, const char* relId, const char* filename, const char* width, const char* height, const char* xpos, const char* ypos, const char* wrapMode, int target = TARGET_DOCUMENT);
 	UT_Error setImageRelation(const char* filename, const char* id);
 	UT_Error writeImage(const char* filename, const UT_ConstByteBufPtr & data);
 	UT_Error setSimpleField(int target, const char* instr, const char* value);
@@ -224,6 +224,10 @@ private:
 	std::map<std::string, GsfOutput*> footerStreams; //all footer id, stream pairs
 
 	bool isOverline;
+	std::string m_pendingInd;
+	std::string m_pendingSpacing;
+	int m_pendingTarget;
+	UT_Error flushPendingParagraphProps(int target);
 
 	UT_Error startNumbering();
 	UT_Error startStyles();

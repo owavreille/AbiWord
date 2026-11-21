@@ -675,6 +675,7 @@ UT_Error IE_Imp_OpenDocument::_handleStream ( GsfInfile* pGsfInfile,
         
 #ifndef HAVE_GCRYPT
         UT_DEBUGMSG(("Can not decrypt files because of how abiword is compiled!\n"));
+        g_object_unref(G_OBJECT(pInput));
         return UT_ERROR;
 #endif
         
@@ -719,8 +720,9 @@ UT_Error IE_Imp_OpenDocument::_parseStream (GsfInput* pInput, UT_XML & parser)
             // FIXME: we want to pass the stream in chunks, but libXML2 finds this disagreeable.
             // we probably need to pass some magic to our XML parser? 
             // len = UT_MIN (len, BUF_SZ);
+            if (gsf_input_size(pInput) > (gsf_off_t)(256 * 1024 * 1024))
+                return UT_ERROR;
             if (nullptr == (data = gsf_input_read (pInput, len, nullptr))) {
-                g_object_unref (G_OBJECT (pInput));
                 return UT_ERROR;
             }
             ret = parser.parse ((const char *)data, len);

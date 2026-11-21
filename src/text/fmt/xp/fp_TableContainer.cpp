@@ -5945,8 +5945,20 @@ void  fp_TableContainer::_size_allocate_pass2(void)
 
 fp_TableRowColumn * fp_TableContainer::getNthCol(UT_uint32 i) const
 {
-	UT_ASSERT(i < m_vecColumns.size());
-	return m_vecColumns[i];
+	if (m_vecColumns.empty())
+	{
+		static fp_TableRowColumn s_missing(0);
+		return &s_missing;
+	}
+	if (i >= m_vecColumns.size())
+		i = static_cast<UT_uint32>(m_vecColumns.size() - 1);
+	fp_TableRowColumn * column = m_vecColumns[i];
+	if (!column)
+	{
+		static fp_TableRowColumn s_missing(0);
+		return &s_missing;
+	}
+	return column;
 }
 
 fp_TableRowColumn * fp_TableContainer::getNthRow(UT_uint32 i) const

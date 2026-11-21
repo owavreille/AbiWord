@@ -26,6 +26,7 @@
 
 // Abiword includes
 #include "ut_std_string.h"
+#include <cstdlib>
 
 /**
  * Constructor
@@ -49,7 +50,8 @@ IE_Exp_OpenXML::IE_Exp_OpenXML (PD_Document * pDocument)
 	footerStream(nullptr),
 	footnoteStream(nullptr),
 	endnoteStream(nullptr),
-	isOverline(false)
+	isOverline(false),
+	m_pendingTarget(TARGET_DOCUMENT)
 {
 }
 
@@ -397,8 +399,33 @@ UT_Error IE_Exp_OpenXML::startParagraphProperties(int target)
 /**
  * Finishes exporting the OXML_Element_Paragraph object's properties
  */
+UT_Error IE_Exp_OpenXML::flushPendingParagraphProps(int target)
+{
+	if (m_pendingTarget != target)
+		target = m_pendingTarget;
+	UT_Error err = UT_OK;
+	if (!m_pendingInd.empty())
+	{
+		std::string element = "<w:ind" + m_pendingInd + "/>";
+		err = writeTargetStream(target, element.c_str());
+		m_pendingInd.clear();
+		if (err != UT_OK)
+			return err;
+	}
+	if (!m_pendingSpacing.empty())
+	{
+		std::string element = "<w:spacing" + m_pendingSpacing + "/>";
+		err = writeTargetStream(target, element.c_str());
+		m_pendingSpacing.clear();
+	}
+	return err;
+}
+
 UT_Error IE_Exp_OpenXML::finishParagraphProperties(int target)
 {
+	UT_Error err = flushPendingParagraphProps(target);
+	if (err != UT_OK)
+		return err;
 	return writeTargetStream(target, "</w:pPr>");
 }
 
@@ -988,16 +1015,11 @@ UT_Error IE_Exp_OpenXML::setTextIndentation(int target, const gchar* indentation
 	if(!twips)
 		return UT_OK;
 
-	std::string str("<w:ind ");
-
-	if(isNegativeQuantity(indentation))
-		str += "w:hanging=\"";
-	else
-		str += "w:firstLine=\"";
-
-	str += twips;
-	str += "\"/>";
-	return writeTargetStream(target, str.c_str());
+	m_pendingTarget = target;
+	m_pendingInd += isNegativeQuantity(indentation) ? " w:hanging=\"" : " w:firstLine=\"";
+	m_pendingInd += twips;
+	m_pendingInd += "\"";
+	return UT_OK;
 }
 
 /**
@@ -1009,10 +1031,11 @@ UT_Error IE_Exp_OpenXML::setParagraphLeftMargin(int target, const gchar* margin)
 	if(!twips)
 		return UT_OK;
 
-	std::string str("<w:ind w:left=\"");
-	str += twips;
-	str += "\"/>";
-	return writeTargetStream(target, str.c_str());
+	m_pendingTarget = target;
+	m_pendingInd += " w:left=\"";
+	m_pendingInd += twips;
+	m_pendingInd += "\"";
+	return UT_OK;
 }
 
 /**
@@ -1024,10 +1047,11 @@ UT_Error IE_Exp_OpenXML::setParagraphRightMargin(int target, const gchar* margin
 	if(!twips)
 		return UT_OK;
 
-	std::string str("<w:ind w:right=\"");
-	str += twips;
-	str += "\"/>";
-	return writeTargetStream(target, str.c_str());
+	m_pendingTarget = target;
+	m_pendingInd += " w:right=\"";
+	m_pendingInd += twips;
+	m_pendingInd += "\"";
+	return UT_OK;
 }
 
 /**
@@ -1039,10 +1063,11 @@ UT_Error IE_Exp_OpenXML::setParagraphTopMargin(int target, const gchar* margin)
 	if(!twips)
 		return UT_OK;
 
-	std::string str("<w:spacing w:before=\"");
-	str += twips;
-	str += "\"/>";
-	return writeTargetStream(target, str.c_str());
+	m_pendingTarget = target;
+	m_pendingSpacing += " w:before=\"";
+	m_pendingSpacing += twips;
+	m_pendingSpacing += "\"";
+	return UT_OK;
 }
 
 /**
@@ -1147,10 +1172,11 @@ UT_Error IE_Exp_OpenXML::setParagraphBottomMargin(int target, const gchar* margi
 	if(!twips)
 		return UT_OK;
 
-	std::string str("<w:spacing w:after=\"");
-	str += twips;
-	str += "\"/>";
-	return writeTargetStream(target, str.c_str());
+	m_pendingTarget = target;
+	m_pendingSpacing += " w:after=\"";
+	m_pendingSpacing += twips;
+	m_pendingSpacing += "\"";
+	return UT_OK;
 }
 
 /**
@@ -1182,12 +1208,13 @@ UT_Error IE_Exp_OpenXML::setLineHeight(int target, const gchar* height)
 	if(!twips)
 		return UT_OK;
 	
-	std::string str("<w:spacing w:line=\"");
-	str += twips;
-	str += "\" w:lineRule=\"";
-	str += lineRule;
-	str += "\"/>";
-	return writeTargetStream(target, str.c_str());
+	m_pendingTarget = target;
+	m_pendingSpacing += " w:line=\"";
+	m_pendingSpacing += twips;
+	m_pendingSpacing += "\" w:lineRule=\"";
+	m_pendingSpacing += lineRule;
+	m_pendingSpacing += "\"";
+	return UT_OK;
 }
 
 /**
@@ -1461,10 +1488,21 @@ UT_Error IE_Exp_OpenXML::finishRowProperties(int target)
 /**
  * Starts footnote
  */
+static std::string noteIdForWord(const char* id)
+{
+	char* end = nullptr;
+	long value = id ? strtol(id, &end, 10) : 1;
+	if (!id || end == id)
+		value = 1;
+	if (value <= 0)
+		value += 1000000;
+	return std::to_string(value);
+}
+
 UT_Error IE_Exp_OpenXML::startFootnote(const char* id)
 {
 	std::string str("<w:footnote w:id=\"");
-	str += id;
+	str += noteIdForWord(id);
 	str += "\">";
 	return writeTargetStream(TARGET_FOOTNOTE, str.c_str());
 }
@@ -1483,7 +1521,7 @@ UT_Error IE_Exp_OpenXML::finishFootnote()
 UT_Error IE_Exp_OpenXML::startEndnote(const char* id)
 {
 	std::string str("<w:endnote w:id=\"");
-	str += id;
+	str += noteIdForWord(id);
 	str += "\">";
 	return writeTargetStream(TARGET_ENDNOTE, str.c_str());
 }
@@ -1642,7 +1680,7 @@ UT_Error IE_Exp_OpenXML::setMultilevelType(int target, const char* type)
 /**
  * Sets the inline image
  */
-UT_Error IE_Exp_OpenXML::setImage(const char* id, const char* relId, const char* filename, const char* width, const char* height)
+UT_Error IE_Exp_OpenXML::setImage(const char* id, const char* relId, const char* filename, const char* width, const char* height, int target)
 {
 	std::string str("");
 	std::string h("");
@@ -1658,6 +1696,7 @@ UT_Error IE_Exp_OpenXML::setImage(const char* id, const char* relId, const char*
 	str += "\" cy=\"";
 	str += h;
 	str += "\"/>";
+	str += "<wp:effectExtent l=\"0\" t=\"0\" r=\"0\" b=\"0\"/>";
 	str += "<wp:docPr id=\"";
 	str += id;
 	str += "\" name=\"";
@@ -1698,13 +1737,13 @@ UT_Error IE_Exp_OpenXML::setImage(const char* id, const char* relId, const char*
 	str += "</wp:inline>";
 	str += "</w:drawing>";
 
-	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
  * Sets the positioned image
  */
-UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, const char* filename, const char* width, const char* height, const char* xpos, const char* ypos, const char* wrapMode)
+UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, const char* filename, const char* width, const char* height, const char* xpos, const char* ypos, const char* wrapMode, int target)
 {
 	std::string str("");
 	std::string h("");
@@ -1792,7 +1831,7 @@ UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, c
 	str += "</wp:anchor>";
 	str += "</w:drawing>";
 
-	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
+	return writeTargetStream(target, str.c_str());
 }
 
 /**
@@ -1857,7 +1896,7 @@ UT_Error IE_Exp_OpenXML::setFootnoteReference(const char* id)
 	std::string str("");
 	str += "<w:footnoteReference ";
 	str += "w:id=\"";
-	str += id;
+	str += noteIdForWord(id);
 	str += "\"/>";
 	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
 }
@@ -1880,7 +1919,7 @@ UT_Error IE_Exp_OpenXML::setEndnoteReference(const char* id)
 	std::string str("");
 	str += "<w:endnoteReference ";
 	str += "w:id=\"";
-	str += id;
+	str += noteIdForWord(id);
 	str += "\"/>";
 	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
 }

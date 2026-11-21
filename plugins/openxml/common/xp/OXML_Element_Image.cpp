@@ -82,7 +82,7 @@ UT_Error OXML_Element_Image::serialize(IE_Exp_OpenXML* exporter)
 		getProperty("frame-width", width);
 		getProperty("xpos", xpos);
 		getProperty("ypos", ypos);
-		err = exporter->setPositionedImage(getId().c_str(), relId.c_str(), filename.c_str(), width, height, xpos, ypos, wrapMode);
+		err = exporter->setPositionedImage(getId().c_str(), relId.c_str(), filename.c_str(), width, height, xpos, ypos, wrapMode, TARGET);
 		if(err != UT_OK)
 			return err;
 	}
@@ -91,7 +91,7 @@ UT_Error OXML_Element_Image::serialize(IE_Exp_OpenXML* exporter)
 		// inline image
 		getProperty("height", height);
 		getProperty("width", width);
-		err = exporter->setImage(getId().c_str(), relId.c_str(), filename.c_str(), width, height);
+		err = exporter->setImage(getId().c_str(), relId.c_str(), filename.c_str(), width, height, TARGET);
 		if(err != UT_OK)
 			return err;
 	}

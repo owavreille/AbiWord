@@ -33,6 +33,21 @@
 #include "xap_App.h"
 
 #include <sstream>
+
+static std::string sparqlLiteral(const std::string& raw)
+{
+	std::string out;
+	out.reserve(raw.size());
+	for (unsigned char c : raw)
+	{
+		if (c < 0x20)
+			continue;
+		if (c == '\\' || c == '"')
+			out.push_back('\\');
+		out.push_back(static_cast<char>(c));
+	}
+	return out;
+}
 #include <set>
 #include <fstream>
 
@@ -2801,7 +2816,7 @@ PD_RDFLocation::getXMLIDs() const
        << "where { " << std::endl
        << " ?s pkg:idref ?xmlid ." << std::endl
        << " ?s ?p ?o " << std::endl
-       << " . filter( str(?o) = \"" << m_linkingSubject.toString() << "\" )" << std::endl
+       << " . filter( str(?o) = \"" << sparqlLiteral(m_linkingSubject.toString()) << "\" )" << std::endl
        << "}" << std::endl;
     std::set<std::string> uniqfilter;
     PD_RDFQuery q( getRDF(), getRDF() );
@@ -3029,7 +3044,7 @@ PD_RDFSemanticItem::getXMLIDsForLinkingSubject( PD_DocumentRDFHandle rdf, const 
        << "select distinct ?s ?xmlid" << std::endl
        << "where { " << std::endl
        << " ?s pkg:idref ?xmlid " << std::endl
-       << " . filter( str(?s) = \"" << linkingSubj << "\" )" << std::endl
+       << " . filter( str(?s) = \"" << sparqlLiteral(linkingSubj) << "\" )" << std::endl
        << "}" << std::endl;
     std::set<std::string> uniqfilter;
     PD_RDFQuery q( rdf, rdf );
@@ -5235,7 +5250,7 @@ class ABI_EXPORT PD_RDFMutation_XMLIDLimited
                    << "where {  \n"
                    << " ?s ?p ?o .  \n"
                    << " ?s pkg:idref ?rdflink .  \n"
-                   << "   filter( str(?s) = \"" << subj << "\" ) . \n"
+                   << "   filter( str(?s) = \"" << sparqlLiteral(subj) << "\" ) . \n"
                    << "   filter( str(?p) != \"http://docs.oasis-open.org/opendocument/meta/package/common#idref\" ) \n"
                 << "} \n";
             

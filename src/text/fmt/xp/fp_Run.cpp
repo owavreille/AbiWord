@@ -4039,7 +4039,8 @@ bool fp_FieldRun::_setValue(const UT_UCS4Char *p_new_value)
 
 		markDrawBufferDirty();
 		UT_uint32 iLen = UT_UCS4_strlen(p_new_value);
-		iLen = UT_MIN(iLen,FPFIELD_MAX_LENGTH);
+		if (iLen >= FPFIELD_MAX_LENGTH)
+			iLen = FPFIELD_MAX_LENGTH - 1;
 
 		if(iLen > 1 && XAP_App::getApp()->theOSHasBidiSupport() == XAP_App::BIDI_SUPPORT_GUI)
 		{
@@ -4057,7 +4058,9 @@ bool fp_FieldRun::_setValue(const UT_UCS4Char *p_new_value)
 		}
 		else
 		{
-			UT_UCS4_strcpy(m_sFieldValue, p_new_value);
+			for (UT_uint32 i = 0; i < iLen; ++i)
+				m_sFieldValue[i] = p_new_value[i];
+			m_sFieldValue[iLen] = 0;
 		}
 
 		{

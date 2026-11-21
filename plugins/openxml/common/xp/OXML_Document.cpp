@@ -378,6 +378,15 @@ UT_Error OXML_Document::serialize(IE_Exp_OpenXML* exporter)
 
 	OXML_StyleMap::iterator it1;
 	for (it1 = m_styles_by_id.begin(); it1 != m_styles_by_id.end(); it1++) {
+		if (it1->second->getName() != "Normal")
+			continue;
+		ret = it1->second->serialize(exporter);
+		if (ret != UT_OK)
+			return ret;
+	}
+	for (it1 = m_styles_by_id.begin(); it1 != m_styles_by_id.end(); it1++) {
+		if (it1->second->getName() == "Normal")
+			continue;
 		ret = it1->second->serialize(exporter);
 		if (ret != UT_OK)
 			return ret;

@@ -1464,23 +1464,46 @@ UT_go_url_may_open (gchar const *url)
 	if (g_ascii_strncasecmp(url, "file:", 5) != 0)
 		return FALSE;
 
-	const char * slash = strrchr(url, '/');
-	const char * base = slash ? slash + 1 : url;
+	const char * cut = strpbrk(url, "#?");
+	gchar * path = g_strndup(url, cut ? (gsize)(cut - url) : strlen(url));
+	gchar * decoded = path ? g_uri_unescape_string(path, nullptr) : nullptr;
+	g_free(path);
+	if (!decoded)
+		return FALSE;
+
+	gsize len = strlen(decoded);
+	while (len > 0 && (decoded[len - 1] == '.' || decoded[len - 1] == ' '))
+		decoded[--len] = '\0';
+
+	const char * slash = strrchr(decoded, '/');
+	const char * base = slash ? slash + 1 : decoded;
 	const char * dot = strrchr(base, '.');
 	if (!dot || !dot[1])
+	{
+		g_free(decoded);
 		return TRUE;
+	}
 
 	static const char * blocked[] = {
 		".exe", ".bat", ".cmd", ".com", ".scr", ".js", ".jse",
 		".vbs", ".vbe", ".ps1", ".msi", ".lnk", ".hta", ".cpl",
-		".jar", ".msc", ".reg", nullptr
+		".jar", ".msc", ".reg", ".url", ".wsf", ".wsh", ".pif",
+		".scf", ".chm", ".iso", ".application", ".appref-ms",
+		".settingcontent-ms", ".gadget", ".inf", ".job", ".sct",
+		".shb", ".shs", ".vb", ".ws", ".wsc", ".cab", ".diagcab",
+		nullptr
 	};
+	gboolean allowed = TRUE;
 	for (int i = 0; blocked[i]; ++i)
 	{
 		if (g_ascii_strcasecmp(dot, blocked[i]) == 0)
-			return FALSE;
+		{
+			allowed = FALSE;
+			break;
+		}
 	}
-	return TRUE;
+	g_free(decoded);
+	return allowed;
 }
 
 GError *

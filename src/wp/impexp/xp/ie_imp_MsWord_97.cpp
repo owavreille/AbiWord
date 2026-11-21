@@ -5585,10 +5585,12 @@ void IE_Imp_MsWord_97::_handleNotes(const wvParseStruct *ps)
 
 	bool bNoteError = false;
 
-	if(ps->fib.lcbPlcffndTxt)
+	if(ps->fib.lcbPlcffndTxt >= 8)
 	{
 		/* the docs say -1, but that is an error */
 		m_iFootnotesCount = ps->fib.lcbPlcffndTxt/4 - 2;
+		if (m_iFootnotesCount > 100000)
+			m_iFootnotesCount = 0;
 		try
 		{
 			m_pFootnotes = new footnote[m_iFootnotesCount];
@@ -5702,9 +5704,11 @@ void IE_Imp_MsWord_97::_handleNotes(const wvParseStruct *ps)
 		getDoc()->setProperties(props);
 	}
 
-	if(ps->fib.lcbPlcfendTxt)
+	if(ps->fib.lcbPlcfendTxt >= 8)
 	{
 		m_iEndnotesCount  = ps->fib.lcbPlcfendTxt/4 - 2;
+		if (m_iEndnotesCount > 100000)
+			m_iEndnotesCount = 0;
 		try
 		{
 			m_pEndnotes  = new footnote[m_iEndnotesCount];
@@ -6680,11 +6684,13 @@ void IE_Imp_MsWord_97::_handleHeaders(const wvParseStruct *ps)
 
 	bool bHeaderError = false;
 
-	if(ps->fib.lcbPlcfhdd)
+	if(ps->fib.lcbPlcfhdd >= 8)
 	{
 		/* the docs are ambiguous, at one place saying the PLCF
 		   contains n+2 entries, another n+1; I think the former is correct*/
 		m_iHeadersCount = ps->fib.lcbPlcfhdd/4 - 2;
+		if (m_iHeadersCount > 100000)
+			m_iHeadersCount = 0;
 		try
 		{
 			m_pHeaders = new header[m_iHeadersCount];

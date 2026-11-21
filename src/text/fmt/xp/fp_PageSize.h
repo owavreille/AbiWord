@@ -62,7 +62,7 @@ public:
 	void Set(double w, double h, UT_Dimension u = DIM_none);
 	void Set(UT_Dimension u) { m_unit = u; }
 	bool Set(const PP_PropertyVector & attributes);
-	inline void setScale( double scale) { m_scale = scale; }
+	inline void setScale( double scale) { m_scale = (scale > 0.0) ? scale : 1.0; }
 	void setPortrait(void);
 	void setLandscape(void);
 	bool isPortrait(void) const { return m_bisPortrait; }

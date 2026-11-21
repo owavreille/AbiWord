@@ -26,6 +26,7 @@
 #include "ie_exp_HTML_Listener.h"
 #include "ie_exp_HTML_util.h"
 #include "ie_exp_HTML.h"
+#include "ut_go_file.h"
 
 IE_Exp_HTML_Listener::IE_Exp_HTML_Listener(PD_Document *pDocument, 
                                            IE_Exp_HTML_DataExporter* pDataExporter,
@@ -2606,6 +2607,8 @@ void IE_Exp_HTML_Listener::_openHyperlink(PT_AttrPropIndex api)
         const gchar *szEscapedUrl = nullptr;
         const gchar *szUrl = _getObjectKey(api, "xlink:href");
         UT_UTF8String url = szUrl;
+        if (szUrl != nullptr && strchr(szUrl, ':') && !UT_go_url_may_open(szUrl))
+            url = "#";
         if (szUrl != nullptr)
         {
             

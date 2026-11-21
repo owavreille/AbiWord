@@ -239,7 +239,7 @@ bool ODi_Abi_Data::addObjectDataItem(UT_String& rDataId, const gchar** ppAtts, i
     //
 
     UT_ByteBufPtr latexBuf(new UT_ByteBuf);
-    UT_UTF8String PbMathml = (const char*)(object_buf->getPointer(0));
+    UT_UTF8String PbMathml((const char*)(object_buf->getPointer(0)), object_buf->getLength());
     UT_UTF8String PbLatex,Pbitex;
 	
     if (!m_pAbiDocument->createDataItem(rDataId.c_str(), false, object_buf,"application/mathml+xml", nullptr))
@@ -283,6 +283,11 @@ UT_Error ODi_Abi_Data::_loadStream (GsfInfile* oo,
     	return UT_ERROR;
     }
   
+    if (gsf_input_size (input) > (gsf_off_t)(256 * 1024 * 1024)) {
+        g_object_unref (G_OBJECT (input));
+        return UT_ERROR;
+    }
+
     if (gsf_input_size (input) > 0) {
         while ((len = gsf_input_remaining (input)) > 0) {
             len = UT_MIN (len, BUF_SZ);

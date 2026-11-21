@@ -659,12 +659,22 @@ static librdf_model* getRedlandModel( PD_RDFModelHandle abimodel )
         return nullptr;
     }
     abiwordContext* ac = abiwordContext::get( storage );
+    if (!ac)
+    {
+        librdf_free_storage(storage);
+        return nullptr;
+    }
     ac->setModel( abimodel );
     xxx_UT_DEBUGMSG(("getRedlandModel(2) storage: %p abimodel: %p\n", storage, abimodel.get()));
     
     librdf_model* model = nullptr;
     /*int rc = */librdf_storage_open( storage, model );
     model = librdf_new_model( getWorld(), storage, nullptr );
+    if (!model)
+    {
+        librdf_free_storage(storage);
+        return nullptr;
+    }
     
     xxx_UT_DEBUGMSG(("getRedlandModel(3) storage: %p model: %p\n", storage, model));
     return model;
@@ -712,14 +722,29 @@ PD_RDFQuery::executeQuery( const std::string& sparql_query_string )
     }
     
     librdf_model* rdfmodel = getRedlandModel( m_model );
+    if (!rdfmodel)
+        return ret;
     librdf_uri*   base_uri = nullptr;
     librdf_query* query = librdf_new_query( getWorld(),
                                             "sparql", nullptr,
                                             (unsigned char*)sparql_query_string.c_str(),
                                             base_uri );
+    if (!query)
+    {
+        librdf_storage* storage = librdf_model_get_storage(rdfmodel);
+        librdf_free_model(rdfmodel);
+        if (storage)
+            librdf_free_storage(storage);
+        return ret;
+    }
     librdf_query_results* results = librdf_query_execute( query, rdfmodel );
     if( !results )
     {
+        librdf_free_query(query);
+        librdf_storage* storage = librdf_model_get_storage(rdfmodel);
+        librdf_free_model(rdfmodel);
+        if (storage)
+            librdf_free_storage(storage);
         return ret;
     }
     
@@ -757,7 +782,13 @@ PD_RDFQuery::executeQuery( const std::string& sparql_query_string )
 
         ret.push_back(x);
     }
-    
+
+    librdf_free_query_results(results);
+    librdf_free_query(query);
+    librdf_storage* storage = librdf_model_get_storage(rdfmodel);
+    librdf_free_model(rdfmodel);
+    if (storage)
+        librdf_free_storage(storage);
     return ret;
 
 #endif

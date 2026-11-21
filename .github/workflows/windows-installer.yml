@@ -98,7 +98,8 @@ jobs:
           ./configure \
             --host=x86_64-w64-mingw32 \
             --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
-            --disable-static
+            --enable-static \
+            --disable-shared
           make -j"$(nproc)"
           make install
 
