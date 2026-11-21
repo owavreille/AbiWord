@@ -417,7 +417,7 @@ void AccountHandler::_handlePacket(Packet* packet, BuddyPtr buddy)
 					// to modify the ACL).
 					if (!pDoc->getAuthorByInt(jsre->getAuthorId()))
 					{
-						delete pDoc;
+						pDoc->unref();
 						pDoc = nullptr;
 						break;
 					}

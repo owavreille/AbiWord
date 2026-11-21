@@ -1583,7 +1583,7 @@ void ServiceAccountHandler::_handleJoinSessionRequestResponse(
 
 	if (!(*pDoc)->getAuthorByInt(jsre->getAuthorId()))
 	{
-		delete *pDoc;
+		(*pDoc)->unref();
 		*pDoc = nullptr;
 		return;
 	}
