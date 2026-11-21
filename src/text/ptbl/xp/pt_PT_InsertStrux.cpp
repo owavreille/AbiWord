@@ -302,7 +302,7 @@ bool pt_PieceTable::_createStrux(PTStruxType pts,
  * BEFORE pf. In this case the container is actually in strux before this one.
  * In this case pfsActual returns the rela containing strux.
  */
-void pt_PieceTable::_insertStrux(pf_Frag * pf,
+bool pt_PieceTable::_insertStrux(pf_Frag * pf,
 								 PT_BlockOffset fragOffset,
 								 pf_Frag_Strux * pfsNew)
 {
@@ -333,7 +333,7 @@ void pt_PieceTable::_insertStrux(pf_Frag * pf,
 	{
 	default:
 		UT_ASSERT_HARMLESS(0);
-		return;
+		return false;
 
 	case pf_Frag::PFT_Object:
 	case pf_Frag::PFT_EndOfDoc:
@@ -342,12 +342,13 @@ void pt_PieceTable::_insertStrux(pf_Frag * pf,
 			// insert pfsNew before pf.
 			// TODO this may introduce some oddities due to empty paragraphs.
 			// TODO investigate this later.
-			UT_return_if_fail (fragOffset == 0);
+			if (fragOffset != 0)
+				return false;
 //
 // OK find the real container strux.
 //
 			m_fragments.insertFrag(pf->getPrev(),pfsNew);
-			return;
+			return true;
 		}
 
 	case pf_Frag::PFT_FmtMark:
@@ -355,9 +356,10 @@ void pt_PieceTable::_insertStrux(pf_Frag * pf,
 			// insert pfsNew after pf.
             // before this.
 			// TODO check this.
-			UT_return_if_fail (fragOffset == 0);
+			if (fragOffset != 0)
+				return false;
 			m_fragments.insertFrag(pf,pfsNew);
-			return;
+			return true;
 		}
 
 	case pf_Frag::PFT_Text:
@@ -403,16 +405,18 @@ void pt_PieceTable::_insertStrux(pf_Frag * pf,
 				UT_uint32 lenTail = pft->getLength() - fragOffset;
 				PT_BufIndex biTail = m_varset.getBufIndex(pft->getBufIndex(),fragOffset);
 				pf_Frag_Text * pftTail = new pf_Frag_Text(this,biTail,lenTail,pft->getIndexAP(),pft->getField());
-				UT_return_if_fail (pftTail);
+				if (!pftTail)
+					return false;
 
 				pft->changeLength(fragOffset);
 				m_fragments.insertFrag(pft,pfsNew);
 				m_fragments.insertFrag(pfsNew,pftTail);
 			}
 
-			return;
+			return true;
 		}
 	}
+	return false;
 }
 
 
@@ -592,7 +596,13 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 	}
 
 	// insert this frag into the fragment list. Update the container strux as needed
-	_insertStrux(pf,fragOffset,pfsNew);
+	if (!_insertStrux(pf,fragOffset,pfsNew))
+	{
+		delete pfsNew;
+		if (bNeedGlob)
+			endMultiStepGlob();
+		return false;
+	}
 	if (ppfs_ret)
 		*ppfs_ret = pfsNew;
 

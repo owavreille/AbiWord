@@ -94,12 +94,12 @@ public:
 	virtual void Skip( unsigned int Count ) = 0;
 	virtual bool EndOfFile() const = 0;
 	bool failed() const { return m_bFailed; }
+	void fail() { m_bFailed = true; }
 protected:
 	Archive( bool bLoading )
 	: m_bLoading( bLoading )
 	, m_bFailed( false )
 	{}
-	void fail() { m_bFailed = true; }
 	virtual bool canSerialize(unsigned int count) const
 	{
 		(void)count;

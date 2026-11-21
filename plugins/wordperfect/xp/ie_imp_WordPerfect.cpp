@@ -432,7 +432,7 @@ void IE_Imp_WordPerfect::setDocumentMetaData(const librevenge::RVNGPropertyList 
 		getDoc()->setMetaDataProp(PD_META_KEY_SUBJECT, propList["dc:subject"]->getStr().cstr());
 	if (propList["dc:publisher"])
 		getDoc()->setMetaDataProp(PD_META_KEY_PUBLISHER, propList["dc:publisher"]->getStr().cstr());
-	if (propList["dc:type"])
+	if (propList["dc:category"])
 		getDoc()->setMetaDataProp(PD_META_KEY_TYPE, propList["dc:category"]->getStr().cstr());
 	if (propList["librevenge:keywords"])
 		getDoc()->setMetaDataProp(PD_META_KEY_KEYWORDS, propList["librevenge:keywords"]->getStr().cstr());
@@ -790,6 +790,8 @@ void IE_Imp_WordPerfect::openOrderedListLevel(const librevenge::RVNGPropertyList
 		startingNumber = propList["text:start-value"]->getInt();
 	if (propList["librevenge:level"])
 		level = propList["librevenge:level"]->getInt();
+	if (level < 1 || level > WP6_NUM_LIST_LEVELS)
+		return;
 	if (propList["style:num-prefix"])
 		textBeforeNumber += propList["style:num-prefix"]->getStr().cstr();
 	if (propList["style:num-suffix"])
@@ -821,14 +823,16 @@ void IE_Imp_WordPerfect::openOrderedListLevel(const librevenge::RVNGPropertyList
 		_updateDocumentOrderedListDefinition(m_pCurrentListDefinition, level, listType, textBeforeNumber, textAfterNumber, startingNumber);
 	}
 
-	m_iCurrentListLevel++;
+	if (m_iCurrentListLevel < WP6_NUM_LIST_LEVELS)
+		m_iCurrentListLevel++;
 }
 
 void IE_Imp_WordPerfect::closeOrderedListLevel()
 {
 	if (m_bHdrFtrOpenCount) return; // HACK
 	UT_DEBUGMSG(("AbiWordPerfect: closeOrderedListLevel (level: %i)\n", m_iCurrentListLevel));
-	UT_ASSERT(m_iCurrentListLevel > 0); 
+	if (m_iCurrentListLevel <= 0 || !m_pCurrentListDefinition)
+		return; 
 	
 	// every time we close a list level, the level above it is normally renumbered to start at "1"
 	// again. this code takes care of that.
@@ -852,6 +856,8 @@ void IE_Imp_WordPerfect::openUnorderedListLevel(const librevenge::RVNGPropertyLi
 		listID = propList["librevenge:id"]->getInt();
 	if (propList["librevenge:level"])
 		level = propList["librevenge:level"]->getInt();
+	if (level < 1 || level > WP6_NUM_LIST_LEVELS)
+		return;
 	if (propList["text:space-before"])
 		listLeftOffset = propList["text:space-before"]->getDouble();
 	if (propList["text:min-label-width"])
@@ -873,14 +879,16 @@ void IE_Imp_WordPerfect::openUnorderedListLevel(const librevenge::RVNGPropertyLi
 		_updateDocumentUnorderedListDefinition(m_pCurrentListDefinition, level);
 	}
 
-	m_iCurrentListLevel++;
+	if (m_iCurrentListLevel < WP6_NUM_LIST_LEVELS)
+		m_iCurrentListLevel++;
 }
 
 void IE_Imp_WordPerfect::closeUnorderedListLevel()
 {
 	if (m_bHdrFtrOpenCount) return; // HACK
 	UT_DEBUGMSG(("AbiWordPerfect: closeUnorderedListLevel (level: %i)\n", m_iCurrentListLevel));
-	UT_ASSERT(m_iCurrentListLevel > 0); 
+	if (m_iCurrentListLevel <= 0)
+		return; 
 	
 	m_iCurrentListLevel--;
 }
@@ -892,7 +900,10 @@ void IE_Imp_WordPerfect::openListElement(const librevenge::RVNGPropertyList &pro
 	if (m_bHdrFtrOpenCount) return; // HACK
 	UT_DEBUGMSG(("AbiWordPerfect: openListElement\n"));
 	
-	UT_ASSERT(m_pCurrentListDefinition); // FIXME: ABI_LISTS_IMPORT throw an exception back to libwpd, if this fails
+	if (!m_pCurrentListDefinition
+		|| m_iCurrentListLevel < 1
+		|| m_iCurrentListLevel > WP6_NUM_LIST_LEVELS)
+		return;
 	
 	// Paragraph properties for our list element
 	UT_String szListID;
@@ -1147,9 +1158,13 @@ void IE_Imp_WordPerfect::openTableCell(const librevenge::RVNGPropertyList &propL
 	// we only support bg-style:1 for now
 	if (propList["fo:background-color"])
 	{
-		UT_String bgCol;
-		UT_String_sprintf(bgCol, "; bg-style:1; background-color:%s", &(propList["fo:background-color"]->getStr().cstr()[1]));
-		propBuffer += bgCol;
+		const char* color = propList["fo:background-color"]->getStr().cstr();
+		if (color && color[0] && color[1])
+		{
+			UT_String bgCol;
+			UT_String_sprintf(bgCol, "; bg-style:1; background-color:%s", color + 1);
+			propBuffer += bgCol;
+		}
 	}
 	
 	UT_DEBUGMSG(("AbiWordPerfect: Inserting a Cell definition: %s\n", propBuffer.c_str()));

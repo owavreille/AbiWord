@@ -279,7 +279,8 @@ void ServiceAccountHandler::removeExporter(void)
 	if (m_pExport)
 	{
 		PD_Document * pDoc = m_pExport->getDocument();
-		pDoc->removeListener(m_iListenerID);
+		if (pDoc)
+			pDoc->removeListener(m_iListenerID);
 		m_iListenerID = 0;
 		DELETEP(m_pExport);
 	}
@@ -618,8 +619,9 @@ bool ServiceAccountHandler::startSession(PD_Document* pDoc, const std::vector<st
 	connection->setDocument(pDoc);
 	m_connections.push_back(connection);
 
-	// Register a serviceExporter to handle remote saves via a signal.
-	// FIXME: the exporter is document dependent, so don't store it in a simple class member
+	// One exporter belongs to one document. Drop the previous listener
+	// before this account starts watching another document.
+	removeExporter();
 	m_pExport = new AbiCollabService_Export(pDoc, this);
 	pDoc->addListener(m_pExport, &m_iListenerID);
 	
@@ -981,8 +983,7 @@ acs::SOAP_ERROR ServiceAccountHandler::_openDocumentMaster(ConnectionPtr connect
 	gchar* fname = g_strdup(filename.c_str());
 	(*pDoc)->setFilename(fname);
 	
-	// Register a serviceExporter to handle remote saves via a signal.
-	// FIXME: the exporter is document dependent, so don't store it in a simple class member
+	removeExporter();
 	m_pExport = new AbiCollabService_Export(*pDoc,this);
 	(*pDoc)->addListener(m_pExport,	&m_iListenerID);
 	
@@ -1030,8 +1031,7 @@ acs::SOAP_ERROR ServiceAccountHandler::_openDocumentSlave(ConnectionPtr connecti
 
 	UT_return_val_if_fail(*pDoc, acs::SOAP_ERROR_GENERIC);
 
-	// Register a serviceExporter to handle remote saves via a signal.
-	// FIXME: the exporter is document dependent, so don't store it in a simple class member
+	removeExporter();
 	m_pExport = new AbiCollabService_Export(*pDoc,this);
 	(*pDoc)->addListener(m_pExport,&m_iListenerID);
 
@@ -1398,7 +1398,12 @@ bool ServiceAccountHandler::parseUserInfo(const std::string& userinfo, uint64_t&
 	}
 
 	xmlChar* id = xmlGetProp(rootNode, reinterpret_cast<const xmlChar*>("id"));
-	std::string id_str = reinterpret_cast<char *>(id); 
+	if (!id)
+	{
+		xmlFreeDoc(doc);
+		return false;
+	}
+	std::string id_str(reinterpret_cast<char *>(id));
 	FREEP(id);
 
 	try
@@ -1575,6 +1580,13 @@ void ServiceAccountHandler::_handleJoinSessionRequestResponse(
 
 	gchar* fname = g_strdup(filename.c_str());
 	(*pDoc)->setFilename(fname);
+
+	if (!(*pDoc)->getAuthorByInt(jsre->getAuthorId()))
+	{
+		delete *pDoc;
+		*pDoc = nullptr;
+		return;
+	}
 
 	pManager->joinSession(jsre->getSessionId(), *pDoc, jsre->m_sDocumentId, jsre->m_iRev, jsre->getAuthorId(), pBuddy, this, bLocallyOwned, pFrame);
 

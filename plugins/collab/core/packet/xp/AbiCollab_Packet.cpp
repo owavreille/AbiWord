@@ -22,6 +22,7 @@
  */
 
 #include <string>
+#include <string.h>
 #include <vector>
 
 #include "ut_vector.h"
@@ -171,10 +172,25 @@ ChangeRecordSessionPacket::ChangeRecordSessionPacket(
 {
 }
 
+/* The wire image is four bytes. The enum itself is one byte at the
+ * lowest address; the other three used to be whatever padding followed
+ * the member. Copying through an int& was undefined. Peers still exchange
+ * four bytes, and only the first is the value.
+ */
+static void serializeSmallEnum(Archive& ar, void* value, size_t size)
+{
+	unsigned char bytes[4] = {0, 0, 0, 0};
+	if (!ar.isLoading() && value && size && size <= 4)
+		memcpy(bytes, value, size);
+	ar.Serialize(bytes, 4);
+	if (ar.isLoading() && !ar.failed() && value && size && size <= 4)
+		memcpy(value, bytes, size);
+}
+
 void ChangeRecordSessionPacket::serialize( Archive& ar )
 {
 	SessionPacket::serialize( ar );
-	ar << (int&)m_cType;
+	serializeSmallEnum(ar, &m_cType, sizeof(m_cType));
 	ar << COMPACT_INT(m_iPos);	
 	ar << COMPACT_INT(m_iLength);
 	ar << COMPACT_INT(m_iAdjust);
@@ -393,8 +409,7 @@ std::string InsertSpan_ChangeRecordSessionPacket::toStr() const
 void ChangeStrux_ChangeRecordSessionPacket::serialize( Archive& ar )
 {
 	Props_ChangeRecordSessionPacket::serialize( ar );
-	UT_ASSERT(sizeof(m_eStruxType)==4);
-	ar << (int&)m_eStruxType;
+	serializeSmallEnum(ar, &m_eStruxType, sizeof(m_eStruxType));
 }
 
 std::string ChangeStrux_ChangeRecordSessionPacket::toStr() const
@@ -406,8 +421,7 @@ std::string ChangeStrux_ChangeRecordSessionPacket::toStr() const
 void DeleteStrux_ChangeRecordSessionPacket::serialize( Archive& ar )
 {
 	ChangeRecordSessionPacket::serialize( ar );
-	UT_ASSERT(sizeof(m_eStruxType)==4);
-	ar << (int&)m_eStruxType;
+	serializeSmallEnum(ar, &m_eStruxType, sizeof(m_eStruxType));
 }
 
 std::string DeleteStrux_ChangeRecordSessionPacket::toStr() const
@@ -419,8 +433,7 @@ std::string DeleteStrux_ChangeRecordSessionPacket::toStr() const
 void Object_ChangeRecordSessionPacket::serialize( Archive& ar )
 {
 	Props_ChangeRecordSessionPacket::serialize( ar );
-	UT_ASSERT(sizeof(m_eObjectType)==4);
-	ar << (int&)m_eObjectType;
+	serializeSmallEnum(ar, &m_eObjectType, sizeof(m_eObjectType));
 }
 
 void RDF_ChangeRecordSessionPacket::serialize( Archive& ar )
@@ -650,42 +663,63 @@ UT_sint32 GlobSessionPacket::getRemoteRev(void) const
 void GlobSessionPacket::serialize( Archive& ar )
 {
 	SessionPacket::serialize( ar );
-	
-	unsigned int count;
-	if (ar.isLoading()) 
+
+	unsigned int count = 0;
+	if (ar.isLoading())
 	{
-		// load packet count
+		// Same ceiling as std::vector serialization. A peer-supplied count
+		// used to resize before any packet was known to exist.
 		ar << COMPACT_INT(count);
+		if (ar.failed() || count > (1u << 20))
+		{
+			ar.fail();
+			return;
+		}
 		m_pPackets.resize( count, NULL );
-		
-		// load packets
+
 		for (size_t i=0; i<m_pPackets.size(); ++i)
 		{
-			UT_uint8 classId;
+			UT_uint8 classId = 0;
 			ar << classId;
-			SessionPacket* newPacket = static_cast<SessionPacket*>( Packet::createPacket( (PClassType)classId ) );
-			UT_ASSERT(newPacket);		// should this be safer?
+			if (ar.failed())
+				return;
+			Packet* created = Packet::createPacket( (PClassType)classId );
+			if (!created || !SessionPacket::isInstanceOf(*created))
+			{
+				delete created;
+				ar.fail();
+				return;
+			}
+			SessionPacket* newPacket = static_cast<SessionPacket*>(created);
+			// Child packets omit their session id while a parent is set,
+			// so the parent has to be installed before they are read.
 			newPacket->setParent( this );
 			ar << *newPacket;
 			m_pPackets[i] = newPacket;
-			// for efficiency reasons, childs of a glob don't serialize their session 
-			// and document id's; therefor we set them now manually
+			if (ar.failed())
+				return;
 			newPacket->setSessionId(getSessionId());
 			newPacket->setDocUUID(getDocUUID());
 		}
-	} 
-	else 
+	}
+	else
 	{
-		// save packet count
-		count = m_pPackets.size();
-		ar << COMPACT_INT(count);
-		
-		// save packets
-		for (size_t i=0; i<m_pPackets.size(); ++i) 
+		count = static_cast<unsigned int>(m_pPackets.size());
+		if (count > (1u << 20))
 		{
-			// get and check packet
+			ar.fail();
+			return;
+		}
+		ar << COMPACT_INT(count);
+
+		for (size_t i=0; i<m_pPackets.size(); ++i)
+		{
 			SessionPacket* sp = m_pPackets[i];
-			UT_ASSERT(sp);				// this really may NEVER fail or addPacket malfunctioned!
+			if (!sp)
+			{
+				ar.fail();
+				return;
+			}
 			UT_uint8 classId = sp->getClassType();
 			ar << classId << *sp;
 		}

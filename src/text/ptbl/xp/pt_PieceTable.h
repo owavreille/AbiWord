@@ -419,7 +419,7 @@ protected:
 										 PT_AttrPropIndex indexAP,
 										 pf_Frag_Strux ** ppfs);
 
-	void					_insertStrux(pf_Frag * pf,
+	bool					_insertStrux(pf_Frag * pf,
 										 PT_BlockOffset fragOffset,
 										 pf_Frag_Strux * pfsNew);
 

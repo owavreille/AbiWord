@@ -271,7 +271,7 @@ namespace soa {
 					return GenericPtr();
 				}
 			} else if (strcasecmp(reinterpret_cast<const char*>(soapNode->name), "Header") == 0) {
-				return GenericPtr();
+				continue;
 			}
 			else {
 				return GenericPtr();

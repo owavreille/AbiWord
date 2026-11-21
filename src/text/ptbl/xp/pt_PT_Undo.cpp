@@ -242,7 +242,11 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 				bool bFoundStrux = _getStruxFromFragSkip(static_cast<pf_Frag *>(pfsContainer),&pfsContainer);
 				UNDO_return_val_if_fail (bFoundStrux, false);
 			}
-			_insertStrux(pf,fragOffset,pfsNew);
+			if (!_insertStrux(pf,fragOffset,pfsNew))
+			{
+				delete pfsNew;
+				return false;
+			}
 			// insert frag in the embedded_strux list if needed
 			PTStruxType pts = pcrStrux->getStruxType();
 			if ((pts == PTX_EndFootnote) || (pts == PTX_EndEndnote) || (pts == PTX_EndAnnotation)) 
