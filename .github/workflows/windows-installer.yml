@@ -168,6 +168,9 @@ jobs:
           unzip -q /tmp/nsis.zip -d "$HOME"
           tar -xjf /tmp/nsis-src.tar.bz2 -C /tmp
           scons -C /tmp/nsis-3.13-src \
+            VERSION=3.13 \
+            VER_MAJOR=3 \
+            VER_MINOR=13 \
             SKIPSTUBS=all \
             SKIPPLUGINS=all \
             SKIPUTILS=all \
