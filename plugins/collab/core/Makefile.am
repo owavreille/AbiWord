@@ -37,7 +37,7 @@ libcore_la_SOURCES += \
 
 libcore_la_LIBADD += ap_Win32Res_CollaborationDialogs.lo
 ap_Win32Res_CollaborationDialogs.lo:  $(srcdir)/dialogs/win/ap_Win32Res_CollaborationDialogs.rc $(libcore_la_OBJECTS)
-	CPPFLAGS="$(COLLAB_RCFLAGS)" $(top_srcdir)/lt-compile-resource $< $@
+	CPPFLAGS="-I$(srcdir)/dialogs/win $(COLLAB_RCFLAGS)" $(top_srcdir)/lt-compile-resource $< $@
 
 ui_win32 += \
 	dialogs/win/ap_Win32Res_CollaborationDialogs.rc \
