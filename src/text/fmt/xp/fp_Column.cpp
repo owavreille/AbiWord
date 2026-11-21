@@ -209,9 +209,21 @@ UT_sint32 fp_VerticalContainer::getY(void) const
 */
 UT_sint32 fp_VerticalContainer::getY(GR_Graphics * pG) const
 {
-	if(getSectionLayout()->getDocLayout()->getView()  && (getSectionLayout()->getDocLayout()->getView()->getViewMode() != VIEW_PRINT) && pG->queryProperties(GR_Graphics::DGP_SCREEN))
+	if(pG && getSectionLayout()->getDocLayout()->getView()  && (getSectionLayout()->getDocLayout()->getView()->getViewMode() != VIEW_PRINT) && pG->queryProperties(GR_Graphics::DGP_SCREEN))
 	{
-		return m_iY - static_cast<fl_DocSectionLayout *>(getSectionLayout())->getTopMargin();
+		fl_SectionLayout * pSL = getSectionLayout();
+		fl_DocSectionLayout * pDSL = nullptr;
+		if(static_cast<fl_ContainerLayout *>(pSL)->getContainerType() == FL_CONTAINER_DOCSECTION)
+		{
+			pDSL = static_cast<fl_DocSectionLayout *>(pSL);
+		}
+		else
+		{
+			pDSL = static_cast<fl_DocSectionLayout *>(pSL->getDocSectionLayout());
+		}
+		if(pDSL && pSL->getContainerType() == FL_CONTAINER_DOCSECTION)
+			return m_iY - pDSL->getTopMargin();
+		return m_iY;
 	}
 	return m_iY;
 }

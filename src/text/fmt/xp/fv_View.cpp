@@ -8281,13 +8281,13 @@ void FV_View::setYScrollOffset(UT_sint32 v)
 void FV_View::drawPage(int page, dg_DrawArgs* da)
 {
 	UT_DEBUGMSG(("FV_View::draw_1: [page %d]\n",page));
+	if (!da || !da->pG || !m_pLayout)
+		return;
 	calculateNumHorizPages();
 
-	if(getPoint() == 0) {
-		return;
-	}
-
-	UT_ASSERT(da->pG);
+	// Print preview builds its own view. That view never receives an
+	// insertion point, so a point of 0 only means "no caret", not
+	// "nothing to draw".
 	fp_Page* pPage = m_pLayout->getNthPage(page);
 	if (pPage)
 	{
@@ -8307,9 +8307,11 @@ void FV_View::queueDraw(const UT_Rect* pClipRect)
 */
 void FV_View::drawImmediate(const UT_Rect* pClipRect)
 {
-	if (getPoint() == 0) {
+	// A new document still has its caret at 0 when the first paint
+	// arrives. Skipping that paint leaves the page blank, and Windows
+	// does not send another one until the window is resized.
+	if (getPoint() == 0 && (!m_pLayout || m_pLayout->countPages() == 0))
 		return;
-	}
 
 	if (pClipRect)
 	{

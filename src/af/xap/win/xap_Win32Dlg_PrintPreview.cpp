@@ -162,6 +162,7 @@ typedef GpStatus (WINGDIPAPI* GdipCreateBitmapFromScan0Func) (INT width, INT hei
 typedef GpStatus (WINGDIPAPI* GdipGetImageWidthFunc) (GpImage*, guint*);
 typedef GpStatus (WINGDIPAPI* GdipGetImageHeightFunc) (GpImage*, guint*);
 typedef GpStatus (WINGDIPAPI* GdipDrawImageIFunc) (GpGraphics *graphics, GpImage *image, INT x, INT y);
+typedef GpStatus (WINGDIPAPI* GdipDrawImageRectIFunc) (GpGraphics *graphics, GpImage *image, INT x, INT y, INT width, INT height);
 typedef GpStatus (WINGDIPAPI* GdipGetImageGraphicsContextFunc) (GpImage *image, GpGraphics **graphics);
 typedef GpStatus (WINGDIPAPI* GdipFlushFunc) (GpGraphics *graphics, INT intention);
 typedef GpStatus (WINGDIPAPI* GdipGraphicsClearFunc) (GpGraphics *graphics, ARGB color);
@@ -186,6 +187,7 @@ static GdipCreateBitmapFromScan0Func GdipCreateBitmapFromScan0 = nullptr;
 static GdipGetImageWidthFunc GdipGetImageWidth = nullptr;
 static GdipGetImageHeightFunc GdipGetImageHeight = nullptr;
 static GdipDrawImageIFunc GdipDrawImageI = nullptr;
+static GdipDrawImageRectIFunc GdipDrawImageRectI = nullptr;
 static GdipGetImageGraphicsContextFunc GdipGetImageGraphicsContext = nullptr;
 static GdipFlushFunc GdipFlush = nullptr;
 static GdipGraphicsClearFunc GdipGraphicsClear = nullptr;
@@ -274,6 +276,7 @@ gdip_init (void)
   LOOKUP (GdipGetImageWidth);
   LOOKUP (GdipGetImageHeight);
   LOOKUP (GdipDrawImageI);
+  LOOKUP (GdipDrawImageRectI);
   LOOKUP (GdipGetImageGraphicsContext);
   LOOKUP (GdipFlush);
   LOOKUP (GdipGraphicsClear);
@@ -648,15 +651,32 @@ public:
 	
 	guint width = 0, height = 0;
 	if (GdipGetImageWidth(m, &width) != 0 || GdipGetImageHeight(m, &height) != 0
-	    || width == 0 || height == 0 || width > 4096 || height > 4096)
+	    || width == 0 || height == 0)
 	  {
 	    GdipDisposeImage(m);
 	    return;
 	  }
 
-	d (g_print ("w: %d | h: %d\n", width, height));
+	// A high-DPI screen makes an A4 metafile taller than 4096 pixels.
+	// Dropping the page left the preview with nothing to open. Scale it
+	// down instead; the TIFF only has to be readable.
+	guint destW = width;
+	guint destH = height;
+	const guint cap = 4096;
+	if (destW > cap || destH > cap)
+	  {
+	    double scale = (double)cap / (double)((destW > destH) ? destW : destH);
+	    destW = (guint)((double)width * scale);
+	    destH = (guint)((double)height * scale);
+	    if (destW < 1)
+	      destW = 1;
+	    if (destH < 1)
+	      destH = 1;
+	  }
 
-	status = GdipCreateBitmapFromScan0 (width, height, 0, PixelFormat32bppARGB, nullptr, &meta);
+	d (g_print ("w: %d | h: %d\n", destW, destH));
+
+	status = GdipCreateBitmapFromScan0 (destW, destH, 0, PixelFormat32bppARGB, nullptr, &meta);
 	ASSERT_GDIP_SUCCESS (status, GdipCreateBitmapFromScan0);
 	if (status != 0 || !meta)
 	  {
@@ -681,7 +701,10 @@ public:
 	status = GdipGraphicsClear(g, 0xffffffff);
 	ASSERT_GDIP_SUCCESS (status, GdipGraphicsClear);
 	
-	status = GdipDrawImageI(g, m, 0, 0);
+	if (destW == width && destH == height)
+	  status = GdipDrawImageI(g, m, 0, 0);
+	else
+	  status = GdipDrawImageRectI(g, m, 0, 0, (INT)destW, (INT)destH);
 	ASSERT_GDIP_SUCCESS (status, GdipDrawImage);
 	
 	status = GdipFlush(g, 1);

@@ -185,6 +185,10 @@ public:
 	// WM_PAINT must draw on the HDC from BeginPaint, then restore the
 	// window DC. Returns the previous HDC.
 	HDC swapDC(HDC hdc);
+	// The screen graphics is created before the document child exists.
+	// Drawing and invalidation must target that child, not the container
+	// hidden behind it.
+	void setWindow(HWND hwnd);
 	// Layout units to client pixels, including the scroll offset.
 	void layoutToClient(UT_sint32 x, UT_sint32 y, int & cx, int & cy) const;
 
