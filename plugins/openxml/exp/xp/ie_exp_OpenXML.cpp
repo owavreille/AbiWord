@@ -51,7 +51,13 @@ IE_Exp_OpenXML::IE_Exp_OpenXML (PD_Document * pDocument)
 	footnoteStream(nullptr),
 	endnoteStream(nullptr),
 	isOverline(false),
-	m_pendingTarget(TARGET_DOCUMENT)
+	m_pendingTarget(TARGET_DOCUMENT),
+	m_capturePPr(false),
+	m_captureRPr(false),
+	m_captureSectPr(false),
+	m_captureTblPr(false),
+	m_captureBorders(false),
+	m_borderTarget(TARGET_DOCUMENT)
 {
 }
 
@@ -226,15 +232,33 @@ UT_Error IE_Exp_OpenXML::finishDocument()
  */
 UT_Error IE_Exp_OpenXML::startSectionProperties()
 {
-	return writeTargetStream(TARGET_DOCUMENT, "<w:sectPr>");
+	clearSectionMarkup();
+	m_captureSectPr = true;
+	return UT_OK;
 }
 
 /**
- * Finishes exporting the OXML_Section object's properties
+ * Finishes exporting the OXML_Section object's properties.
+ * ECMA-376 CT_SectPr: headerReference, footerReference, type, pgSz, pgMar, cols, titlePg.
  */
 UT_Error IE_Exp_OpenXML::finishSectionProperties()
 {
-	return writeTargetStream(TARGET_DOCUMENT, "</w:sectPr>");
+	std::string xml = "<w:sectPr>";
+	xml += m_sectHdr;
+	xml += m_sectType;
+	xml += m_sectPgSz;
+	xml += m_sectPgMar;
+	xml += m_sectCols;
+	xml += m_sectTitlePg;
+	xml += "</w:sectPr>";
+	m_captureSectPr = false;
+	clearSectionMarkup();
+	if (m_capturePPr)
+	{
+		m_pSectPr += xml;
+		return UT_OK;
+	}
+	return writeTargetStream(TARGET_DOCUMENT, xml.c_str());
 }
 
 /**
@@ -372,61 +396,137 @@ UT_Error IE_Exp_OpenXML::finishRun(int target)
 	return writeTargetStream(target, "</w:r>");
 }
 
-/**
- * Starts exporting the OXML_Element_Run object's properties
- */
-UT_Error IE_Exp_OpenXML::startRunProperties(int target)
+void IE_Exp_OpenXML::clearParagraphMarkup()
 {
-	return writeTargetStream(target, "<w:rPr>");
+	m_pStyle.clear();
+	m_pPageBreak.clear();
+	m_pWidow.clear();
+	m_pNumPr.clear();
+	m_pShd.clear();
+	m_pTabs.clear();
+	m_pJc.clear();
+	m_pSectPr.clear();
+	m_pendingInd.clear();
+	m_pendingSpacing.clear();
+}
+
+void IE_Exp_OpenXML::clearRunMarkup()
+{
+	m_rFonts.clear();
+	m_rBold.clear();
+	m_rItalic.clear();
+	m_rStrike.clear();
+	m_rNoProof.clear();
+	m_rColor.clear();
+	m_rSz.clear();
+	m_rU.clear();
+	m_rShd.clear();
+	m_rVert.clear();
+	m_rRtl.clear();
+	m_rLang.clear();
+}
+
+void IE_Exp_OpenXML::clearSectionMarkup()
+{
+	m_sectHdr.clear();
+	m_sectType.clear();
+	m_sectPgSz.clear();
+	m_sectPgMar.clear();
+	m_sectCols.clear();
+	m_sectTitlePg.clear();
+}
+
+void IE_Exp_OpenXML::clearBorderMarkup()
+{
+	m_bTop.clear();
+	m_bLeft.clear();
+	m_bBottom.clear();
+	m_bRight.clear();
+	m_bInsideH.clear();
+	m_bInsideV.clear();
+}
+
+std::string IE_Exp_OpenXML::borderMarkup() const
+{
+	return std::string("<") + m_borderTag + ">"
+		+ m_bTop + m_bLeft + m_bBottom + m_bRight
+		+ m_bInsideH + m_bInsideV
+		+ "</" + m_borderTag + ">";
+}
+
+static std::string wordNumberId(UT_uint32 id)
+{
+	return std::to_string(static_cast<unsigned long>(id) + 1UL);
 }
 
 /**
- * Finishes exporting the OXML_Element_Run object's properties
+ * Starts exporting the OXML_Element_Run object's properties
+ */
+UT_Error IE_Exp_OpenXML::startRunProperties(int /*target*/)
+{
+	clearRunMarkup();
+	m_captureRPr = true;
+	return UT_OK;
+}
+
+/**
+ * Finishes exporting the OXML_Element_Run object's properties.
+ * ECMA-376 CT_RPr: rFonts, b, i, strike, noProof, color, sz, u, shd, vertAlign, rtl, lang.
  */
 UT_Error IE_Exp_OpenXML::finishRunProperties(int target)
 {
-	return writeTargetStream(target, "</w:rPr>");
+	std::string xml = "<w:rPr>";
+	xml += m_rFonts;
+	xml += m_rBold;
+	xml += m_rItalic;
+	xml += m_rStrike;
+	xml += m_rNoProof;
+	xml += m_rColor;
+	xml += m_rSz;
+	xml += m_rU;
+	xml += m_rShd;
+	xml += m_rVert;
+	xml += m_rRtl;
+	xml += m_rLang;
+	xml += "</w:rPr>";
+	m_captureRPr = false;
+	clearRunMarkup();
+	return writeTargetStream(target, xml.c_str());
 }
 
 /**
  * Starts exporting the OXML_Element_Paragraph object's properties
  */
-UT_Error IE_Exp_OpenXML::startParagraphProperties(int target)
+UT_Error IE_Exp_OpenXML::startParagraphProperties(int /*target*/)
 {
-	return writeTargetStream(target, "<w:pPr>");
+	clearParagraphMarkup();
+	m_capturePPr = true;
+	return UT_OK;
 }
 
 /**
- * Finishes exporting the OXML_Element_Paragraph object's properties
+ * ECMA-376 CT_PPr: pStyle, pageBreakBefore, widowControl, numPr, shd, tabs,
+ * spacing, ind, jc, then sectPr.
  */
-UT_Error IE_Exp_OpenXML::flushPendingParagraphProps(int target)
-{
-	if (m_pendingTarget != target)
-		target = m_pendingTarget;
-	UT_Error err = UT_OK;
-	if (!m_pendingInd.empty())
-	{
-		std::string element = "<w:ind" + m_pendingInd + "/>";
-		err = writeTargetStream(target, element.c_str());
-		m_pendingInd.clear();
-		if (err != UT_OK)
-			return err;
-	}
-	if (!m_pendingSpacing.empty())
-	{
-		std::string element = "<w:spacing" + m_pendingSpacing + "/>";
-		err = writeTargetStream(target, element.c_str());
-		m_pendingSpacing.clear();
-	}
-	return err;
-}
-
 UT_Error IE_Exp_OpenXML::finishParagraphProperties(int target)
 {
-	UT_Error err = flushPendingParagraphProps(target);
-	if (err != UT_OK)
-		return err;
-	return writeTargetStream(target, "</w:pPr>");
+	std::string xml = "<w:pPr>";
+	xml += m_pStyle;
+	xml += m_pPageBreak;
+	xml += m_pWidow;
+	xml += m_pNumPr;
+	xml += m_pShd;
+	xml += m_pTabs;
+	if (!m_pendingSpacing.empty())
+		xml += "<w:spacing" + m_pendingSpacing + "/>";
+	if (!m_pendingInd.empty())
+		xml += "<w:ind" + m_pendingInd + "/>";
+	xml += m_pJc;
+	xml += m_pSectPr;
+	xml += "</w:pPr>";
+	m_capturePPr = false;
+	clearParagraphMarkup();
+	return writeTargetStream(target, xml.c_str());
 }
 
 /**
@@ -450,14 +550,34 @@ UT_Error IE_Exp_OpenXML::finishTable()
  */
 UT_Error IE_Exp_OpenXML::startTableProperties(int target)
 {
+	m_captureTblPr = true;
+	m_tblShd.clear();
+	m_tblBorders.clear();
 	return writeTargetStream(target, "<w:tblPr>");
 }
 
 /**
- * Finishes exporting the OXML_Element_Table's properties
+ * Finishes exporting the OXML_Element_Table's properties.
+ * ECMA-376 CT_TblPr places tblBorders before shd.
  */
 UT_Error IE_Exp_OpenXML::finishTableProperties(int target)
 {
+	UT_Error err = UT_OK;
+	if (!m_tblBorders.empty())
+	{
+		err = writeTargetStream(target, m_tblBorders.c_str());
+		m_tblBorders.clear();
+		if (err != UT_OK)
+			return err;
+	}
+	if (!m_tblShd.empty())
+	{
+		err = writeTargetStream(target, m_tblShd.c_str());
+		m_tblShd.clear();
+		if (err != UT_OK)
+			return err;
+	}
+	m_captureTblPr = false;
 	return writeTargetStream(target, "</w:tblPr>");
 }
 
@@ -466,15 +586,28 @@ UT_Error IE_Exp_OpenXML::finishTableProperties(int target)
  */
 UT_Error IE_Exp_OpenXML::startTableBorderProperties(int target)
 {
-	return writeTargetStream(target, "<w:tblBorders>");
+	clearBorderMarkup();
+	m_captureBorders = true;
+	m_borderTag = "w:tblBorders";
+	m_borderTarget = target;
+	return UT_OK;
 }
 
 /**
- * Finishes exporting the OXML_Element_Table's border properties
+ * Finishes exporting the OXML_Element_Table's border properties.
+ * ECMA-376 CT_TblBorders: top, left, bottom, right.
  */
-UT_Error IE_Exp_OpenXML::finishTableBorderProperties(int target)
+UT_Error IE_Exp_OpenXML::finishTableBorderProperties(int /*target*/)
 {
-	return writeTargetStream(target, "</w:tblBorders>");
+	std::string xml = borderMarkup();
+	m_captureBorders = false;
+	clearBorderMarkup();
+	if (m_captureTblPr)
+	{
+		m_tblBorders = xml;
+		return UT_OK;
+	}
+	return writeTargetStream(m_borderTarget, xml.c_str());
 }
 
 /**
@@ -482,15 +615,22 @@ UT_Error IE_Exp_OpenXML::finishTableBorderProperties(int target)
  */
 UT_Error IE_Exp_OpenXML::startCellBorderProperties(int target)
 {
-	return writeTargetStream(target, "<w:tcBorders>");
+	clearBorderMarkup();
+	m_captureBorders = true;
+	m_borderTag = "w:tcBorders";
+	m_borderTarget = target;
+	return UT_OK;
 }
 
 /**
  * Finishes exporting the OXML_Element_Cell's border properties
  */
-UT_Error IE_Exp_OpenXML::finishCellBorderProperties(int target)
+UT_Error IE_Exp_OpenXML::finishCellBorderProperties(int /*target*/)
 {
-	return writeTargetStream(target, "</w:tcBorders>");
+	std::string xml = borderMarkup();
+	m_captureBorders = false;
+	clearBorderMarkup();
+	return writeTargetStream(m_borderTarget, xml.c_str());
 }
 
 /**
@@ -498,6 +638,11 @@ UT_Error IE_Exp_OpenXML::finishCellBorderProperties(int target)
  */
 UT_Error IE_Exp_OpenXML::startListProperties(int target)
 {
+	if (m_capturePPr)
+	{
+		m_pNumPr += "<w:numPr>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "<w:numPr>");
 }
 
@@ -506,6 +651,11 @@ UT_Error IE_Exp_OpenXML::startListProperties(int target)
  */
 UT_Error IE_Exp_OpenXML::finishListProperties(int target)
 {
+	if (m_capturePPr)
+	{
+		m_pNumPr += "</w:numPr>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "</w:numPr>");
 }
 
@@ -514,13 +664,8 @@ UT_Error IE_Exp_OpenXML::finishListProperties(int target)
  */
 UT_Error IE_Exp_OpenXML::startAbstractNumbering(int target, UT_uint32 id)
 {
-	char buffer[12]; 
-	int len = snprintf(buffer, 12, "%d", id);
-	if(len <= 0)
-		return UT_IE_COULDNOTWRITE;
-
 	std::string str("<w:abstractNum w:abstractNumId=\"");
-	str += buffer;
+	str += wordNumberId(id);
 	str += "\">";
 	return writeTargetStream(target, str.c_str());
 }
@@ -538,13 +683,8 @@ UT_Error IE_Exp_OpenXML::finishAbstractNumbering(int target)
  */
 UT_Error IE_Exp_OpenXML::startNumbering(int target, UT_uint32 id)
 {
-	char buffer[12]; 
-	int len = snprintf(buffer, 12, "%d", id);
-	if(len <= 0)
-		return UT_IE_COULDNOTWRITE;
-
 	std::string str("<w:num w:numId=\"");
-	str += buffer;
+	str += wordNumberId(id);
 	str += "\">";
 	return writeTargetStream(target, str.c_str());
 }
@@ -832,6 +972,11 @@ GsfOutput* IE_Exp_OpenXML::getTargetStream(int target)
  */
 UT_Error IE_Exp_OpenXML::setBold(int target)
 {
+	if (m_captureRPr)
+	{
+		m_rBold = "<w:b/>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "<w:b/>");
 }
 
@@ -840,6 +985,11 @@ UT_Error IE_Exp_OpenXML::setBold(int target)
  */
 UT_Error IE_Exp_OpenXML::setItalic(int target)
 {
+	if (m_captureRPr)
+	{
+		m_rItalic = "<w:i/>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "<w:i/>");
 }
 
@@ -848,6 +998,11 @@ UT_Error IE_Exp_OpenXML::setItalic(int target)
  */
 UT_Error IE_Exp_OpenXML::setUnderline(int target)
 {
+	if (m_captureRPr)
+	{
+		m_rU = "<w:u w:val=\"single\"/>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "<w:u w:val=\"single\"/>");
 }
 
@@ -865,6 +1020,11 @@ UT_Error IE_Exp_OpenXML::setOverline()
  */
 UT_Error IE_Exp_OpenXML::setLineThrough(int target)
 {
+	if (m_captureRPr)
+	{
+		m_rStrike = "<w:strike/>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "<w:strike/>");
 }
 
@@ -873,6 +1033,11 @@ UT_Error IE_Exp_OpenXML::setLineThrough(int target)
  */
 UT_Error IE_Exp_OpenXML::setSuperscript(int target)
 {
+	if (m_captureRPr)
+	{
+		m_rVert = "<w:vertAlign w:val=\"superscript\"/>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "<w:vertAlign w:val=\"superscript\"/>");
 }
 
@@ -881,6 +1046,11 @@ UT_Error IE_Exp_OpenXML::setSuperscript(int target)
  */
 UT_Error IE_Exp_OpenXML::setSubscript(int target)
 {
+	if (m_captureRPr)
+	{
+		m_rVert = "<w:vertAlign w:val=\"subscript\"/>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "<w:vertAlign w:val=\"subscript\"/>");
 }
 
@@ -892,6 +1062,11 @@ UT_Error IE_Exp_OpenXML::setTextColor(int target, const gchar* color)
 	std::string str("<w:color w:val=\"");
 	str += UT_colorToHex(color);
 	str += "\"/>";
+	if (m_captureRPr)
+	{
+		m_rColor = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -903,6 +1078,21 @@ UT_Error IE_Exp_OpenXML::setBackgroundColor(int target, const gchar* color)
 	std::string str("<w:shd w:val=\"clear\" w:fill=\"");
 	str += UT_colorToHex(color);
 	str += "\"/>";
+	if (m_captureRPr)
+	{
+		m_rShd = str;
+		return UT_OK;
+	}
+	if (m_capturePPr)
+	{
+		m_pShd = str;
+		return UT_OK;
+	}
+	if (m_captureTblPr)
+	{
+		m_tblShd = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -914,6 +1104,11 @@ UT_Error IE_Exp_OpenXML::setFontSize(int target, const gchar* size)
 	std::string str("<w:sz w:val=\"");
 	str += computeFontSize(size);
 	str += "\"/>";
+	if (m_captureRPr)
+	{
+		m_rSz = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -932,6 +1127,11 @@ UT_Error IE_Exp_OpenXML::setFontFamily(int target, const gchar* family)
 	str += "\" w:hAnsi=\"";
 	str += sEscFamily.utf8_str();
 	str += "\"/>";
+	if (m_captureRPr)
+	{
+		m_rFonts = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -946,6 +1146,11 @@ UT_Error IE_Exp_OpenXML::setLanguage(int target, const gchar* lang)
 	std::string str("<w:lang w:val=\"");
 	str += sEscLang.utf8_str();
 	str += "\"/>";
+	if (m_captureRPr)
+	{
+		m_rLang = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -954,6 +1159,11 @@ UT_Error IE_Exp_OpenXML::setLanguage(int target, const gchar* lang)
  */
 UT_Error IE_Exp_OpenXML::setNoProof(int target)
 {
+	if (m_captureRPr)
+	{
+		m_rNoProof = "<w:noProof/>";
+		return UT_OK;
+	}
 	return writeTargetStream(target, "<w:noProof/>");
 }
 
@@ -963,10 +1173,19 @@ UT_Error IE_Exp_OpenXML::setNoProof(int target)
 UT_Error IE_Exp_OpenXML::setTextDirection(int target, const gchar* direction)
 {
 	std::string str(direction);
+	const char* markup = nullptr;
 	if(str.compare("rtl") == 0)
-		return writeTargetStream(target, "<w:rtl w:val=\"on\"/>");
+		markup = "<w:rtl w:val=\"on\"/>";
 	else if(str.compare("ltr") == 0)
-		return writeTargetStream(target, "<w:rtl w:val=\"off\"/>");
+		markup = "<w:rtl w:val=\"off\"/>";
+	if (!markup)
+		return UT_OK;
+	if (m_captureRPr)
+	{
+		m_rRtl = markup;
+		return UT_OK;
+	}
+	return writeTargetStream(target, markup);
 	return UT_OK;
 }
 
@@ -977,7 +1196,14 @@ UT_Error IE_Exp_OpenXML::setWidows(int target, const gchar* widows)
 {
 	UT_sint32 wdws = atoi(widows);
 	if(wdws > 0)
+	{
+		if (m_capturePPr)
+		{
+			m_pWidow = "<w:widowControl w:val=\"on\"/>";
+			return UT_OK;
+		}
 		return writeTargetStream(target, "<w:widowControl w:val=\"on\"/>");
+	}
 	return UT_OK;
 }
 
@@ -989,6 +1215,11 @@ UT_Error IE_Exp_OpenXML::setTextAlignment(int target, const gchar* alignment)
 	std::string str("<w:jc w:val=\"");
 	str += alignment;
 	str += "\"/>";
+	if (m_capturePPr)
+	{
+		m_pJc = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -1003,6 +1234,11 @@ UT_Error IE_Exp_OpenXML::setParagraphStyle(int target, const gchar* style)
 	std::string str("<w:pStyle w:val=\"");
 	str += sEscStyle.utf8_str();
 	str += "\"/>";
+	if (m_capturePPr)
+	{
+		m_pStyle = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -1124,6 +1360,11 @@ UT_Error IE_Exp_OpenXML::setHeaderRelation(const char* relId, const char* header
  */
 UT_Error IE_Exp_OpenXML::setTitlePage()
 {
+	if (m_captureSectPr)
+	{
+		m_sectTitlePg = "<w:titlePg/>";
+		return UT_OK;
+	}
 	return writeTargetStream(TARGET_DOCUMENT, "<w:titlePg/>");
 }
 
@@ -1276,6 +1517,11 @@ UT_Error IE_Exp_OpenXML::setTabstops(int target, const gchar* tabstops)
 
 	tabs += "</w:tabs>";
 
+	if (m_capturePPr)
+	{
+		m_pTabs = tabs;
+		return UT_OK;
+	}
 	return writeTargetStream(target, tabs.c_str());
 }
 
@@ -1305,6 +1551,11 @@ UT_Error IE_Exp_OpenXML::setColumns(int target, const gchar* num, const gchar* s
 	str += "\" ";
 	str += "w:equalWidth=\"1\"/>";
 
+	if (m_captureSectPr)
+	{
+		m_sectCols = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -1315,6 +1566,11 @@ UT_Error IE_Exp_OpenXML::setContinuousSection(int target)
 {
 	std::string str("");
 	str += "<w:type w:val=\"continuous\"/>";
+	if (m_captureSectPr)
+	{
+		m_sectType = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -1350,8 +1606,12 @@ UT_Error IE_Exp_OpenXML::setVerticalMerge(int target, const char* vmerge)
  */
 UT_Error IE_Exp_OpenXML::setPageBreak(int target)
 {
-	std::string str("<w:pageBreakBefore/>");
-	return writeTargetStream(target, str.c_str());
+	if (m_capturePPr)
+	{
+		m_pPageBreak = "<w:pageBreakBefore/>";
+		return UT_OK;
+	}
+	return writeTargetStream(target, "<w:pageBreakBefore/>");
 }
 
 /**
@@ -1371,6 +1631,11 @@ UT_Error IE_Exp_OpenXML::setPageSize(int target, const char* width, const char* 
 	str += orientation;
 	str += "\"/>";
 
+	if (m_captureSectPr)
+	{
+		m_sectPgSz = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());	
 }
 
@@ -1407,6 +1672,11 @@ UT_Error IE_Exp_OpenXML::setPageMargins(int target, const char* top, const char*
 
 	str += " w:header=\"720\" w:footer=\"720\" w:gutter=\"0\"/>";
 
+	if (m_captureSectPr)
+	{
+		m_sectPgMar = str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());	
 }
 
@@ -1438,6 +1708,24 @@ UT_Error IE_Exp_OpenXML::setTableBorder(int target, const char* border, const ch
 	}
 
 	str += "/>";
+	if (m_captureBorders)
+	{
+		if (!strcmp(border, "top"))
+			m_bTop = str;
+		else if (!strcmp(border, "left") || !strcmp(border, "start"))
+			m_bLeft = str;
+		else if (!strcmp(border, "bottom"))
+			m_bBottom = str;
+		else if (!strcmp(border, "right") || !strcmp(border, "end"))
+			m_bRight = str;
+		else if (!strcmp(border, "insideH"))
+			m_bInsideH = str;
+		else if (!strcmp(border, "insideV"))
+			m_bInsideV = str;
+		else
+			m_bRight += str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -1574,6 +1862,11 @@ UT_Error IE_Exp_OpenXML::setListLevel(int target, const char* level)
 	std::string str("<w:ilvl w:val=\"");
 	str += level;
 	str += "\"/>";
+	if (m_capturePPr)
+	{
+		m_pNumPr += str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -1582,9 +1875,20 @@ UT_Error IE_Exp_OpenXML::setListLevel(int target, const char* level)
  */
 UT_Error IE_Exp_OpenXML::setListFormat(int target, const char* format)
 {
+	std::string value = format ? format : "1";
+	char* end = nullptr;
+	long number = strtol(value.c_str(), &end, 10);
+	if (format && end != value.c_str())
+		value = std::to_string(number + 1);
+
 	std::string str("<w:numId w:val=\"");
-	str += format;
+	str += value;
 	str += "\"/>";
+	if (m_capturePPr)
+	{
+		m_pNumPr += str;
+		return UT_OK;
+	}
 	return writeTargetStream(target, str.c_str());
 }
 
@@ -1644,13 +1948,8 @@ bool IE_Exp_OpenXML::isListBullet(const char* str)
  */
 UT_Error IE_Exp_OpenXML::setAbstractNumberingId(int target, UT_uint32 id)
 {
-	char buffer[12]; 
-	int len = snprintf(buffer, 12, "%d", id);
-	if(len <= 0)
-		return UT_IE_COULDNOTWRITE;
-
 	std::string str("<w:abstractNumId w:val=\"");
-	str += buffer;
+	str += wordNumberId(id);
 	str += "\"/>";
 	return writeTargetStream(target, str.c_str());
 }
@@ -1885,6 +2184,11 @@ UT_Error IE_Exp_OpenXML::setHeaderReference(const char* id, const char* type)
 	str += "r:id=\"";
 	str += id;
 	str += "\"/>";
+	if (m_captureSectPr)
+	{
+		m_sectHdr += str;
+		return UT_OK;
+	}
 	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
 }
 
@@ -1946,6 +2250,11 @@ UT_Error IE_Exp_OpenXML::setFooterReference(const char* id, const char* type)
 	str += "r:id=\"";
 	str += id;
 	str += "\"/>";
+	if (m_captureSectPr)
+	{
+		m_sectHdr += str;
+		return UT_OK;
+	}
 	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
 }
 

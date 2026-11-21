@@ -71,10 +71,6 @@ UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
 
 	if(getProperty("table-column-props", szValue) == UT_OK)
 	{
-		err = exporter->startTableGrid(TARGET_DOCUMENT);
-		if(err != UT_OK)
-			return err;
-
 		std::string col(szValue);
 		std::string token("");
 
@@ -85,16 +81,9 @@ UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
 		{
 			token = col.substr(prev+1, pos-prev-1);
 			columnWidth.push_back(token);
-			err = exporter->setGridCol(TARGET_DOCUMENT, token.c_str());
-			if(err != UT_OK)
-				return err;
 			prev = pos;	
 			pos = col.find_first_of("/", pos + 1);
 		}
-		
-		err = exporter->finishTableGrid(TARGET_DOCUMENT);
-		if(err != UT_OK)
-			return err;
 	}
 
 	if(getProperty("table-row-heights", szValue) == UT_OK)
@@ -239,7 +228,26 @@ UT_Error OXML_Element_Table::serializeProperties(IE_Exp_OpenXML* exporter)
 	if(err != UT_OK)
 		return err;
 
-	return exporter->finishTableProperties(TARGET_DOCUMENT);
+	err = exporter->finishTableProperties(TARGET_DOCUMENT);
+	if(err != UT_OK)
+		return err;
+
+	if(!columnWidth.empty())
+	{
+		err = exporter->startTableGrid(TARGET_DOCUMENT);
+		if(err != UT_OK)
+			return err;
+		for(size_t col = 0; col < columnWidth.size(); ++col)
+		{
+			err = exporter->setGridCol(TARGET_DOCUMENT, columnWidth[col].c_str());
+			if(err != UT_OK)
+				return err;
+		}
+		err = exporter->finishTableGrid(TARGET_DOCUMENT);
+		if(err != UT_OK)
+			return err;
+	}
+	return UT_OK;
 }
 
 UT_Error OXML_Element_Table::serializeChildren(IE_Exp_OpenXML* exporter)
