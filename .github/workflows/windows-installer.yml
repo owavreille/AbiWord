@@ -1,8 +1,8 @@
 # Compile l'installateur Windows x64 sur GitHub.
 # La compilation croisée reprend l'environnement Fedora 45 / MinGW
 # qui produit abiword.exe, libabiword-3.1.dll, OpenDocument, OpenXML
-# et la correction Enchant/Hunspell. NSIS est lancé ensuite sur Ubuntu,
-# où makensis est un programme natif.
+# et la correction Enchant/Hunspell. NSIS 3.13 est ensuite compilé sur Ubuntu :
+# les stubs viennent de l'archive officielle, makensis est natif.
 
 name: Installateur Windows
 
@@ -157,10 +157,27 @@ jobs:
           name: windows-dist
           path: dist/windows-x86_64
 
-      - name: Installer NSIS
+      - name: Installer NSIS 3.13
         run: |
           sudo apt-get update
-          sudo apt-get install -y nsis
+          sudo apt-get install -y scons g++ zlib1g-dev unzip
+          curl -fsSL -o /tmp/nsis-src.tar.bz2 \
+            "https://sourceforge.net/projects/nsis/files/NSIS%203/3.13/nsis-3.13-src.tar.bz2/download"
+          curl -fsSL -o /tmp/nsis.zip \
+            "https://sourceforge.net/projects/nsis/files/NSIS%203/3.13/nsis-3.13.zip/download"
+          unzip -q /tmp/nsis.zip -d "$HOME"
+          tar -xjf /tmp/nsis-src.tar.bz2 -C /tmp
+          scons -C /tmp/nsis-3.13-src \
+            SKIPSTUBS=all \
+            SKIPPLUGINS=all \
+            SKIPUTILS=all \
+            SKIPMISC=all \
+            NSIS_CONFIG_CONST_DATA_PATH=no \
+            PREFIX="$HOME/nsis-3.13" \
+            install-compiler
+          echo "$HOME/nsis-3.13/bin" >> "$GITHUB_PATH"
+          echo "NSISDIR=$HOME/nsis-3.13" >> "$GITHUB_ENV"
+          "$HOME/nsis-3.13/bin/makensis" -VERSION
 
       - name: Créer l'installateur
         run: |
