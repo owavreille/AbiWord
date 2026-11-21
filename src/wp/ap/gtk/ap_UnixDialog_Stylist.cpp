@@ -358,11 +358,10 @@ void  AP_UnixDialog_Stylist::_fillTree(void)
 	GtkTreeIter iter;
 	GtkTreeIter child_iter;
 	GtkTreeSelection *sel;
-	UT_sint32 row,col, page;
+	UT_sint32 row,col;
 
 	m_wModel = gtk_tree_store_new (3, G_TYPE_STRING, G_TYPE_INT, G_TYPE_INT);
 
-	page = 0;
 	std::string sTmp, sLoc;
 	for (row = 0; row < pStyleTree->getNumRows(); row++)
 	{
@@ -389,7 +388,6 @@ void  AP_UnixDialog_Stylist::_fillTree(void)
 				pt_PieceTable::s_getLocalisedStyleName(style.c_str(), sLoc);
 				xxx_UT_DEBUGMSG(("Adding style %s at row %d col %d \n", sLoc.c_str(), row, col + 1));
 				gtk_tree_store_set(m_wModel, &child_iter, 0, sLoc.c_str(), 1, row, 2, col + 1, -1);
-				page++;
 			}
 		}
 		else
@@ -397,7 +395,6 @@ void  AP_UnixDialog_Stylist::_fillTree(void)
 			pt_PieceTable::s_getLocalisedStyleName(sTmp.c_str(), sLoc);
 			xxx_UT_DEBUGMSG(("Adding style %s at row %d \n", sLoc.c_str(), row));
 			gtk_tree_store_set(m_wModel, &iter, 0, sLoc.c_str(), 1, row, 2, 0, -1);
-			page++;
 		}
 	}
 

@@ -27,6 +27,7 @@
 
 #define GDK_PIXBUF_ENABLE_BACKEND
 #include "ie_impGraphic_GdkPixbuf.h"
+#include <gio/gio.h>
 
 //------------------------------------------------------------------------------------
 
@@ -347,11 +348,22 @@ GdkPixbuf * IE_ImpGraphic_GdkPixbuf::_loadXPM(const UT_ConstByteBufPtr & pBB)
 		return nullptr;
 	}
 
-	const char ** pszStr = static_cast<const char **>(UT_calloc(vecStr.getItemCount(),sizeof(char *)));
+	GString * xpm = g_string_new(nullptr);
 	for(i=0; i< vecStr.getItemCount(); i++)
-		pszStr[i] = vecStr.getNthItem(i);
-	pixbuf = gdk_pixbuf_new_from_xpm_data(pszStr);
-	DELETEP(pszStr);
+	{
+		char * line = vecStr.getNthItem(i);
+		g_string_append(xpm, line);
+		g_string_append_c(xpm, '\n');
+		FREEP(line);
+	}
+	gsize xpm_len = xpm->len;
+	char * xpm_data = g_string_free(xpm, FALSE);
+	GInputStream * stream = g_memory_input_stream_new_from_data(xpm_data, xpm_len, g_free);
+	GError * error = nullptr;
+	pixbuf = gdk_pixbuf_new_from_stream(stream, nullptr, &error);
+	g_object_unref(stream);
+	if (error)
+		g_error_free(error);
 	return pixbuf;
 }
 

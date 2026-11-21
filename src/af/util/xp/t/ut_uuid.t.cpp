@@ -99,6 +99,7 @@ void UT_UUIDGenerator__test(UT_UUIDGenerator* self)
 
   UT_DEBUGMSG(("CUMULATIVE RESULTS (of %d): %d hash collisions (min distance %d)\n",
                iMax*iTest, iColHTotal, iDeltaMinH));
+  (void) iColHTotal;
 
   // delete the dummy uuid instance so that any genuine calls to the
   // hash functions allocate a proper derived instance

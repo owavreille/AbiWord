@@ -2200,7 +2200,6 @@ fp_Container * fp_CellContainer::drawSelectedCell(fp_Line * /*pLine*/)
 	}
 	bool bFound = false;
 	bool bEnd = false;
-	UT_sint32 iBroke = 0;
 	while(pBroke && !bEnd)
 	{
 		if(doesOverlapBrokenTable(pBroke))
@@ -2253,7 +2252,6 @@ fp_Container * fp_CellContainer::drawSelectedCell(fp_Line * /*pLine*/)
 		{
 			bEnd = true;
 		}
-		iBroke++;
 		pBroke = static_cast<fp_TableContainer *>(pBroke->getNext());
 	}
 	fp_Container * pLast = nullptr;
@@ -5286,6 +5284,7 @@ void fp_TableContainer::_brokenDraw(dg_DrawArgs* pDA)
 	}
 
 	xxx_UT_DEBUGMSG(("_brokenDraw: Draw %d cells and check %d cells for table %p\n",iCountCells,this));
+	(void) iCountCells;
     _drawBrokenBoundaries(pDA);
 	fl_TableLayout * pTL = static_cast<fl_TableLayout *>(getSectionLayout());
 	pTL->clearNeedsRedraw();

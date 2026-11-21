@@ -216,6 +216,8 @@ void fp_EmbedRun::_lookupProperties(const PP_AttrProp * pSpanAP,
 	UT_sint32 maxH = p->getHeight() - UT_convertToLogicalUnits("0.1in");
 	maxW -= pDSL->getLeftMargin() + pDSL->getRightMargin();
 	maxH -= pDSL->getTopMargin() + pDSL->getBottomMargin();
+	(void) maxW;
+	(void) maxH;
 	markAsDirty();
 	if(getLine())
 	{

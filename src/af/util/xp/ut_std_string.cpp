@@ -266,7 +266,7 @@ std::vector<std::string> UT_simpleSplit (const std::string & str, char separator
 	std::vector<std::string> v;
 	UT_uint32 start = 0;
 
-	for(size_t j = 0; start < str.size(); j++)
+	while (start < str.size())
 	{
 		std::string utsEntry;
 

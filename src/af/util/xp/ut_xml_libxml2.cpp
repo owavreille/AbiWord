@@ -238,6 +238,7 @@ UT_Error UT_XML::parse (const char * szFilename)
 		if (ret == UT_OK && (getNumMinorErrors() == 0))
 			if (!ctxt->wellFormed && !m_bStopped) ret = UT_IE_IMPORTERROR; // How does stopping mid-file affect wellFormed?
 
+		(void) chucks;
 		xmlDocPtr myXmlDoc = ctxt->myDoc;
 		xmlFreeParserCtxt (ctxt);
 		xmlFreeDoc(myXmlDoc);
