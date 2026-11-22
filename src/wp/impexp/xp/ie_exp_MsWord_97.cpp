@@ -1,7 +1,7 @@
 /* -*- mode: C++; tab-width: 4; c-basic-offset: 4; -*- */
 
 /* AbiWord
- * Copyright (C) 1998-2000 AbiSource, Inc.
+ * Copyright (C) 1998 AbiSource, Inc.
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -20,892 +20,636 @@
  */
 
 /*
- What's been done:
- 
- We Create a open a file, open the relevant streams, and
- create a FIB.  The FIB is written to give us a correct offset into the file,
- but is also stored in memory and updated when appropriate to take into account
- information learned about the document.
- 
- When we are finished, the updated FIB is written to the beginning of the stream
- again, overwriting the original (wrong) FIB.
- 
- actual document output is simply a basic ASCII dump of the file (this will
- need to be changed, for obvious reasons).
- 
- i.e. we don't do very much yet.
- 
- 
- What's left to do:
- 
- Find out a valid LID, and put it in the FIB (locale information.  We should
- probably choose a constant one for this, and use 16-bit character output
- instead of ASCII to make things simpler).  If we do this, we also need to make
- our character output 16 bit and modify the peicetable to show this.  Once we
- have a peice table being output, that is :-)
- 
- To have a 'working' exporter we need the following in the main stream:
- 
- FIB [File Information Block];
- text of body, footnotes, headers 
-    Begins at the [stream, not file, I hope] position recorded in
-    fib.fcMin. 
- FKPs [Formatted disK Pages] for CHPs [CHaracter Properties], 
-    PAPs [PAragraph Properties] and LVCs [Not sure what these are...] 
-    The first FKP begins at the 512-byte boundary after the last byte of text
-    written.  The remaining FKPs are recorded in the 512-byte pages that
-    immediately follow. The FKPs for CHPs PAPs and LVCs are interleaved.
-    Previous versions of Word wrote them in contiguous chunks. The
-    hplcfbte's of the three flavors (CHP, PAP and LVC) are used to find the
-    relevant FKP of the appropriate type. 
- group of SEPXs 
-    SEPXs immediately follow the FKPs and are concatenated one after the 
-    other. 
-    
- 
- And the following in the table stream:
- 
- sttbfUssr      \
- plcupcRgbuse    >- Undouumented.  Something to do with undo data.
- plcupcUsp       |  Hopefully not important.
- uskf           /
-
- stsh [style sheet] 
- plcffndRef     [footnote reference position table] 
-    Written if the document contains footnotes.
- plcffndTxt     [footnote text position table]
-    Written if the document contains footnotes.
- pgdFtn         [footnote text page description table]
-    Written if the document contains footnotes.
- bkdFtn         [footnote text break descriptor table]
-    Written if the document contains footnotes. 
- plcfendRef     [endnote reference position table]
-    Written recorded table if the document contains endnotes.
- plcfendTxt     [endnote text position table]
-    Written if the document contains endnotes.
- pgdEdn         [endnote text page description table]
-    Written if the document contains endnotes.
- bkdEdn         [endnote text break descriptor table]
-    Written if the document contains endnotes.
- plcftxbxTxt    [text box link table]
-    Written if the document contains textboxes 
- plcftxbxBkd    [text box break descriptor table]
-    Written if the document contains textboxes 
- plcfhdrtxbxTxt [header text box link table] 
-    Written if the header subdocument contains textboxes 
- plcfhdrtxbxBkd [header text box break descriptor table]
-    Written if the header subdocument contains textboxes. 
- grpXstAtnOwners [annotation owner table] 
-    Written if the document contains annotations. 
- plcfandRef     [annotation reference position table] 
-    Written if the document contains annotations 
- plcfandTxt     [annotation text position table] 
-    Written if the document contains annotations. 
- plcfsed        [section table] 
-    'Recorded' in all Word documents (why not 'written'?).
- pgdMother      [page description table] 
-    Written in all Word documents 
- bkdMother      [break descriptor table] 
-    Written in all Word documents 
- plcfphe        [paragraph height table] 
-    Written if paragraph heights have been recorded. Only written during a 
-    fast save (so we won't need to write it). 
- plcfsea        [private] 
-    'PLCF reserved for private use by Word' - lets hope we don't need to put
-    something valid into this. 
- plcflvc        [list and outline level table] 
-    Written during fast save only (i.e. we don't need to worry about it). 
- plcasumy       [AutoSummary analysis] 
-    Written if the document stored is in AutoSummary view mode. 
- sttbGlsy       [glossary name string table] 
-    Written if the document stored is a glossary. 
- sttbGlsyStyle  [glossary style name string table] 
-    Written if the document stored is a glossary. 
- plcfglsy       [glossary entry text position table] 
-    Written if the document stored is a glossary. 
- plcfhdd        [header text position table] 
-    Written if the document contains headers or footers. 
- plcfbteChpx    [bin table for CHP FKPs] 
-    Recorded in all Word documents. 
- plcfbtePapx    [bin table for PAP FKPs] 
-    Recorded in all Word documents. 
- plcfbteLvc     [bin table for LVC FKPs] 
-    Recorded in all Word documents. 
- sttbfRMark     [revision mark author string table] 
-    Written if the document contains revision marks. 
- PlcffldMom     [table of field positions and statuses for main document] 
-    Written recorded table if the main document contains fields. 
- PlcffldHdr     [table of field positions and statuses for header subdocument] 
-    Written if the header subdocument contains fields. 
- PlcffldFtn     [table of field positions and statuses for footnote subdocument] 
-    Written if the footnote subdocument contains fields. 
- PlcffldAtn     [table of field positions and statuses for annotation subdocument] 
-    Written if the annotation subdocument contains fields. 
- PlcffldEdn     [table of field positions and statuses for endnote subdocument] 
-    Written if the endnote subdocument contains fields. 
- PlcffldTxbx    [table of field positions and statuses for textbox subdocument] 
-    Written if the textbox subdocument contains fields. 
- plcOcx         [ocx position table] 
-    Written if the document contains ole controls. Undocumented, but we won't
-    need it anyway. 
- PlcffldHdrTxbx [table of field positions and statuses for textbox subdocument
-                 of header subdocument] 
-    Written if the textbox subdocument of the header subdocument contains
-    fields. 
- dggInfo        [office drawing information] 
-    Written recorded table. Format is apparently described in the 'Office 
-    drawing group format document'.  Perhaps we can save our vector graphics in
-    it? :-) 
- plcspaMom      [office drawing table] 
-    Written if the document contains office drawings. 
- plcspaHdr      [header office drawing table] 
-    Written if the header subdocument contains office drawings.
- sttbfBkmk      [table of bookmark name strings] 
-    Written if the document contains bookmarks. 
- plcfBkmkf      [table recording beginning CPs of bookmarks] 
-    Written if the document contains bookmarks. 
- plcfBkmkl      [table recording limit CPs of bookmarks] 
-    Written if the document contains bookmarks. 
- sttbfAtnBkmk   [table of annotation bookmark string names] 
-    Written if the document contains annotations with bookmarks. 
- plcfAtnbkf     [table recording beginning CPs of bookmarks in the annotation
-                 subdocument] 
-    Written previously recorded table, if the document contains annotations 
-    with bookmarks. 
- plcfAtnbkl     [table recording limit CPs of bookmarks in the annotation 
-                 subdocument] 
-    Written previously recorded table, if the document contains anotations with
-    bookmarks. 
- plcfspl        [spelling state table] 
-    Written recorded table. Records state of spell checking in a PLCF of SPLS
-    structures. 
- plcfgram       [grammar state table] 
-    Written recorded table. Records state of grammar checking in a PLCF of
-    SPLS structures.
- plcfwkb        [work book document partition table] 
-    Written if the document is a master document. 
- formFldSttbs   [form field dropdown string tables] 
-    Written if the document contains form field dropdown controls. 
- sttbCaption    [caption title string table] 
-    Written if the document contains captions. 
- sttbAutoCaption [auto caption string table] 
-    Written if the document contains auto captions. 
- sttbFnm        [filename reference string table] 
-    Written if the document references other documents. 
- sttbSavedBy    [last saved by string table] 
-    Written immedietly after the previously recorded table (Hmmm...?)
- plcflst        [list formats] 
-    Written if there are any lists defined in the document. This begins
-    with a short count of LSTF structures followed by those LSTF structures. 
-    This is immediately followed by the allocated data hanging off the LSTFs.
-    This data consists of the array of LVLs for each LSTF. (Each LVL consists
-    of an LVLF followed by two grpprls and an XST.) 
- plflfo         [more list formats] 
-    Written if there are any lists defined in the document.
-    This consists first of a PL of LFO records, followed by the allocated data 
-    (if any) hanging off the LFOs. The allocated data consists of the array of
-    LFOLVLFs for each LFO (and each LFOLVLF is immediately followed by some 
-    LVLs). 
- sttbfListNames [more list formats] 
-    Written if there are any lists defined in the document.  This is a string
-    table containg the list names for each list. It is parallel with the
-    plcflst, and may contain null strings if the corresponding LST does not
-    have a list name. 
- hplgosl        [grammar option settings] 
-    This undocumented structure maps LID and grammar checker type
-    to grammar checking options.  I hope we don't need to write this.  If we do,
-    perhaps we can just copy one from an existing document, and hope everything
-    will be okay...
- stwUser        [macro user storage] 
- routeSlip      [mailer routing slip] 
-    Written if this document has a mailer routing slip (i.e. we won't need it). 
- cmds [recording of command data structures] 
-    Written if special commands are linked to this document (i.e. not written). 
- prDrvr         [printer driver information] 
-    Written if a print environment is recorded for the document (no). 
- prEnvPort      [print environment in portrait mode] 
-    Written if a portrait mode print environment is recorded for this document
-    (no). 
- prEnvLand      [print environment in landscape mode] 
-    Written if a landscape mode print environment is recorded for this
-    document (no). 
- wss            [window state structure] 
-    Written if the document was saved while a window was open (we should be able
-    to ignore this). 
- pms            [print merge state] 
-    Written if information about the print / mail merge state is recorded for
-    the document (no). 
- clx            [encoding of the sprm lists for a complex file and piece table
-                 for a any file] 
-    Recorded in all Word documents. 
- sttbfffn       [table of font name strings] 
-    Recorded in all Word documents. The sttbfffn is an sttbf where each string
-    is instead an FFN structure [note that just as for a pascal-style string, 
-    the first byte in the FFN records the total number of bytes not counting 
-    the count byte itself]. The names of the fonts correspond to the ftc codes 
-    in the CHP structure. For example, the first font name listed corresponds
-    is the name for ftc = 0. [this sounds a bit nasty...]
- sttbttmbd      [true type font embedding string table] 
-    Writtenif document contains embedded true type fonts (no [at least, not yet
-    :-]). 
- dop            [document properties record] 
-    Recorded in all Word documents.
- sttbfAssoc     [table of associated strings] 
-    ?
- autosaveSource [name of original] 
-    This field only appears in autosave files.  So we won't need it.
-    
- (Don't you love Microsoft's abbreviations?)
- 
- First to be tackled should be the style sheets and peice table, I think.
- 
- Later we can do translation of fancy things like felds and pictures :-)
- 
+ * Word 97 binary document, as specified by [MS-DOC] and written by
+ * LibreOffice's ww8 exporter: a FIB at the start of WordDocument, Unicode
+ * text at fcMin, formatted-disk pages after the text, and the piece table,
+ * stylesheet, section table and document properties in the 1Table stream.
  */
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
+#include <string>
+#include <vector>
 
-#include "wvexporter.h"
+#include <gsf/gsf-outfile.h>
+#include <gsf/gsf-outfile-msole.h>
+#include <gsf/gsf-output-memory.h>
+#include <gsf/gsf-output.h>
 
-/* These following included files can probably be thinned down a bit/lot */
-
-#include "ut_string.h"
-#include "ut_types.h"
-#include "ut_bytebuf.h"
-#include "ut_base64.h"
-#include "pt_Types.h"
-#include "ie_impexp_MsWord_97.h"
 #include "ie_exp_MsWord_97.h"
 #include "pd_Document.h"
+#include "pt_PieceTable.h"
+#include "pf_Frag_Strux.h"
+#include "pf_Frag_Text.h"
 #include "pp_AttrProp.h"
-#include "ut_assert.h"
-#include "ut_debugmsg.h"
-#include "ut_string.h"
 #include "ut_units.h"
-#include "ie_types.h"
 
-#include "pp_AttrProp.h"
-#include "px_ChangeRecord.h"
-#include "px_CR_Object.h"
-#include "px_CR_Span.h"
-#include "px_CR_Strux.h"
+namespace {
 
-/*****************************************************************/
-/*****************************************************************/
+const unsigned PAGE = 512;
+const unsigned FC_MIN = 0x800;
+const unsigned FIB_BYTES = 900;
 
-#ifdef ENABLE_PLUGINS
+typedef std::vector<unsigned char> Buf;
 
-// completely generic code to allow this to be a plugin
-
-#include "xap_Module.h"
-
-ABI_PLUGIN_DECLARE("MsWord")
-
-// we use a reference-counted sniffer
-static IE_Exp_MsWord_97_Sniffer * m_sniffer = 0;
-
-ABI_FAR_CALL
-int abi_plugin_register (XAP_ModuleInfo * mi)
+struct Run
 {
+	std::u16string text;
+	std::string grpprl;
+};
 
-	if (!m_sniffer)
+struct Paragraph
+{
+	std::vector<Run> runs;
+};
+
+struct ChRun
+{
+	unsigned fc;
+	std::string grpprl;
+};
+
+static void append_u16(Buf & out, unsigned value)
+{
+	out.push_back(static_cast<unsigned char>(value & 0xff));
+	out.push_back(static_cast<unsigned char>((value >> 8) & 0xff));
+}
+
+static void append_u32(Buf & out, unsigned value)
+{
+	out.push_back(static_cast<unsigned char>(value & 0xff));
+	out.push_back(static_cast<unsigned char>((value >> 8) & 0xff));
+	out.push_back(static_cast<unsigned char>((value >> 16) & 0xff));
+	out.push_back(static_cast<unsigned char>((value >> 24) & 0xff));
+}
+
+static void poke_u16(Buf & out, unsigned at, unsigned value)
+{
+	out[at] = static_cast<unsigned char>(value & 0xff);
+	out[at + 1] = static_cast<unsigned char>((value >> 8) & 0xff);
+}
+
+static void poke_u32(Buf & out, unsigned at, unsigned value)
+{
+	out[at] = static_cast<unsigned char>(value & 0xff);
+	out[at + 1] = static_cast<unsigned char>((value >> 8) & 0xff);
+	out[at + 2] = static_cast<unsigned char>((value >> 16) & 0xff);
+	out[at + 3] = static_cast<unsigned char>((value >> 24) & 0xff);
+}
+
+static void append_sprm(std::string & grpprl, unsigned opcode, unsigned operand, unsigned width)
+{
+	grpprl.push_back(static_cast<char>(opcode & 0xff));
+	grpprl.push_back(static_cast<char>((opcode >> 8) & 0xff));
+	grpprl.push_back(static_cast<char>(operand & 0xff));
+	if (width == 2)
+		grpprl.push_back(static_cast<char>((operand >> 8) & 0xff));
+}
+
+static bool property_is(const PP_AttrProp * ap, const char * name, const char * wanted)
+{
+	const gchar * value = nullptr;
+	return ap && ap->getProperty(name, value) && value && !strcmp(value, wanted);
+}
+
+static std::string character_grpprl(const PP_AttrProp * ap)
+{
+	std::string grpprl;
+	if (!ap)
+		return grpprl;
+	const gchar * weight = nullptr;
+	if (ap->getProperty("font-weight", weight) && weight)
 	{
-		m_sniffer = new IE_Exp_MsWord_97_Sniffer ();
+		const int numeric = atoi(weight);
+		if (!strcmp(weight, "bold") || numeric >= 700)
+			append_sprm(grpprl, 0x0835, 1, 1);
 	}
-	else
+	if (property_is(ap, "font-style", "italic"))
+		append_sprm(grpprl, 0x0836, 1, 1);
+	const gchar * decoration = nullptr;
+	if (ap->getProperty("text-decoration", decoration) && decoration &&
+		strstr(decoration, "underline"))
+		append_sprm(grpprl, 0x2A3E, 1, 1);
+	const gchar * size = nullptr;
+	if (ap->getProperty("font-size", size) && size && *size)
 	{
-		m_sniffer->ref();
+		const double points = UT_convertToPoints(size);
+		if (points > 0.0 && points < 1000.0)
+			append_sprm(grpprl, 0x4A43, static_cast<unsigned>(points * 2.0 + 0.5), 2);
 	}
-
-	mi->name = "MsWord 2000 Exporter";
-	mi->desc = "Export MsWord 2000 Documents";
-	mi->version = ABI_VERSION_STRING;
-	mi->author = "Abi the Ant";
-	mi->usage = "No Usage";
-
-	IE_Exp::registerExporter (m_sniffer);
-	return 1;
+	return grpprl;
 }
 
-ABI_FAR_CALL
-int abi_plugin_unregister (XAP_ModuleInfo * mi)
+static void append_code_unit(std::u16string & text, UT_UCS4Char ch)
 {
-	mi->name = 0;
-	mi->desc = 0;
-	mi->version = 0;
-	mi->author = 0;
-	mi->usage = 0;
-
-	UT_return_val_if_fail( m_sniffer, 0 );
-
-	IE_Exp::unregisterExporter (m_sniffer);
-	if (!m_sniffer->unref())
+	if (ch == UCS_LF || ch == 0x000D)
+		ch = 0x000B;
+	else if (ch == UCS_FF)
+		ch = 0x000C;
+	else if (ch == UCS_VTAB)
+		ch = 0x000E;
+	if (ch > 0x10FFFF || (ch >= 0xD800 && ch <= 0xDFFF))
+		ch = 0xFFFD;
+	if (ch <= 0xFFFF)
 	{
-		m_sniffer = 0;
+		text.push_back(static_cast<char16_t>(ch));
+		return;
 	}
-
-	return 1;
+	ch -= 0x10000;
+	text.push_back(static_cast<char16_t>(0xD800 + (ch >> 10)));
+	text.push_back(static_cast<char16_t>(0xDC00 + (ch & 0x3FF)));
 }
 
-ABI_FAR_CALL
-int abi_plugin_supports_version (UT_uint32 major, UT_uint32 minor, 
-								 UT_uint32 release)
+static bool skipped_section(PTStruxType type)
 {
-  return 1;
+	switch (type)
+	{
+	case PTX_SectionHdrFtr:
+	case PTX_SectionEndnote:
+	case PTX_SectionFootnote:
+	case PTX_SectionMarginnote:
+	case PTX_SectionAnnotation:
+	case PTX_SectionFrame:
+	case PTX_SectionTOC:
+		return true;
+	default:
+		return false;
+	}
 }
 
-#endif
-
-/*****************************************************************/
-/*****************************************************************/
-
-IE_Exp_MsWord_97_Sniffer::IE_Exp_MsWord_97_Sniffer ()
-	: IE_ExpSniffer(IE_IMPEXPNAME_MSWORD97)
+static std::vector<Paragraph> collect_paragraphs(PD_Document * doc)
 {
-	// 
-}
+	std::vector<Paragraph> paragraphs;
+	Paragraph current;
+	bool accept = true;
+	bool in_paragraph = false;
+	pt_PieceTable * table = doc->getPieceTable();
+	if (!table)
+		return paragraphs;
 
-UT_Confidence_t IE_Exp_MsWord_97_Sniffer::supportsMIME (const char * szMIME)
-{
-	if (strcmp (szMIME, IE_MIMETYPE_MSWord) == 0)
+	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
+	{
+		if (frag->getType() == pf_Frag::PFT_Strux)
 		{
-			return UT_CONFIDENCE_SOSO;
+			const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
+			if (kind == PTX_Block)
+			{
+				if (accept)
+				{
+					if (in_paragraph)
+						paragraphs.push_back(current);
+					current = Paragraph();
+					in_paragraph = true;
+				}
+				else if (in_paragraph)
+				{
+					paragraphs.push_back(current);
+					current = Paragraph();
+					in_paragraph = false;
+				}
+				continue;
+			}
+			if (in_paragraph)
+			{
+				paragraphs.push_back(current);
+				current = Paragraph();
+				in_paragraph = false;
+			}
+			if (kind == PTX_Section)
+				accept = true;
+			else if (skipped_section(kind))
+				accept = false;
+			continue;
 		}
-	return UT_CONFIDENCE_ZILCH;
+		if (!accept || frag->getType() != pf_Frag::PFT_Text)
+			continue;
+		if (!in_paragraph)
+		{
+			current = Paragraph();
+			in_paragraph = true;
+		}
+		const pf_Frag_Text * text = static_cast<const pf_Frag_Text *>(frag);
+		const UT_UCS4Char * chars = doc->getPointer(text->getBufIndex());
+		const PP_AttrProp * props = nullptr;
+		doc->getAttrProp(text->getIndexAP(), &props);
+		Run run;
+		run.grpprl = character_grpprl(props);
+		for (UT_uint32 i = 0; chars && i < text->getLength(); ++i)
+			append_code_unit(run.text, chars[i]);
+		if (!current.runs.empty() && current.runs.back().grpprl == run.grpprl)
+			current.runs.back().text += run.text;
+		else
+			current.runs.push_back(run);
+	}
+	if (in_paragraph)
+		paragraphs.push_back(current);
+	if (paragraphs.empty())
+		paragraphs.push_back(Paragraph());
+	return paragraphs;
 }
 
-bool IE_Exp_MsWord_97_Sniffer::recognizeSuffix(const char * szSuffix)
+static bool chpx_fits(const std::vector<ChRun> & runs, size_t from, size_t until)
 {
-	return (!g_ascii_strcasecmp(szSuffix,".doc") || !g_ascii_strcasecmp(szSuffix, ".dot"));
+	const unsigned count = static_cast<unsigned>(until - from);
+	unsigned grp = 0;
+	for (size_t i = from; i < until; ++i)
+	{
+		if (runs[i].grpprl.empty())
+			continue;
+		unsigned size = static_cast<unsigned>(1 + runs[i].grpprl.size());
+		if (size & 1)
+			++size;
+		grp += size;
+	}
+	return (count + 1) * 4 + count + grp + 1 <= PAGE;
 }
 
-UT_Error IE_Exp_MsWord_97_Sniffer::constructExporter(PD_Document * pDocument,
-											   IE_Exp ** ppie)
+static Buf make_chpx(const std::vector<ChRun> & runs, size_t from, size_t until, unsigned limit)
 {
-	IE_Exp_MsWord_97 * p = new IE_Exp_MsWord_97(pDocument);
-	*ppie = p;
-	return UT_OK;
+	Buf page(PAGE, 0);
+	const unsigned count = static_cast<unsigned>(until - from);
+	unsigned pos = 0;
+	for (size_t i = from; i < until; ++i)
+	{
+		poke_u32(page, pos, runs[i].fc);
+		pos += 4;
+	}
+	poke_u32(page, pos, limit);
+	pos += 4;
+
+	unsigned end = 510;
+	std::vector<unsigned> offsets;
+	for (size_t n = until; n > from; --n)
+	{
+		const std::string & grp = runs[n - 1].grpprl;
+		if (grp.empty())
+		{
+			offsets.push_back(0);
+			continue;
+		}
+		unsigned size = static_cast<unsigned>(1 + grp.size());
+		if (size & 1)
+			++size;
+		end -= size;
+		if (end & 1)
+			--end;
+		page[end] = static_cast<unsigned char>(grp.size());
+		memcpy(&page[end + 1], grp.data(), grp.size());
+		offsets.push_back(end / 2);
+	}
+	for (size_t i = offsets.size(); i > 0; --i)
+		page[pos++] = static_cast<unsigned char>(offsets[i - 1]);
+	page[511] = static_cast<unsigned char>(count);
+	return page;
 }
 
-bool IE_Exp_MsWord_97_Sniffer::getDlgLabels(const char ** pszDesc,
-									  const char ** pszSuffixList,
-									  IEFileType * ft)
+struct FkpPage
 {
-	*pszDesc = "MsWord 2000 (.doc)";
-	*pszSuffixList = "*.dot; *.doc";
-	*ft = getFileType();
-	return true;
+	unsigned start;
+	unsigned limit;
+	Buf page;
+};
+
+static std::vector<FkpPage> pack_chpx(const std::vector<ChRun> & runs, unsigned fc_end)
+{
+	std::vector<FkpPage> pages;
+	size_t i = 0;
+	while (i < runs.size())
+	{
+		size_t best = i + 1;
+		for (size_t j = i + 1; j <= runs.size(); ++j)
+		{
+			if (chpx_fits(runs, i, j))
+				best = j;
+			else
+				break;
+		}
+		const unsigned limit = best < runs.size() ? runs[best].fc : fc_end;
+		FkpPage page;
+		page.start = runs[i].fc;
+		page.limit = limit;
+		page.page = make_chpx(runs, i, best, limit);
+		pages.push_back(page);
+		i = best;
+	}
+	return pages;
 }
 
-/********************************************************/
-/********************************************************/
+static bool papx_fits(unsigned count)
+{
+	return (count + 1) * 4 + count * 13 + 1 <= PAGE;
+}
 
-IE_Exp_MsWord_97::IE_Exp_MsWord_97(PD_Document *pDocument)
+static Buf make_papx(const std::vector<unsigned> & bounds, size_t from, size_t until)
+{
+	Buf page(PAGE, 0);
+	unsigned pos = 0;
+	for (size_t i = from; i <= until; ++i)
+	{
+		poke_u32(page, pos, bounds[i]);
+		pos += 4;
+	}
+	page[511] = static_cast<unsigned char>(until - from);
+	return page;
+}
+
+static std::vector<FkpPage> pack_papx(const std::vector<unsigned> & bounds)
+{
+	std::vector<FkpPage> pages;
+	size_t i = 0;
+	const size_t last = bounds.size() - 1;
+	while (i < last)
+	{
+		size_t best = i + 1;
+		for (size_t j = i + 1; j <= last; ++j)
+		{
+			if (papx_fits(static_cast<unsigned>(j - i)))
+				best = j;
+			else
+				break;
+		}
+		FkpPage page;
+		page.start = bounds[i];
+		page.limit = bounds[best];
+		page.page = make_papx(bounds, i, best);
+		pages.push_back(page);
+		i = best;
+	}
+	return pages;
+}
+
+static Buf stylesheet()
+{
+	Buf std;
+	append_u16(std, 0);
+	append_u16(std, 1 | (0x0FFF << 4));
+	append_u16(std, 2);
+	append_u16(std, 0);
+	append_u16(std, 0);
+	append_u16(std, 6);
+	const char * name = "Normal";
+	for (const char * p = name; *p; ++p)
+		append_u16(std, static_cast<unsigned char>(*p));
+	append_u16(std, 0);
+	append_u16(std, 2);
+	append_u16(std, 0);
+	append_u16(std, 0);
+
+	Buf stshi;
+	append_u16(stshi, 1);
+	append_u16(stshi, 10);
+	append_u16(stshi, 1);
+	append_u16(stshi, 0);
+	append_u16(stshi, 0);
+	append_u16(stshi, 0);
+	append_u16(stshi, 0);
+	append_u16(stshi, 0);
+	append_u16(stshi, 0);
+
+	Buf out;
+	append_u16(out, static_cast<unsigned>(stshi.size()));
+	out.insert(out.end(), stshi.begin(), stshi.end());
+	append_u16(out, static_cast<unsigned>(std.size()));
+	out.insert(out.end(), std.begin(), std.end());
+	return out;
+}
+
+static Buf font_table()
+{
+	const char * name = "Times New Roman";
+	Buf body;
+	body.push_back(0);
+	body.push_back(static_cast<unsigned char>(2 | 4 | (1 << 4)));
+	append_u16(body, 400);
+	body.push_back(0);
+	body.push_back(0);
+	body.insert(body.end(), 10, 0);
+	body.insert(body.end(), 24, 0);
+	for (const char * p = name; *p; ++p)
+		append_u16(body, static_cast<unsigned char>(*p));
+	append_u16(body, 0);
+	body[0] = static_cast<unsigned char>(body.size() - 1);
+
+	Buf out;
+	append_u16(out, 0xFFFF);
+	append_u16(out, 1);
+	append_u16(out, 0);
+	out.insert(out.end(), body.begin(), body.end());
+	return out;
+}
+
+static Buf bin_table(const std::vector<FkpPage> & pages, const std::vector<unsigned> & pns)
+{
+	Buf out;
+	append_u32(out, pages.front().start);
+	for (size_t i = 0; i < pages.size(); ++i)
+		append_u32(out, pages[i].limit);
+	for (size_t i = 0; i < pns.size(); ++i)
+		append_u32(out, pns[i]);
+	return out;
+}
+
+static void place(Buf & fib, unsigned index, unsigned offset, unsigned length)
+{
+	const unsigned at = 0x9A + index * 8;
+	poke_u32(fib, at, offset);
+	poke_u32(fib, at + 4, length);
+}
+
+static bool write_ole(GsfOutput * destination, const Buf & word, const Buf & table)
+{
+	GsfOutput * memory = gsf_output_memory_new();
+	if (!memory)
+		return false;
+	GsfOutfile * ole = gsf_outfile_msole_new(memory);
+	if (!ole)
+	{
+		g_object_unref(memory);
+		return false;
+	}
+
+	bool ok = true;
+	GsfOutput * word_stream = gsf_outfile_new_child(ole, "WordDocument", FALSE);
+	GsfOutput * table_stream = gsf_outfile_new_child(ole, "1Table", FALSE);
+	if (!word_stream || !table_stream)
+		ok = false;
+	if (ok && !word.empty())
+		ok = gsf_output_write(word_stream, word.size(), &word[0]) && ok;
+	if (ok && !table.empty())
+		ok = gsf_output_write(table_stream, table.size(), &table[0]) && ok;
+	if (word_stream)
+	{
+		ok = gsf_output_close(word_stream) && ok;
+		g_object_unref(word_stream);
+	}
+	if (table_stream)
+	{
+		ok = gsf_output_close(table_stream) && ok;
+		g_object_unref(table_stream);
+	}
+	ok = gsf_output_close(GSF_OUTPUT(ole)) && ok;
+	g_object_unref(ole);
+	if (ok)
+	{
+		const guint8 * bytes = gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(memory));
+		const gsf_off_t size = gsf_output_size(memory);
+		ok = bytes && size > 0 &&
+			gsf_output_write(destination, static_cast<size_t>(size), bytes);
+	}
+	g_object_unref(memory);
+	return ok;
+}
+
+}
+
+IE_Exp_MsWord_97::IE_Exp_MsWord_97(PD_Document * pDocument)
 	: IE_Exp(pDocument)
 {
-	m_error = 0;
-	m_pListener = nullptr;
 }
 
 IE_Exp_MsWord_97::~IE_Exp_MsWord_97()
 {
 }
 
-/********************************************************/
-/********************************************************/
-
-class ABI_EXPORT s_MsWord_97_Listener : public PL_Listener
-{
-public:
-
-	s_MsWord_97_Listener (PD_Document *pDocument,
-						  IE_Exp_MsWord_97 * pie);
-
-	virtual ~s_MsWord_97_Listener();
-
-	virtual bool populate(fl_ContainerLayout* sfh,
-		  				     const PX_ChangeRecord * pcr);
-
-	virtual bool populateStrux(pf_Frag_Strux* sdh,
-							 	  const PX_ChangeRecord * pcr,
-							 	  fl_ContainerLayout* * psfh);
-
-
-	virtual bool change(fl_ContainerLayout* sfh,
-						   const PX_ChangeRecord * pcr);
-
-	virtual bool insertStrux(fl_ContainerLayout* sfh,
-								const PX_ChangeRecord * pcr,
-	                            pf_Frag_Strux* sdh,
-	                            PL_ListenerId lid,
-                                void (* pfnBindHandles)(pf_Frag_Strux* sdhNew,
-		                                                PL_ListenerId lid,
-		                                                fl_ContainerLayout* sfhNew));
-
-	virtual bool signal(UT_uint32 iSignal);
-
-protected:	
-    void				_closeSection(void);
-	void				_closeBlock(void);
-	void				_closeSpan(void);
-	void				_openSpan(PT_AttrPropIndex apiSpan);
-	void				_openTag(const char * szPrefix, const char * szSuffix,
-								 bool bNewLineAfter, PT_AttrPropIndex api);
-	void				_outputData(const UT_UCSChar * p, UT_uint32 length);
-	void				_handleStyles(void);
-	void				_handleDataItems(void);
-
-
-	void _convertColor (UT_sint32 * msCol, const char * szFrom);
-
-	void _convertFontSize  (UT_sint32 * szDest, const char * szFrom);
-
-	void _convertFontFace  (char * szDest, const char * szFrom);
-
-	PD_Document *		m_pDocument;
-	IE_Exp_MsWord_97*	m_pie;
-	bool				m_bInSection;
-	bool				m_bInBlock;
-	bool				m_bInSpan;
-	PT_AttrPropIndex	m_apiLastSpan;
-};
-
-/********************************************************/
-/********************************************************/
-
 UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 {
+	const std::vector<Paragraph> paragraphs = collect_paragraphs(getDoc());
+	std::vector<uint16_t> units;
+	std::vector<ChRun> runs;
+	std::vector<unsigned> bounds;
+	bounds.push_back(FC_MIN);
 
-	// create and install a listener that will recieve the
-	// current document and write/export a MsWord 97
-	// document
-	//
-
-	m_pListener = new s_MsWord_97_Listener (getDoc(), this);
-
-	if(!m_pListener)
-		return UT_IE_NOMEMORY;
-
-	if (getDocRange())
-	    getDoc()->tellListenerSubset(static_cast<PL_Listener *>(m_pListener),getDocRange());
-	else
-	    getDoc()->tellListener(static_cast<PL_Listener *>(m_pListener));
-
-	DELETEP(m_pListener);
-	return ((m_error) ? UT_IE_COULDNOTWRITE : UT_OK);
-}
-
-
-// Overriding the methods in our base class is necessary
-// because we are relying on wv to do a binary write of our
-// data in a OLE stream/document. As of writing this, all
-// other exporters are text-based and would thus share much
-// in common. Unfortunately, we do not.
-//
-
-bool IE_Exp_MsWord_97::_openFile(const char * szFileName)
-{
-	UT_return_val_if_fail(szFileName, false);
-
-	m_pExporter = wvExporter_create(szFileName);
-	if(!m_pExporter)
-	  {
-	    UT_DEBUGMSG(("MSWord Exporter: nullptr exporter object\n"));
-	    return false;
-	  }
-
-	UT_DEBUGMSG(("MSWord Exporter: created exporter object\n"));
-	UT_DEBUGMSG(("Populating the summary stream\n"));
-
-	wvExporter_summaryPutString(m_pExporter, PID_APPNAME, "AbiWord");
-
-#if 0
-	// we may be able to fill some/all of these in
-	wvExporter_summaryPutString(m_pExporter, PID_TITLE, "");
-	wvExporter_summaryPutString(m_pExporter, PID_AUTHOR, "");
-
-	wvExporter_summaryPutLong(m_pExporter, PID_PAGECOUNT, 0);
-	wvExporter_summaryPutLong(m_pExporter, PID_WORDCOUNT, 0);
-	wvExporter_summaryPutLong(m_pExporter, PID_CHARCOUNT, 0);
-#endif
-
-	return true;
-}
-
-UT_uint32 IE_Exp_MsWord_97::_writeBytes(const UT_Byte * pBytes, UT_uint32 length)
-{
-	UT_return_val_if_fail(pBytes && length, UT_ERROR);
-	UT_DEBUGMSG(("Writing %s", pBytes));
-
-	return wvExporter_writeBytes(m_pExporter, sizeof(UT_Byte), 
-				     length, const_cast<void*>(static_cast<const void*>(pBytes)));
-}
-
-bool IE_Exp_MsWord_97::_writeBytes(const UT_Byte * pBytes)
-{
-	UT_return_val_if_fail(pBytes, false);
-	
-	UT_uint32 length = static_cast<UT_uint32>(strlen(reinterpret_cast<const char *>(pBytes)));
-	UT_return_val_if_fail(length, false);
-
-	return (_writeBytes(pBytes, length) == length);
-}
-
-bool IE_Exp_MsWord_97::_closeFile(void)
-{
-	bool tmp = true;
-
-	wvExporter_close(m_pExporter);
-	return tmp;
-}
-
-// NOTE: We may be able to use our base-class' implementation
-// NOTE: As the current code is identical
-// NOTE: But I'd rather be paranoid :)
-//
-void IE_Exp_MsWord_97::_abortFile(void)
-{
-	_closeFile();
-	return;
-}
-
-void IE_Exp_MsWord_97::write(const char * sz)
-{
-	write(sz, static_cast<UT_uint32>(strlen(sz)));
-}
-
-void IE_Exp_MsWord_97::write(const char * sz, UT_uint32 length)
-{
-	if(m_error)
-		return;
-
-	m_error |= (_writeBytes (reinterpret_cast<const UT_Byte *>(sz), length) != length);
-}
-
-/********************************************************/
-/********************************************************/
-
-s_MsWord_97_Listener::s_MsWord_97_Listener(PD_Document * pDocument,
-										   IE_Exp_MsWord_97 * pie)
-{
-	m_pDocument = pDocument;
-	m_pie = pie;
-
-	UT_DEBUGMSG(("Beginning Word Export\n"));
-}
-
-s_MsWord_97_Listener::~s_MsWord_97_Listener()
-{
-        // nothing
-}
-
-bool s_MsWord_97_Listener::populate(fl_ContainerLayout* /*sfh*/,
-									  const PX_ChangeRecord * pcr)
-{
-	switch (pcr->getType())
+	for (size_t p = 0; p < paragraphs.size(); ++p)
 	{
-	case PX_ChangeRecord::PXT_InsertSpan:
+		const std::vector<Run> & source = paragraphs[p].runs;
+		if (source.empty())
 		{
-			const PX_ChangeRecord_Span * pcrs = static_cast<const PX_ChangeRecord_Span *> (pcr);
-
-			//PT_AttrPropIndex api = pcr->getIndexAP();
-			//_openSpan(api);
-			
-			PT_BufIndex bi = pcrs->getBufIndex();
-			_outputData(m_pDocument->getPointer(bi),pcrs->getLength());
-
-			return true;
-		}
-
-	case PX_ChangeRecord::PXT_InsertObject:
-		{
-			const PX_ChangeRecord_Object * pcro = static_cast<const PX_ChangeRecord_Object *> (pcr);
-			//PT_AttrPropIndex api = pcr->getIndexAP();
-			switch (pcro->getObjectType())
+			const unsigned fc = FC_MIN + static_cast<unsigned>(units.size() * 2);
+			if (runs.empty() || !runs.back().grpprl.empty())
 			{
-                
-            // Should do something with these.
-			case PTO_Image:
-				
-                return true;
-
-			case PTO_Field:
-				
-				return true;
-
-				// todo: support these
-			case PTO_Hyperlink:
-			case PTO_Bookmark:
-			  return true;
-
-			default:
-				UT_ASSERT_HARMLESS(0);
-				return false;
+				ChRun run;
+				run.fc = fc;
+				runs.push_back(run);
 			}
 		}
-
-	case PX_ChangeRecord::PXT_InsertFmtMark:
-		return true;
-		
-	default:
-		UT_ASSERT_HARMLESS(0);
-		return false;
-	}
-}
-
-bool s_MsWord_97_Listener::populateStrux(pf_Frag_Strux* /*sdh*/,
-										   const PX_ChangeRecord * pcr,
-										   fl_ContainerLayout* * psfh)
-{
-	UT_return_val_if_fail(pcr->getType() == PX_ChangeRecord::PXT_InsertStrux, false);
-	const PX_ChangeRecord_Strux * pcrx = static_cast<const PX_ChangeRecord_Strux *> (pcr);
-	*psfh = 0;							// we don't need it.
-
-	switch (pcrx->getStruxType())
-	{
-	case PTX_Section:
+		for (size_t r = 0; r < source.size(); ++r)
 		{
-			_closeSpan();
-			_closeBlock();
-			_closeSection();
-			_openTag("section","",true,pcr->getIndexAP());
-			m_bInSection = true;
-			return true;
-		}
-
-	case PTX_SectionHdrFtr:
-		{
-			_closeSpan();
-			_closeBlock();
-			_closeSection();
-			_openTag("section","",true,pcr->getIndexAP());
-			m_bInSection = true;
-			return true;
-		}
-
-	case PTX_Block:
-		{
-			_closeSpan();
-			_closeBlock();
-			_openTag("p","",false,pcr->getIndexAP());
-			m_bInBlock = true;
-			return true;
-		}
-
-	default:
-		UT_ASSERT_HARMLESS(0);
-		return false;
-	}
-}
-
-bool s_MsWord_97_Listener::change(fl_ContainerLayout* /*sfh*/,
-									const PX_ChangeRecord * /*pcr*/)
-{
-	UT_ASSERT_HARMLESS(0);						// this function is not used.
-	return false;
-}
-
-bool s_MsWord_97_Listener::insertStrux(fl_ContainerLayout* /*sfh*/,
-										  const PX_ChangeRecord * /*pcr*/,
-										  pf_Frag_Strux* /*sdh*/,
-										  PL_ListenerId /* lid */,
-										  void (* /*pfnBindHandles*/)(pf_Frag_Strux* /* sdhNew */,
-																	  PL_ListenerId /* lid */,
-																	  fl_ContainerLayout* /* sfhNew */))
-{
-	UT_ASSERT_HARMLESS(0);						// this function is not used.
-	return false;
-}
-
-bool s_MsWord_97_Listener::signal(UT_uint32 /* iSignal */)
-{
-	UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
-	return false;
-}
-
-
-void s_MsWord_97_Listener::_closeSection(void) {}
-void s_MsWord_97_Listener::_closeBlock(void) {}
-void s_MsWord_97_Listener::_closeSpan(void) {}
-void s_MsWord_97_Listener::_openSpan(PT_AttrPropIndex apiSpan) {}
-void s_MsWord_97_Listener::_openTag(const char * szPrefix, const char * szSuffix,
-							    bool bNewLineAfter, PT_AttrPropIndex api) {}
-
-void s_MsWord_97_Listener::_outputData(const UT_UCSChar * data, UT_uint32 length) 
-{
-#define MY_BUFFER_SIZE		1024
-#define MY_HIGHWATER_MARK	20
-	char buf[MY_BUFFER_SIZE];
-	char * pBuf;
-	const UT_UCSChar * pData;
-
-	for (pBuf=buf, pData=data; (pData<data+length); /**/)
-	{
-		if (pBuf >= (buf+MY_BUFFER_SIZE-MY_HIGHWATER_MARK))
-		{
-			wvExporter_writeBytes(m_pie->m_pExporter, sizeof(UT_UCSChar), pBuf-buf, buf);
-			pBuf = buf;
-		}
-
-		switch (*pData)
-		{
-            
-        // Theses are ripped from the AbiWord format exporter.
-        // We should either convert them to their Word equivalents here,
-        // or put something in wv to do this and simply run the buffer through
-        // it.
-		case UCS_LF:					// LF -- representing a Forced-Line-Break
-			*pBuf++ = '<';				// these get mapped to <br/>
-			*pBuf++ = 'b';
-			*pBuf++ = 'r';
-			*pBuf++ = '/';
-			*pBuf++ = '>';
-			pData++;
-			break;
-			
-		case UCS_VTAB:					// VTAB -- representing a Forced-Column-Break
-			*pBuf++ = '<';				// these get mapped to <cbr/>
-			*pBuf++ = 'c';
-			*pBuf++ = 'b';
-			*pBuf++ = 'r';
-			*pBuf++ = '/';
-			*pBuf++ = '>';
-			pData++;
-			break;
-			
-		case UCS_FF:					// FF -- representing a Forced-Page-Break
-			*pBuf++ = '<';				// these get mapped to <pbr/>
-			*pBuf++ = 'p';
-			*pBuf++ = 'b';
-			*pBuf++ = 'r';
-			*pBuf++ = '/';
-			*pBuf++ = '>';
-			pData++;
-			break;
-			
-		default:
-			if (*pData > 0x007f)
+			const unsigned fc = FC_MIN + static_cast<unsigned>(units.size() * 2);
+			if (runs.empty() || runs.back().grpprl != source[r].grpprl)
 			{
-
-				// We want to do proper conversion here.
-				char localBuf[20];
-				char * plocal = localBuf;
-				sprintf(localBuf,"&#x%x;",*pData++);
-				while (*plocal)
-					*pBuf++ = (UT_Byte)*plocal++;
-
+				ChRun run;
+				run.fc = fc;
+				run.grpprl = source[r].grpprl;
+				runs.push_back(run);
 			}
-			else
-			{
-				*pBuf++ = (UT_Byte)*pData++;
-			}
-			break;
+			for (size_t c = 0; c < source[r].text.size(); ++c)
+				units.push_back(static_cast<uint16_t>(source[r].text[c]));
 		}
+		units.push_back(0x000D);
+		bounds.push_back(FC_MIN + static_cast<unsigned>(units.size() * 2));
+	}
+	if (runs.empty())
+	{
+		ChRun run;
+		run.fc = FC_MIN;
+		runs.push_back(run);
 	}
 
-    wvExporter_writeBytes(m_pie->m_pExporter, sizeof(UT_UCSChar), pBuf-buf, buf);
-}
+	const unsigned fc_mac = FC_MIN + static_cast<unsigned>(units.size() * 2);
+	const unsigned ccp = static_cast<unsigned>(units.size());
+	if (fc_mac < FC_MIN)
+		return UT_IE_COULDNOTWRITE;
 
-void s_MsWord_97_Listener::_handleStyles(void) {}
-void s_MsWord_97_Listener::_handleDataItems(void) {}
-
-
-void s_MsWord_97_Listener::_convertColor (UT_sint32 * mscol, const char * szFrom)
-{
-	// convert from our 6 hex-digit color scheme to
-	// msword 97's (tiny) 16-color palette
-	//
-
-	UT_sint32 ftcol = static_cast<UT_sint32>(atoi(szFrom));
-
-	// NOTE: this only supports the 16 colors currently handled in
-	// NOTE: the import code. everything else gets treated as black
-	// NOTE: this is an area for improvement
-	//
-	switch (ftcol) {
-
-		case 0x0000ff: //blue
-			*mscol = 2;
-			break;
-
-		case 0x00ffff: //cyan
-			*mscol = 3;
-			break;
-
-		case 0x00ff00: //green
-			*mscol = 4;
-			break;
-
-		case 0xff00ff: //magenta
-			*mscol = 5;
-			break;
-
-		case 0xff0000: //red
-			*mscol = 6;
-			break;
-
-		case 0xffff00: //yellow
-			*mscol = 7;
-			break;
-
-		case 0xffffff: //white
-			*mscol = 8;
-			break;
-
-		case 0x000080: //dark blue
-			*mscol = 9;
-			break;
-
-		case 0x008080: //dark cyan
-			*mscol = 10;
-			break;
-
-		case 0x008000: //dark green
-			*mscol = 11;
-			break;
-
-		case 0x800080: //dark magenta
-			*mscol = 12;
-			break;
-
-		case 0x800000: //dark red
-			*mscol = 13;
-			break;
-
-		case 0x808000: //dark yellow
-			*mscol = 14;
-			break;
-
-		case 0x808080: //dark gray
-			*mscol = 15;
-			break;
-
-		case 0xc0c0c0: //light gray
-			*mscol = 16;
-			break;
-
-		default:
-			// 0x000000 and anything else/unknown will be treated as black
-			//
-			*mscol = 1;
-			break;
+	const std::vector<FkpPage> ch_pages = pack_chpx(runs, fc_mac);
+	const std::vector<FkpPage> pap_pages = pack_papx(bounds);
+	unsigned fkp_at = (fc_mac + PAGE - 1) & ~(PAGE - 1);
+	Buf word(fkp_at, 0);
+	for (size_t i = 0; i < units.size(); ++i)
+	{
+		word[FC_MIN + i * 2] = static_cast<unsigned char>(units[i] & 0xff);
+		word[FC_MIN + i * 2 + 1] = static_cast<unsigned char>((units[i] >> 8) & 0xff);
 	}
-}
 
-void s_MsWord_97_Listener::_convertFontSize  (UT_sint32 * szDest, const char * szFrom)
-{
-	// msword uses half-points to represent font sizes
-	// and we use full points
-	//
-	*szDest = (UT_sint32)(2 * atoi(szFrom));
-}
+	unsigned pn = fkp_at / PAGE;
+	std::vector<unsigned> ch_pns;
+	for (size_t i = 0; i < ch_pages.size(); ++i)
+	{
+		word.insert(word.end(), ch_pages[i].page.begin(), ch_pages[i].page.end());
+		ch_pns.push_back(pn++);
+	}
+	std::vector<unsigned> pap_pns;
+	for (size_t i = 0; i < pap_pages.size(); ++i)
+	{
+		word.insert(word.end(), pap_pages[i].page.begin(), pap_pages[i].page.end());
+		pap_pns.push_back(pn++);
+	}
 
-void s_MsWord_97_Listener::_convertFontFace  (char * szDest, const char * szFrom)
-{
-	// i believe that there is a 1-1 correspondence here, but
-	// we'll let wv handle the proper encoding somewhere else
-	//
-	strcpy (szDest, szFrom);
-}
+	Buf table;
+	const Buf stsh = stylesheet();
+	const unsigned stsh_at = static_cast<unsigned>(table.size());
+	table.insert(table.end(), stsh.begin(), stsh.end());
 
+	const unsigned sed_at = static_cast<unsigned>(table.size());
+	append_u32(table, 0);
+	append_u32(table, ccp);
+	append_u16(table, 0);
+	append_u32(table, 0xFFFFFFFF);
+	append_u16(table, 0);
+	append_u32(table, 0);
+	const unsigned sed_len = static_cast<unsigned>(table.size() - sed_at);
+
+	const Buf ch_bin = bin_table(ch_pages, ch_pns);
+	const unsigned ch_at = static_cast<unsigned>(table.size());
+	table.insert(table.end(), ch_bin.begin(), ch_bin.end());
+	const Buf pap_bin = bin_table(pap_pages, pap_pns);
+	const unsigned pap_at = static_cast<unsigned>(table.size());
+	table.insert(table.end(), pap_bin.begin(), pap_bin.end());
+	const Buf fonts = font_table();
+	const unsigned font_at = static_cast<unsigned>(table.size());
+	table.insert(table.end(), fonts.begin(), fonts.end());
+
+	const unsigned dop_at = static_cast<unsigned>(table.size());
+	table.insert(table.end(), 500, 0);
+	table[dop_at] = 0x02;
+	poke_u16(table, dop_at + 10, 720);
+
+	const unsigned clx_at = static_cast<unsigned>(table.size());
+	Buf plc;
+	append_u32(plc, 0);
+	append_u32(plc, ccp);
+	plc.push_back(0);
+	plc.push_back(0);
+	append_u32(plc, FC_MIN);
+	append_u16(plc, 0);
+	table.push_back(0x02);
+	append_u32(table, static_cast<unsigned>(plc.size()));
+	table.insert(table.end(), plc.begin(), plc.end());
+	const unsigned clx_len = static_cast<unsigned>(table.size() - clx_at);
+
+	Buf fib(FIB_BYTES, 0);
+	poke_u16(fib, 0x00, 0xA5EC);
+	poke_u16(fib, 0x02, 0x00C1);
+	poke_u16(fib, 0x06, 0x0409);
+	poke_u16(fib, 0x0A, 0x1200);
+	poke_u16(fib, 0x0C, 0x00BF);
+	fib[0x13] = 0x10;
+	poke_u32(fib, 0x18, FC_MIN);
+	poke_u32(fib, 0x1C, fc_mac);
+	poke_u16(fib, 0x20, 0x000E);
+	poke_u16(fib, 0x3E, 0x0016);
+	poke_u32(fib, 0x40, static_cast<unsigned>(word.size()));
+	poke_u32(fib, 0x4C, ccp);
+	poke_u16(fib, 0x98, 93);
+	place(fib, 1, stsh_at, static_cast<unsigned>(stsh.size()));
+	place(fib, 6, sed_at, sed_len);
+	place(fib, 12, ch_at, static_cast<unsigned>(ch_bin.size()));
+	place(fib, 13, pap_at, static_cast<unsigned>(pap_bin.size()));
+	place(fib, 15, font_at, static_cast<unsigned>(fonts.size()));
+	place(fib, 31, dop_at, 500);
+	place(fib, 33, clx_at, clx_len);
+	memcpy(&word[0], &fib[0], FIB_BYTES);
+
+	if (!getFp() || !write_ole(getFp(), word, table))
+		return UT_IE_COULDNOTWRITE;
+	return UT_OK;
+}

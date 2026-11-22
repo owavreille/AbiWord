@@ -74,6 +74,8 @@ libimpexp_la_SOURCES = \
 	xp/ie_impGraphic_SVG.cpp \
 	xp/ie_impGraphic_SVG.h \
 	xp/ie_imp.h \
+	xp/ie_exp_MsWord_97.cpp \
+	xp/ie_exp_MsWord_97.h \
 	xp/ie_imp_MsWord_97.cpp \
 	xp/ie_imp_MsWord_97.h \
 	xp/ie_imp_MsWord_dump.h \

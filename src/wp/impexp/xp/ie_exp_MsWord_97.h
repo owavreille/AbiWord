@@ -23,64 +23,15 @@
 #define IE_EXP_MSWORD_97_H
 
 #include "ie_exp.h"
-#include "ut_vector.h"
-#include "ut_misc.h"
-#include "pl_Listener.h"
-
-// forward declarations
-//
-class PD_Document;
-class s_MsWord_97_Listener;
-
-typedef struct _wvExporter wvExporter;
-
-// The exporter/writer for the MsWord 97 format
-
-class ABI_EXPORT IE_Exp_MsWord_97_Sniffer : public IE_ExpSniffer
-{
-	friend class IE_Exp;
-
-public:
-	IE_Exp_MsWord_97_Sniffer ();
-	virtual ~IE_Exp_MsWord_97_Sniffer () {}
-
-	UT_Confidence_t supportsMIME (const char * szMIME);
-
-	virtual bool recognizeSuffix (const char * szSuffix);
-	virtual bool getDlgLabels (const char ** szDesc,
-							   const char ** szSuffixList,
-							   IEFileType * ft);
-	virtual UT_Error constructExporter (PD_Document * pDocument,
-										IE_Exp ** ppie);
-};
 
 class ABI_EXPORT IE_Exp_MsWord_97 : public IE_Exp
 {
-		friend class s_MsWord_97_Listener;
-        s_MsWord_97_Listener* m_pListener;
+public:
+	IE_Exp_MsWord_97(PD_Document * pDocument);
+	virtual ~IE_Exp_MsWord_97();
 
- public:
-        IE_Exp_MsWord_97(PD_Document * pDocument);
-        ~IE_Exp_MsWord_97();
-
-		void            		write(const char * sz);
-		void            		write(const char * sz, UT_uint32 length);
-
- private:
-		char * fileName;
-
-	wvExporter *m_pExporter;
-
- protected:
-		// these are all overridden methods of the base class
-		// see comments in ie_exp_MsWord_97.cpp for explanation
-
-        UT_Error        		_writeDocument(void);
-		bool 				_openFile(const char * szFileName);
-		UT_uint32				_writeBytes(const UT_Byte * pBytes, UT_uint32 length);
-		bool 				_writeBytes(const UT_Byte * pBytes);
-		bool 				_closeFile(void);
-		void 					_abortFile(void);
+protected:
+	virtual UT_Error _writeDocument(void) override;
 };
 
 #endif
