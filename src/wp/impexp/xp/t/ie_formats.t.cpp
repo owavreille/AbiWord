@@ -776,15 +776,23 @@ static std::string pdf_inflate_streams(const std::string & bytes)
 		const std::string::size_type marker = bytes.find("stream", i);
 		if (marker == std::string::npos)
 			break;
-		if (marker >= 3 && bytes.compare(marker - 3, 3, "end") == 0)
+		// A compressed stream can contain these six bytes by chance. A real
+		// keyword is the one that follows the dictionary and a newline.
+		std::string::size_type before = marker;
+		while (before > 0 && (bytes[before - 1] == ' ' || bytes[before - 1] == '\t' ||
+				      bytes[before - 1] == '\r' || bytes[before - 1] == '\n'))
+			--before;
+		const bool keyword = before >= 2 && bytes[before - 1] == '>' && bytes[before - 2] == '>';
+		std::string::size_type start = marker + 6;
+		const bool newline = start < bytes.size() && (bytes[start] == '\n' || bytes[start] == '\r');
+		if (!keyword || !newline)
 		{
-			i = marker + 6;
+			i = marker + 1;
 			continue;
 		}
-		std::string::size_type start = marker + 6;
 		if (start + 1 < bytes.size() && bytes[start] == '\r' && bytes[start + 1] == '\n')
 			start += 2;
-		else if (start < bytes.size() && (bytes[start] == '\n' || bytes[start] == '\r'))
+		else
 			start += 1;
 		const std::string::size_type end = bytes.find("endstream", start);
 		if (end == std::string::npos)
