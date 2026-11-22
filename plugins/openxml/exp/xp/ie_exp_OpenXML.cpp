@@ -346,6 +346,16 @@ UT_Error IE_Exp_OpenXML::finishContentControl(int target)
 	return writeTargetStream(target, "</w:sdtContent></w:sdt>");
 }
 
+UT_Error IE_Exp_OpenXML::startDelText(int target)
+{
+	return writeTargetStream(target, "<w:delText xml:space=\"preserve\">");
+}
+
+UT_Error IE_Exp_OpenXML::finishDelText(int target)
+{
+	return writeTargetStream(target, "</w:delText>");
+}
+
 UT_Error IE_Exp_OpenXML::startText(int target)
 {
 	if(isOverline)

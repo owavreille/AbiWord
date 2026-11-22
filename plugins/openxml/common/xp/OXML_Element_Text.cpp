@@ -106,7 +106,7 @@ UT_Error OXML_Element_Text::serialize(IE_Exp_OpenXML* exporter)
 	const gchar* revision = nullptr;
 	bool deletion = getAttribute("revision", revision) == UT_OK && revision && revision[0] == '-';
 	if (deletion)
-		err = exporter->writeTargetStream(TARGET, "<w:delText xml:space=\"preserve\">");
+		err = exporter->startDelText(TARGET);
 	else
 		err = exporter->startText(TARGET);
 	if(err != UT_OK)
@@ -120,7 +120,7 @@ UT_Error OXML_Element_Text::serialize(IE_Exp_OpenXML* exporter)
 		return err;
 
 	if (deletion)
-		return exporter->writeTargetStream(TARGET, "</w:delText>");
+		return exporter->finishDelText(TARGET);
 	return exporter->finishText(TARGET);
 }
 
