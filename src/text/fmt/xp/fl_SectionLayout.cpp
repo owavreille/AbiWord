@@ -1726,6 +1726,17 @@ fp_Container* fl_DocSectionLayout::getNewContainer(const fp_Container* pFirstCon
 	return pLeaderColumn;
 }
 
+static void releaseLoadedBlocks(fl_ContainerLayout * layout)
+{
+	for (fl_ContainerLayout * child = layout ? layout->getFirstLayout() : nullptr; child; child = child->getNext())
+	{
+		if (child->getContainerType() == FL_CONTAINER_BLOCK)
+			static_cast<fl_BlockLayout *>(child)->releaseLoadReformat();
+		else
+			releaseLoadedBlocks(child);
+	}
+}
+
 void fl_DocSectionLayout::format(void)
 {
 	fl_ContainerLayout*	pBL = getFirstLayout();
@@ -1785,6 +1796,7 @@ void fl_DocSectionLayout::format(void)
 
 	m_ColumnBreaker.breakSection();
 	m_bNeedsFormat = false;
+	releaseLoadedBlocks(this);
 }
 
 void fl_DocSectionLayout::markAllRunsDirty(void)
@@ -1836,10 +1848,6 @@ void fl_DocSectionLayout::updateLayout(bool bDoFull)
 	bool bShowHidden = pView && pView->getShowPara();
 	FPVisibility eHidden;
 	bool bHidden;
-	//
-	// FIXME!! Do extensive tests to see if we can remove this line!
-	//
-	bDoFull = true;
 	xxx_UT_DEBUGMSG(("Doing DocSection Update layout (section %p)\n",this));
 	if (!bDoFull || (m_vecFormatLayout.getItemCount() > 0))
 	{

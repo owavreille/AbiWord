@@ -55,6 +55,22 @@ void AP_collectUsedFonts(PD_Document * doc, std::vector<std::string> & fonts)
 	if (!table)
 		return;
 
+	struct UsedFontCache
+	{
+		const PD_Document * doc;
+		const pf_Frag * stamp;
+		UT_sint32 cr;
+		std::vector<std::string> fonts;
+	};
+	static UsedFontCache cache = { nullptr, nullptr, -1, {} };
+	const pf_Frag * stamp = table->getFragments().getFirst();
+	const UT_sint32 cr = doc->getCRNumber();
+	if (cache.doc == doc && cache.stamp == stamp && cache.cr == cr)
+	{
+		fonts = cache.fonts;
+		return;
+	}
+
 	std::set<std::string> seen;
 	const PP_AttrProp * sectionAP = nullptr;
 	const PP_AttrProp * blockAP = nullptr;
@@ -101,6 +117,10 @@ void AP_collectUsedFonts(PD_Document * doc, std::vector<std::string> & fonts)
 	}
 
 	std::sort(fonts.begin(), fonts.end(), fontNameLess);
+	cache.doc = doc;
+	cache.stamp = stamp;
+	cache.cr = cr;
+	cache.fonts = fonts;
 }
 
 void AP_buildFontMenu(PD_Document * doc,

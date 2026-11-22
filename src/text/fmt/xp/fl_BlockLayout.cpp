@@ -4051,11 +4051,13 @@ void fl_BlockLayout::format()
 		}
 	}
 
-	// Paragraph has been reformatted.
-	if(!m_pLayout->isLayoutFilling())
+	// Paragraph has been reformatted. A block that already has lines does
+	// not need the load-time second pass.
+	if(!m_pLayout->isLayoutFilling() || getFirstContainer())
     {
 		m_iNeedsReformat = -1;
-		getDocSectionLayout()->clearNeedsReformat(this);
+		if (!m_pLayout->isLayoutFilling())
+			getDocSectionLayout()->clearNeedsReformat(this);
 	}
 	else
 	{
@@ -4321,6 +4323,16 @@ fp_Container* fl_BlockLayout::getNewContainer(const fp_Container* /* pCon*/)
 	UT_ASSERT(findLineInBlock(pLine) >= 0);
 	pLine->recalcMaxWidth(true);
 	return static_cast<fp_Container *>(pLine);
+}
+
+void fl_BlockLayout::releaseLoadReformat(void)
+{
+	if (m_iNeedsReformat != 0 || !getFirstContainer())
+		return;
+	m_iNeedsReformat = -1;
+	fl_DocSectionLayout * section = getDocSectionLayout();
+	if (section)
+		section->clearNeedsReformat(this);
 }
 
 void fl_BlockLayout::setNeedsReformat(fl_ContainerLayout * pCL,UT_uint32 offset)
@@ -5007,7 +5019,7 @@ bool fl_BlockLayout::checkSpelling(void)
 		m_iSpellCheckFrom = 0;
 	bUpdateScreen |= _checkMultiWord(m_iSpellCheckFrom, -1, false, chunk, &next);
 	if (bUpdateScreen && pView && isOnScreen())
-		pView->updateScreen(true);
+		pView->queueDraw();
 	if (next >= 0)
 	{
 		m_iSpellCheckFrom = next;
