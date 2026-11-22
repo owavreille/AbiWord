@@ -422,7 +422,9 @@ public:									// we create...
 	static void s_font_popup_shown(GObject * object, GParamSpec * /*pspec*/, _wd * wd)
 	{
 		GtkComboBox * combo = GTK_COMBO_BOX (object);
-		if (!wd || !wd->m_pUnixToolbar || !gtk_combo_box_get_popup_shown (combo))
+		gboolean shown = FALSE;
+		g_object_get (object, "popup-shown", &shown, nullptr);
+		if (!wd || !wd->m_pUnixToolbar || !shown)
 			return;
 		if (wd->m_blockSignal)
 			return;

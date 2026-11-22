@@ -23,6 +23,7 @@
 #include "ODe_Main_Listener.h"
 
 // Internal includes
+#include "ODe_AuxiliaryData.h"
 #include "ODe_Common.h"
 #include "ODe_Style_MasterPage.h"
 #include "ODe_Style_PageLayout.h"
