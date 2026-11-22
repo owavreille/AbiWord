@@ -522,22 +522,19 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 				// highlighted filter was still the previous format.
 				m_nFileType = docType;
 			}
-			else if (static_cast<IEFileType>(m_nFileType) == docType)
+
+			// The type list is not allowed to rewrite the name while the
+			// dialog is open: Windows validates that change immediately and
+			// reports an error as soon as .doc is chosen. Apply the chosen
+			// exporter's extension here, and only on the file name. A dot in
+			// a directory (C:\a.b\file) must stay put.
+			IE_ExpSniffer * sniffer = IE_Exp::snifferForFileType(static_cast<IEFileType>(m_nFileType));
+			if (sniffer)
 			{
-				if (suffix.empty())
-					path += ".doc";
-				else
-				{
-					const std::string::size_type dot = path.find_last_of('.');
-					if (dot != std::string::npos)
-						path.replace(dot, std::string::npos, ".doc");
-				}
-			}
-			else if (suffix.empty())
-			{
-				IE_ExpSniffer * sniffer = IE_Exp::snifferForFileType(static_cast<IEFileType>(m_nFileType));
-				if (sniffer)
-					path += sniffer->getPreferredSuffix().utf8_str();
+				const std::string want = sniffer->getPreferredSuffix().utf8_str();
+				if (!path.empty() && !want.empty() &&
+					(suffix.empty() || g_ascii_strcasecmp(suffix.c_str(), want.c_str())))
+					UT_addOrReplacePathSuffix(path, want.c_str());
 			}
 		}
 
@@ -573,10 +570,8 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 
  Static routine
  */
-UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UINT msg, WPARAM /*wParam*/, LPARAM lParam)
+UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND /*hDlg*/, UINT msg, WPARAM /*wParam*/, LPARAM lParam)
 {
-	XAP_Win32Dialog_FileOpenSaveAs* pThis;
-	static wchar_t buff[MAX_DLG_INS_PICT_STRING];
 	switch(msg)
 	{
 		case WM_NOTIFY:
@@ -585,50 +580,15 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UI
 				switch (pNotify->hdr.code)
 				{
 					case CDN_TYPECHANGE:
-						{
-							UT_DEBUGMSG(("SaveAs filetype changed to %d\n", pNotify->lpOFN->nFilterIndex));
-							pThis = (XAP_Win32Dialog_FileOpenSaveAs*)pNotify->lpOFN->lCustData;
-							if (!pThis)
-								break;
-							const wchar_t * ext = pThis->_getDefaultExtension(pNotify->lpOFN->nFilterIndex - 1);
-							// lpstrFile still holds the original name. The control has what was typed.
-							HWND hParent = GetParent(hDlg);
-							buff[0] = 0;
-							if (SendMessageW(hParent, CDM_GETSPEC, G_N_ELEMENTS(buff), (LPARAM)buff) <= 0 || !buff[0])
-							{
-								if (GetDlgItemTextW(hParent, cmb13, buff, MAX_DLG_INS_PICT_STRING) <= 0 || !buff[0])
-								{
-									if (GetDlgItemTextW(hParent, edt1, buff, MAX_DLG_INS_PICT_STRING) <= 0)
-										buff[0] = 0;
-								}
-							}
-							buff[MAX_DLG_INS_PICT_STRING - 1] = 0;
-							wchar_t * bslash = wcsrchr(buff, L'\\');
-							wchar_t * fslash = wcsrchr(buff, L'/');
-							wchar_t * slash = (bslash && fslash) ? (bslash > fslash ? bslash : fslash) : (bslash ? bslash : fslash);
-							wchar_t * name = slash ? slash + 1 : buff;
-							wchar_t * dot = wcsrchr(name, L'.');
-							if (dot)
-								*dot = 0;
-							if (*buff && ext && *ext)
-							{
-								size_t used = wcslen(buff);
-								size_t need = used + 1 + wcslen(ext);
-								if (need < MAX_DLG_INS_PICT_STRING)
-								{
-									buff[used] = L'.';
-									wcscpy(buff + used + 1, ext);
-									CommDlg_OpenSave_SetControlText(hParent, edt1, buff);
-									SetDlgItemTextW(hParent, cmb13, buff);
-								}
-							}
-							else if (dot)
-							{
-								CommDlg_OpenSave_SetControlText(hParent, edt1, buff);
-								SetDlgItemTextW(hParent, cmb13, buff);
-							}
-							CommDlg_OpenSave_SetDefExt(hParent, ext);
-						}
+						// Do not write the file name, and do not call
+						// _getDefaultExtension(). That call overwrites the
+						// buffer lpstrDefExt already points at, and a
+						// SetDlgItemText on the name combo makes the common
+						// dialog validate the name before this notification
+						// returns. Choosing Microsoft Word then fails at once:
+						// the name becomes .doc, that file often already
+						// exists, and Windows reports it as invalid. The
+						// chosen extension is applied after the dialog closes.
 						break;
 				}
 			}

@@ -406,6 +406,111 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	}
 }
 
+typedef BOOL (WINAPI *AboutAlphaBlendFn)(
+	HDC, int, int, int, int,
+	HDC, int, int, int, int,
+	BLENDFUNCTION);
+
+static AboutAlphaBlendFn aboutAlphaBlend(void)
+{
+	static AboutAlphaBlendFn fn = nullptr;
+	static bool tried = false;
+	if (!tried)
+	{
+		tried = true;
+		HMODULE dll = LoadLibraryW(L"msimg32.dll");
+		if (dll)
+		{
+			fn = reinterpret_cast<AboutAlphaBlendFn>(
+				reinterpret_cast<void *>(GetProcAddress(dll, "AlphaBlend")));
+			if (!fn)
+				FreeLibrary(dll);
+		}
+	}
+	return fn;
+}
+
+// StretchDIBits ignores the alpha channel, so a transparent logo would
+// paint a black rectangle. Blend the straight BGRA pixels over the face.
+static bool paintAboutLogo(HDC hdc, GR_Win32Image *pImage, int x, int y, int destW, int destH)
+{
+	BITMAPINFO *pDIB = pImage ? pImage->getDIB() : nullptr;
+	if (!hdc || !pDIB || destW <= 0 || destH <= 0)
+		return false;
+
+	int srcW = pDIB->bmiHeader.biWidth;
+	int srcH = pDIB->bmiHeader.biHeight;
+	if (srcW <= 0 || srcH == 0)
+		return false;
+	const bool topDown = srcH < 0;
+	if (topDown)
+		srcH = -srcH;
+
+	UT_Byte *pBits = reinterpret_cast<UT_Byte *>(pDIB) + pDIB->bmiHeader.biSize
+		+ pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
+	const int bpp = pDIB->bmiHeader.biBitCount / 8;
+	if (bpp != 4 || !pImage->hasAlpha())
+		return false;
+	int stride = srcW * bpp;
+	if (stride % 4)
+		stride += 4 - (stride % 4);
+
+	AboutAlphaBlendFn blend = aboutAlphaBlend();
+	if (!blend)
+		return false;
+
+	HDC mem = CreateCompatibleDC(hdc);
+	if (!mem)
+		return false;
+
+	BITMAPINFO bi;
+	memset(&bi, 0, sizeof(bi));
+	bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bi.bmiHeader.biWidth = srcW;
+	bi.bmiHeader.biHeight = srcH;
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+
+	void *bits = nullptr;
+	HBITMAP hbmp = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+	bool blended = false;
+	if (hbmp && bits)
+	{
+		const int dstStride = srcW * 4;
+		UT_Byte *dst = static_cast<UT_Byte *>(bits);
+		for (int row = 0; row < srcH; ++row)
+		{
+			const int srcRow = topDown ? (srcH - 1 - row) : row;
+			const UT_Byte *s = pBits + (size_t)srcRow * (size_t)stride;
+			UT_Byte *d = dst + (size_t)row * (size_t)dstStride;
+			for (int col = 0; col < srcW; ++col)
+			{
+				const UT_Byte a = s[3];
+				d[0] = (UT_Byte)((s[0] * a + 127) / 255);
+				d[1] = (UT_Byte)((s[1] * a + 127) / 255);
+				d[2] = (UT_Byte)((s[2] * a + 127) / 255);
+				d[3] = a;
+				s += 4;
+				d += 4;
+			}
+		}
+		HGDIOBJ prev = SelectObject(mem, hbmp);
+		BLENDFUNCTION blendfn;
+		blendfn.BlendOp = AC_SRC_OVER;
+		blendfn.BlendFlags = 0;
+		blendfn.SourceConstantAlpha = 255;
+		blendfn.AlphaFormat = AC_SRC_ALPHA;
+		blended = blend(hdc, x, y, destW, destH, mem, 0, 0, srcW, srcH, blendfn) != FALSE;
+		if (prev)
+			SelectObject(mem, prev);
+	}
+	if (hbmp)
+		DeleteObject(hbmp);
+	DeleteDC(mem);
+	return blended;
+}
+
 LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 {
 	// A window procedure must return LRESULT. BOOL leaves the top half
@@ -475,18 +580,21 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 		{
 			int imageWidth = pImage->getDisplayWidth();
 			int imageHeight = pImage->getDisplayHeight();
-			UT_Byte * pBits = ((unsigned char *) pDIB) + pDIB->bmiHeader.biSize
-				+ pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
 			int y = (r.bottom - imageHeight) / 2;
-			const int previousMode = SetStretchBltMode(hdc, HALFTONE);
-			POINT previousOrg;
-			SetBrushOrgEx(hdc, 0, 0, &previousOrg);
-			StretchDIBits(hdc,
-						  0, y, imageWidth, imageHeight,
-						  0, 0, pDIB->bmiHeader.biWidth, pDIB->bmiHeader.biHeight,
-						  pBits, pDIB, DIB_RGB_COLORS, SRCCOPY);
-			SetBrushOrgEx(hdc, previousOrg.x, previousOrg.y, nullptr);
-			SetStretchBltMode(hdc, previousMode);
+			if (!paintAboutLogo(hdc, pImage, 0, y, imageWidth, imageHeight))
+			{
+				UT_Byte * pBits = ((unsigned char *) pDIB) + pDIB->bmiHeader.biSize
+					+ pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
+				const int previousMode = SetStretchBltMode(hdc, HALFTONE);
+				POINT previousOrg;
+				SetBrushOrgEx(hdc, 0, 0, &previousOrg);
+				StretchDIBits(hdc,
+							  0, y, imageWidth, imageHeight,
+							  0, 0, pDIB->bmiHeader.biWidth, pDIB->bmiHeader.biHeight,
+							  pBits, pDIB, DIB_RGB_COLORS, SRCCOPY);
+				SetBrushOrgEx(hdc, previousOrg.x, previousOrg.y, nullptr);
+				SetStretchBltMode(hdc, previousMode);
+			}
 		}
 
 		EndPaint(hWnd,&ps);
