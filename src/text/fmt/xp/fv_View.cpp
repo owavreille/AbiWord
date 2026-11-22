@@ -9339,38 +9339,27 @@ void FV_View::reflowWebPageToWindow(void)
 	// The scrollbar can appear on the first pass and narrow the window.
 	for (int pass = 0; pass < 2; ++pass)
 	{
-		UT_uint32 zoom = m_pG->getZoomPercentage();
-		if (zoom < 1)
-			zoom = 100;
-		UT_sint32 iAdjustZoom = static_cast<UT_sint32>(calculateZoomPercentForPageWidth());
-		if (iAdjustZoom < 1)
-			break;
-
-		UT_Dimension orig_ut = m_pLayout->m_docViewPageSize.getDims();
-		double orig_width = m_pDoc->m_docPageSize.Width(orig_ut);
-		double orig_height = m_pDoc->m_docPageSize.Height(orig_ut);
-		if (orig_width < 0.5)
-			break;
-		double new_width = orig_width * static_cast<double>(iAdjustZoom) / static_cast<double>(zoom);
+		const UT_sint32 pad = m_pG->tlu(4);
+		double new_width = static_cast<double>(getWindowWidth() - pad) / 1440.0;
 		if (new_width < 1.0)
 			new_width = 1.0;
 		if (new_width > 50.0)
 			new_width = 50.0;
 
-		double current = m_pLayout->m_docViewPageSize.Width(orig_ut);
+		double orig_height = m_pDoc->m_docPageSize.Height(DIM_IN);
+		double current = m_pLayout->m_docViewPageSize.Width(DIM_IN);
 		double delta = new_width - current;
 		if (delta < 0)
 			delta = -delta;
-		if (delta < 0.05)
+		if (delta < 0.02)
 			break;
 
-		bool portrait = m_pLayout->m_docViewPageSize.isPortrait();
-		m_pLayout->m_docViewPageSize.Set(new_width, orig_height, orig_ut);
-		m_pLayout->m_docViewPageSize.Set(fp_PageSize::psCustom, orig_ut);
-		if (portrait)
-			m_pLayout->m_docViewPageSize.setPortrait();
-		else
-			m_pLayout->m_docViewPageSize.setLandscape();
+		m_pLayout->m_docViewPageSize.Set(new_width, orig_height, DIM_IN);
+		m_pLayout->m_docViewPageSize.Set(fp_PageSize::psCustom, DIM_IN);
+		// Width() follows the stored width only in portrait. A landscape
+		// document would otherwise keep the paper height as its width.
+		m_pLayout->m_docViewPageSize.setPortrait();
+		m_pLayout->syncViewPageDimensions();
 
 		fl_SectionLayout * pSL = m_pLayout->getFirstSection();
 		while (pSL)

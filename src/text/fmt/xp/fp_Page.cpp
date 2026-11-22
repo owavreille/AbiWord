@@ -1935,7 +1935,21 @@ void fp_Page::_reformatColumns(void)
 		iLeftMarginReal = pSL->getLeftMargin();
 		iRightMarginReal = pSL->getRightMargin();
 
-		UT_uint32 iSpace = getWidth() - iLeftMarginReal - iRightMarginReal;
+		// Web layout is the window, not the paper with its margins
+		// still reserved. Keeping the paper margins left a narrow
+		// column and a horizontal scrollbar.
+		UT_sint32 iSpaceLeft = iLeftMarginReal;
+		UT_sint32 iSpaceRight = iRightMarginReal;
+		if ((m_pView->getViewMode() == VIEW_WEB) &&
+		    !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
+		{
+			iSpaceLeft = iLeftMargin;
+			iSpaceRight = iRightMargin;
+		}
+		UT_sint32 iSpaceSigned = getWidth() - iSpaceLeft - iSpaceRight;
+		if (iSpaceSigned < 1)
+			iSpaceSigned = 1;
+		UT_uint32 iSpace = static_cast<UT_uint32>(iSpaceSigned);
 		pSL->checkAndAdjustColumnGap(iSpace);
 
 		UT_uint32 iNumColumns = pSL->getNumColumns();
