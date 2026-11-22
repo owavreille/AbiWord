@@ -17,6 +17,7 @@
 #include "xap_Dlg_MessageBox.h"
 #include "fv_View.h"
 #include "fl_BlockLayout.h"
+#include "pd_Document.h"
 #include "ev_EditMethod.h"
 #include "ev_Menu_Actions.h"
 #include "ev_Menu_Layouts.h"
