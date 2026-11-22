@@ -352,19 +352,20 @@ void ODi_Frame_ListenerState::_drawInlineImage (const gchar** ppAtts)
     pHeight = m_rElementStack.getStartTag(0)->getAttributeValue("svg:height");
     UT_ASSERT(pHeight);  
         
-    if (pWidth && pHeight)
+    if (pWidth && pHeight) {
         UT_String_sprintf(propsBuffer, "width:%s; height:%s", pWidth, pHeight);
-    else if (pWidth)
+    } else if (pWidth) {
         UT_String_sprintf(propsBuffer, "width:%s", pWidth);
-    else if (pHeight)
+    } else if (pHeight) {
         UT_String_sprintf(propsBuffer, "height:%s", pHeight);
-        
-	m_mPendingImgProps["props"] = propsBuffer.c_str();
-	m_mPendingImgProps["dataid"] = dataId.c_str();
+    }
 
-	// don't write the image out yet as we might get more properties, for
-	// example alt descriptions from the <svg:desc> tag
-	m_bInlineImagePending = true;
+    m_mPendingImgProps["props"] = propsBuffer.c_str();
+    m_mPendingImgProps["dataid"] = dataId.c_str();
+
+    // don't write the image out yet as we might get more properties, for
+    // example alt descriptions from the <svg:desc> tag
+    m_bInlineImagePending = true;
 }
 
 /**

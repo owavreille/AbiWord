@@ -210,9 +210,16 @@ abi_stock_init (void)
 	if (is_initialized) {
 		return;
 	}
+	if (gdk_screen_get_default() == nullptr) {
+		return;
+	}
+	GtkIconTheme * theme = gtk_icon_theme_get_default();
+	if (theme == nullptr) {
+		return;
+	}
 	is_initialized = TRUE;
 
-	gtk_icon_theme_add_resource_path(gtk_icon_theme_get_default(), "/com/abisource/AbiWord");
+	gtk_icon_theme_add_resource_path(theme, "/com/abisource/AbiWord");
 }
 
 /*!

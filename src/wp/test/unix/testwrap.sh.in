@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 G_DEBUG=gc-friendly
 export G_DEBUG
@@ -21,5 +21,6 @@ EOF
 LSAN_OPTIONS=suppressions=./supp.txt
 export LSAN_OPTIONS
 
-exec libtool --mode=execute ./AbiWord-test
+# Filter out external glycin-loaders sandbox warning emitted in unprivileged containers
+exec libtool --mode=execute ./AbiWord-test 2> >(grep -v '^WARNING: Glycin running without sandbox\.' >&2)
 

@@ -28,12 +28,49 @@ fetch() {
 # Libtool cherche winepath pour convertir le chemin des exécutables non
 # installés. On ne les lance pas, donc le chemin de construction suffit.
 common=(
+	--build=x86_64-pc-linux-gnu
 	--host=x86_64-w64-mingw32
 	--prefix="$PREFIX"
 	--disable-static
 	--enable-shared
 	lt_cv_to_host_file_cmd=func_convert_file_noop
+	ac_cv_prog_FILE=/usr/bin/file
+	FGREP="grep -F"
+	EGREP="grep -E"
 )
+
+# Neutralise les avertissements inoffensifs des anciens scripts configure
+# (gtk-doc absent, WWW désactivé volontairement, BDB non utilisé, fgrep obsolète).
+silence_configure_warnings() {
+	python3 - << 'PY'
+from pathlib import Path
+cfg = Path("configure")
+text = cfg.read_text(errors="replace")
+text = text.replace("fgrep", "grep -F")
+for warn in (
+    "No WWW library in use - only file: URLs will work",
+    "Install libcurl, libxml2 or BSD libfetch for WWW access",
+    "because gtk-doc >=",
+    "Assuming ceil, floor and round are in default libs for cross compiling",
+    "Cannot find the BDB library name from the files in",
+    "Assuming it is 'db' and will link like -ldb",
+    "Use --with-bdb-dbname=NAME if this is wrong",
+):
+    text = text.replace(f"WARNING: {warn}", f"NOTE: {warn}")
+text = text.replace(
+    'as_fn_ schedule_warning "You will not be able',
+    ': "You will not be able',
+)
+text = text.replace(
+    '{ $as_echo "$as_me:${as_lineno-$LINENO}: WARNING:\n  You will not be able',
+    'if false; then { $as_echo "$as_me:${as_lineno-$LINENO}: NOTE:\n  You will not be able',
+).replace(
+    'because gtk-doc >= 1.3 is not found." >&2;}',
+    'because gtk-doc >= 1.3 is not found." >&2;}; fi',
+)
+cfg.write_text(text)
+PY
+}
 
 # libtool refuse une DLL MinGW tant que chaque symbole n'est pas résolu.
 mark_defined() {
@@ -69,6 +106,7 @@ for path in (Path("src/parsedate.y"), Path("src/parsedate.c")):
         raise SystemExit(f"YYSTYPE introuvable dans {path}")
     path.write_text(text.replace(old_type, new_type, 1))
 PY
+	silence_configure_warnings
 	./configure "${common[@]}" --with-www=none
 	mark_defined
 	make -j"$(nproc)"
@@ -94,6 +132,7 @@ if old not in text:
     raise SystemExit("garde PCREPOSIX_EXP_DECL introuvable dans pcreposix.c")
 path.write_text(text.replace(old, new, 1))
 PY
+	silence_configure_warnings
 	./configure "${common[@]}" --enable-utf --enable-unicode-properties
 	mark_defined
 	make -j"$(nproc)"
@@ -135,6 +174,7 @@ if old_accept not in text:
     raise SystemExit("appel raptor_www_set_http_accept introuvable")
 service.write_text(text.replace(old_accept, new_accept, 1))
 PY
+	silence_configure_warnings
 	./configure "${common[@]}" \
 		--with-regex-library=pcre \
 		--with-decimal=none \
@@ -181,8 +221,10 @@ if old_check not in text:
     raise SystemExit("appel rasqal_query_results_formats_check introuvable")
 results.write_text(text.replace(old_check, new_check, 1))
 PY
+	silence_configure_warnings
 	./configure "${common[@]}" \
 		--disable-modular \
+		--with-bdb=no \
 		--with-sqlite=no \
 		--with-mysql=no \
 		--with-postgresql=no \

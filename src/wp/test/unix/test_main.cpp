@@ -20,6 +20,8 @@
 
 #include "../xp/main.cpp"
 
+#include <gtk/gtk.h>
+
 #include "all_test_unix.h"
 #include "ap_UnixApp.h"
 
@@ -27,8 +29,11 @@ static AP_UnixApp *app = nullptr;
 
 void init_platform(void)
 {
+	int argc = 0;
+	char **argv = nullptr;
+	const bool has_display = (gtk_init_check(&argc, &argv) == TRUE);
 	app = new AP_UnixApp(PACKAGE);
-	app->initialize(TRUE);
+	app->initialize(has_display);
 }
 
 

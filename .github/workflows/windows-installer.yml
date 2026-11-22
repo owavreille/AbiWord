@@ -105,7 +105,9 @@ jobs:
           cd /tmp/wv-1.2.9
           patch -p1 < "$GITHUB_WORKSPACE/packaging/windows/wv-1.2.9-bounds.patch"
           patch -p1 < "$GITHUB_WORKSPACE/packaging/windows/wv-1.2.9-warnings.patch"
+          sed -i '1i # @datarootdir@' wv*.in
           ./configure \
+            --build=x86_64-pc-linux-gnu \
             --host=x86_64-w64-mingw32 \
             --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
             --enable-static \

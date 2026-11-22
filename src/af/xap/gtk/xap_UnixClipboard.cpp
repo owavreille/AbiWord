@@ -49,8 +49,13 @@ static AV_View * viewFromApp(XAP_App * pApp)
 XAP_UnixClipboard::XAP_UnixClipboard(XAP_UnixApp * pUnixApp)
 	: m_pUnixApp(pUnixApp), m_Targets(nullptr), m_nTargets(0)
 {
-	m_clip = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
-	m_primary = gtk_clipboard_get(GDK_SELECTION_PRIMARY);
+	if (gdk_display_get_default() != nullptr) {
+		m_clip = gtk_clipboard_get(GDK_SELECTION_CLIPBOARD);
+		m_primary = gtk_clipboard_get(GDK_SELECTION_PRIMARY);
+	} else {
+		m_clip = nullptr;
+		m_primary = nullptr;
+	}
 }
 
 XAP_UnixClipboard::~XAP_UnixClipboard()
@@ -167,7 +172,10 @@ void XAP_UnixClipboard::clipboard_get_func(GtkClipboard *clipboard,
 
 bool XAP_UnixClipboard::assertSelection()
 {
-  return (gtk_clipboard_set_with_data (gtkClipboardForTarget(TAG_PrimaryOnly),
+	GtkClipboard * clip = gtkClipboardForTarget(TAG_PrimaryOnly);
+	if (!clip)
+		return false;
+	return (gtk_clipboard_set_with_data (clip,
 										 m_Targets,
 										 m_nTargets,
 										 s_primary_get_func,
@@ -190,27 +198,32 @@ bool XAP_UnixClipboard::addData(T_AllowGet tFrom, const char* format, const void
 
 void XAP_UnixClipboard::finishedAddingData(void)
 {
-  gtk_clipboard_set_with_data (gtkClipboardForTarget(TAG_ClipboardOnly),
+	GtkClipboard * clip = gtkClipboardForTarget(TAG_ClipboardOnly);
+	if (!clip)
+		return;
+	gtk_clipboard_set_with_data (clip,
 			       m_Targets,
 			       m_nTargets,
 			       s_clipboard_get_func,
 			       s_clipboard_clear_func,
 			       this);
 
-  gtk_clipboard_set_can_store (gtkClipboardForTarget(TAG_ClipboardOnly), m_Targets, m_nTargets);
+	gtk_clipboard_set_can_store (clip, m_Targets, m_nTargets);
 }
 
 void XAP_UnixClipboard::clearData(bool bClipboard, bool bPrimary)
 {
 	if (bClipboard)
     {
-		gtk_clipboard_clear (gtkClipboardForTarget (TAG_ClipboardOnly));
+		if (GtkClipboard * clip = gtkClipboardForTarget(TAG_ClipboardOnly))
+			gtk_clipboard_clear(clip);
 		m_fakeClipboard.clearClipboard();
     }
 	
 	if (bPrimary)
     {
-		gtk_clipboard_clear(gtkClipboardForTarget (TAG_PrimaryOnly));
+		if (GtkClipboard * clip = gtkClipboardForTarget(TAG_PrimaryOnly))
+			gtk_clipboard_clear(clip);
 		m_fakePrimaryClipboard.clearClipboard();
     }
 }
@@ -240,6 +253,8 @@ bool XAP_UnixClipboard::getTextData(T_AllowGet tFrom, void ** ppData,
 	*pLen = 0;
 	
 	GtkClipboard * clippy = gtkClipboardForTarget (tFrom);
+	if (!clippy)
+		return false;
 	
 	char * txt = gtk_clipboard_wait_for_text (clippy);
 	
@@ -315,6 +330,8 @@ bool XAP_UnixClipboard::_getDataFromServer(T_AllowGet tFrom, const char** format
 	  return false;
 
 	GtkClipboard * clipboard = gtkClipboardForTarget (tFrom);
+	if (!clipboard)
+		return false;
 #if DEBUG
 	gtk_clipboard_request_targets(clipboard,( GtkClipboardTargetsReceivedFunc) allTargets, this);
 #endif
