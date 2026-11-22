@@ -36,10 +36,16 @@
 #include <string>
 #include <vector>
 
+#include <glib.h>
+#include <glib/gstdio.h>
+
 #include <gsf/gsf-outfile.h>
 #include <gsf/gsf-outfile-msole.h>
 #include <gsf/gsf-output-memory.h>
+#include <gsf/gsf-output-stdio.h>
 #include <gsf/gsf-output.h>
+
+#include "ut_go_file.h"
 
 #include "ie_exp_MsWord_97.h"
 #include "pd_Document.h"
@@ -1205,6 +1211,21 @@ IE_Exp_MsWord_97::IE_Exp_MsWord_97(PD_Document * pDocument)
 
 IE_Exp_MsWord_97::~IE_Exp_MsWord_97()
 {
+}
+
+GsfOutput * IE_Exp_MsWord_97::_openFile(const char * szFilename)
+{
+	// The usual saver writes .gsf-save-XXXXXX and renames it when the
+	// file is closed. Windows refuses that rename for a .doc name, so
+	// the export reports that it could not write. Open the destination.
+	char * local = UT_go_filename_from_uri(szFilename);
+	const char * path = (local && *local) ? local : szFilename;
+	FILE * file = path ? g_fopen(path, "wb") : nullptr;
+	GsfOutput * output = nullptr;
+	if (file)
+		output = gsf_output_stdio_new_FILE(path ? path : szFilename, file, FALSE);
+	g_free(local);
+	return output;
 }
 
 UT_Error IE_Exp_MsWord_97::_writeDocument(void)
