@@ -28,6 +28,7 @@ TESTS = test_llm
 
 test_llm_CPPFLAGS = \
 	-DHAVE_CONFIG_H \
+	-I$(srcdir)/xp \
 	$(LLM_CFLAGS)
 
 test_llm_LDADD = \
