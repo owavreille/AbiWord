@@ -31,6 +31,7 @@ public:
 	virtual ~IE_Exp_MsWord_97();
 
 protected:
+	virtual GsfOutput * _openFile(const char * szFilename) override;
 	virtual UT_Error _writeDocument(void) override;
 };
 
