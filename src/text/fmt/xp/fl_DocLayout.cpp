@@ -661,8 +661,14 @@ void FL_DocLayout::fillLayouts(void)
 		setLayoutIsFilling(false);
 		m_pView->moveInsPtTo(FV_DOCPOS_BOD);
 		m_pView->clearCursorWait();
-		m_pView->updateLayout();
-		if(!pG->queryProperties(GR_Graphics::DGP_PAPER))
+		// The section was broken while the layout was still filling, which
+		// empties the first column before placing each line. Updating again
+		// breaks that section without emptying the columns. On paper the
+		// header, the body and the footer then land on different pages.
+		const bool paper = pG && pG->queryProperties(GR_Graphics::DGP_PAPER);
+		if (!paper)
+			m_pView->updateLayout();
+		if(!paper)
 		{
 			m_pView->queueDraw();
 			XAP_Frame * pFrame = static_cast<XAP_Frame *>(m_pView->getParentData());

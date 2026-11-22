@@ -776,12 +776,41 @@ static std::string pdf_inflate_streams(const std::string & bytes)
 		const std::string::size_type marker = bytes.find("stream", i);
 		if (marker == std::string::npos)
 			break;
+		const bool keyword = marker > 0
+			&& (bytes[marker - 1] == '\n' || bytes[marker - 1] == '\r' || bytes[marker - 1] == ' ')
+			&& !(marker >= 3 && bytes.compare(marker - 3, 3, "end") == 0);
+		if (!keyword)
+		{
+			i = marker + 6;
+			continue;
+		}
 		std::string::size_type start = marker + 6;
 		if (start + 1 < bytes.size() && bytes[start] == '\r' && bytes[start + 1] == '\n')
 			start += 2;
 		else if (start < bytes.size() && (bytes[start] == '\n' || bytes[start] == '\r'))
 			start += 1;
-		const std::string::size_type end = bytes.find("endstream", start);
+		std::string::size_type end = std::string::npos;
+		const std::string::size_type look = marker > 120 ? marker - 120 : 0;
+		const std::string::size_type lenAt = bytes.rfind("/Length", marker);
+		if (lenAt != std::string::npos && lenAt >= look)
+		{
+			std::string::size_type n = lenAt + 7;
+			while (n < marker && (bytes[n] == ' ' || bytes[n] == '\t' || bytes[n] == '\r' || bytes[n] == '\n'))
+				++n;
+			if (n < marker && bytes[n] >= '0' && bytes[n] <= '9')
+			{
+				unsigned long length = 0;
+				while (n < marker && bytes[n] >= '0' && bytes[n] <= '9')
+				{
+					length = length * 10 + static_cast<unsigned long>(bytes[n] - '0');
+					++n;
+				}
+				if (start + length <= bytes.size())
+					end = start + length;
+			}
+		}
+		if (end == std::string::npos)
+			end = bytes.find("endstream", start);
 		if (end == std::string::npos)
 			break;
 		std::string raw = bytes.substr(start, end - start);
@@ -816,7 +845,13 @@ static std::string pdf_inflate_streams(const std::string & bytes)
 		}
 		else
 			text += raw;
-		i = end + 9;
+		if (bytes.compare(end, 9, "endstream") == 0)
+			i = end + 9;
+		else
+		{
+			const std::string::size_type tail = bytes.find("endstream", end);
+			i = tail == std::string::npos ? end : tail + 9;
+		}
 	}
 	return text;
 }
@@ -839,6 +874,48 @@ static int pdf_page_count(const std::string & bytes)
 		i = name + 4;
 	}
 	return pages;
+}
+
+static int pdf_declared_pages(const std::string & bytes)
+{
+	int declared = -1;
+	for (std::string::size_type i = 0; i < bytes.size();)
+	{
+		const std::string::size_type at = bytes.find("/Type", i);
+		if (at == std::string::npos)
+			break;
+		std::string::size_type name = at + 5;
+		while (name < bytes.size() && (bytes[name] == ' ' || bytes[name] == '\t' || bytes[name] == '\r' || bytes[name] == '\n'))
+			++name;
+		if (name < bytes.size() && bytes[name] == '/')
+			++name;
+		if (bytes.compare(name, 5, "Pages") != 0)
+		{
+			i = name + 4;
+			continue;
+		}
+		const std::string::size_type end = bytes.find(">>", name);
+		const std::string::size_type count = bytes.find("/Count", name);
+		if (count != std::string::npos && (end == std::string::npos || count < end))
+		{
+			std::string::size_type n = count + 6;
+			while (n < bytes.size() && (bytes[n] == ' ' || bytes[n] == '\t' || bytes[n] == '\r' || bytes[n] == '\n'))
+				++n;
+			if (n < bytes.size() && bytes[n] >= '0' && bytes[n] <= '9')
+			{
+				int value = 0;
+				while (n < bytes.size() && bytes[n] >= '0' && bytes[n] <= '9')
+				{
+					value = value * 10 + (bytes[n] - '0');
+					++n;
+				}
+				if (value > declared)
+					declared = value;
+			}
+		}
+		i = name + 5;
+	}
+	return declared;
 }
 
 static bool pdf_has_text(const std::string & bytes, const char * marker)
@@ -1123,9 +1200,16 @@ TFTEST_MAIN("PDF export keeps header, body and footer on one page")
 	std::remove(path.c_str());
 
 	const std::string decoded = pdf_inflate_streams(bytes);
-	const int pages = pdf_page_count(decoded);
+	int declared = pdf_declared_pages(decoded);
+	if (declared < 0)
+		declared = pdf_declared_pages(bytes);
+	if (declared < 0)
+	{
+		const int pages = pdf_page_count(decoded);
+		declared = pages > 0 ? pages : pdf_page_count(bytes);
+	}
 	TFPASS(bytes.compare(0, 5, "%PDF-") == 0);
-	TFPASS((pages > 0 ? pages : pdf_page_count(bytes)) == 1);
+	TFPASSEQ(declared, 1);
 	TFPASS(pdf_has_text(bytes, "EntetePdf"));
 	TFPASS(pdf_has_text(bytes, "CorpsPdf"));
 	TFPASS(pdf_has_text(bytes, "PiedPdf"));
