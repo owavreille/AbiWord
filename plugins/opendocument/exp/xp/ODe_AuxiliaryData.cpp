@@ -28,6 +28,7 @@
 
 
 ODe_AuxiliaryData::ODe_AuxiliaryData() :
+    m_pCurrentPageLayout(nullptr),
     m_pDoc(nullptr),
     m_pTOCContents(nullptr),
     m_tableCount(0),

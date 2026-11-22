@@ -105,11 +105,13 @@ void ODe_Style_PageLayout::fetchAttributesFromAbiSection(const PP_AttrProp* pAP,
      * heights.
      */
 
-    // Note: no need to check separately for the existence of a "header-even"
-    // property: "header-even" only exists in AbiWord when "header" also exists.
-    ok = pAP->getAttribute("header", pValue);
-    if (ok && pValue != nullptr)
-         hasHeader = true;
+    // Detect any header variant (regular, even, first, last).
+    if ((pAP->getAttribute("header", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("header-even", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("header-first", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("header-last", pValue) && pValue && *pValue)) {
+        hasHeader = true;
+    }
 
     ok = pAP->getProperty("page-margin-top", pValue);
     if (ok && pValue != nullptr)
@@ -120,29 +122,31 @@ void ODe_Style_PageLayout::fetchAttributesFromAbiSection(const PP_AttrProp* pAP,
     if (hasHeader)
     {
         ok = pAP->getProperty("page-margin-header", pValue);
-        if (ok && pValue != nullptr) {
-        
-            abiHeaderMarginCM = UT_convertToDimension(pValue, DIM_CM);
-        
-            // Set the header height
-            abiTopMarginCM = UT_convertToDimension(m_marginTop.utf8_str(), DIM_CM);
-            // ODF 1.3 §20.407.2 / §18.3.18: a negative height clips the header
-            // away. Keep a non-negative minimum and let the content grow.
-            double headerHeight = abiTopMarginCM - abiHeaderMarginCM;
-            if (headerHeight < 0.0)
-                headerHeight = 0.0;
-            UT_UTF8String_sprintf(m_headerHeight, "%fcm", headerHeight);
-        
-            // Redefine the top margin
-            UT_UTF8String_sprintf(m_marginTop, "%fcm",abiHeaderMarginCM);
-        }
+        const gchar* headerMarginStr = (ok && pValue && *pValue) ? pValue : "0.5in";
+        abiHeaderMarginCM = UT_convertToDimension(headerMarginStr, DIM_CM);
+        if (abiHeaderMarginCM < 0.0)
+            abiHeaderMarginCM = 0.0;
+
+        // Set the header height
+        abiTopMarginCM = UT_convertToDimension(m_marginTop.utf8_str(), DIM_CM);
+        // ODF 1.3 §20.407.2 / §18.3.18: a negative height clips the header
+        // away. Keep a non-negative minimum and let the content grow.
+        double headerHeight = abiTopMarginCM - abiHeaderMarginCM;
+        if (headerHeight < 0.0)
+            headerHeight = 0.0;
+        UT_UTF8String_sprintf(m_headerHeight, "%fcm", headerHeight);
+
+        // Redefine the top margin
+        UT_UTF8String_sprintf(m_marginTop, "%fcm", abiHeaderMarginCM);
     }
 
-    // Note: no need to check separately for the existence of a "footer-even"
-    // property: "footer-even" only exists in AbiWord when "footer" also exists.
-    ok = pAP->getAttribute("footer", pValue);
-    if (ok && pValue != nullptr)
-         hasFooter = true;
+    // Detect any footer variant (regular, even, first, last).
+    if ((pAP->getAttribute("footer", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("footer-even", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("footer-first", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("footer-last", pValue) && pValue && *pValue)) {
+        hasFooter = true;
+    }
 
     ok = pAP->getProperty("page-margin-bottom", pValue);
     if (ok && pValue != nullptr)
@@ -153,20 +157,20 @@ void ODe_Style_PageLayout::fetchAttributesFromAbiSection(const PP_AttrProp* pAP,
     if (hasFooter)
     {
         ok = pAP->getProperty("page-margin-footer", pValue);
-        if (ok && pValue != nullptr) {
-        
-            abiFooterMarginCM = UT_convertToDimension(pValue, DIM_CM);
-        
-            // Set the footer height
-            abiBottomMarginCM = UT_convertToDimension(m_marginBottom.utf8_str(), DIM_CM);
-            double footerHeight = abiBottomMarginCM - abiFooterMarginCM;
-            if (footerHeight < 0.0)
-                footerHeight = 0.0;
-            UT_UTF8String_sprintf(m_footerHeight, "%fcm", footerHeight);
-        
-            // Redefine the bottom margin
-            UT_UTF8String_sprintf(m_marginBottom, "%fcm",abiFooterMarginCM);
-        }
+        const gchar* footerMarginStr = (ok && pValue && *pValue) ? pValue : "0.5in";
+        abiFooterMarginCM = UT_convertToDimension(footerMarginStr, DIM_CM);
+        if (abiFooterMarginCM < 0.0)
+            abiFooterMarginCM = 0.0;
+
+        // Set the footer height
+        abiBottomMarginCM = UT_convertToDimension(m_marginBottom.utf8_str(), DIM_CM);
+        double footerHeight = abiBottomMarginCM - abiFooterMarginCM;
+        if (footerHeight < 0.0)
+            footerHeight = 0.0;
+        UT_UTF8String_sprintf(m_footerHeight, "%fcm", footerHeight);
+
+        // Redefine the bottom margin
+        UT_UTF8String_sprintf(m_marginBottom, "%fcm", abiFooterMarginCM);
     }
 
     ok = pAP->getProperty("page-margin-left", pValue);
@@ -238,6 +242,17 @@ bool ODe_Style_PageLayout::hasPageLayoutInfo(const PP_AttrProp* pAP) {
 
     ok = pAP->getAttribute("strux-image-dataid", pValue);
     if (ok && pValue != nullptr) {
+        return true;
+    }
+
+    if ((pAP->getAttribute("header", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("header-even", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("header-first", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("header-last", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("footer", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("footer-even", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("footer-first", pValue) && pValue && *pValue) ||
+        (pAP->getAttribute("footer-last", pValue) && pValue && *pValue)) {
         return true;
     }
 
@@ -342,7 +357,7 @@ bool ODe_Style_PageLayout::write(GsfOutput* pODT,
     
     // Close the <style:page-layout> element.
     UT_UTF8String_sprintf(output, "%s</style:page-layout>\n",
-        rSpacesOffset.utf8_str(), m_name.utf8_str());
+        rSpacesOffset.utf8_str());
 
     ODe_writeUTF8String(pODT, output);
     

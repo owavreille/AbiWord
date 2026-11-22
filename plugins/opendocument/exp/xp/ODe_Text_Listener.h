@@ -138,6 +138,7 @@ private:
     void _closeODParagraph();
     void _closeODList();
     void _openParagraphDelayed();
+    void _flushPendingFrames();
     
     const PP_AttrProp* m_delayedAP;
     ODe_Style_List*    m_delayedListStyle;
@@ -146,6 +147,12 @@ private:
     bool               m_delayedColumnBreak;
     std::string        m_delayedMasterPageStyleName;
     UT_uint32          m_delayedSpacesOffset;
+
+    // Floating frames (images/textboxes) encountered before a paragraph opens
+    // are attached to the next paragraph to avoid empty paragraphs or orphan
+    // draw:frame elements outside <text:p>.
+    UT_UTF8String      m_pendingFrames;
+    GsfOutput*         m_pPendingTextboxBuffer;
 
     bool m_openedODParagraph;
     bool m_openedODSpan;

@@ -50,7 +50,10 @@
 #include <glib/gstdio.h>
 
 #include <unistd.h>
+#include <ctype.h>
+#include <stdio.h>
 #include <set>
+#include <string>
 
 /*****************************************************************/
 /*****************************************************************/
@@ -62,6 +65,101 @@ ie_exp_cairo_write_func (void *closure, const unsigned char *data, unsigned int 
 		return CAIRO_STATUS_WRITE_ERROR;
     return CAIRO_STATUS_SUCCESS;
 }
+
+#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 16, 0)
+static std::string ie_exp_pdf_iso_date(const std::string & raw)
+{
+	std::string s = raw;
+	while (!s.empty() && isspace(static_cast<unsigned char>(s.back())))
+		s.pop_back();
+	size_t start = 0;
+	while (start < s.size() && isspace(static_cast<unsigned char>(s[start])))
+		++start;
+	if (start > 0)
+		s.erase(0, start);
+	if (s.empty())
+		return std::string();
+
+	// Already ISO-8601 (YYYY-MM-DD...)
+	int year = 0, month = 0, day = 0, hour = 0, min = 0, sec = 0;
+	if (sscanf(s.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d", &year, &month, &day, &hour, &min, &sec) == 6 &&
+		year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+		hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60)
+	{
+		return s;
+	}
+	if (sscanf(s.c_str(), "%4d-%2d-%2d %2d:%2d:%2d", &year, &month, &day, &hour, &min, &sec) == 6 &&
+		year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+		hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60)
+	{
+		char buf[32];
+		snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d", year, month, day, hour, min, sec);
+		return buf;
+	}
+	if (s.size() == 10 && sscanf(s.c_str(), "%4d-%2d-%2d", &year, &month, &day) == 3 &&
+		year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31)
+	{
+		char buf[32];
+		snprintf(buf, sizeof(buf), "%04d-%02d-%02dT00:00:00", year, month, day);
+		return buf;
+	}
+
+	// ctime() format produced by FV_View::_updateDatesBeforeSave: "Www Mmm dd hh:mm:ss yyyy"
+	char wday[8] = {}, mon[8] = {};
+	if (sscanf(s.c_str(), "%3s %3s %d %d:%d:%d %d", wday, mon, &day, &hour, &min, &sec, &year) == 7)
+	{
+		static const char * const months[12] = {
+			"Jan", "Feb", "Mar", "Apr", "May", "Jun",
+			"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+		};
+		month = 0;
+		for (int i = 0; i < 12; ++i)
+		{
+			if (g_ascii_strcasecmp(mon, months[i]) == 0)
+			{
+				month = i + 1;
+				break;
+			}
+		}
+		if (month >= 1 && year >= 1 && day >= 1 && day <= 31 &&
+			hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60)
+		{
+			char buf[32];
+			snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d", year, month, day, hour, min, sec);
+			return buf;
+		}
+	}
+	return std::string();
+}
+
+static void ie_exp_pdf_apply_metadata(cairo_surface_t * surface, PD_Document * doc)
+{
+	if (!surface || !doc)
+		return;
+	std::string val;
+	if (doc->getMetaDataProp(PD_META_KEY_TITLE, val) && !val.empty())
+		cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_TITLE, val.c_str());
+	if (doc->getMetaDataProp(PD_META_KEY_CREATOR, val) && !val.empty())
+		cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_AUTHOR, val.c_str());
+	if (doc->getMetaDataProp(PD_META_KEY_SUBJECT, val) && !val.empty())
+		cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_SUBJECT, val.c_str());
+	if (doc->getMetaDataProp(PD_META_KEY_KEYWORDS, val) && !val.empty())
+		cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_KEYWORDS, val.c_str());
+	cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_CREATOR, "AbiWord");
+	if (doc->getMetaDataProp(PD_META_KEY_DATE, val) && !val.empty())
+	{
+		const std::string iso = ie_exp_pdf_iso_date(val);
+		if (!iso.empty())
+			cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_CREATE_DATE, iso.c_str());
+	}
+	if (doc->getMetaDataProp(PD_META_KEY_DATE_LAST_CHANGED, val) && !val.empty())
+	{
+		const std::string iso = ie_exp_pdf_iso_date(val);
+		if (!iso.empty())
+			cairo_pdf_surface_set_metadata(surface, CAIRO_PDF_METADATA_MOD_DATE, iso.c_str());
+	}
+}
+#endif
 
 class ABI_EXPORT IE_Exp_Cairo : public IE_Exp
 {
@@ -95,22 +193,26 @@ public:
     std::set<UT_sint32> pages;
     const std::string & pages_prop = getProperty ("pages");
 
-    double width, height;
+    double width = getDoc()->m_docPageSize.Width (DIM_IN);
+    double height = getDoc()->m_docPageSize.Height (DIM_IN);
+    if (width <= 0.0 || height <= 0.0)
+      {
+        width = 8.5;
+        height = 11.0;
+      }
 
-    width = getDoc()->m_docPageSize.Width (DIM_IN);
-    height = getDoc()->m_docPageSize.Height (DIM_IN);
-
-	// Cairo expects the width/height of the surface in points, with 1 point == 1/72 inch). For details, see
-	// http://cairographics.org/manual/cairo-pdf-surface.html#cairo-pdf-surface-create-for-stream
-	// Fixes bug 11343 - export to pdf uses wrong document size
-	UT_uint32 dpi = 72;
+	// Cairo expects the width/height of the surface in points (1 point == 1/72 inch).
+	// Use 144 DPI device space (matching XAP_UnixDialog_Print / gr_PRINTRES) scaled to
+	// 72 DPI PDF user space for sub-point border precision and sharper raster images.
+	const double pointsPerInch = 72.0;
+	const UT_uint32 dpi = 144;
 	if (BACKEND_PDF == mFormat)
-		surface = cairo_pdf_surface_create_for_stream(ie_exp_cairo_write_func, getFp(), width * dpi, height * dpi);
+		surface = cairo_pdf_surface_create_for_stream(ie_exp_cairo_write_func, getFp(), width * pointsPerInch, height * pointsPerInch);
 	else if (BACKEND_PS == mFormat)
-		surface = cairo_ps_surface_create_for_stream(ie_exp_cairo_write_func, getFp(), width * dpi, height * dpi);
+		surface = cairo_ps_surface_create_for_stream(ie_exp_cairo_write_func, getFp(), width * pointsPerInch, height * pointsPerInch);
 	else if (BACKEND_SVG == mFormat)
 		{
-			// surface = cairo_svg_surface_create_for_stream(ie_exp_cairo_write_func, getFp(), width * dpi, height * dpi);
+			// surface = cairo_svg_surface_create_for_stream(ie_exp_cairo_write_func, getFp(), width * pointsPerInch, height * pointsPerInch);
 			return UT_ERROR;
 		}
 	else
@@ -118,8 +220,31 @@ public:
 			return UT_ERROR;
 		}
 
+	if (!surface || cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS)
+		{
+			if (surface)
+				cairo_surface_destroy(surface);
+			return UT_ERROR;
+		}
+
+#if CAIRO_VERSION >= CAIRO_VERSION_ENCODE(1, 16, 0)
+	if (BACKEND_PDF == mFormat)
+		ie_exp_pdf_apply_metadata(surface, getDoc());
+#endif
+
 	cr = cairo_create(surface);
-	cairo_surface_destroy(surface), surface = nullptr;
+	if (!cr || cairo_status(cr) != CAIRO_STATUS_SUCCESS)
+		{
+			if (cr)
+				cairo_destroy(cr);
+			cairo_surface_finish(surface);
+			cairo_surface_destroy(surface);
+			return UT_ERROR;
+		}
+
+	const double scale = pointsPerInch / static_cast<double>(dpi);
+	cairo_scale(cr, scale, scale);
+	cairo_translate(cr, 0.5, 0.5);
 
 	print_graphics = new GR_CairoPrintGraphics(cr, dpi);
     pDocLayout = new FL_DocLayout(getDoc(), print_graphics);
@@ -134,8 +259,6 @@ public:
 		printView->setViewMode(VIEW_PRINT);
     printView->getLayout()->fillLayouts();
     printView->getLayout()->recalculateTOCFields();
-
-	// TODO lifecycle of "surface" and "cr"?
 
     if (!pages_prop.empty())
       {
@@ -175,9 +298,11 @@ public:
     const UT_sint32 pageCount = pDocLayout->countPages();
     if (pageCount < 1)
       {
-		DELETEP(print_graphics);
-		DELETEP(pDocLayout);
 		DELETEP(printView);
+		DELETEP(pDocLayout);
+		DELETEP(print_graphics);
+		cairo_surface_finish(surface);
+		cairo_surface_destroy(surface);
 		return UT_ERROR;
       }
 
@@ -195,13 +320,18 @@ public:
 					 pDocLayout->getWidth(), pDocLayout->getHeight() / pageCount, 
 					 pages);
     const cairo_status_t drawn = cairo_status(cr);
-	
+
+    // Destroy view and layout before print_graphics (which owns cr), then
+    // finish the PDF/PS surface so streams, xref, and %%EOF are flushed and checked.
+    DELETEP(printView);
+    DELETEP(pDocLayout);
     DELETEP(print_graphics);
 
-    DELETEP(pDocLayout);
-    DELETEP(printView);
-    DELETEP(print_graphics);
-    if (!printed || drawn != CAIRO_STATUS_SUCCESS)
+    cairo_surface_finish(surface);
+    const cairo_status_t surfaceStatus = cairo_surface_status(surface);
+    cairo_surface_destroy(surface);
+
+    if (!printed || drawn != CAIRO_STATUS_SUCCESS || surfaceStatus != CAIRO_STATUS_SUCCESS)
 		return UT_ERROR;
     return UT_OK;
   }

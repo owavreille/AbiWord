@@ -35,6 +35,84 @@
 #include "ut_std_string.h"
 #include "pd_Document.h"
 
+#include <ctype.h>
+#include <stdio.h>
+
+/**
+ * Normalize an AbiWord date string (ISO-8601 or ctime() output from
+ * FV_View::_updateDatesBeforeSave) to strict ODF 1.3 xsd:dateTime
+ * (YYYY-MM-DDThh:mm:ss). Returns empty string if the input is not a valid date.
+ */
+static std::string ode_formatIsoDateTime(const std::string& raw) {
+    std::string s = raw;
+    while (!s.empty() && isspace(static_cast<unsigned char>(s.back()))) {
+        s.pop_back();
+    }
+    size_t start = 0;
+    while (start < s.size() && isspace(static_cast<unsigned char>(s[start]))) {
+        ++start;
+    }
+    if (start > 0) {
+        s.erase(0, start);
+    }
+    if (s.empty()) {
+        return std::string();
+    }
+
+    int year = 0, month = 0, day = 0, hour = 0, min = 0, sec = 0;
+    if (sscanf(s.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d",
+               &year, &month, &day, &hour, &min, &sec) == 6 &&
+        year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+        hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60) {
+        return s;
+    }
+
+    if (sscanf(s.c_str(), "%4d-%2d-%2d %2d:%2d:%2d",
+               &year, &month, &day, &hour, &min, &sec) == 6 &&
+        year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+        hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
+                 year, month, day, hour, min, sec);
+        return buf;
+    }
+
+    if (s.size() == 10 &&
+        sscanf(s.c_str(), "%4d-%2d-%2d", &year, &month, &day) == 3 &&
+        year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%04d-%02d-%02dT00:00:00", year, month, day);
+        return buf;
+    }
+
+    // ctime() format: "Www Mmm dd hh:mm:ss yyyy"
+    char wday[8] = {};
+    char mon[8] = {};
+    if (sscanf(s.c_str(), "%3s %3s %d %d:%d:%d %d",
+               wday, mon, &day, &hour, &min, &sec, &year) == 7) {
+        static const char* const months[12] = {
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        };
+        month = 0;
+        for (int i = 0; i < 12; ++i) {
+            if (g_ascii_strcasecmp(mon, months[i]) == 0) {
+                month = i + 1;
+                break;
+            }
+        }
+        if (month >= 1 && year >= 1 && day >= 1 && day <= 31 &&
+            hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
+                     year, month, day, hour, min, sec);
+            return buf;
+        }
+    }
+
+    return std::string();
+}
+
 /**
  * 
  */
@@ -68,6 +146,15 @@ bool ODe_MetaDataWriter::writeMetaData(PD_Document* pDoc, GsfOutfile* oo) {
                                                                val = UT_std_string_sprintf("<%s>%s</%s>\n", odElementName, meta_val.c_str(), odElementName); \
                                                                ODe_writeUTF8StdString (meta, val); \
                                                           }
+
+#define WRITE_METADATA_DATE_ELEMENT(abiwordKey, odElementName) if (pDoc->getMetaDataProp(abiwordKey, meta_val) && meta_val.size()) { \
+                                                                    std::string isoDate = ode_formatIsoDateTime(meta_val); \
+                                                                    if (!isoDate.empty()) { \
+                                                                        isoDate = UT_escapeXML(isoDate); \
+                                                                        val = UT_std_string_sprintf("<%s>%s</%s>\n", odElementName, isoDate.c_str(), odElementName); \
+                                                                        ODe_writeUTF8StdString (meta, val); \
+                                                                    } \
+                                                               }
     
     WRITE_METADATA_ELEMENT(PD_META_KEY_TITLE, "dc:title");
     WRITE_METADATA_ELEMENT(PD_META_KEY_DESCRIPTION, "dc:description");
@@ -115,18 +202,18 @@ bool ODe_MetaDataWriter::writeMetaData(PD_Document* pDoc, GsfOutfile* oo) {
     
     WRITE_METADATA_ELEMENT("meta:printed-by", "meta:printed-by");
     
-    // ATTENTION: I'm assuming that dc.date is used by AbiWord as
-    // the document creation date & time.
-    WRITE_METADATA_ELEMENT(PD_META_KEY_DATE, "meta:creation-date");
+    // ODF 1.3 requires xsd:dateTime (ISO-8601) for creation, modification, and print dates.
+    WRITE_METADATA_DATE_ELEMENT(PD_META_KEY_DATE, "meta:creation-date");
     
-    // Note that, for the OpenDocument standard, dc.date
+    // Note that, for the OpenDocument standard, dc:date
     // is the last modification date & time.
-    WRITE_METADATA_ELEMENT(PD_META_KEY_DATE_LAST_CHANGED, "dc:date");
+    WRITE_METADATA_DATE_ELEMENT(PD_META_KEY_DATE_LAST_CHANGED, "dc:date");
     
-    WRITE_METADATA_ELEMENT("meta:print-date", "meta:print-date");
+    WRITE_METADATA_DATE_ELEMENT("meta:print-date", "meta:print-date");
     
     WRITE_METADATA_ELEMENT(PD_META_KEY_LANGUAGE, "dc:language");
     
+#undef WRITE_METADATA_DATE_ELEMENT
 #undef WRITE_METADATA_ELEMENT
 
     ODe_writeToStream(meta, postamble, G_N_ELEMENTS(postamble));

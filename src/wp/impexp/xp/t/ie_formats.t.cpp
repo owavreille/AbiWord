@@ -569,11 +569,19 @@ static bool is_office_odt(const std::string & path)
 
 	const std::string content = zip_read(zip, "content.xml");
 	const std::string styles = zip_read(zip, "styles.xml");
+	const std::string meta = zip_read(zip, "meta.xml");
 	const std::string manifest = zip_read(zip, "META-INF/manifest.xml");
+	const bool thumbInZip = zip_has(zip, "Thumbnails/thumbnail.png");
+	const bool thumbNonEmpty = !thumbInZip || !zip_read(zip, "Thumbnails/thumbnail.png").empty();
+	const bool thumbInManifest = manifest.find("Thumbnails/thumbnail.png") != std::string::npos;
 	const bool ok =
 		TFPASS(content.find("<office:document-content") != std::string::npos) &&
+		TFPASS(content.find("<style:page-layout") == std::string::npos) &&
 		TFPASS(styles.find("<office:document-styles") != std::string::npos) &&
+		TFPASS(meta.find("<office:document-meta") != std::string::npos) &&
 		TFPASS(manifest.find("application/vnd.oasis.opendocument.text") != std::string::npos) &&
+		TFPASS(thumbNonEmpty) &&
+		TFPASS(thumbInZip == thumbInManifest) &&
 		TFPASS(odt_picture_hrefs(zip, content, manifest)) &&
 		TFPASS(odt_picture_hrefs(zip, styles, manifest)) &&
 		TFPASS(styles.find("fo:min-height=\"-") == std::string::npos) &&
@@ -2059,4 +2067,252 @@ TFTEST_MAIN("DOC export keeps the header text and an inline image")
 
 	package_close(input, ole);
 	std::remove(path.c_str());
+}
+
+TFTEST_MAIN("ODT export writes valid table styles, positioned images, text formatting and ISO dates")
+{
+	ensure_plugin(".odt", "opendocument");
+	if (!TFPASS(exporter_known(".odt")))
+		return;
+
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+
+	doc->setMetaDataProp(PD_META_KEY_DATE, "Sun Nov 22 17:00:00 2026\n");
+	doc->setMetaDataProp(PD_META_KEY_DATE_LAST_CHANGED, "Mon Nov 23 08:15:30 2026");
+
+	if (!TFPASS(doc->createDataItem("img1", false, tiny_png(), "image/png", nullptr)))
+	{
+		doc->unref();
+		return;
+	}
+
+	// Floating image before first paragraph (mirrors AbiWord's piece table order).
+	pf_Frag_Strux * frame = nullptr;
+	const PP_PropertyVector frameAtts = {"strux-image-dataid", "img1"};
+	const PP_PropertyVector frameProps = {
+		"frame-type", "image",
+		"frame-width", "1.5in",
+		"frame-height", "1in",
+		"position-to", "column-above-text",
+		"frame-col-xpos", "1.25in",
+		"frame-col-ypos", "0.75in",
+		"wrap-mode", "wrapped-both"
+	};
+	if (!TFPASS(doc->insertStrux(first_strux(doc, PTX_Block), PTX_SectionFrame, frameAtts, frameProps, &frame)) ||
+		!TFPASS(frame != nullptr) ||
+		!TFPASS(doc->insertStrux(frame->getPos() + frame->getLength(), PTX_EndFrame)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const PT_DocPosition body = first_block_content(doc);
+	const std::string text = "SurligneSouligne";
+	if (!TFPASS(doc->insertSpan(body, text)))
+	{
+		doc->unref();
+		return;
+	}
+	const PP_PropertyVector spanProps = {
+		"bgcolor", "ffff00",
+		"text-decoration", "underline line-through"
+	};
+	if (!TFPASS(doc->changeSpanFmt(PTC_AddFmt, body, body + static_cast<PT_DocPosition>(text.size()),
+		PP_NOPROPS, spanProps)))
+	{
+		doc->unref();
+		return;
+	}
+
+	// Insert a 2x2 table with explicit column widths and cell background.
+	pf_Frag_Strux * table = nullptr;
+	const PP_PropertyVector tableProps = {
+		"table-column-props", "2in/3in/",
+		"table-row-heights", "0.5in/0.5in/"
+	};
+	if (!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionTable, PP_NOPROPS, tableProps, &table)) ||
+		!TFPASS(table != nullptr))
+	{
+		doc->unref();
+		return;
+	}
+	for (int r = 0; r < 2; ++r)
+	{
+		for (int c = 0; c < 2; ++c)
+		{
+			pf_Frag_Strux * cell = nullptr;
+			const PP_PropertyVector cellProps = {
+				"left-attach", std::to_string(c),
+				"right-attach", std::to_string(c + 1),
+				"top-attach", std::to_string(r),
+				"bot-attach", std::to_string(r + 1),
+				"background-color", "eeeeee"
+			};
+			if (!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionCell, PP_NOPROPS, cellProps, &cell)) ||
+				!TFPASS(cell != nullptr) ||
+				!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+				!TFPASS(doc->insertSpan(document_end(doc), std::string("Cell"))) ||
+				!TFPASS(doc->insertStrux(document_end(doc), PTX_EndCell)))
+			{
+				doc->unref();
+				return;
+			}
+		}
+	}
+	if (!TFPASS(doc->insertStrux(document_end(doc), PTX_EndTable)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmtodtfull", ".odt");
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK) || !is_office_odt(path))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * zip = package_open(path, input, gsf_infile_zip_new);
+	if (!TFPASS(zip != nullptr))
+	{
+		package_close(input, zip);
+		std::remove(path.c_str());
+		return;
+	}
+
+	const std::string content = zip_read(zip, "content.xml");
+	const std::string meta = zip_read(zip, "meta.xml");
+
+	TFPASS(meta.find("<meta:creation-date>2026-11-22T17:00:00</meta:creation-date>") != std::string::npos);
+	TFPASS(meta.find("<dc:date>2026-11-23T08:15:30</dc:date>") != std::string::npos);
+
+	TFPASS(content.find("<text:section") == std::string::npos);
+	TFPASS(content.find("fo:background-color=\"#ffff00\"") != std::string::npos);
+	TFPASS(content.find("style:text-underline-type=\"single\"") != std::string::npos);
+	TFPASS(content.find("style:text-underline-style=\"solid\"") != std::string::npos);
+	TFPASS(content.find("style:text-line-through-type=\"single\"") != std::string::npos);
+	TFPASS(content.find("style:text-line-through-style=\"solid\"") != std::string::npos);
+
+	// Positioned image must declare from-left/from-top and page-content coordinates.
+	TFPASS(content.find("style:horizontal-pos=\"from-left\"") != std::string::npos);
+	TFPASS(content.find("style:vertical-pos=\"from-top\"") != std::string::npos);
+	TFPASS(content.find("style:horizontal-rel=\"page-content\"") != std::string::npos);
+	TFPASS(content.find("style:vertical-rel=\"page-content\"") != std::string::npos);
+	TFPASS(content.find("style:wrap=\"parallel\"") != std::string::npos);
+	TFPASS(content.find("svg:x=\"1.25in\"") != std::string::npos);
+	TFPASS(content.find("svg:y=\"0.75in\"") != std::string::npos);
+
+	// Table column/row/cell style names must match their NCName definitions.
+	TFPASS(content.find("table:border-model=\"collapsing\"") != std::string::npos);
+	TFPASS(content.find("style:name=\"Table1-col1\"") != std::string::npos);
+	TFPASS(content.find("table:style-name=\"Table1-col1\"") != std::string::npos);
+	TFPASS(content.find("style:name=\"Table1-row1\"") != std::string::npos);
+	TFPASS(content.find("table:style-name=\"Table1-row1\"") != std::string::npos);
+	TFPASS(content.find("style:name=\"Table1-col1-row1\"") != std::string::npos);
+	TFPASS(content.find("table:style-name=\"Table1-col1-row1\"") != std::string::npos);
+	TFPASS(content.find("table:style-name=\"Table1.col1\"") == std::string::npos);
+	TFPASS(content.find("table:style-name=\"Table1_col1_row1\"") == std::string::npos);
+
+	package_close(input, zip);
+	std::remove(path.c_str());
+}
+
+TFTEST_MAIN("PDF export embeds images, textbox frames, metadata and flushes cleanly")
+{
+	if (!exporter_known(".pdf"))
+		return;
+
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+
+	doc->setMetaDataProp(PD_META_KEY_TITLE, "TitrePdf");
+	doc->setMetaDataProp(PD_META_KEY_CREATOR, "AuteurPdf");
+	doc->setMetaDataProp(PD_META_KEY_DATE, "Sun Nov 22 17:00:00 2026\n");
+
+	if (!TFPASS(doc->createDataItem("pdfimg", false, tiny_png(), "image/png", nullptr)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const PT_DocPosition body = first_block_content(doc);
+	const PP_PropertyVector imgAtts = {"dataid", "pdfimg"};
+	const PP_PropertyVector imgProps = {"width", "1in", "height", "1in"};
+	if (!TFPASS(doc->insertSpan(body, std::string("CorpsPdfImg"))) ||
+		!TFPASS(doc->insertObject(body + 11, PTO_Image, imgAtts, imgProps)))
+	{
+		doc->unref();
+		return;
+	}
+
+	pf_Frag_Strux * tb = nullptr;
+	const PP_PropertyVector tbProps = {
+		"frame-type", "textbox",
+		"frame-width", "2in",
+		"frame-height", "1in",
+		"position-to", "column-above-text",
+		"frame-col-xpos", "0.5in",
+		"frame-col-ypos", "2in"
+	};
+	if (!TFPASS(doc->insertStrux(first_strux(doc, PTX_Block), PTX_SectionFrame, PP_NOPROPS, tbProps, &tb)) ||
+		!TFPASS(tb != nullptr) ||
+		!TFPASS(doc->insertStrux(tb->getPos() + tb->getLength(), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(tb->getPos() + tb->getLength() + 1, std::string("CadrePdf"))) ||
+		!TFPASS(doc->insertStrux(tb->getPos() + tb->getLength() + 9, PTX_EndFrame)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmtpdfimg", ".pdf");
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	gchar * contents = nullptr;
+	gsize length = 0;
+	GError * error = nullptr;
+	const bool loaded = g_file_get_contents(path.c_str(), &contents, &length, &error);
+	if (error)
+	{
+		g_error_free(error);
+		error = nullptr;
+	}
+	const std::string bytes = loaded ? std::string(contents, length) : std::string();
+	g_free(contents);
+	std::remove(path.c_str());
+
+	const std::string decoded = pdf_inflate_streams(bytes);
+	int declared = pdf_declared_pages(decoded);
+	if (declared < 0)
+		declared = pdf_declared_pages(bytes);
+	if (declared < 0)
+	{
+		const int pages = pdf_page_count(decoded);
+		declared = pages > 0 ? pages : pdf_page_count(bytes);
+	}
+
+	TFPASS(bytes.compare(0, 5, "%PDF-") == 0);
+	TFPASS(bytes.find("%%EOF") != std::string::npos);
+	TFPASSEQ(declared, 1);
+	TFPASS(bytes.find("/Subtype /Image") != std::string::npos || decoded.find("/Subtype /Image") != std::string::npos);
+	TFPASS(pdf_has_text(bytes, "CorpsPdfImg"));
+	TFPASS(pdf_has_text(bytes, "CadrePdf"));
 }

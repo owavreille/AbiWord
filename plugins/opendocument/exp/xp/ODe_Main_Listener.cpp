@@ -83,10 +83,11 @@ void ODe_Main_Listener::openSection(const PP_AttrProp* pAP,
     if (ODe_Style_PageLayout::hasPageLayoutInfo(pAP)) {
 
         if (m_isFirstSection) {
-            // Use stantard master page and page layout.
+            // Use standard master page and page layout.
 
             ODe_Style_PageLayout* pPageLayout = m_rDocumentData.m_stylesAutoStyles.getPageLayout("Standard");
             pPageLayout->fetchAttributesFromAbiSection(pAP, m_rAuxiliaryData.m_pDoc);
+            m_rAuxiliaryData.m_pCurrentPageLayout = pPageLayout;
             pMPStyle = m_rDocumentData.m_masterStyles.pick("Standard");
             pMPStyle->fetchAttributesFromAbiSection(pAP);
             UT_DEBUGMSG(("Got PageLayout %p AutoStyles %p \n",pPageLayout,&m_rDocumentData.m_stylesAutoStyles));
@@ -106,30 +107,31 @@ void ODe_Main_Listener::openSection(const PP_AttrProp* pAP,
             if (pMPStyle->hasProperties())
             {
                 ODe_Style_PageLayout* pPageLayout = m_rDocumentData.m_stylesAutoStyles.addPageLayout();
+                if (m_rAuxiliaryData.m_pDoc) {
+                    pPageLayout->fetchAttributesFromAbiDoc(m_rAuxiliaryData.m_pDoc);
+                }
                 pPageLayout->fetchAttributesFromAbiSection(pAP, m_rAuxiliaryData.m_pDoc);
+                m_rAuxiliaryData.m_pCurrentPageLayout = pPageLayout;
                 pMPStyle->setPageLayoutName(pPageLayout->getName());
 
                 m_rDocumentData.m_masterStyles.insert(styleName.utf8_str(),pMPStyle);
                 pendingMasterPageStyleChange = true;
                 masterPageStyleName = styleName;
+            } else {
+                delete pMPStyle;
+                pMPStyle = nullptr;
             }
         }
-
-        
-	//
-	// OK Set up a "standard" default set of properties
-	//
-	ODe_Style_PageLayout* pStandard = new ODe_Style_PageLayout();
-	UT_UTF8String sName = "Standard";
-	pStandard->setName(sName);
-        m_rDocumentData.m_contentAutoStyles.addPageLayout(pStandard);
-	pStandard->fetchAttributesFromAbiSection(pAP, m_rAuxiliaryData.m_pDoc);
     } else {
         // Without this, '!strcmp(pId, pValue)' fails in _isHeaderFooterSection()
         // below, which ultimately leads to a crash due to an uninitialized
         // FILE* being passed to fwrite() (see bug 9798 for a sample).
         pMPStyle = m_rDocumentData.m_masterStyles.pick("Standard");
         pMPStyle->fetchAttributesFromAbiSection(pAP);
+        if (!m_rAuxiliaryData.m_pCurrentPageLayout) {
+            m_rAuxiliaryData.m_pCurrentPageLayout = m_rDocumentData.m_stylesAutoStyles.getPageLayout("Standard");
+        }
+        m_isFirstSection = false;
     }
     
 
@@ -141,15 +143,12 @@ void ODe_Main_Listener::openSection(const PP_AttrProp* pAP,
         
         pSectionStyle->fetchAttributesFromAbiSection(pAP);
         m_rDocumentData.m_contentAutoStyles.storeSectionStyle(pSectionStyle);
-
-        ODe_Style_PageLayout* pPageLayout = m_rDocumentData.m_contentAutoStyles.addPageLayout();
-	pPageLayout->fetchAttributesFromAbiSection(pAP, m_rAuxiliaryData.m_pDoc);
        
         UT_UTF8String output;
         
         UT_UTF8String_sprintf(output,
-        	"   <text:section text:style-name=\"%s\" text:name=\"Section%u\">\n",
-        	pSectionStyle->getName().utf8_str(),
+            "   <text:section text:style-name=\"%s\" text:name=\"Section%u\">\n",
+            ODe_Style_Style::convertStyleToNCName(pSectionStyle->getName()).escapeXML().utf8_str(),
             m_rDocumentData.m_contentAutoStyles.getSectionStylesCount());
         
         ODe_writeUTF8String(m_rDocumentData.m_pOfficeTextTemp, output);

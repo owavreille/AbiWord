@@ -62,6 +62,13 @@ ODe_Text_Listener::ODe_Text_Listener(ODe_Styles& rStyles,
                                      UT_uint8 zIndex,
                                      UT_uint8 spacesOffset) :
                         ODe_AbiDocListenerImpl(spacesOffset),
+                        m_delayedAP(nullptr),
+                        m_delayedListStyle(nullptr),
+                        m_delayedPendingMasterPageStyleChange(false),
+                        m_delayedPageBreak(false),
+                        m_delayedColumnBreak(false),
+                        m_delayedSpacesOffset(0),
+                        m_pPendingTextboxBuffer(nullptr),
                         m_openedODParagraph(false),
                         m_openedODSpan(false),
                         m_isFirstCharOnParagraph(true),
@@ -101,18 +108,26 @@ ODe_Text_Listener::ODe_Text_Listener(ODe_Styles& rStyles,
                              UT_uint8 spacesOffset,
                              const UT_UTF8String& rPendingMasterPageStyleName) :
                         ODe_AbiDocListenerImpl(spacesOffset),
+                        m_delayedAP(nullptr),
+                        m_delayedListStyle(nullptr),
+                        m_delayedPendingMasterPageStyleChange(false),
+                        m_delayedPageBreak(false),
+                        m_delayedColumnBreak(false),
+                        m_delayedSpacesOffset(0),
+                        m_pPendingTextboxBuffer(nullptr),
                         m_openedODParagraph(false),
                         m_openedODSpan(false),
                         m_isFirstCharOnParagraph(true),
                         m_openedODTextboxFrame(false),
                         m_openedODNote(false),
-			m_bIgoreFirstTab(false),
+                        m_bIgoreFirstTab(false),
                         m_inHeaderFooter(false),
                         m_pParagraphContent(nullptr),
                         m_currentListLevel(0),
                         m_pCurrentListStyle(nullptr),
                         m_pendingColumnBreak(false),
                         m_pendingPageBreak(false),
+                        m_bAfter(false),
                         m_pendingMasterPageStyleChange(true),
                         m_masterPageStyleName(rPendingMasterPageStyleName),
                         m_rStyles(rStyles),
@@ -130,6 +145,12 @@ ODe_Text_Listener::ODe_Text_Listener(ODe_Styles& rStyles,
  * 
  */
 ODe_Text_Listener::~ODe_Text_Listener() {
+    if (m_pPendingTextboxBuffer) {
+        ODe_gsf_output_close(m_pPendingTextboxBuffer);
+        m_pPendingTextboxBuffer = nullptr;
+    }
+    _flushPendingFrames();
+
     // Check if there is nothing being left unfinished.
     
     UT_ASSERT_HARMLESS(!m_openedODParagraph);
@@ -164,6 +185,7 @@ ODe_Text_Listener::~ODe_Text_Listener() {
 void ODe_Text_Listener::openTable(const PP_AttrProp* /*pAP*/,
                                   ODe_ListenerAction& rAction) {
     _closeODParagraph();
+    _flushPendingFrames();
     _closeODList();
 
     rAction.pushListenerImpl(new ODe_Table_Listener(m_rStyles,
@@ -224,11 +246,13 @@ void ODe_Text_Listener::openSpan(const PP_AttrProp* pAP) {
         return;
 
     if (m_spanRevisionKind == '+') {
-        UT_UTF8String mark = "<text:change-start text:change-id=\"";
-        mark += m_spanRevisionId.c_str();
-        mark += "\"/>";
-        ODe_writeUTF8String(m_pParagraphContent, mark);
-        m_changeStartOpen = true;
+        if (m_pParagraphContent) {
+            UT_UTF8String mark = "<text:change-start text:change-id=\"";
+            mark += m_spanRevisionId.c_str();
+            mark += "\"/>";
+            ODe_writeUTF8String(m_pParagraphContent, mark);
+            m_changeStartOpen = true;
+        }
     }
     
     if ( ODe_Style_Style::hasTextStyleProps(pAP) ) {
@@ -252,7 +276,7 @@ void ODe_Text_Listener::openSpan(const PP_AttrProp* pAP) {
         }
     }
     
-    if (!styleName.empty()) {
+    if (!styleName.empty() && m_pParagraphContent) {
         UT_UTF8String output;
         
         UT_UTF8String_sprintf(output, "<text:span text:style-name=\"%s\">",
@@ -269,14 +293,18 @@ void ODe_Text_Listener::openSpan(const PP_AttrProp* pAP) {
  */
 void ODe_Text_Listener::closeSpan() {
     if (m_openedODSpan) {
-        ODe_writeUTF8String(m_pParagraphContent, "</text:span>");
+        if (m_pParagraphContent) {
+            ODe_writeUTF8String(m_pParagraphContent, "</text:span>");
+        }
         m_openedODSpan = false;
     }
     if (m_changeStartOpen) {
-        UT_UTF8String mark = "<text:change-end text:change-id=\"";
-        mark += m_spanRevisionId.c_str();
-        mark += "\"/>";
-        ODe_writeUTF8String(m_pParagraphContent, mark);
+        if (m_pParagraphContent) {
+            UT_UTF8String mark = "<text:change-end text:change-id=\"";
+            mark += m_spanRevisionId.c_str();
+            mark += "\"/>";
+            ODe_writeUTF8String(m_pParagraphContent, mark);
+        }
         m_changeStartOpen = false;
     }
     m_spanRevisionKind = 0;
@@ -295,22 +323,25 @@ void ODe_Text_Listener::openFrame(const PP_AttrProp* pAP,
     
     if (pValue && !strcmp(pValue, "textbox")) {
         ODe_Frame_Listener* pFrameListener;
-            
-        // Paragraph anchored textboxes goes inside the paragraph that
-        // it's anchored to, right before the paragraph contents.
-        //
-        // Page anchored textboxes goes inside the closest previous paragraph.
+        GsfOutput* pFrameTarget = m_pParagraphContent;
+        if (!pFrameTarget) {
+            if (m_pPendingTextboxBuffer) {
+                ODe_gsf_output_close(m_pPendingTextboxBuffer);
+            }
+            m_pPendingTextboxBuffer = gsf_output_memory_new();
+            pFrameTarget = m_pPendingTextboxBuffer;
+        }
 
+        // Write textbox <draw:frame> inside the active paragraph (or buffer
+        // until the next paragraph opens) so it is always a valid child of <text:p>.
         pFrameListener = new ODe_Frame_Listener(m_rStyles,
                                                 m_rAutomatiStyles,
-                                                m_pTextOutput,
+                                                pFrameTarget,
                                                 m_rAuxiliaryData,
                                                 m_zIndex,
-                                                m_spacesOffset);
-                                                
-        // Make the frame element appear on a new line
-        ODe_writeUTF8String(m_pTextOutput, "\n");
-                                                
+                                                m_spacesOffset,
+                                                m_inHeaderFooter);
+
         rAction.pushListenerImpl(pFrameListener, true);
         m_openedODTextboxFrame = true;
     } else if (pValue && !strcmp(pValue, "image")) {
@@ -331,9 +362,20 @@ void ODe_Text_Listener::closeFrame(ODe_ListenerAction& rAction) {
 
     if (m_openedODTextboxFrame) {
         m_openedODTextboxFrame = false;
+        if (m_pPendingTextboxBuffer) {
+            const gsf_off_t sz = gsf_output_size(m_pPendingTextboxBuffer);
+            if (sz > 0) {
+                const guint8* bytes = gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(m_pPendingTextboxBuffer));
+                m_pendingFrames.append(reinterpret_cast<const char*>(bytes), static_cast<size_t>(sz));
+            }
+            ODe_gsf_output_close(m_pPendingTextboxBuffer);
+            m_pPendingTextboxBuffer = nullptr;
+        }
     } else {
-        // We are inside a textbox.        
+        // We are inside a textbox.
         _closeODParagraph();
+        _flushPendingFrames();
+        _closeODList();
         rAction.popListenerImpl();
     }
 }
@@ -630,6 +672,7 @@ void ODe_Text_Listener::openTOC(const PP_AttrProp* pAP) {
     UT_UTF8String str;
     
     _closeODParagraph();
+    _flushPendingFrames();
     _closeODList();
     
 	m_iCurrentTOC++;
@@ -967,7 +1010,7 @@ void ODe_Text_Listener::insertText(const UT_UTF8String& rText) {
 		return;
     if (m_spanRevisionKind == '-') {
         m_revisionText[m_spanRevisionId] += rText;
-        if (m_revisionMarkers.insert(m_spanRevisionId).second) {
+        if (m_revisionMarkers.insert(m_spanRevisionId).second && m_pParagraphContent) {
             UT_UTF8String mark = "<text:change text:change-id=\"";
             mark += m_spanRevisionId.c_str();
             mark += "\"/>";
@@ -976,7 +1019,9 @@ void ODe_Text_Listener::insertText(const UT_UTF8String& rText) {
         m_isFirstCharOnParagraph = false;
         return;
     }
-    ODe_writeUTF8String(m_pParagraphContent, rText);
+    if (m_pParagraphContent) {
+        ODe_writeUTF8String(m_pParagraphContent, rText);
+    }
     m_isFirstCharOnParagraph = false;
 }
 
@@ -986,6 +1031,7 @@ void ODe_Text_Listener::insertText(const UT_UTF8String& rText) {
  */
 void ODe_Text_Listener::closeCell(ODe_ListenerAction& rAction) {
     _closeODParagraph();
+    _flushPendingFrames();
     _closeODList(); // Close the current list, if there is one.
     rAction.popListenerImpl();
 }
@@ -996,6 +1042,7 @@ void ODe_Text_Listener::closeCell(ODe_ListenerAction& rAction) {
  */
 void ODe_Text_Listener::closeSection(ODe_ListenerAction& rAction) {
     _closeODParagraph();
+    _flushPendingFrames();
     _closeODList(); // Close the current list, if there is one.
     rAction.popListenerImpl();
 }
@@ -1005,7 +1052,9 @@ void ODe_Text_Listener::closeSection(ODe_ListenerAction& rAction) {
  *
  */
 void ODe_Text_Listener::insertLineBreak() {
-    ODe_writeUTF8String(m_pParagraphContent, "<text:line-break/>");
+    if (m_pParagraphContent) {
+        ODe_writeUTF8String(m_pParagraphContent, "<text:line-break/>");
+    }
 }
 
 
@@ -1041,7 +1090,7 @@ void ODe_Text_Listener::insertTabChar() {
     // list item bullet/number.
   // Also don't write out the tab after a note anchor
     
-  if (!m_bIgoreFirstTab && (!m_isFirstCharOnParagraph || (m_currentListLevel == 0)))
+  if (m_pParagraphContent && !m_bIgoreFirstTab && (!m_isFirstCharOnParagraph || (m_currentListLevel == 0)))
     {
       ODe_writeUTF8String(m_pParagraphContent, "<text:tab/>");
     }
@@ -1090,24 +1139,31 @@ void ODe_Text_Listener::insertInlinedImage(const gchar* pImageName,
 
 	m_rAutomatiStyles.storeGraphicStyle(pStyle);
     
-    output = "<draw:frame text:anchor-type=\"as-char\"";
+    output = "<draw:frame";
+    UT_UTF8String_sprintf(str, "Image%u", m_rAuxiliaryData.m_frameCount + 1);
+    ODe_writeAttribute(output, "draw:name", str);
+    m_rAuxiliaryData.m_frameCount++;
+    ODe_writeAttribute(output, "text:anchor-type", "as-char");
 
     UT_UTF8String_sprintf(str, "%u", m_zIndex);
     ODe_writeAttribute(output, "draw:z-index", str);
-    ODe_writeAttribute(output, "draw:style-name", pStyle->getName());
+    ODe_writeAttribute(output, "draw:style-name",
+                       ODe_Style_Style::convertStyleToNCName(pStyle->getName()));
 
     ok = pAP && pAP->getProperty("width", pValue);
     if (!(ok && pValue))
         ok = pAP && pAP->getProperty("frame-width", pValue);
     if (ok && pValue != nullptr) {
-        ODe_writeAttribute(output, "svg:width", pValue);
+        const char* width = (UT_convertToInches(pValue) < 0.0) ? "0in" : pValue;
+        ODe_writeAttribute(output, "svg:width", width);
     }
     
     ok = pAP && pAP->getProperty("height", pValue);
     if (!(ok && pValue))
         ok = pAP && pAP->getProperty("frame-height", pValue);
     if (ok && pValue != nullptr) {
-        ODe_writeAttribute(output, "svg:height", pValue);
+        const char* height = (UT_convertToInches(pValue) < 0.0) ? "0in" : pValue;
+        ODe_writeAttribute(output, "svg:height", height);
     }
     UT_UTF8String imageHref(pImageName ? pImageName : "");
     imageHref.escapeXML();
@@ -1145,10 +1201,8 @@ void ODe_Text_Listener::insertInlinedImage(const gchar* pImageName,
     // child. §5.1.3 puts the frame inside the paragraph.
     if (m_pParagraphContent) {
         ODe_writeUTF8String(m_pParagraphContent, output);
-    } else if (m_pTextOutput) {
-        ODe_writeUTF8String(m_pTextOutput, "<text:p>");
-        ODe_writeUTF8String(m_pTextOutput, output);
-        ODe_writeUTF8String(m_pTextOutput, "</text:p>");
+    } else {
+        m_pendingFrames += output;
     }
 }
 
@@ -1167,134 +1221,108 @@ void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
     UT_UTF8String str;
     UT_UTF8String escape;
     ODe_Style_Style* pStyle;
-    const gchar* pValue;
-    bool ok;
+    const gchar* pValue = nullptr;
+    bool ok = false;
    
     pStyle = new ODe_Style_Style();
     pStyle->setFamily("graphic");
-    // For OOo to recognize an image as being an image, it will
-    // need to have the parent style name "Graphics". I can't find it
-    // in the ODF spec, but without it OOo doesn't properly recognize
-	// it (check the Navigator window in OOo).
+    // For LibreOffice / OOo to recognize an image as an image, it needs
+    // parent style name "Graphics".
     pStyle->setParentStyleName("Graphics");
+    if (!m_rStyles.getGraphicsStyle("Graphics")) {
+        ODe_Style_Style* pGraphicsStyle = new ODe_Style_Style();
+        pGraphicsStyle->setStyleName("Graphics");
+        pGraphicsStyle->setFamily("graphic");
+        m_rStyles.addGraphicsStyle(pGraphicsStyle);
+    }
 
-    //set wrapping
-    ok = pAP->getProperty("wrap-mode", pValue);
-    if(ok && pValue && !strcmp(pValue, "wrapped-to-right")) {
+    // Set explicit positioning so both LibreOffice Writer and Microsoft Word
+    // [MS-OODF3] honour svg:x and svg:y instead of snapping the image to (0,0).
+    pStyle->setHorizontalPos("from-left");
+    pStyle->setVerticalPos("from-top");
+
+    // Set wrapping
+    ok = pAP && pAP->getProperty("wrap-mode", pValue);
+    if (ok && pValue && !strcmp(pValue, "wrapped-to-right")) {
         pStyle->setWrap("right");
-    }
-    else if(ok && pValue && !strcmp(pValue, "wrapped-to-left")) {
+    } else if (ok && pValue && !strcmp(pValue, "wrapped-to-left")) {
         pStyle->setWrap("left");
-    }
-    else if(ok && pValue && !strcmp(pValue, "wrapped-both")) {
+    } else if (ok && pValue && !strcmp(pValue, "wrapped-both")) {
         pStyle->setWrap("parallel");
-    }
-    else { //this handles the above-text case and any other unforeseen ones
+    } else if (ok && pValue && !strcmp(pValue, "wrapped-topbot")) {
+        pStyle->setWrap("none");
+    } else if (ok && pValue && !strcmp(pValue, "below-text")) {
+        pStyle->setWrap("run-through");
+        pStyle->setRunThrough("background");
+    } else { // above-text and default
         pStyle->setWrap("run-through");
         pStyle->setRunThrough("foreground");
     }
 
-    m_rAutomatiStyles.storeGraphicStyle(pStyle);    
-    
-    output += "<draw:frame text:anchor-type=\"";
-    ok = pAP->getProperty("position-to", pValue);
-    if(ok && pValue && !strcmp(pValue, "column-above-text")) {
-        output+="page\""; //the spec doesn't seem to handle column anchoring
-	// we work around it
-	ok = pAP->getProperty("pref-page", pValue);
- 	if(ok)
-	{
-	    UT_sint32 iPage = atoi(pValue)+1;
-	    UT_UTF8String sPage;
-	    UT_UTF8String_sprintf(sPage,"%d",iPage);
-	    ODe_writeAttribute(output, "text:anchor-page-number", sPage.utf8_str());
-	}
-	else
-	{
-	    ODe_writeAttribute(output, "text:anchor-page-number", "1");
-	}
-	//
-	// Get the most recent page style so we can do the arithmetic
-	// Won't work for x in multi-columned docs
-	//
+    // Map AbiWord's position-to onto ODF 1.3 horizontal-rel / vertical-rel with
+    // paragraph anchoring (valid inside <text:p> and understood consistently by
+    // LibreOffice Writer and Microsoft Word [MS-OODF3]).
+    const gchar* posTo = nullptr;
+    const bool hasPosTo = pAP && pAP->getProperty("position-to", posTo) && posTo;
+    const gchar* xProp = "xpos";
+    const gchar* yProp = "ypos";
+    if (hasPosTo && !strcmp(posTo, "column-above-text")) {
+        pStyle->setHorizontalRel("page-content");
+        pStyle->setVerticalRel("page-content");
+        xProp = "frame-col-xpos";
+        yProp = "frame-col-ypos";
+    } else if (hasPosTo && !strcmp(posTo, "page-above-text")) {
+        pStyle->setHorizontalRel("page");
+        pStyle->setVerticalRel("page");
+        xProp = "frame-page-xpos";
+        yProp = "frame-page-ypos";
+    } else {
+        pStyle->setHorizontalRel("paragraph");
+        pStyle->setVerticalRel("paragraph");
+    }
 
-	UT_DEBUGMSG(("InsertPosionedObject TextListener %p AutoStyle %p \n",this,&m_rAutomatiStyles));
-	ODe_Style_PageLayout * pPageL = nullptr;
-	UT_uint32 numPStyles =  m_rAutomatiStyles.getSectionStylesCount();
-	UT_UTF8String stylePName;
-	UT_DEBUGMSG(("Number PageLayoutStyles %d \n",numPStyles));
-	UT_UTF8String_sprintf(stylePName, "PLayout%d", numPStyles + 1);
-	pPageL = m_rAutomatiStyles.getPageLayout(stylePName.utf8_str());
-	if(pPageL == nullptr)
-	{
-	    pPageL = m_rAutomatiStyles.getPageLayout("Standard");
-	}
-	UT_DEBUGMSG(("Got PageLayoutStyle %p \n",pPageL));
-	double xPageL = 0.;
-	double yPageL = 0.;
-	
-	ok = pAP->getProperty("frame-col-xpos", pValue);
-	UT_ASSERT(ok && pValue != nullptr);
-	double xCol =  UT_convertToInches(pValue);
-	const gchar* pSVal= nullptr;
-	if(pPageL)
-	{
-	    pSVal = pPageL->getPageMarginLeft();
-	    xPageL = UT_convertToInches(pSVal);
-	}
-	double xTot = xPageL + xCol;
-	pValue = UT_convertInchesToDimensionString(DIM_IN,xTot,"4");
-	ODe_writeAttribute(output, "svg:x", pValue);
-        
-	ok = pAP->getProperty("frame-col-ypos", pValue);
-	UT_ASSERT(ok && pValue != nullptr);
-	double yCol =  UT_convertToInches(pValue);
-	if(pPageL)
-	{
-	    pSVal = pPageL->getPageMarginTop();
-	    yPageL = UT_convertToInches(pSVal);
-	    pSVal = pPageL->getPageMarginHeader();
-	    yPageL += UT_convertToInches(pSVal);
-	    UT_DEBUGMSG(("PageMarginTop %s Margin in %f8.4\n",pSVal,yPageL));
-	}
-	double yTot = yPageL + yCol;
-	UT_DEBUGMSG(("Col %f8.4 Total in %f8.4\n",yCol,yTot));
-	pValue = UT_convertInchesToDimensionString(DIM_IN,yTot,"4");
-	ODe_writeAttribute(output, "svg:y", pValue);
+    m_rAutomatiStyles.storeGraphicStyle(pStyle);
+
+    output += "<draw:frame";
+    UT_UTF8String_sprintf(str, "Image%u", m_rAuxiliaryData.m_frameCount + 1);
+    ODe_writeAttribute(output, "draw:name", str);
+    m_rAuxiliaryData.m_frameCount++;
+
+    ODe_writeAttribute(output, "text:anchor-type", "paragraph");
+
+    const gchar* xVal = nullptr;
+    if (pAP && pAP->getProperty(xProp, xVal) && xVal && *xVal) {
+        ODe_writeAttribute(output, "svg:x", xVal);
+    } else if (pAP && pAP->getProperty("xpos", xVal) && xVal && *xVal) {
+        ODe_writeAttribute(output, "svg:x", xVal);
+    } else {
+        ODe_writeAttribute(output, "svg:x", "0in");
     }
-    else if(ok && pValue && !strcmp(pValue, "page-above-text")) {
-        output+="page\"";
-        ok = pAP->getProperty("frame-page-xpos", pValue);
-        if (ok && pValue != nullptr)
-            ODe_writeAttribute(output, "svg:x", pValue);
-        
-        ok = pAP->getProperty("frame-page-ypos", pValue);
-        if (ok && pValue != nullptr)
-            ODe_writeAttribute(output, "svg:y", pValue);
-    }
-    else { //this handles the block-above-text case and any other unforeseen ones
-        output+="paragraph\"";
-        ok = pAP->getProperty("xpos", pValue);
-        if (ok && pValue != nullptr)
-            ODe_writeAttribute(output, "svg:x", pValue);
-        
-        ok = pAP->getProperty("ypos", pValue);
-        if (ok && pValue != nullptr)
-            ODe_writeAttribute(output, "svg:y", pValue);
+
+    const gchar* yVal = nullptr;
+    if (pAP && pAP->getProperty(yProp, yVal) && yVal && *yVal) {
+        ODe_writeAttribute(output, "svg:y", yVal);
+    } else if (pAP && pAP->getProperty("ypos", yVal) && yVal && *yVal) {
+        ODe_writeAttribute(output, "svg:y", yVal);
+    } else {
+        ODe_writeAttribute(output, "svg:y", "0in");
     }
 
     UT_UTF8String_sprintf(str, "%u", m_zIndex);
     ODe_writeAttribute(output, "draw:z-index", str);
-    ODe_writeAttribute(output, "draw:style-name", pStyle->getName());
+    ODe_writeAttribute(output, "draw:style-name",
+                       ODe_Style_Style::convertStyleToNCName(pStyle->getName()));
 
-    ok = pAP->getProperty("frame-width", pValue);
+    ok = pAP && pAP->getProperty("frame-width", pValue);
     if (ok && pValue != nullptr) {
-        ODe_writeAttribute(output, "svg:width", pValue);
+        const char* width = (UT_convertToInches(pValue) < 0.0) ? "0in" : pValue;
+        ODe_writeAttribute(output, "svg:width", width);
     }
     
-    ok = pAP->getProperty("frame-height", pValue);
+    ok = pAP && pAP->getProperty("frame-height", pValue);
     if (ok && pValue != nullptr) {
-        ODe_writeAttribute(output, "svg:height", pValue);
+        const char* height = (UT_convertToInches(pValue) < 0.0) ? "0in" : pValue;
+        ODe_writeAttribute(output, "svg:height", height);
     }
     
     UT_UTF8String imageHref(pImageName ? pImageName : "");
@@ -1304,7 +1332,7 @@ void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
     output += "\" xlink:type=\"simple\" xlink:show=\"embed\""
               " xlink:actuate=\"onLoad\"/>";
 
-    ok = pAP->getAttribute("title", pValue);
+    ok = pAP && pAP->getAttribute("title", pValue);
     if (ok && pValue != nullptr) {
        escape = pValue;
        escape.escapeXML();
@@ -1315,7 +1343,7 @@ void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
        }
     }
 
-    ok = pAP->getAttribute("alt", pValue);
+    ok = pAP && pAP->getAttribute("alt", pValue);
     if (ok && pValue != nullptr) {
        escape = pValue;
        escape.escapeXML();
@@ -1331,10 +1359,8 @@ void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
 
     if (m_pParagraphContent) {
         ODe_writeUTF8String(m_pParagraphContent, output);
-    } else if (m_pTextOutput) {
-        ODe_writeUTF8String(m_pTextOutput, "<text:p>");
-        ODe_writeUTF8String(m_pTextOutput, output);
-        ODe_writeUTF8String(m_pTextOutput, "</text:p>");
+    } else {
+        m_pendingFrames += output;
     }
 }
 
@@ -1505,6 +1531,12 @@ void ODe_Text_Listener::_openODParagraph(const PP_AttrProp* pAP) {
     ////
     // Figure out the paragraph style
     m_delayedAP = pAP;
+    m_delayedListStyle = m_pCurrentListStyle;
+    m_delayedPendingMasterPageStyleChange = false;
+    m_delayedMasterPageStyleName.clear();
+    m_delayedColumnBreak = false;
+    m_delayedPageBreak = false;
+
     if (ODe_Style_Style::hasParagraphStyleProps(pAP) ||
         ODe_Style_Style::hasTextStyleProps(pAP) ||
         m_pendingMasterPageStyleChange ||
@@ -1513,8 +1545,6 @@ void ODe_Text_Listener::_openODParagraph(const PP_AttrProp* pAP) {
             
         // Need to create a new automatic style to hold those paragraph
         // properties.
-        
-        m_delayedListStyle = m_pCurrentListStyle;
         if (m_pendingMasterPageStyleChange){
                 m_delayedPendingMasterPageStyleChange = m_pendingMasterPageStyleChange;
                 m_delayedMasterPageStyleName = m_masterPageStyleName.utf8_str();
@@ -1552,6 +1582,23 @@ void ODe_Text_Listener::_openODParagraph(const PP_AttrProp* pAP) {
     // before the textbox.
     UT_ASSERT(m_pParagraphContent==nullptr);
     m_pParagraphContent = gsf_output_memory_new();
+    if (!m_pendingFrames.empty()) {
+        ODe_writeUTF8String(m_pParagraphContent, m_pendingFrames);
+        m_pendingFrames.clear();
+    }
+}
+
+void ODe_Text_Listener::_flushPendingFrames() {
+    if (m_pendingFrames.empty() || !m_pTextOutput) {
+        return;
+    }
+    UT_UTF8String output;
+    _printSpacesOffset(output);
+    output += "<text:p>";
+    output += m_pendingFrames;
+    output += "</text:p>\n";
+    ODe_writeUTF8String(m_pTextOutput, output);
+    m_pendingFrames.clear();
 }
 
 
@@ -1623,6 +1670,8 @@ void ODe_Text_Listener::_openParagraphDelayed(){
         
         if (m_delayedPendingMasterPageStyleChange) {
             pStyle->setMasterPageName(m_delayedMasterPageStyleName.c_str());
+            m_delayedPendingMasterPageStyleChange = false;
+            m_delayedMasterPageStyleName.clear();
         }
         
         

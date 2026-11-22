@@ -43,6 +43,7 @@
  * into an OpenDocument <text:p> or into a <text:h>.
  */
 class PD_Document;
+class ODe_Style_PageLayout;
 
 class ODe_HeadingStyles {
 public:
@@ -72,6 +73,10 @@ public:
     ~ODe_AuxiliaryData();
 
     ODe_HeadingStyles m_headingStyles;
+
+    // Active page layout in styles.xml (non-owning) so frames can resolve margins
+    // without polluting content.xml with invalid <style:page-layout> elements.
+    ODe_Style_PageLayout* m_pCurrentPageLayout;
 
     // The document being exported. Image names need its data items so the
     // package path, the manifest and xlink:href stay the same string.

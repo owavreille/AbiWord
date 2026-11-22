@@ -133,6 +133,16 @@ bool ODe_DocumentData::doPostListeningWork() {
         m_stylesXMLFontDecls.addFont( (*pStylesVector)[i]->getFontName() );
     }
 
+    auto pStylesListStyles = m_stylesAutoStyles.getListStyles();
+    count = pStylesListStyles->getItemCount();
+    for (i=0; i<count; i++) {
+        auto pListLevelStyles = pStylesListStyles->getNthItem(i)->getListLevelStyles();
+        count2 = pListLevelStyles->getItemCount();
+        for (j=0; j<count2; j++) {
+            m_stylesXMLFontDecls.addFont((*pListLevelStyles)[j]->getFontName());
+        }
+    }
+
     ////
     // Build the <office:font-face-decls> element for the Content XML file.
 
@@ -169,7 +179,7 @@ bool ODe_DocumentData::doPostListeningWork() {
         handleDefaultTabInterval((*pStylesVector)[i]);
     }
 
-    pStylesVector = m_stylesAutoStyles.getTextStyles();
+    pStylesVector = m_stylesAutoStyles.getParagraphStyles();
     count = pStylesVector->getItemCount();
     for (i=0; i<count; i++) {
         handleDefaultTabInterval((*pStylesVector)[i]);

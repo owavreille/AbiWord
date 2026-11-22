@@ -45,7 +45,7 @@ class ODe_ManifestWriter
 {
 public:
 
-    static bool writeManifest(PD_Document* pDoc, GsfOutfile* pODT);
+    static bool writeManifest(PD_Document* pDoc, GsfOutfile* pODT, bool hasThumbnail = false);
 
 private:
     ODe_ManifestWriter ();

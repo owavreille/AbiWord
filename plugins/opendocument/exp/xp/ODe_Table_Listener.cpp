@@ -85,15 +85,12 @@ void ODe_Table_Listener::openTable(const PP_AttrProp* pAP,
     m_rAuxiliaryData.m_tableCount++;
     UT_UTF8String_sprintf(m_tableName, "Table%u", m_rAuxiliaryData.m_tableCount);
 
-    if (ODe_Style_Style::hasTableStyleProps(pAP)) {
-        m_tableStyleName = m_tableName; // Plain simple
-        
-        pStyle = m_rAutomatiStyles.addTableStyle(m_tableStyleName);
-        pStyle->fetchAttributesFromAbiTable(pAP);
-        pStyle = nullptr; // We're done with it.
-                       // OBS: There's no need to delete it as it will be done
-                       //      later by ODe_AutomaticStyles destructor.
-    }
+    // Always create a table automatic style so table:border-model="collapsing"
+    // and table alignment/width are applied consistently in LibreOffice and Word.
+    m_tableStyleName = m_tableName;
+    pStyle = m_rAutomatiStyles.addTableStyle(m_tableStyleName);
+    pStyle->fetchAttributesFromAbiTable(pAP);
+    pStyle = nullptr; // Owned by ODe_AutomaticStyles.
   
     
     // We don't have to check if there are any properties to export at all,
@@ -220,7 +217,8 @@ void ODe_Table_Listener::closeTable(ODe_ListenerAction& rAction) {
     output += m_tableName;
     output += "\"";
 
-    ODe_writeAttribute(output, "table:style-name", m_tableStyleName);
+    ODe_writeAttribute(output, "table:style-name",
+                       ODe_Style_Style::convertStyleToNCName(m_tableStyleName));
     output += ">\n";
     
     ODe_writeUTF8String(m_pTextOutput, output);
@@ -455,7 +453,8 @@ void ODe_Table_Cell::write(GsfOutput* pTableOutput, const UT_UTF8String& rSpaces
     
     output = rSpacesOffset;
     output += "<table:table-cell";
-    ODe_writeAttribute(output, "table:style-name", m_styleName);
+    ODe_writeAttribute(output, "table:style-name",
+                       ODe_Style_Style::convertStyleToNCName(m_styleName));
     if(m_numberColumnsSpanned.size() > 0)
       ODe_writeAttribute(output, "table:number-columns-spanned", m_numberColumnsSpanned);
     if(m_numberRowsSpanned.size() > 0)
@@ -465,8 +464,13 @@ void ODe_Table_Cell::write(GsfOutput* pTableOutput, const UT_UTF8String& rSpaces
         
     output += ">\n";
     ODe_writeUTF8String(pTableOutput, output);
-    gsf_output_write (pTableOutput, gsf_output_size (m_pTextContent),
-		      gsf_output_memory_get_bytes (GSF_OUTPUT_MEMORY (m_pTextContent)));
+    const gsf_off_t contentSize = gsf_output_size(m_pTextContent);
+    if (contentSize > 0) {
+        gsf_output_write(pTableOutput, contentSize,
+                         gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(m_pTextContent)));
+    } else {
+        ODe_writeUTF8String(pTableOutput, rSpacesOffset + " <text:p/>\n");
+    }
 
     output = rSpacesOffset;
     output += "</table:table-cell>\n";
@@ -482,7 +486,8 @@ void ODe_Table_Column::write(GsfOutput* pTableOutput, const UT_UTF8String& rSpac
     
     output = rSpacesOffset;
     output += "<table:table-column";
-    ODe_writeAttribute(output, "table:style-name", m_styleName);
+    ODe_writeAttribute(output, "table:style-name",
+                       ODe_Style_Style::convertStyleToNCName(m_styleName));
     output += "/>\n";
                           
     ODe_writeUTF8String(pTableOutput, output);
@@ -499,7 +504,8 @@ void ODe_Table_Row::write(GsfOutput* pTableOutput, const UT_UTF8String& rSpacesO
     
     output = rSpacesOffset;
     output += "<table:table-row";
-    ODe_writeAttribute(output, "table:style-name", m_styleName);
+    ODe_writeAttribute(output, "table:style-name",
+                       ODe_Style_Style::convertStyleToNCName(m_styleName));
     output += ">\n";
     
     ODe_writeUTF8String(pTableOutput, output);

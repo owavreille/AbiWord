@@ -29,7 +29,7 @@ class ODe_ThumbnailsWriter
 {
 public:
 
-    static bool writeThumbnails(PD_Document* pDoc, GsfOutfile* oo);
+    static bool writeThumbnails(PD_Document* pDoc, GsfOutfile* oo, bool* pHasThumbnail = nullptr);
 
 private:
 

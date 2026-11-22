@@ -249,7 +249,8 @@ UT_Error IE_Exp_OpenDocument::_writeDocument(void)
 		return UT_ERROR;
 	}
 
-	if (!ODe_ThumbnailsWriter::writeThumbnails(getDoc(), m_odt))
+	bool hasThumbnail = false;
+	if (!ODe_ThumbnailsWriter::writeThumbnails(getDoc(), m_odt, &hasThumbnail))
 	{
 		ODe_gsf_output_close(GSF_OUTPUT(m_odt));
 		return UT_ERROR;
@@ -359,7 +360,7 @@ UT_Error IE_Exp_OpenDocument::_writeDocument(void)
 		return UT_ERROR;
 	}
 
-	if (!ODe_ManifestWriter::writeManifest(getDoc(), m_odt))
+	if (!ODe_ManifestWriter::writeManifest(getDoc(), m_odt, hasThumbnail))
 	{
 		ODe_gsf_output_close(GSF_OUTPUT(m_odt));
 		return UT_ERROR;

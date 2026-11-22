@@ -52,7 +52,8 @@ public:
                        GsfOutput* pTextOutput,
                        ODe_AuxiliaryData& rAuxiliaryData,
                        UT_uint8 zIndex,
-                       UT_uint8 spacesOffset);
+                       UT_uint8 spacesOffset,
+                       bool inHeaderFooter = false);
 
     virtual void openFrame(const PP_AttrProp* pAP, ODe_ListenerAction& rAction) override;
     virtual void closeFrame(ODe_ListenerAction& rAction) override;
@@ -68,6 +69,7 @@ private:
     GsfOutput* m_pTextOutput;
     ODe_AuxiliaryData& m_rAuxiliaryData;
     UT_uint8 m_zIndex;
+    bool m_inHeaderFooter;
 };
 
 #endif /*ODE_FRAME_LISTENER_H_*/

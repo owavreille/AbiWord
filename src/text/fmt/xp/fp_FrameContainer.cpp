@@ -680,38 +680,45 @@ void fp_FrameContainer::draw(dg_DrawArgs* pDA)
 	xxx_UT_DEBUGMSG(("Number of containers in frame %d \n",count));
 	auto p = pDA->pG->getClipRect();
 	std::unique_ptr<UT_Rect> pPrevRect(p ? new UT_Rect(*p) : nullptr);
-	UT_Rect pRect = getScreenRect().value();
 	UT_Rect newRect;
 	bool bRemoveRectAfter = false;
 	bool bSetOrigClip = false;
 	bool bSkip = false;
-	if((pPrevRect == nullptr) && pG->queryProperties(GR_Graphics::DGP_SCREEN))
+	if (pDA->pG->queryProperties(GR_Graphics::DGP_SCREEN))
 	{
-		pDA->pG->setClipRect(&pRect);
-		UT_DEBUGMSG(("Clip bottom is %d \n", pRect.top + pRect.height));
-		bRemoveRectAfter = true;
-	}
-	else if(pPrevRect && !pRect.intersectsRect(pPrevRect.get()))
-	{
-		bSkip = true;
-		xxx_UT_DEBUGMSG(("External Clip bottom is %d \n", pRect.top + pRect.height));
-	}
-	else if(pPrevRect)
-	{
-		newRect.top = UT_MAX(pPrevRect->top, pRect.top);
-		UT_sint32 iBotPrev = pPrevRect->height + pPrevRect->top;
-		UT_sint32 iBot = pRect.height + pRect.top;
-		newRect.height = UT_MIN(iBotPrev,iBot) - newRect.top;
-		newRect.width = pPrevRect->width;
-		newRect.left = pPrevRect->left;
-		if((newRect.height > 0) && pDA->pG->queryProperties(GR_Graphics::DGP_SCREEN))
+		const auto screenRect = getScreenRect();
+		if (screenRect.has_value())
 		{
-			pDA->pG->setClipRect(&newRect);
-			bSetOrigClip = true;
-		}
-		else
-		{
-			bSkip = true;
+			const UT_Rect pRect = screenRect.value();
+			if (pPrevRect == nullptr)
+			{
+				pDA->pG->setClipRect(&pRect);
+				UT_DEBUGMSG(("Clip bottom is %d \n", pRect.top + pRect.height));
+				bRemoveRectAfter = true;
+			}
+			else if (!pRect.intersectsRect(pPrevRect.get()))
+			{
+				bSkip = true;
+				xxx_UT_DEBUGMSG(("External Clip bottom is %d \n", pRect.top + pRect.height));
+			}
+			else
+			{
+				newRect.top = UT_MAX(pPrevRect->top, pRect.top);
+				UT_sint32 iBotPrev = pPrevRect->height + pPrevRect->top;
+				UT_sint32 iBot = pRect.height + pRect.top;
+				newRect.height = UT_MIN(iBotPrev,iBot) - newRect.top;
+				newRect.width = pPrevRect->width;
+				newRect.left = pPrevRect->left;
+				if (newRect.height > 0)
+				{
+					pDA->pG->setClipRect(&newRect);
+					bSetOrigClip = true;
+				}
+				else
+				{
+					bSkip = true;
+				}
+			}
 		}
 	}
 	if(!bSkip)

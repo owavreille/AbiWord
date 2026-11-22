@@ -440,42 +440,16 @@ bool ODe_Style_Style::hasSectionInfo(const PP_AttrProp* pAP) {
     bool ok;
     
     ok = pAP->getProperty("columns", pValue);
-    if (ok && pValue != nullptr) {
+    if (ok && pValue != nullptr && atoi(pValue) > 1) {
         return true;
     }
     
     ok = pAP->getProperty("column-gap", pValue);
-    if (ok && pValue != nullptr) {
-        return true;
-    }
-    ok= pAP->getProperty("page-margin-top",pValue);
-    if (ok && pValue != nullptr) {
-        return true;
-    }
-
-    ok= pAP->getProperty("page-margin-left",pValue);
-    if (ok && pValue != nullptr) {
-        return true;
-    }
-
-    ok= pAP->getProperty("page-margin-right",pValue);
-    if (ok && pValue != nullptr) {
-        return true;
-    }
-
-    ok= pAP->getProperty("page-margin-bottom",pValue);
-    if (ok && pValue != nullptr) {
-        return true;
-    }
-    
-    ok = pAP->getProperty("page-margin-header", pValue);
-    if (ok && pValue != nullptr) {
-        return true;
-    }
-    
-    ok = pAP->getProperty("page-margin-footer", pValue);
-    if (ok && pValue != nullptr) {
-        return true;
+    if (ok && pValue != nullptr && *pValue != '\0') {
+        const gchar* cols = nullptr;
+        if (pAP->getProperty("columns", cols) && cols != nullptr && atoi(cols) > 1) {
+            return true;
+        }
     }
     return false;
 }
@@ -950,6 +924,14 @@ void ODe_Style_Style::setHorizontalPos(const UT_UTF8String& rHorizontalPos) {
     m_pGraphicProps->m_horizontalPos = rHorizontalPos;
 }
 
+void ODe_Style_Style::setHorizontalRel(const UT_UTF8String& rHorizontalRel) {
+    if (m_pGraphicProps == nullptr) {
+        m_pGraphicProps = new GraphicProps();
+    }
+
+    m_pGraphicProps->m_horizontalRel = rHorizontalRel;
+}
+
 
 /**
  * 
@@ -995,32 +977,33 @@ void ODe_Style_Style::setDefaultTabInterval(const UT_UTF8String& rDefaultTabInte
  * 
  */
 UT_UTF8String ODe_Style_Style::convertStyleToNCName(const UT_UTF8String& name) {
-    // To generate a valid NCName for a style, we simply replace
-    // all non-alphanumeric characters with a dash. Then whenever a collision
-    // occurs between the generated ncnames for two different styles, we'll
-    // just append the string "-1" until it becomes unique :)
-    //
-    // Feel free to make it not replace valid NCName characters. See
-    // http://www.w3.org/TR/REC-xml-names/#NT-NCName for the allowed values
+    if (name.empty()) {
+        return "";
+    }
 
+    // Generate a valid XML NCName: start with ASCII letter or '_', followed by
+    // ASCII alphanumerics, '_', or '-'. Collisions get "-1" appended.
     std::string nc_name = name.utf8_str();
     for (UT_uint32 i = 0; i < nc_name.size(); i++) {
-        if (isalnum(nc_name[i]))
+        if (g_ascii_isalnum(nc_name[i]))
             continue;
         nc_name[i] = '-';
+    }
+    if (!g_ascii_isalpha(nc_name[0]) && nc_name[0] != '_') {
+        nc_name.insert(nc_name.begin(), '_');
     }
     
     while (true) {
         if (m_NCStyleMappings.find(nc_name) == m_NCStyleMappings.end()) {
             // we've never used this nc_name before, so assign it to our style name
             m_NCStyleMappings[nc_name] = name.utf8_str();
-            return nc_name.c_str();;
+            return nc_name.c_str();
         }
         
         if (m_NCStyleMappings[nc_name] == name.utf8_str()) {
-            // we've seen this nc_before and it matches our style name, so 
+            // we've seen this nc_name before and it matches our style name, so
             // reuse it!
-            return nc_name.c_str();;
+            return nc_name.c_str();
         }
         
         // we've encountered a collision, add "-1" and try again
@@ -1202,12 +1185,11 @@ fetchAttributesFromAbiProps(const PP_AttrProp& rAP) {
     if (ok && pValue != nullptr) {
         UT_LocaleTransactor t(LC_NUMERIC, "C");
         if(strstr(pValue, "+")) { // "at least" spacing
-            int len = strlen(pValue);
+            size_t len = strlen(pValue);
 
             if((len > 1) && (pValue[len - 1] == '+')) {
-               gchar* temp = (gchar*)pValue;
-               temp[len-1] = '\0';
-               m_lineHeightAtLeast = UT_UTF8String_sprintf("%fin", UT_convertToDimension(temp, DIM_IN));
+               std::string temp(pValue, len - 1);
+               m_lineHeightAtLeast = UT_UTF8String_sprintf("%fin", UT_convertToDimension(temp.c_str(), DIM_IN));
                m_lineHeight.clear(); // make sure this is empty
             } else {
                 UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
@@ -1693,14 +1675,28 @@ fetchAttributesFromAbiProps(const PP_AttrProp& rAP) {
         // TODO: handle transparent?
         m_color = UT_colorToHex(pValue, true);
     }
+
+    ok = rAP.getProperty("bgcolor", pValue);
+    if (ok && pValue && *pValue) {
+        if (!strcmp(pValue, "transparent")) {
+            m_backgroundColor = "transparent";
+        } else {
+            m_backgroundColor = UT_colorToHex(pValue, true);
+        }
+    }
     
     ok = rAP.getProperty("text-decoration", pValue);
     if (ok && pValue != nullptr) {
-        if (strstr(pValue, "underline"))
+        const bool hasUnderline = strstr(pValue, "underline") != nullptr;
+        const bool hasLineThrough = strstr(pValue, "line-through") != nullptr;
+        if (hasUnderline)
             m_underlineType = "single";
-
-        if (strstr(pValue, "line-through"))
+        if (hasLineThrough)
             m_lineThroughType = "single";
+        if (!hasUnderline && !hasLineThrough && strstr(pValue, "none")) {
+            m_underlineType = "none";
+            m_lineThroughType = "none";
+        }
     }
     
     
@@ -1773,6 +1769,8 @@ fetchAttributesFromAbiProps(const PP_AttrProp& rAP) {
     if (ok && pValue != nullptr) {
         if (!strcmp(pValue, "italic")) {
             m_fontStyle = "italic";
+        } else if (!strcmp(pValue, "normal")) {
+            m_fontStyle = "normal";
         }
     }
     
@@ -1820,10 +1818,27 @@ write(UT_UTF8String& rOutput, const UT_UTF8String& rSpacesOffset) const {
     rOutput += "<style:text-properties";
     
     ODe_writeAttribute(rOutput, "fo:color", m_color);
-    ODe_writeAttribute(rOutput, "style:text-underline-type", m_underlineType);
-    ODe_writeAttribute(rOutput, "style:text-line-through-type", m_lineThroughType);
+    if (!m_underlineType.empty()) {
+        ODe_writeAttribute(rOutput, "style:text-underline-type", m_underlineType);
+        // ODF 1.3 §20.380, LibreOffice Writer, and Microsoft Word [MS-OODF3]
+        // require style:text-underline-style alongside style:text-underline-type.
+        ODe_writeAttribute(rOutput, "style:text-underline-style",
+                           m_underlineType == "none" ? "none" : "solid");
+        if (m_underlineType != "none") {
+            ODe_writeAttribute(rOutput, "style:text-underline-width", "auto");
+        }
+    }
+    if (!m_lineThroughType.empty()) {
+        ODe_writeAttribute(rOutput, "style:text-line-through-type", m_lineThroughType);
+        ODe_writeAttribute(rOutput, "style:text-line-through-style",
+                           m_lineThroughType == "none" ? "none" : "solid");
+    }
     ODe_writeAttribute(rOutput, "style:text-position", m_textPosition);
-    ODe_writeAttribute(rOutput, "style:font-name", m_fontName);
+    if (!m_fontName.empty()) {
+        UT_UTF8String escapedFont(m_fontName);
+        escapedFont.escapeXML();
+        ODe_writeAttribute(rOutput, "style:font-name", escapedFont);
+    }
     UT_UTF8String fontSize = m_fontSize;
     if (!fontSize.empty()) {
         const char* size = fontSize.utf8_str();
@@ -1934,32 +1949,35 @@ fetchAttributesFromAbiProps(const PP_AttrProp& rAP) {
     ok = rAP.getProperty("table-column-props", pValue);
     if (ok && pValue != nullptr) {
         std::string buffer;
-        double tableWidth = 0.0;
-        UT_Dimension dimension = DIM_none;
-        bool gotDimension = false;
-        
-        // The table width is the sum of all column widths.
-        
+        double tableWidthIn = 0.0;
+
+        // Convert every column width to inches before summing so mixed units
+        // or empty entries do not corrupt style:width.
         while (*pValue != 0) {
             if (*pValue == '/') {
-                // We've reached the end of a column width
-                if (!gotDimension) {
-                    dimension = UT_determineDimension(buffer.c_str(), DIM_none);
-                    gotDimension = true;
+                if (!buffer.empty()) {
+                    const double colIn = UT_convertToInches(buffer.c_str());
+                    if (colIn > 0.0) {
+                        tableWidthIn += colIn;
+                    }
+                    buffer.clear();
                 }
-                
-                tableWidth += UT_convertDimensionless(buffer.c_str());
-                buffer.clear();
             } else {
-                // Store the character in the buffer
                 buffer += *pValue;
             }
             pValue++;
         }
-        
-        UT_LocaleTransactor t(LC_NUMERIC, "C");
-        UT_UTF8String_sprintf(m_width, "%f%s",
-                              tableWidth, UT_dimensionName(dimension) );
+        if (!buffer.empty()) {
+            const double colIn = UT_convertToInches(buffer.c_str());
+            if (colIn > 0.0) {
+                tableWidthIn += colIn;
+            }
+        }
+
+        if (tableWidthIn > 0.0) {
+            UT_LocaleTransactor t(LC_NUMERIC, "C");
+            UT_UTF8String_sprintf(m_width, "%fin", tableWidthIn);
+        }
     }
     
     
@@ -1994,6 +2012,7 @@ void ODe_Style_Style::TableProps::write(UT_UTF8String& rOutput,
     ODe_writeAttribute(rOutput, "table:align", m_align);
     ODe_writeAttribute(rOutput, "fo:margin-left", m_marginLeft);
     ODe_writeAttribute(rOutput, "fo:margin-right", m_marginRight);
+    ODe_writeAttribute(rOutput, "table:border-model", "collapsing");
     
     rOutput += "/>\n";
 }
@@ -2071,6 +2090,7 @@ ODe_Style_Style::ColumnProps& ODe_Style_Style::ColumnProps::operator=(
                                             const ColumnProps& rColumnProps) {
                                                 
     m_columnWidth = rColumnProps.m_columnWidth;
+    m_RelColumnWidth = rColumnProps.m_RelColumnWidth;
     return *this;
 }
 
@@ -2157,7 +2177,8 @@ bool ODe_Style_Style::CellProps::isEmpty() const {
            m_bottomThickness.empty() &&
            m_bottomColor.empty() &&
            m_backgroundColor.empty() &&
-	   m_verticalAlign.empty();
+           m_backgroundImage.empty() &&
+           m_verticalAlign.empty();
 }
 
 
@@ -2336,6 +2357,7 @@ ODe_Style_Style::CellProps& ODe_Style_Style::CellProps::operator=(
     m_bottomThickness = rCellProps.m_bottomThickness;
     m_bottomColor = rCellProps.m_bottomColor;
     m_backgroundColor = rCellProps.m_backgroundColor;
+    m_backgroundImage = rCellProps.m_backgroundImage;
     m_verticalAlign = rCellProps.m_verticalAlign;
     
     return *this;
@@ -2357,7 +2379,8 @@ bool ODe_Style_Style::CellProps::operator==(
         m_bottomThickness    == rCellProps.m_bottomThickness &&
         m_bottomColor        == rCellProps.m_bottomColor &&
         m_backgroundColor    == rCellProps.m_backgroundColor &&
-	m_verticalAlign      == rCellProps.m_verticalAlign;
+        m_backgroundImage    == rCellProps.m_backgroundImage &&
+        m_verticalAlign      == rCellProps.m_verticalAlign;
 }
 
 
@@ -2507,24 +2530,34 @@ fetchAttributesFromAbiProps(const PP_AttrProp& rAP) {
         if (!strcmp(pValue, "above-text")) {
             m_wrap = "run-through";
             m_runThrough = "foreground";
+        } else if (!strcmp(pValue, "below-text")) {
+            m_wrap = "run-through";
+            m_runThrough = "background";
         } else if (!strcmp(pValue, "wrapped-both")) {
             m_wrap = "parallel";
+        } else if (!strcmp(pValue, "wrapped-to-left")) {
+            m_wrap = "left";
+        } else if (!strcmp(pValue, "wrapped-to-right")) {
+            m_wrap = "right";
+        } else if (!strcmp(pValue, "wrapped-topbot")) {
+            m_wrap = "none";
         } else {
-            UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+            m_wrap = "run-through";
+            m_runThrough = "foreground";
         }
     }
     
     
     ok = rAP.getProperty("position-to", pValue);
-    UT_ASSERT (ok && pValue != nullptr);
-    if (ok && pValue && !strcmp(pValue, "block-above-text")) {
-        m_horizontalRel = "paragraph";
-        m_verticalRel = "paragraph";
-    } else {
-        // Everything else (column and page) will be treated as page
-        // anchored.
+    if (ok && pValue && !strcmp(pValue, "page-above-text")) {
         m_horizontalRel = "page";
         m_verticalRel = "page";
+    } else if (ok && pValue && !strcmp(pValue, "column-above-text")) {
+        m_horizontalRel = "page-content";
+        m_verticalRel = "page-content";
+    } else {
+        m_horizontalRel = "paragraph";
+        m_verticalRel = "paragraph";
     }
 }
 

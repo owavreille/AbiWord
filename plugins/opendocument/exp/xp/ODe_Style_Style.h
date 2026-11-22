@@ -127,6 +127,7 @@ public:
     void setRunThrough(const UT_UTF8String& rRunThrough);
     void setPadding(const UT_UTF8String& rPadding);
     void setHorizontalPos(const UT_UTF8String& rHorizontalPos);
+    void setHorizontalRel(const UT_UTF8String& rHorizontalRel);
     void setVerticalPos(const UT_UTF8String& rVerticalPos);
     void setVerticalRel(const UT_UTF8String& rVerticalRel);
 

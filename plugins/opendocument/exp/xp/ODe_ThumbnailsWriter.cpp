@@ -35,56 +35,68 @@
 #include "gr_Graphics.h"
 #include "gr_Painter.h"
 
-bool ODe_ThumbnailsWriter::writeThumbnails(PD_Document* /*pDoc*/, GsfOutfile* oo) {
+#include <string.h>
 
-	GsfOutput* thumbnailsDir = gsf_outfile_new_child (oo, "Thumbnails", TRUE);
-	if(thumbnailsDir == nullptr){
-		return false;
-	}
+bool ODe_ThumbnailsWriter::writeThumbnails(PD_Document* /*pDoc*/, GsfOutfile* oo, bool* pHasThumbnail) {
+    if (pHasThumbnail) {
+        *pHasThumbnail = false;
+    }
 
-	GsfOutput* thumbnail = gsf_outfile_new_child(GSF_OUTFILE(thumbnailsDir),
-			 "thumbnail.png", FALSE);
-	if(thumbnail == nullptr){
-		return false;
-	}
-
-    XAP_Frame *pFrame = XAP_App::getApp()->getLastFocussedFrame();
-    // not sure we have a frame e.g. when running abiword -t odt myfile.abw
-    if (!pFrame)
-    {
-        gsf_output_close(thumbnail);
-        gsf_output_close(thumbnailsDir);
-        /* return true because it's better to export a file without thumbnails
-         * than no file at all */
+    XAP_App* pApp = XAP_App::getApp();
+    XAP_Frame* pFrame = pApp ? pApp->getLastFocussedFrame() : nullptr;
+    // Do not create an empty/corrupt Thumbnails/thumbnail.png when no active
+    // frame/view/graphics exists (e.g. headless conversion, CLI, or tests).
+    if (!pFrame) {
         return true;
     }
+
     FV_View* pView = static_cast<FV_View*>(pFrame->getCurrentView());
+    GR_Graphics* pVG = pView ? pView->getGraphics() : nullptr;
+    if (!pView || !pVG) {
+        return true;
+    }
 
-    GR_Graphics* pVG = pView->getGraphics();
+    const UT_sint32 iWidth = pView->getWindowWidth();
+    const UT_sint32 iHeight = pView->getWindowHeight();
+    if (iWidth <= 0 || iHeight <= 0) {
+        return true;
+    }
 
-    UT_sint32 iWidth = pView->getWindowWidth();
-	UT_sint32 iHeight = pView->getWindowHeight();
     UT_Rect rect(0, 0, iWidth, iHeight);
+    GR_Painter painter(pVG);
+    GR_Image* pImage = painter.genImageFromRectangle(rect);
+    if (!pImage) {
+        return true;
+    }
 
-	GR_Painter painter(pVG);
-	GR_Image * pImage = painter.genImageFromRectangle(rect);
+    UT_ConstByteBufPtr pBuf;
+    const bool converted = pImage->convertToBuffer(pBuf);
+    DELETEP(pImage);
 
-	if(pImage == nullptr){
-		gsf_output_close(thumbnail);
-		gsf_output_close(thumbnailsDir);
-		return false;
-	}
+    // ODF 1.3 Part 2 §3.7: Thumbnails/thumbnail.png must be a valid PNG image.
+    if (!converted || !pBuf || pBuf->getLength() < 8 ||
+        memcmp(pBuf->getPointer(0), "\x89PNG\r\n\x1a\n", 8) != 0) {
+        return true;
+    }
 
-	UT_ConstByteBufPtr pBuf;
-	pImage->convertToBuffer(pBuf);
+    GsfOutput* thumbnailsDir = gsf_outfile_new_child(oo, "Thumbnails", TRUE);
+    if (!thumbnailsDir) {
+        return false;
+    }
 
-	gsf_output_write(thumbnail, pBuf->getLength(),
-			pBuf->getPointer(0));
+    GsfOutput* thumbnail = gsf_outfile_new_child(GSF_OUTFILE(thumbnailsDir),
+                                                 "thumbnail.png", FALSE);
+    if (!thumbnail) {
+        ODe_gsf_output_close(thumbnailsDir);
+        return false;
+    }
 
-	DELETEP(pImage);
+    ODe_gsf_output_write(thumbnail, pBuf->getLength(), pBuf->getPointer(0));
+    ODe_gsf_output_close(thumbnail);
+    ODe_gsf_output_close(thumbnailsDir);
 
-	gsf_output_close(thumbnail);
-	gsf_output_close(thumbnailsDir);
-
-	return true;
+    if (pHasThumbnail) {
+        *pHasThumbnail = true;
+    }
+    return true;
 }

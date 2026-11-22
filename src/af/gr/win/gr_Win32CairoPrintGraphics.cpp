@@ -279,6 +279,22 @@ bool GR_Win32CairoImage::loadJpeg(const UT_ConstByteBufPtr & pBB)
 	}
 	g_free(rgb);
 	cairo_surface_mark_dirty(m_surface);
+#ifdef CAIRO_MIME_TYPE_JPEG
+	if (pBB->getLength() > 0)
+	{
+		unsigned char* jpegCopy = static_cast<unsigned char*>(g_malloc(pBB->getLength()));
+		if (jpegCopy)
+		{
+			memcpy(jpegCopy, pBB->getPointer(0), pBB->getLength());
+			if (cairo_surface_set_mime_data(m_surface, CAIRO_MIME_TYPE_JPEG,
+											jpegCopy, pBB->getLength(),
+											g_free, jpegCopy) != CAIRO_STATUS_SUCCESS)
+			{
+				g_free(jpegCopy);
+			}
+		}
+	}
+#endif
 	return true;
 }
 
@@ -350,10 +366,24 @@ GR_CairoRasterImage *GR_Win32CairoImage::makeSubimage(const std::string & name,
 {
 	if (!m_surface || w <= 0 || h <= 0)
 		return nullptr;
+	const double srcW = cairo_image_surface_get_width(m_surface);
+	const double srcH = cairo_image_surface_get_height(m_surface);
+	const double dispW = getDisplayWidth();
+	const double dispH = getDisplayHeight();
+	if (srcW <= 0.0 || srcH <= 0.0 || dispW <= 0.0 || dispH <= 0.0)
+		return nullptr;
 	GR_Win32CairoImage *image = new GR_Win32CairoImage(name.c_str());
 	cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, w, h);
+	if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS)
+	{
+		cairo_surface_destroy(surface);
+		delete image;
+		return nullptr;
+	}
 	cairo_t *cr = cairo_create(surface);
-	cairo_set_source_surface(cr, m_surface, -x, -y);
+	cairo_translate(cr, -x, -y);
+	cairo_scale(cr, dispW / srcW, dispH / srcH);
+	cairo_set_source_surface(cr, m_surface, 0, 0);
 	cairo_paint(cr);
 	cairo_destroy(cr);
 	cairo_surface_mark_dirty(surface);
@@ -429,15 +459,32 @@ GR_Image* GR_CairoPrintGraphics::createNewImage(const char* pszName,
 	if (type == GR_Image::GRT_Unknown && pBB)
 		type = GR_Image::getBufferType(pBB);
 
+	// iDisplayWidth and iDisplayHeight arrive in logical units (1440 DPI).
+	// Convert to device units to match GR_UnixCairoGraphicsBase and GR_Win32Graphics.
+	UT_sint32 devWidth = iDisplayWidth;
+	if (iDisplayWidth > 0)
+	{
+		devWidth = tdu(iDisplayWidth);
+		if (devWidth <= 0)
+			devWidth = 1;
+	}
+	UT_sint32 devHeight = iDisplayHeight;
+	if (iDisplayHeight > 0)
+	{
+		devHeight = tdu(iDisplayHeight);
+		if (devHeight <= 0)
+			devHeight = 1;
+	}
+
 	if (type == GR_Image::GRT_Vector)
 	{
 		GR_Win32CairoVectorImage *image = new GR_Win32CairoVectorImage(pszName);
-		image->convertFromBuffer(pBB, mimetype, iDisplayWidth, iDisplayHeight);
+		image->convertFromBuffer(pBB, mimetype, devWidth, devHeight);
 		return image;
 	}
 
 	GR_Win32CairoImage *image = new GR_Win32CairoImage(pszName);
-	if (!image->convertFromBuffer(pBB, mimetype, iDisplayWidth, iDisplayHeight))
+	if (!image->convertFromBuffer(pBB, mimetype, devWidth, devHeight))
 	{
 		delete image;
 		return nullptr;

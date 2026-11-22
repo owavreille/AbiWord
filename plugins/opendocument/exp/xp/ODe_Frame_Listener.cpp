@@ -44,14 +44,16 @@ ODe_Frame_Listener::ODe_Frame_Listener(ODe_Styles& rStyles,
                                        GsfOutput* pTextOutput,
                                        ODe_AuxiliaryData& rAuxiliaryData,
                                        UT_uint8 zIndex,
-                                       UT_uint8 spacesOffset)
+                                       UT_uint8 spacesOffset,
+                                       bool inHeaderFooter)
                                        :
                                        ODe_AbiDocListenerImpl(spacesOffset),
                                        m_rStyles(rStyles),
                                        m_rAutomatiStyles(rAutomatiStyles),
                                        m_pTextOutput(pTextOutput),
                                        m_rAuxiliaryData(rAuxiliaryData),
-                                       m_zIndex(zIndex)
+                                       m_zIndex(zIndex),
+                                       m_inHeaderFooter(inHeaderFooter)
 {
 }
 
@@ -144,17 +146,17 @@ void ODe_Frame_Listener::_openODTextbox(const PP_AttrProp& rAP,
     // (no margin between frame borders and its content)
     pStyle->setPadding("0cm");
     
-    // Abi frames are aways positioned from its top-left corner.
+    // Abi frames are always positioned from their top-left corner.
     pStyle->setHorizontalPos("from-left");
     pStyle->setVerticalPos("from-top");
+    if (m_inHeaderFooter) {
+        pStyle->setHorizontalRel("paragraph");
+        pStyle->setVerticalRel("paragraph");
+    }
     
-    // For OOo to recognize a textbox as being a textbox, it will
-    // need to have the parent style name "Frame". I can't find it
-    // in the ODF spec, but without it OOo considers the textbox to
-    // be a generic drawing object (check the Navigator window in OOo).
+    // For OOo/LibreOffice to recognize a textbox as a frame, it needs
+    // parent style name "Frame".
     pStyle->setParentStyleName("Frame");
-    // Make sure an (empty) Frame style exists, for completeness sake
-	// (OOo doesn't seem to care if it exists or not).
     if (!m_rStyles.getGraphicsStyle("Frame")) {
         ODe_Style_Style* pFrameStyle = new ODe_Style_Style();
 		pFrameStyle->setStyleName("Frame");
@@ -166,6 +168,8 @@ void ODe_Frame_Listener::_openODTextbox(const PP_AttrProp& rAP,
 
     ////
     // Write <draw:frame>
+    // Always anchor to paragraph (valid inside <text:p> and headers/footers,
+    // and supported by both LibreOffice Writer and Microsoft Word [MS-OODF3]).
     
     _printSpacesOffset(output);
     output += "<draw:frame";
@@ -174,85 +178,46 @@ void ODe_Frame_Listener::_openODTextbox(const PP_AttrProp& rAP,
     ODe_writeAttribute(output, "draw:name", str);
     m_rAuxiliaryData.m_frameCount++;
     
-    ODe_writeAttribute(output, "draw:style-name", pStyle->getName());
+    ODe_writeAttribute(output, "draw:style-name",
+                       ODe_Style_Style::convertStyleToNCName(pStyle->getName()));
 
     UT_UTF8String_sprintf(str, "%u", m_zIndex);
     ODe_writeAttribute(output, "draw:z-index", str);
-
+    ODe_writeAttribute(output, "text:anchor-type", "paragraph");
 
     ok = rAP.getProperty("position-to", pValue);
-
-    if (ok && pValue && !strcmp(pValue, "block-above-text")) {
-        ODe_writeAttribute(output, "text:anchor-type", "paragraph");
-
-        ok = rAP.getProperty("xpos", pValue);
-        if (ok && pValue)
-            ODe_writeAttribute(output, "svg:x", pValue);
-
-        ok = rAP.getProperty("ypos", pValue);
-        if (ok && pValue)
-            ODe_writeAttribute(output, "svg:y", pValue);
-    } else {
-        // Everything else (column and page) will be treated as page
-        // anchored.
-
-        ODe_writeAttribute(output, "text:anchor-type", "page");
-
-	if(ok && pValue && !strcmp(pValue, "column-above-text"))
-	{
-	  //
-	  // Get the most recent page style so we can do the arithmetic
-	  // Won't work for x in multi-columned docs
-	  //
-	    UT_uint32 numPStyles =  m_rAutomatiStyles.getSectionStylesCount();
-	    UT_UTF8String stylePName;
-	    UT_UTF8String_sprintf(stylePName, "PLayout%d", numPStyles + 1);
-	    ODe_Style_PageLayout * pPageL = m_rAutomatiStyles.getPageLayout(stylePName.utf8_str());
-
-	    ok = rAP.getProperty("frame-col-xpos", pValue);
-	    double xCol = 0.;
-	    if(ok && pValue != nullptr)
-	    {
-		xCol =  UT_convertToInches(pValue);
-	    }
-	    ok = rAP.getProperty("frame-col-ypos", pValue);
-	    double yCol = 0.;
-	    if(ok && pValue != nullptr)
-	    {
-		yCol =  UT_convertToInches(pValue);
-	    }
-	    double xPageL = 0.;
-	    double yPageL = 0.;
-	    if (pPageL)
-	    {		
-		const gchar* pSVal= pPageL->getPageMarginLeft();
-		xPageL = UT_convertToInches(pSVal);
-		pSVal= pPageL->getPageMarginTop();
-		yPageL = UT_convertToInches(pSVal);	
-	    }
-	    double xTot = xPageL + xCol;
-	    pValue = UT_convertInchesToDimensionString(DIM_IN,xTot,"4");
-	    ODe_writeAttribute(output, "svg:x", pValue);
-	    double yTot = yPageL + yCol;
-	    pValue = UT_convertInchesToDimensionString(DIM_IN,yTot,"4");
-	    ODe_writeAttribute(output, "svg:y", pValue);	  
-	}
-	else
-	{
-	    ok = rAP.getProperty("frame-page-xpos", pValue);
-	    if (ok && pValue)
-	        ODe_writeAttribute(output, "svg:x", pValue);
-        
-	    ok = rAP.getProperty("frame-page-ypos", pValue);
-	    if (ok && pValue)
-	        ODe_writeAttribute(output, "svg:y", pValue);
-	}
+    const gchar* xProp = "xpos";
+    const gchar* yProp = "ypos";
+    if (!m_inHeaderFooter && ok && pValue && !strcmp(pValue, "column-above-text")) {
+        xProp = "frame-col-xpos";
+        yProp = "frame-col-ypos";
+    } else if (!m_inHeaderFooter && ok && pValue && !strcmp(pValue, "page-above-text")) {
+        xProp = "frame-page-xpos";
+        yProp = "frame-page-ypos";
     }
-    
+
+    const gchar* xVal = nullptr;
+    if (rAP.getProperty(xProp, xVal) && xVal && *xVal) {
+        ODe_writeAttribute(output, "svg:x", xVal);
+    } else if (rAP.getProperty("xpos", xVal) && xVal && *xVal) {
+        ODe_writeAttribute(output, "svg:x", xVal);
+    } else {
+        ODe_writeAttribute(output, "svg:x", "0in");
+    }
+
+    const gchar* yVal = nullptr;
+    if (rAP.getProperty(yProp, yVal) && yVal && *yVal) {
+        ODe_writeAttribute(output, "svg:y", yVal);
+    } else if (rAP.getProperty("ypos", yVal) && yVal && *yVal) {
+        ODe_writeAttribute(output, "svg:y", yVal);
+    } else {
+        ODe_writeAttribute(output, "svg:y", "0in");
+    }
     
     ok = rAP.getProperty("frame-width", pValue);
     if (ok && pValue != nullptr) {
-        ODe_writeAttribute(output, "svg:width", pValue);
+        const char* width = (UT_convertToInches(pValue) < 0.0) ? "0in" : pValue;
+        ODe_writeAttribute(output, "svg:width", width);
     }
     
     output += ">\n";

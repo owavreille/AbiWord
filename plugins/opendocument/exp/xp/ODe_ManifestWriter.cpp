@@ -64,9 +64,10 @@ void ODe_ManifestWriter::ensureDirectoryManifest( PD_Document* /*pDoc*/,
         { 
             pathsAlreadyWritten.insert( runningPath );
 
+            std::string escapedPath = UT_escapeXML(runningPath);
             std::string name = UT_std_string_sprintf(
                 " <manifest:file-entry manifest:media-type=\"\" manifest:full-path=\"%s\"/>\n",
-                runningPath.c_str() );
+                escapedPath.c_str() );
             ODe_gsf_output_write(manifest, name.size(),
                                  reinterpret_cast<const guint8 *>(name.c_str()));
             
@@ -79,7 +80,7 @@ void ODe_ManifestWriter::ensureDirectoryManifest( PD_Document* /*pDoc*/,
 /**
  * 
  */
-bool ODe_ManifestWriter::writeManifest(PD_Document* pDoc, GsfOutfile* pODT)
+bool ODe_ManifestWriter::writeManifest(PD_Document* pDoc, GsfOutfile* pODT, bool hasThumbnail)
 {
     // Create META-INF directory
     GsfOutput* meta_inf = gsf_outfile_new_child(pODT, "META-INF", TRUE);
@@ -96,8 +97,7 @@ bool ODe_ManifestWriter::writeManifest(PD_Document* pDoc, GsfOutfile* pODT)
         " <manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"content.xml\"/>\n",
         " <manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"styles.xml\"/>\n",
         " <manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"meta.xml\"/>\n",
-        " <manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"settings.xml\"/>\n",
-        " <manifest:file-entry manifest:media-type=\"image/png\" manifest:full-path=\"Thumbnails/thumbnail.png\"/>\n"
+        " <manifest:file-entry manifest:media-type=\"text/xml\" manifest:full-path=\"settings.xml\"/>\n"
     };
 
     static const char * const postamble [] = {
@@ -113,6 +113,13 @@ bool ODe_ManifestWriter::writeManifest(PD_Document* pDoc, GsfOutfile* pODT)
     
     ODe_writeToStream (manifest, preamble, G_N_ELEMENTS(preamble));
 
+    if (hasThumbnail) {
+        static const char thumbEntry[] =
+            " <manifest:file-entry manifest:media-type=\"image/png\" manifest:full-path=\"Thumbnails/thumbnail.png\"/>\n";
+        ODe_gsf_output_write(manifest, sizeof(thumbEntry) - 1,
+                             reinterpret_cast<const guint8 *>(thumbEntry));
+    }
+
     const char* szName;
     std::string mimeType;
     UT_ConstByteBufPtr pByteBuf;
@@ -126,18 +133,20 @@ bool ODe_ManifestWriter::writeManifest(PD_Document* pDoc, GsfOutfile* pODT)
                               &mimeType)); k++) {
                                 
         if (!mimeType.empty()) {
-
-            ensureDirectoryManifest( pDoc, manifest, szName, pathsAlreadyWritten );
-
             std::string automaticPathPrefix = "Pictures/";
             if( absolutePathMimeTypes.count(mimeType) )
                 automaticPathPrefix = "";
+            if (automaticPathPrefix.empty()) {
+                ensureDirectoryManifest( pDoc, manifest, szName, pathsAlreadyWritten );
+            }
             const std::string fileName = (automaticPathPrefix.empty())
                 ? std::string(szName)
                 : automaticPathPrefix + ODe_dataItemFileName(pDoc, szName);
+            const std::string escapedMime = UT_escapeXML(mimeType);
+            const std::string escapedFile = UT_escapeXML(fileName);
             name = UT_std_string_sprintf(
                 " <manifest:file-entry manifest:media-type=\"%s\" manifest:full-path=\"%s\"/>\n",
-                mimeType.c_str(), fileName.c_str());
+                escapedMime.c_str(), escapedFile.c_str());
             
             ODe_gsf_output_write (manifest, name.size(),
                 reinterpret_cast<const guint8 *>(name.c_str()));

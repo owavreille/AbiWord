@@ -106,9 +106,11 @@ void ODe_ListLevelStyle::_writeTextProperties(GsfOutput* pODT,
     UT_UTF8String output;
                         
     if (!m_fontName.empty()) {
+        UT_UTF8String escapedFont(m_fontName);
+        escapedFont.escapeXML();
         UT_UTF8String_sprintf(output,
             "%s<style:text-properties style:font-name=\"%s\"/>\n",
-            rSpacesOffset.utf8_str(), m_fontName.utf8_str());
+            rSpacesOffset.utf8_str(), escapedFont.utf8_str());
             
         ODe_writeUTF8String(pODT, output);
     }
@@ -202,9 +204,11 @@ bool ODe_Bullet_ListLevelStyle::write(GsfOutput* pODT,
                                         
     UT_UTF8String output;
     
+    UT_UTF8String escapedBullet(m_bulletChar);
+    escapedBullet.escapeXML();
     UT_UTF8String_sprintf(output,
         "%s<text:list-level-style-bullet text:level=\"%s\" text:bullet-char=\"%s\">\n",
-        rSpacesOffset.utf8_str(), m_level.utf8_str(), m_bulletChar.utf8_str());
+        rSpacesOffset.utf8_str(), m_level.utf8_str(), escapedBullet.utf8_str());
     
     ODe_writeUTF8String(pODT, output);
 
