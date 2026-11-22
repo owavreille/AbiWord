@@ -31,6 +31,7 @@
 #include "fp_Column.h"
 #include "fp_Line.h"
 #include "fp_Run.h"
+#include "fp_AnnotationRun.h"
 #include "fl_BlockLayout.h"
 #include "gr_Graphics.h"
 #include "gr_DrawArgs.h"
@@ -2140,7 +2141,7 @@ void fp_Page::_reformatAnnotations(void)
 	fp_Column* pFirstColumnLeader = getNthColumnLeader(0);
 	fl_DocSectionLayout* pFirstSectionLayout = (pFirstColumnLeader->getDocSectionLayout());
 	UT_ASSERT(m_pOwner == pFirstSectionLayout);
-	GR_Graphics* pG = getGraphics();
+	GR_Graphics* pG = m_pLayout->getGraphics();
 	UT_sint32 margin = pFirstSectionLayout->getRightMargin();
 	UT_sint32 width = margin - (pG ? pG->tlu(8) : 8);
 	if (width < (pG ? pG->tlu(72) : 72))
