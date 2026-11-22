@@ -3128,13 +3128,13 @@ msgstr "Erreur pendant l'importation du fichier %s."
 #: po/tmp/ap_String_Id.h
 #, c-format
 msgid "Error while attempting to save %s: could not construct exporter"
-msgstr "Impossible d'écrire dans le fichier %s"
+msgstr "Impossible de préparer l'export du fichier %s."
 
 #. MSG_SaveFailedName
 #: po/tmp/ap_String_Id.h
 #, c-format
 msgid "Error while attempting to save %s: invalid name"
-msgstr "Impossible d'écrire dans le fichier %s"
+msgstr "Le nom du fichier %s est invalide."
 
 #. DLG_RDF_SemanticStylesheets_Events
 #: po/tmp/ap_String_Id.h
@@ -7262,7 +7262,7 @@ msgstr "Mots :"
 #: po/tmp/ap_String_Id.h
 #, c-format
 msgid "Writing error when attempting to save %s"
-msgstr "Impossible d'écrire dans le fichier %s"
+msgstr "Erreur d'écriture en enregistrant %s."
 
 #. MSG_DefaultDirectionChg
 #: po/tmp/ap_String_Id.h

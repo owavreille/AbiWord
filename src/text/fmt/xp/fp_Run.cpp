@@ -3862,7 +3862,7 @@ void fp_ImageRun::_draw(dg_DrawArgs* pDA)
 		getLine()->getOffsets(this, xoff, yoff);
 		auto view = _getView();
 		UT_nonnull_or_return(view, );
-		if(view->getViewMode() != VIEW_PRINT)
+		if(view->getViewMode() == VIEW_WEB)
 		{
 			yoff += static_cast<fl_DocSectionLayout *>(getBlock()->getDocSectionLayout())->getTopMargin();
 		}

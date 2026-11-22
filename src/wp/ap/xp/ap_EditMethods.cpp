@@ -10131,6 +10131,13 @@ UT_return_val_if_fail(pFrameData, false);
 
 	FV_View * pView = static_cast<FV_View *>(pAV_View);
 	pView->setViewMode (VIEW_WEB);
+	// Whole-page zoom scales the sheet down to the window height.
+	// In web layout that shrinks the text into a narrow column.
+	if (pFrame->getZoomType() == XAP_Frame::z_WHOLEPAGE)
+	{
+		pFrame->setZoomType(XAP_Frame::z_100);
+		pFrame->quickZoom(100);
+	}
 	// setViewMode restores the paper size. Web layout then follows the window.
 	pView->reflowWebPageToWindow();
 	pFrame->setXScrollRange();

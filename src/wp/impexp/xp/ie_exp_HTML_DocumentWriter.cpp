@@ -66,6 +66,7 @@ void IE_Exp_HTML_DocumentWriter::closeBlock()
 
 void IE_Exp_HTML_DocumentWriter::openHeading(size_t level, 
 											 const gchar* szStyleName, const gchar *szId,
+											 const UT_UTF8String & style,
 											 const PP_AttrProp * /*pAP*/)
 {
     switch (level)
@@ -88,7 +89,7 @@ void IE_Exp_HTML_DocumentWriter::openHeading(size_t level,
     }
     
     
-    _handleStyleAndId(szStyleName, szId, nullptr);
+    _handleStyleAndId(szStyleName, szId, style.utf8_str());
 }
 
 void IE_Exp_HTML_DocumentWriter::closeHeading()
@@ -321,7 +322,10 @@ void IE_Exp_HTML_DocumentWriter::closeTextbox()
 void IE_Exp_HTML_DocumentWriter::_handleStyleAndId(const gchar* szStyleName, 
     const gchar* szId, const gchar* szStyle)
 {
-    if ((szStyleName != nullptr)  && (szStyle != nullptr) && (strlen(szStyle) > 0))
+    // The class carries the stylesheet, including text-align. It used
+    // to be omitted whenever the paragraph had no extra inline style,
+    // so a centered style was exported as a plain left paragraph.
+    if ((szStyleName != nullptr) && (szStyleName[0] != 0))
     {
         m_pTagWriter->addAttribute("class", szStyleName);
     }
@@ -570,9 +574,9 @@ void IE_Exp_HTML_XHTMLWriter::openList(bool ordered,
 
 void IE_Exp_HTML_XHTMLWriter::openHeading(size_t level, 
     const gchar* szStyleName, const gchar *szId,
-    const PP_AttrProp *pAP)
+    const UT_UTF8String & style, const PP_AttrProp *pAP)
 {
-    IE_Exp_HTML_DocumentWriter::openHeading(level, szStyleName, szId, pAP);
+    IE_Exp_HTML_DocumentWriter::openHeading(level, szStyleName, szId, style, pAP);
     _handleAwmlStyle(pAP);
 }
 

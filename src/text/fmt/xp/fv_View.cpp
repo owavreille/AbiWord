@@ -9339,10 +9339,18 @@ void FV_View::reflowWebPageToWindow(void)
 	// The scrollbar can appear on the first pass and narrow the window.
 	for (int pass = 0; pass < 2; ++pass)
 	{
-		const UT_sint32 pad = m_pG->tlu(4);
-		double new_width = static_cast<double>(getWindowWidth() - pad) / 1440.0;
-		if (new_width < 1.0)
-			new_width = 1.0;
+		// Layout units already follow the zoom, so dividing by the
+		// layout resolution is the width that fills the window.
+		// The old floor of one inch crammed every line when the
+		// window size was not ready yet. Never go under the paper.
+		const UT_sint32 pad = m_pG->tlu(8);
+		UT_sint32 windowLu = getWindowWidth() - pad;
+		double paperIn = m_pDoc->m_docPageSize.Width(DIM_IN);
+		if (paperIn < 1.0)
+			paperIn = 1.0;
+		double new_width = static_cast<double>(windowLu) / static_cast<double>(UT_LAYOUT_RESOLUTION);
+		if (new_width < paperIn)
+			new_width = paperIn;
 		if (new_width > 50.0)
 			new_width = 50.0;
 
@@ -14125,7 +14133,7 @@ void FV_View::getVisibleDocumentPagesAndRectangles(std::vector<UT_Rect> &vRect,
 		UT_sint32 iPageHeight		= pPage->getHeight();
 		UT_sint32 adjustedTop		= curY - m_yScrollOffset;
 		fl_DocSectionLayout * pDSL = pPage->getOwningSection();
-		if(getViewMode() != VIEW_PRINT)
+		if(getViewMode() == VIEW_WEB)
 		{
 			iPageHeight = iPageHeight - pDSL->getTopMargin() - pDSL->getBottomMargin();
 		}
@@ -14556,7 +14564,7 @@ UT_uint32 FV_View::getMaxHeight(UT_uint32 iRow) const
 	for(unsigned int i = 0; i < getNumHorizPages(); i++)
 	{
 		UT_sint32 iPageHeight = pPage->getHeight();
-		if(getViewMode() != VIEW_PRINT)
+		if(getViewMode() == VIEW_WEB)
 		{
 			iPageHeight = iPageHeight - pDSL->getTopMargin() - pDSL->getBottomMargin();
 		}

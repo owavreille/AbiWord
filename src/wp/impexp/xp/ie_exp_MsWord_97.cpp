@@ -29,6 +29,7 @@
  * ccpHdd stays 0 when there is none, as LibreOffice writes it.
  */
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <map>
@@ -37,6 +38,20 @@
 #include <vector>
 
 #include <glib.h>
+#include <glib/gstdio.h>
+
+#ifdef G_OS_WIN32
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#ifdef interface
+#undef interface
+#endif
+#endif
 
 #include <gsf/gsf-outfile.h>
 #include <gsf/gsf-outfile-msole.h>
@@ -1211,75 +1226,171 @@ IE_Exp_MsWord_97::~IE_Exp_MsWord_97()
 {
 }
 
-// The dialog hands back a file URI. g_filename_from_uri turns
-// file:///C:/Dir/name.doc into C:\Dir\name.doc. A raw path is kept.
+// file:///C:/Dir/name.doc and /C:/Dir/name.doc both have to become
+// C:\Dir\name.doc. g_filename_from_uri sometimes keeps the leading slash,
+// and CreateFile rejects that path.
+static void
+normalize_windows_path(char * path)
+{
+#ifdef G_OS_WIN32
+	if (!path || !path[0])
+		return;
+	if (path[0] == '/' &&
+	    g_ascii_isalpha(static_cast<unsigned char>(path[1])) &&
+	    (path[2] == ':' || path[2] == '|'))
+	{
+		if (path[2] == '|')
+			path[2] = ':';
+		memmove(path, path + 1, strlen(path + 1) + 1);
+	}
+	for (char * p = path; *p; ++p)
+		if (*p == '/')
+			*p = '\\';
+#else
+	(void)path;
+#endif
+}
+
+// The dialog hands back a file URI. A raw path is kept as-is.
 static char *
 local_path_for_save(const char * name)
 {
 	if (!name || !*name)
 		return nullptr;
-	if (!UT_go_path_is_uri(name))
-		return g_strdup(name);
 
-	char * local = UT_go_filename_from_uri(name);
-	if (local && *local)
-		return local;
-	g_free(local);
-
-	if (g_ascii_strncasecmp(name, "file:", 5) != 0)
+	char * local = nullptr;
+	if (!UT_go_path_is_uri(name) && g_ascii_strncasecmp(name, "file:", 5) != 0)
+		local = g_strdup(name);
+	else
+	{
+		local = UT_go_filename_from_uri(name);
+		if (!local || !*local)
+		{
+			g_free(local);
+			local = nullptr;
+			if (g_ascii_strncasecmp(name, "file:", 5) != 0)
+				return nullptr;
+			const char * path = name + 5;
+			if (path[0] == '/' && path[1] == '/' && path[2] == '/')
+				path += 2;
+			else if (path[0] == '/' && path[1] == '/')
+			{
+				path += 2;
+				const char * slash = strchr(path, '/');
+				if (!slash)
+					return nullptr;
+				path = slash;
+			}
+			local = g_uri_unescape_string(path, nullptr);
+		}
+	}
+	if (!local || !*local)
+	{
+		g_free(local);
 		return nullptr;
-	const char * path = name + 5;
-	if (path[0] == '/' && path[1] == '/' && path[2] == '/')
-		path += 2;
-	else if (path[0] == '/' && path[1] == '/')
-	{
-		path += 2;
-		const char * slash = strchr(path, '/');
-		if (!slash)
-			return nullptr;
-		path = slash;
 	}
-	char * decoded = g_uri_unescape_string(path, nullptr);
-	if (!decoded || !*decoded)
-	{
-		g_free(decoded);
-		return nullptr;
-	}
-#ifdef G_OS_WIN32
-	if (decoded[0] == '/' &&
-	    g_ascii_isalpha(static_cast<unsigned char>(decoded[1])) &&
-	    (decoded[2] == ':' || decoded[2] == '|'))
-	{
-		if (decoded[2] == '|')
-			decoded[2] = ':';
-		memmove(decoded, decoded + 1, strlen(decoded + 1) + 1);
-	}
-	for (char * p = decoded; *p; ++p)
-		if (*p == '/')
-			*p = '\\';
-#endif
-	return decoded;
+	normalize_windows_path(local);
+	return local;
 }
 
-// libgsf's stdio saver, and g_file_set_contents(), write name.XXXXXX and
-// rename it onto the destination. Windows refuses that rename when the
-// destination ends in .doc, and every failure is shown as "could not write".
-// Write the bytes straight into the chosen file.
+#ifdef G_OS_WIN32
+// g_fopen and g_file_set_contents_full() both go through the C runtime.
+// The direct-write flag still passes O_NOFOLLOW to _wopen, which rejects
+// it, so the export reports a write error without creating the .doc.
+// CreateFileW is the call those wrappers are supposed to make.
+static bool
+write_word_file(const char * path, const guint8 * bytes, size_t size)
+{
+	wchar_t * wide = reinterpret_cast<wchar_t *>(g_utf8_to_utf16(path, -1, nullptr, nullptr, nullptr));
+	if (!wide)
+		return false;
+
+	HANDLE file = INVALID_HANDLE_VALUE;
+	for (int attempt = 0; attempt < 6 && file == INVALID_HANDLE_VALUE; ++attempt)
+	{
+		if (attempt)
+			Sleep(50);
+		file = CreateFileW(wide,
+			GENERIC_WRITE,
+			FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+			nullptr,
+			CREATE_ALWAYS,
+			FILE_ATTRIBUTE_NORMAL,
+			nullptr);
+		if (file == INVALID_HANDLE_VALUE && GetLastError() != ERROR_SHARING_VIOLATION)
+			break;
+	}
+	if (file == INVALID_HANDLE_VALUE &&
+	    g_ascii_isalpha(static_cast<unsigned char>(path[0])) &&
+	    path[1] == ':' && path[2] == '\\')
+	{
+		const size_t chars = wcslen(wide);
+		wchar_t * extended = g_new(wchar_t, chars + 5);
+		memcpy(extended, L"\\\\?\\", 4 * sizeof(wchar_t));
+		memcpy(extended + 4, wide, (chars + 1) * sizeof(wchar_t));
+		file = CreateFileW(extended,
+			GENERIC_WRITE,
+			FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+			nullptr,
+			CREATE_ALWAYS,
+			FILE_ATTRIBUTE_NORMAL,
+			nullptr);
+		g_free(extended);
+	}
+	if (file == INVALID_HANDLE_VALUE)
+	{
+		g_free(wide);
+		return false;
+	}
+
+	const guint8 * cursor = bytes;
+	size_t left = size;
+	bool wrote_all = true;
+	while (left > 0)
+	{
+		const DWORD chunk = left > 1048576u ? 1048576u : static_cast<DWORD>(left);
+		DWORD wrote = 0;
+		if (!WriteFile(file, cursor, chunk, &wrote, nullptr) || wrote != chunk)
+		{
+			wrote_all = false;
+			break;
+		}
+		cursor += wrote;
+		left -= wrote;
+	}
+	CloseHandle(file);
+	if (!wrote_all)
+		DeleteFileW(wide);
+	g_free(wide);
+	return wrote_all;
+}
+#else
+static bool
+write_word_file(const char * path, const guint8 * bytes, size_t size)
+{
+	FILE * file = g_fopen(path, "wb");
+	if (!file)
+		return false;
+	const size_t wrote = fwrite(bytes, 1, size, file);
+	const int flushed = fflush(file);
+	const int closed = fclose(file);
+	const bool ok = wrote == size && flushed == 0 && closed == 0;
+	if (wrote != size)
+		g_unlink(path);
+	return ok;
+}
+#endif
+
 static bool
 save_word_bytes(const char * name, const guint8 * bytes, size_t size)
 {
 	char * path = local_path_for_save(name);
-	if (!path || !bytes || size == 0 || size > static_cast<size_t>(G_MAXSSIZE))
+	if (!path || !bytes || size == 0)
 	{
 		g_free(path);
 		return false;
 	}
-	const gboolean ok = g_file_set_contents_full(path,
-		reinterpret_cast<const gchar *>(bytes),
-		static_cast<gssize>(size),
-		G_FILE_SET_CONTENTS_NONE,
-		0666,
-		nullptr);
+	const bool ok = write_word_file(path, bytes, size);
 	g_free(path);
 	return ok;
 }
