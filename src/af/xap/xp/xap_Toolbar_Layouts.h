@@ -61,6 +61,7 @@ public:
   void insertItemBefore(XAP_Toolbar_Factory_lt * p, XAP_Toolbar_Id id);
   void insertItemAfter(XAP_Toolbar_Factory_lt * p, XAP_Toolbar_Id id);
   bool removeToolbarId(XAP_Toolbar_Id id);
+  bool removeSpacerBefore(XAP_Toolbar_Id id);
   const char * getToolbarName(void) const;
   XAP_String_Id getLabelStringID(void) const;
   const gchar * getPrefKey(void) const;
@@ -86,6 +87,10 @@ public:
 	bool             addIconAfter(const char * szName,
 								  XAP_Toolbar_Id newId,
 								  XAP_Toolbar_Id afterId);
+	bool             addSpacerAfter(const char * szName,
+								  XAP_Toolbar_Id afterId);
+	bool             removeSpacerBefore(const char * szName,
+								  XAP_Toolbar_Id id);
 	bool             addIconAtEnd(const char * szName,
 								  XAP_Toolbar_Id newId);
     bool             removeIcon(const char * szName,

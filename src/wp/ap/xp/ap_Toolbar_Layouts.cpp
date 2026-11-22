@@ -230,6 +230,23 @@ bool XAP_Toolbar_Factory_vec::removeToolbarId(XAP_Toolbar_Id id)
 	return true;
 }
 
+bool XAP_Toolbar_Factory_vec::removeSpacerBefore(XAP_Toolbar_Id id)
+{
+	for (UT_sint32 i = 1; i < m_Vec_lt.getItemCount(); ++i)
+	{
+		XAP_Toolbar_Factory_lt * plt = m_Vec_lt.getNthItem(i);
+		if (!plt || plt->m_id != id)
+			continue;
+		XAP_Toolbar_Factory_lt * prev = m_Vec_lt.getNthItem(i - 1);
+		if (!prev || prev->m_flags != EV_TLF_Spacer)
+			return false;
+		m_Vec_lt.deleteNthItem(i - 1);
+		DELETEP(prev);
+		return true;
+	}
+	return false;
+}
+
 const char * XAP_Toolbar_Factory_vec::getToolbarName(void) const
 {
 	return m_name.c_str();
@@ -484,7 +501,38 @@ bool  XAP_Toolbar_Factory::addIconAfter(const char * szName,
 	return true;
 }
 
-			
+bool XAP_Toolbar_Factory::addSpacerAfter(const char * szName, XAP_Toolbar_Id afterId)
+{
+	UT_uint32 count = m_vecTT.getItemCount();
+	XAP_Toolbar_Factory_vec * pVec = nullptr;
+	bool bFound = false;
+	for (UT_uint32 i = 0; !bFound && (i < count); i++)
+	{
+		pVec = m_vecTT.getNthItem(i);
+		if (pVec && g_ascii_strcasecmp(szName, pVec->getToolbarName()) == 0)
+			bFound = true;
+	}
+	if (!bFound || !pVec)
+		return false;
+	XAP_Toolbar_Factory_lt * plt = new XAP_Toolbar_Factory_lt;
+	plt->m_id = AP_TOOLBAR_ID__BOGUS1__;
+	plt->m_flags = EV_TLF_Spacer;
+	pVec->insertItemAfter(plt, afterId);
+	return true;
+}
+
+bool XAP_Toolbar_Factory::removeSpacerBefore(const char * szName, XAP_Toolbar_Id id)
+{
+	UT_uint32 count = m_vecTT.getItemCount();
+	for (UT_uint32 i = 0; i < count; i++)
+	{
+		XAP_Toolbar_Factory_vec * pVec = m_vecTT.getNthItem(i);
+		if (pVec && g_ascii_strcasecmp(szName, pVec->getToolbarName()) == 0)
+			return pVec->removeSpacerBefore(id);
+	}
+	return false;
+}
+
 bool  XAP_Toolbar_Factory::removeIcon(const char * szName,
 									  XAP_Toolbar_Id nukeId)
 {

@@ -784,6 +784,8 @@ static Buf make_papx(const std::vector<unsigned> & bounds, size_t from, size_t u
 static std::vector<FkpPage> pack_papx(const std::vector<unsigned> & bounds)
 {
 	std::vector<FkpPage> pages;
+	if (bounds.size() < 2)
+		return pages;
 	size_t i = 0;
 	const size_t last = bounds.size() - 1;
 	while (i < last)
@@ -1080,6 +1082,8 @@ static Buf section_properties(unsigned hf_flags)
 static Buf bin_table(const std::vector<FkpPage> & pages, const std::vector<unsigned> & pns)
 {
 	Buf out;
+	if (pages.empty() || pns.empty())
+		return out;
 	append_u32(out, pages.front().start);
 	for (size_t i = 0; i < pages.size(); ++i)
 		append_u32(out, pages[i].limit);
@@ -1321,7 +1325,8 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	poke_u16(fib, 0x00, 0xA5EC);
 	poke_u16(fib, 0x02, 0x00C1);
 	poke_u16(fib, 0x06, 0x0409);
-	poke_u16(fib, 0x0A, 0x1200);
+	// Bit 3 of FibBase is fHasPic. Word skips the picture character when it is clear.
+	poke_u16(fib, 0x0A, data.empty() ? 0x1200 : 0x1208);
 	poke_u16(fib, 0x0C, 0x00BF);
 	fib[0x13] = 0x10;
 	poke_u32(fib, 0x18, FC_MIN);
