@@ -27,6 +27,8 @@ cp "$BUILDDIR/plugins/sdw/.libs/sdw.dll" \
 	"$DEST/lib/abiword-3.1/plugins/"
 cp "$BUILDDIR/plugins/collab/.libs/collab.dll" \
 	"$DEST/lib/abiword-3.1/plugins/"
+cp "$BUILDDIR/plugins/llm/.libs/llm.dll" \
+	"$DEST/lib/abiword-3.1/plugins/"
 if [[ -d "$PREFIX/etc/fonts" ]]; then
 	mkdir -p "$DEST/etc/fonts"
 	cp -a "$PREFIX/etc/fonts/." "$DEST/etc/fonts/"
@@ -125,6 +127,7 @@ copy_tree "$DEST/lib/abiword-3.1/plugins/opendocument.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/openxml.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/sdw.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/collab.dll"
+copy_tree "$DEST/lib/abiword-3.1/plugins/llm.dll"
 copy_tree "$DEST/lib/enchant-2/enchant_hunspell.dll"
 
 hunspell=$(find "$DEST/bin" -maxdepth 1 -name 'libhunspell*.dll' -print -quit)
