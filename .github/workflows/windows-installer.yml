@@ -1,7 +1,8 @@
 # Compile l'installateur Windows x64 sur GitHub.
 # La compilation croisée reprend l'environnement Fedora 45 / MinGW
 # qui produit abiword.exe, libabiword-3.1.dll, OpenDocument, OpenXML,
-# l'export PDF, StarOffice SDW, la collaboration TCP et la correction
+# l'export PDF, StarOffice SDW, la collaboration TCP, l'assistant LLM
+# (libcurl) et la correction
 # Enchant/Hunspell. NSIS 3.13 est ensuite compilé sur Ubuntu :
 # les stubs viennent de l'archive officielle, makensis est natif.
 # Un push sur main remplace l'installateur de la release v3.1-windows.
@@ -40,6 +41,7 @@ jobs:
             gtk3-devel cairo-devel pango-devel librsvg2-devel \
             goffice-devel enchant2-devel \
             libjpeg-turbo-devel libpng-devel zlib-devel pcre2-devel \
+            libcurl-devel \
             valgrind valgrind-devel \
             xorg-x11-server-Xvfb
 
@@ -48,7 +50,7 @@ jobs:
           NOCONFIGURE=1 ./autogen.sh
           mkdir -p build-tests
           cd build-tests
-          ../configure --enable-plugins="opendocument openxml"
+          ../configure --enable-plugins="opendocument openxml llm"
           make -j"$(nproc)"
           set +e
           xvfb-run -a make check
@@ -82,6 +84,7 @@ jobs:
             mingw64-fribidi mingw64-libgsf mingw64-libxml2 mingw64-libxslt \
             mingw64-libpng mingw64-libjpeg-turbo mingw64-zlib mingw64-bzip2 \
             mingw64-icu mingw64-pcre mingw64-pcre2 mingw64-libgcrypt mingw64-libgpg-error \
+            mingw64-curl \
             mingw64-win-iconv mingw64-libffi \
             hunspell-fr hunspell-en hunspell-en-GB hunspell-en-US \
             hunspell-de hunspell-es hunspell-it hunspell-pt hunspell-nl \
@@ -125,7 +128,7 @@ jobs:
             --host=x86_64-w64-mingw32 \
             --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
             --with-boost=/usr/x86_64-w64-mingw32/sys-root/mingw \
-            --enable-plugins="opendocument openxml sdw collab" \
+            --enable-plugins="opendocument openxml sdw collab llm" \
             --enable-collab-backend-tcp \
             --disable-collab-backend-service \
             --disable-collab-backend-telepathy \
