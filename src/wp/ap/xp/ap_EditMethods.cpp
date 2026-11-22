@@ -151,6 +151,7 @@
 #include "ie_imp.h"
 #include "ie_impGraphic.h"
 #include "ie_exp.h"
+#include "ie_exp_HTML.h"
 #include "ie_types.h"
 
 #include "ut_timer.h"
@@ -3097,7 +3098,24 @@ Defun1(filePreviewWeb)
 		if(XAP_App::getApp()->getPrefs())
 			XAP_App::getApp()->getPrefs()->setIgnoreNextRecent();
 
-		errSaved = pAV_View->cmdSaveAs(uri, IE_Exp::fileTypeForSuffix(".xhtml"), false);
+		FV_View * pView = static_cast<FV_View *>(pAV_View);
+		IE_Exp * pie = nullptr;
+		errSaved = IE_Exp::constructExporter(pView->getDocument(), uri,
+			IE_Exp::fileTypeForSuffix(".xhtml"), &pie);
+		IE_Exp_HTML * pHTML = dynamic_cast<IE_Exp_HTML *>(pie);
+		if (errSaved == UT_OK && pHTML)
+		{
+			// The export dialog is not the preview. HTML 4 with the
+			// pictures inside the file is what a browser can show.
+			pHTML->suppressDialog(true);
+			pHTML->set_HTML4(true);
+			pHTML->set_EmbedImages(true);
+			pHTML->set_SplitDocument(false);
+			errSaved = pHTML->writeFile(uri);
+		}
+		else if (errSaved == UT_OK)
+			errSaved = UT_IE_COULDNOTWRITE;
+		DELETEP(pie);
 	}
 	else
 		errSaved = UT_IE_COULDNOTWRITE;
@@ -3106,10 +3124,19 @@ Defun1(filePreviewWeb)
 	{
 		// throw up a dialog
 		s_TellSaveFailed(pFrame, file.c_str(), errSaved);
+		g_free(uri);
 		return false;
 	}
 
+	// The browser association opens a local path. A file URI that
+	// the shell does not accept leaves the preview window empty.
+#ifdef TOOLKIT_WIN
+	bool bOk = _openURL(file.c_str());
+	if (!bOk)
+		bOk = _openURL(uri);
+#else
 	bool bOk = _openURL(uri);
+#endif
 	g_free(uri);
 
 	return bOk;
@@ -10104,6 +10131,8 @@ UT_return_val_if_fail(pFrameData, false);
 
 	FV_View * pView = static_cast<FV_View *>(pAV_View);
 	pView->setViewMode (VIEW_WEB);
+	// setViewMode restores the paper size. Web layout then follows the window.
+	pView->reflowWebPageToWindow();
 	pFrame->setXScrollRange();
 	pFrame->setYScrollRange();
 

@@ -1198,8 +1198,21 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
  		UT_sint32 xmin = pDA->xoff;
   		UT_sint32 ymin = pDA->yoff;
 
-		UT_sint32 height =getHeight();
+ 		UT_sint32 height =getHeight();
 		UT_sint32 width = getWidth();
+		// Normal and web layout show the paper without its margins.
+		// Painting the full paper height covers the following page.
+		if (pDA->pG->queryProperties(GR_Graphics::DGP_SCREEN) && m_pView &&
+		    (m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB))
+		{
+			fl_DocSectionLayout * pDSL = getOwningSection();
+			if (pDSL)
+			{
+				UT_sint32 content = height - pDSL->getTopMargin() - pDSL->getBottomMargin();
+				if (content > 0)
+					height = content;
+			}
+		}
 		UT_sint32 srcX = 0;
 		UT_sint32 srcY = 0;
 		getFillType().Fill(pDA->pG,srcX,srcY,xmin,ymin,width,height);
@@ -2143,10 +2156,9 @@ void fp_Page::_reformatAnnotations(void)
 	UT_ASSERT(m_pOwner == pFirstSectionLayout);
 	GR_Graphics* pG = m_pLayout->getGraphics();
 	UT_sint32 margin = pFirstSectionLayout->getRightMargin();
-	UT_sint32 width = margin - (pG ? pG->tlu(8) : 8);
-	if (width < (pG ? pG->tlu(72) : 72))
-		width = pG ? pG->tlu(96) : 96;
-	UT_sint32 x = getWidth() - margin + (pG ? pG->tlu(4) : 4);
+	UT_sint32 width = 0;
+	UT_sint32 x = 0;
+	fp_AnnotationContainer::placeInRightMargin(pG, getWidth(), margin, x, width);
 	UT_sint32 nextY = pFirstSectionLayout->getTopMargin();
 	UT_sint32 gap = pG ? pG->tlu(6) : 6;
 	for (UT_sint32 i = 0; i < countAnnotationContainers(); i++)
@@ -2154,7 +2166,27 @@ void fp_Page::_reformatAnnotations(void)
 		fp_AnnotationContainer * pAC = getNthAnnotationContainer(i);
 		if (!pAC)
 			continue;
+		const bool widthChanged = pAC->getWidth() != width;
+		const bool onPaper = pG && pG->queryProperties(GR_Graphics::DGP_PAPER);
 		pAC->setWidth(width);
+		if (widthChanged && !onPaper)
+		{
+			fl_AnnotationLayout* pWrap = static_cast<fl_AnnotationLayout*>(pAC->getSectionLayout());
+			for (fl_ContainerLayout * pBL = pWrap ? pWrap->getFirstLayout() : nullptr; pBL; pBL = pBL->getNext())
+				pBL->format();
+			UT_sint32 iY = pG ? pG->tlu(16) : 16;
+			for (UT_uint32 c = 0; c < pAC->countCons(); c++)
+			{
+				fp_Container * pInner = static_cast<fp_Container *>(pAC->getNthCon(c));
+				if (!pInner)
+					continue;
+				iY += pInner->getHeight();
+				iY += pInner->getMarginAfter();
+			}
+			if (iY < 1)
+				iY = 1;
+			pAC->setHeight(iY);
+		}
 		UT_sint32 y = nextY;
 		fl_AnnotationLayout* pAL = static_cast<fl_AnnotationLayout*>(pAC->getSectionLayout());
 		fp_AnnotationRun* pRun = pAL ? pAL->getAnnotationRun() : nullptr;

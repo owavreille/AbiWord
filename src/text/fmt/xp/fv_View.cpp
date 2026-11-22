@@ -8190,11 +8190,16 @@ bool FV_View::tryDeleteAnnotationClose(UT_sint32 xPos, UT_sint32 yPos)
 	UT_sint32 xClick = 0;
 	UT_sint32 yClick = 0;
 	fp_AnnotationContainer * box = annotation_box_at(_getPageForXY(xPos, yPos, xClick, yClick), xClick, yClick, true);
-	if (!box || !point_at_annotation(this, box))
+	fl_AnnotationLayout * layout = box ? static_cast<fl_AnnotationLayout *>(box->getSectionLayout()) : nullptr;
+	if (!layout)
 		return false;
 	if (isAnnotationPreviewActive())
 		killAnnotationPreview();
-	cmdDeleteHyperlink();
+	if (!_deleteAnnotation(layout, true))
+		return false;
+	m_prevMouseContext = EV_EMC_TEXT;
+	setCursorToContext();
+	notifyListeners(AV_CHG_ALL);
 	return true;
 }
 
@@ -9317,6 +9322,75 @@ UT_uint32 FV_View::getTabToggleAreaWidth() const
 #else
 			return m_pG->tlu(AP_TopRuler::getFixedWidth());
 #endif
+}
+
+void FV_View::reflowWebPageToWindow(void)
+{
+	// A resize during formatAll posts another size event. Formatting
+	// again from that event would rebuild the layout while it is rebuilt.
+	static bool s_inside = false;
+	if (s_inside || getViewMode() != VIEW_WEB || !m_pLayout || !m_pDoc || !m_pG)
+		return;
+	if (getWindowWidth() < 20)
+		return;
+
+	s_inside = true;
+	bool changed = false;
+	// The scrollbar can appear on the first pass and narrow the window.
+	for (int pass = 0; pass < 2; ++pass)
+	{
+		UT_uint32 zoom = m_pG->getZoomPercentage();
+		if (zoom < 1)
+			zoom = 100;
+		UT_sint32 iAdjustZoom = static_cast<UT_sint32>(calculateZoomPercentForPageWidth());
+		if (iAdjustZoom < 1)
+			break;
+
+		UT_Dimension orig_ut = m_pLayout->m_docViewPageSize.getDims();
+		double orig_width = m_pDoc->m_docPageSize.Width(orig_ut);
+		double orig_height = m_pDoc->m_docPageSize.Height(orig_ut);
+		if (orig_width < 0.5)
+			break;
+		double new_width = orig_width * static_cast<double>(iAdjustZoom) / static_cast<double>(zoom);
+		if (new_width < 1.0)
+			new_width = 1.0;
+		if (new_width > 50.0)
+			new_width = 50.0;
+
+		double current = m_pLayout->m_docViewPageSize.Width(orig_ut);
+		double delta = new_width - current;
+		if (delta < 0)
+			delta = -delta;
+		if (delta < 0.05)
+			break;
+
+		bool portrait = m_pLayout->m_docViewPageSize.isPortrait();
+		m_pLayout->m_docViewPageSize.Set(new_width, orig_height, orig_ut);
+		m_pLayout->m_docViewPageSize.Set(fp_PageSize::psCustom, orig_ut);
+		if (portrait)
+			m_pLayout->m_docViewPageSize.setPortrait();
+		else
+			m_pLayout->m_docViewPageSize.setLandscape();
+
+		fl_SectionLayout * pSL = m_pLayout->getFirstSection();
+		while (pSL)
+		{
+			pSL->lookupMarginProperties();
+			pSL = static_cast<fl_SectionLayout *>(pSL->getNext());
+		}
+		rebuildLayout();
+		m_pLayout->formatAll();
+		changed = true;
+		XAP_Frame * pFrame = static_cast<XAP_Frame *>(getParentData());
+		if (pFrame)
+		{
+			pFrame->setXScrollRange();
+			pFrame->setYScrollRange();
+		}
+	}
+	s_inside = false;
+	if (changed)
+		updateScreen(false);
 }
 
 void FV_View::setViewMode (ViewMode vm)

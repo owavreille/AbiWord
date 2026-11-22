@@ -81,6 +81,11 @@ public:
 	UT_uint32           getPID(void);
 	bool                containsPoint(UT_sint32 x, UT_sint32 y) const;
 	bool                hitClose(UT_sint32 x, UT_sint32 y) const;
+	// The painted callout is `pad` larger than the container on every
+	// side. Fit that painted rectangle in the right margin, on the page.
+	static void         placeInRightMargin(GR_Graphics * pG, UT_sint32 pageWidth,
+	                                        UT_sint32 rightMargin, UT_sint32 & x,
+	                                        UT_sint32 & width);
 private:
 	fp_Page * m_pPage;
 	UT_sint32 m_iLabelWidth;
