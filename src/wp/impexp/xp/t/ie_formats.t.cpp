@@ -158,7 +158,7 @@ static bool round_trip(const char * suffix, const char * plugin)
 		return false;
 	}
 
-	UT_Error err = doc->saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
 	doc->unref();
 	if (!TFPASS(err == UT_OK))
 	{
@@ -189,7 +189,7 @@ static bool round_trip(const char * suffix, const char * plugin)
 		again->unref();
 		return false;
 	}
-	err = again->saveAs(second_path.c_str(), IEFT_Unknown, false, nullptr);
+	err = again->AD_Document::saveAs(second_path.c_str(), IEFT_Unknown, false, nullptr);
 	again->unref();
 	if (!TFPASS(err == UT_OK))
 	{
