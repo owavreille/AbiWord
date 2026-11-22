@@ -26,6 +26,8 @@
 #include "xap_Frame.h"
 #include "xap_Win32FrameImpl.h"
 #include "xap_Win32DialogHelper.h"
+#include "xap_Win32DialogBase.h"
+#include "ap_Strings.h"
 #include "ut_string_class.h"
 
 #include "ap_Win32Dialog_CollaborationAccounts.h"
@@ -137,25 +139,33 @@ BOOL AP_Win32Dialog_CollaborationAccounts::_onInitDialog(HWND hWnd, WPARAM, LPAR
 
 	m_hAccountList = GetDlgItem(hWnd, AP_RID_DIALOG_COLLABORATIONACCOUNTS_ACCOUNT_LIST);
 
+	const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
+	UT_Win32LocaleString onlineText;
+	UT_Win32LocaleString accountText;
+	UT_Win32LocaleString typeText;
+	onlineText.fromUTF8(pSS ? pSS->getValue(AP_STRING_ID_DLG_COLLAB_Accounts_Online) : "Online");
+	accountText.fromUTF8(pSS ? pSS->getValue(AP_STRING_ID_DLG_COLLAB_Accounts_Account) : "Account");
+	typeText.fromUTF8(pSS ? pSS->getValue(AP_STRING_ID_DLG_COLLAB_Accounts_Type) : "Type");
+
 	// setup our listview columns
 
 	// column 0
 	LVCOLUMNW lvc;
 	lvc.mask = LVCF_WIDTH | LVCF_TEXT; 
-	lvc.pszText = const_cast<LPWSTR>(L"Online");
-	lvc.cx = 50;
+	lvc.pszText = const_cast<LPWSTR>(onlineText.c_str());
+	lvc.cx = 70;
 	ListView_InsertColumn(m_hAccountList, 0, &lvc);
 
 	// column 1
 	lvc.mask = LVCF_WIDTH | LVCF_TEXT; 
-	lvc.pszText = const_cast<LPWSTR>(L"Account");
-	lvc.cx = 180;
+	lvc.pszText = const_cast<LPWSTR>(accountText.c_str());
+	lvc.cx = 90;
 	ListView_InsertColumn(m_hAccountList, 1, &lvc);
 
 	// column 2
 	lvc.mask = LVCF_WIDTH | LVCF_TEXT; 
-	lvc.pszText = const_cast<LPWSTR>(L"Type");
-	lvc.cx = 200;
+	lvc.pszText = const_cast<LPWSTR>(typeText.c_str());
+	lvc.cx = 110;
 	ListView_InsertColumn(m_hAccountList, 2, &lvc);
 
 	// enable checkboxes and row select on items in the list view
@@ -164,7 +174,17 @@ BOOL AP_Win32Dialog_CollaborationAccounts::_onInitDialog(HWND hWnd, WPARAM, LPAR
 	// Get ourselves a custom DialogHelper
 	DELETEP(m_pWin32Dialog);
 	m_pWin32Dialog = new XAP_Win32DialogHelper(hWnd);
-	
+
+	if (pSS)
+	{
+		m_pWin32Dialog->setDialogTitle(pSS->getValue(AP_STRING_ID_DLG_COLLAB_Accounts_Title));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONACCOUNTS_AVAILABLE_LABEL, pSS->getValue(AP_STRING_ID_DLG_COLLAB_Accounts_Available));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONACCOUNTS_ADD_BUTTON, pSS->getValue(AP_STRING_ID_DLG_COLLAB_Accounts_Add));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONACCOUNTS_PROPERTIES_BUTTON, pSS->getValue(AP_STRING_ID_DLG_COLLAB_Accounts_Properties));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONACCOUNTS_DELETE_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_Delete));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONACCOUNTS_CLOSE_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_Close));
+	}
+
 	// Set up dialog initial state
 	_populateWindowData();
 	

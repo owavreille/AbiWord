@@ -18,8 +18,26 @@
  */
 
 #include <cstdlib>
+#include <string>
 #include <boost/lexical_cast.hpp>
 #include "TCPWin32AccountHandler.h"
+#include "ap_Strings.h"
+#include "ut_Win32LocaleString.h"
+#include "xap_App.h"
+
+static std::wstring tcp_label(XAP_String_Id id, const wchar_t * fallback)
+{
+	const XAP_StringSet * strings = XAP_App::getApp() ? XAP_App::getApp()->getStringSet() : nullptr;
+	const char * value = strings ? strings->getValue(id) : nullptr;
+	if (value && *value)
+	{
+		UT_Win32LocaleString text;
+		text.fromUTF8(value);
+		if (text.c_str() && *text.c_str())
+			return text.c_str();
+	}
+	return fallback ? fallback : L"";
+}
 
 #define ABI_RID_DIALOG_COLLABTCP_SERVERENTRY 201
 #define ABI_RID_DIALOG_COLLABTCP_PORTENTRY 202
@@ -134,24 +152,30 @@ void TCPWin32AccountHandler::embedDialogWidgets(void* pEmbeddingParent)
 	HWND hBox = reinterpret_cast<HWND>(pEmbeddingParent);
 	
 	/* Non-Tabbable Labels */
-	
+	const std::wstring address = tcp_label(AP_STRING_ID_DLG_COLLAB_TCP_Address, L"Address:");
+	const std::wstring port = tcp_label(AP_STRING_ID_DLG_COLLAB_TCP_Port, L"Port:");
+	const std::wstring accept = tcp_label(AP_STRING_ID_DLG_COLLAB_TCP_Accept, L"Accept Incoming Connections");
+	const std::wstring connect = tcp_label(AP_STRING_ID_DLG_COLLAB_TCP_Connect, L"Connect to Another Computer");
+	const std::wstring grant = tcp_label(AP_STRING_ID_DLG_COLLAB_TCP_Grant, L"Automatically grant buddies access to shared documents");
+	const std::wstring startup = tcp_label(AP_STRING_ID_DLG_COLLAB_TCP_Startup, L"Connect on Application Startup");
+
 	// "Address:"
-	m_hServerLabel = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"STATIC", L"Address:", SS_LEFT | WS_CHILD | WS_VISIBLE,
-	15, 57, 51, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_SERVERLABEL,  m_hInstance, 0);
+	m_hServerLabel = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"STATIC", address.c_str(), SS_LEFT | WS_CHILD | WS_VISIBLE,
+	15, 57, 62, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_SERVERLABEL,  m_hInstance, 0);
 	UT_return_if_fail(m_hServerLabel);
 	
 	// "Port:"
-	m_hPortLabel = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"STATIC", L"Port:", SS_LEFT | WS_CHILD | WS_VISIBLE, 
+	m_hPortLabel = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"STATIC", port.c_str(), SS_LEFT | WS_CHILD | WS_VISIBLE, 
 	15, 87, 47, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_PORTLABEL,  m_hInstance, 0);
 	UT_return_if_fail(m_hPortLabel);
 	
 	/* Radio Button Group */
-	m_hServerRadio = CreateWindowExW(WS_EX_NOPARENTNOTIFY |  WS_EX_TRANSPARENT, L"BUTTON", L"Accept Incoming Connections", BS_NOTIFY | BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+	m_hServerRadio = CreateWindowExW(WS_EX_NOPARENTNOTIFY |  WS_EX_TRANSPARENT, L"BUTTON", accept.c_str(), BS_NOTIFY | BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
 	15, 15, 200, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_SERVERRADIO,  m_hInstance, 0);
 	UT_return_if_fail(m_hServerRadio);
 	
 	// Join a Server radio button
-	m_hJoinRadio = CreateWindowExW(WS_EX_NOPARENTNOTIFY |  WS_EX_TRANSPARENT, L"BUTTON", L"Connect to Another Computer", BS_NOTIFY  | BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+	m_hJoinRadio = CreateWindowExW(WS_EX_NOPARENTNOTIFY |  WS_EX_TRANSPARENT, L"BUTTON", connect.c_str(), BS_NOTIFY  | BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
 	15, 35, 200, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_JOINRADIO,  m_hInstance, 0);
 	UT_return_if_fail(m_hJoinRadio);
 	
@@ -167,12 +191,12 @@ void TCPWin32AccountHandler::embedDialogWidgets(void* pEmbeddingParent)
 	UT_return_if_fail(m_hPortEntry);
 	
 	// Checkbox for "auto grant permission"
-	m_hAllowAllCheck = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"BUTTON", L"Automatically grant buddies access to shared documents", BS_CHECKBOX | BS_AUTOCHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+	m_hAllowAllCheck = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"BUTTON", grant.c_str(), BS_CHECKBOX | BS_AUTOCHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
 	14, 115, 290, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_ALLOWALLCHECK,  m_hInstance, 0);
 	UT_return_if_fail(m_hAllowAllCheck);
 
 	// Checkbox for Connect on Startup
-	m_hAutoconnectCheck = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"BUTTON", L"Connect on Application Startup", BS_CHECKBOX | BS_AUTOCHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
+	m_hAutoconnectCheck = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"BUTTON", startup.c_str(), BS_CHECKBOX | BS_AUTOCHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
 	14, 135, 174, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_AUTOCONNECTCHECK,  m_hInstance, 0);
 	UT_return_if_fail(m_hAutoconnectCheck);
 	

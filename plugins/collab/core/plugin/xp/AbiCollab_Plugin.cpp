@@ -27,6 +27,10 @@
 #define abi_plugin_supports_version abipgn_abicollab_supports_version
 #endif
 
+#include <cstring>
+#include <map>
+#include <string>
+
 #include "xap_Module.h"
 #include "xap_App.h"
 #include "xap_Frame.h"
@@ -152,11 +156,32 @@ int abi_plugin_supports_version (UT_uint32 /*major*/, UT_uint32 /*minor*/, UT_ui
 //
 // -----------------------------------------------------------------------
 
-static const char * collab_text(XAP_String_Id id, const char * fallback)
+static bool collab_ui_is_french(const XAP_StringSet * strings)
 {
+	const char * lang = strings ? strings->getLanguageName() : nullptr;
+	return lang
+		&& (lang[0] == 'f' || lang[0] == 'F')
+		&& (lang[1] == 'r' || lang[1] == 'R')
+		&& (lang[2] == '\0' || lang[2] == '-' || lang[2] == '_');
+}
+
+// Le menu attend de l'UTF-8. Si le jeu de chaînes renvoie encore la source
+// anglaise alors que l'interface est française, on reprend la formulation
+// déjà choisie dans po/fr-FR.po.
+static const char * collab_text(XAP_String_Id id, const char * english, const char * french)
+{
+	static std::map<XAP_String_Id, std::string> kept;
 	const XAP_StringSet * strings = XAP_App::getApp() ? XAP_App::getApp()->getStringSet() : nullptr;
-	const char * value = strings ? strings->getValue(id) : nullptr;
-	return (value && *value) ? value : fallback;
+	std::string value;
+	if (strings && strings->getValueUTF8(id, value) && !value.empty()
+		&& strcmp(value.c_str(), english) != 0)
+	{
+		kept[id] = std::move(value);
+		return kept[id].c_str();
+	}
+	if (french && collab_ui_is_french(strings))
+		return french;
+	return english;
 }
 
 static const char * szCollaboration = "&Collaborate";
@@ -346,23 +371,23 @@ void s_abicollab_add_menus()
     XAP_Menu_Factory * pFact = pApp->getMenuFactory();    
     EV_Menu_ActionSet* pActionSet = pApp->getMenuActionSet();
 	
-	szCollaboration = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB, szCollaboration);
-	szCollaborationTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_TIP, szCollaborationTip);
-	szCollaborationOffer = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_SHARE, szCollaborationOffer);
-	szCollaborationOfferTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_SHARE_TIP, szCollaborationOfferTip);
-	szCollaborationJoin = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_OPEN, szCollaborationJoin);
-	szCollaborationJoinTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_OPEN_TIP, szCollaborationJoinTip);
-	szCollaborationAccounts = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_ACCOUNTS, szCollaborationAccounts);
-	szCollaborationAccountsTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_ACCOUNTS_TIP, szCollaborationAccountsTip);
-	szCollaborationShowAuthors = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_AUTHORS, szCollaborationShowAuthors);
-	szCollaborationShowAuthorsTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_AUTHORS_TIP, szCollaborationShowAuthorsTip);
+	szCollaboration = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB, szCollaboration, "&Collaborer");
+	szCollaborationTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_TIP, szCollaborationTip, "Collaborer par Internet ou sur le réseau local");
+	szCollaborationOffer = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_SHARE, szCollaborationOffer, "&Partager le document");
+	szCollaborationOfferTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_SHARE_TIP, szCollaborationOfferTip, "Proposer le document actuel pour une collaboration");
+	szCollaborationJoin = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_OPEN, szCollaborationJoin, "&Ouvrir un document partagé");
+	szCollaborationJoinTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_OPEN_TIP, szCollaborationJoinTip, "Ouvrir un document partagé");
+	szCollaborationAccounts = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_ACCOUNTS, szCollaborationAccounts, "&Comptes");
+	szCollaborationAccountsTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_ACCOUNTS_TIP, szCollaborationAccountsTip, "Gérer les comptes de collaboration");
+	szCollaborationShowAuthors = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_AUTHORS, szCollaborationShowAuthors, "Afficher les &auteurs");
+	szCollaborationShowAuthorsTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_AUTHORS_TIP, szCollaborationShowAuthorsTip, "Montrer l'auteur de chaque passage avec une couleur différente");
 #if defined(DEBUG)
 #if !defined(ABICOLLAB_RECORD_ALWAYS)
-	szCollaborationRecord = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_RECORD, szCollaborationRecord);
-	szCollaborationRecordTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_RECORD_TIP, szCollaborationRecordTip);
+	szCollaborationRecord = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_RECORD, szCollaborationRecord, "Enre&gistrer cette session");
+	szCollaborationRecordTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_RECORD_TIP, szCollaborationRecordTip, "Enregistrer une session sur le disque, pour le débogage");
 #endif
-	szCollaborationViewRecord = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_VIEWRECORD, szCollaborationViewRecord);
-	szCollaborationViewRecordTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_VIEWRECORD_TIP, szCollaborationViewRecordTip);
+	szCollaborationViewRecord = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_VIEWRECORD, szCollaborationViewRecord, "&Voir la session");
+	szCollaborationViewRecordTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_VIEWRECORD_TIP, szCollaborationViewRecordTip, "Charger une session enregistrée et afficher les paquets");
 #endif
 
 	// The Collaboration menu item

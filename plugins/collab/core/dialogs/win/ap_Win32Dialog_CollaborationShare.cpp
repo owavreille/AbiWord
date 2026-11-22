@@ -23,6 +23,8 @@
 #include "xap_Win32App.h"
 #include "xap_Frame.h"
 #include "xap_Win32DialogHelper.h"
+#include "xap_Win32DialogBase.h"
+#include "ap_Strings.h"
 #include "ut_string_class.h"
 #include <session/xp/AbiCollabSessionManager.h>
 #include <account/xp/Event.h>
@@ -136,7 +138,17 @@ BOOL AP_Win32Dialog_CollaborationShare::_onInitDialog(HWND hWnd, WPARAM, LPARAM)
 	// Get ourselves a custom DialogHelper
 	DELETEP(m_pWin32Dialog);
 	m_pWin32Dialog = new XAP_Win32DialogHelper(hWnd);
-	
+
+	const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
+	if (pSS)
+	{
+		m_pWin32Dialog->setDialogTitle(pSS->getValue(AP_STRING_ID_DLG_COLLAB_Share_Title));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONSHARE_ACCCOUNTBOX, pSS->getValue(AP_STRING_ID_DLG_COLLAB_Share_Account));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONSHARE_BUDDY_LABEL, pSS->getValue(AP_STRING_ID_DLG_COLLAB_Share_Buddies));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONSHARE_OK_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_OK));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONSHARE_CANCEL_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_Cancel));
+	}
+
 	_populateWindowData();
 	_populateBuddyModel(true);
 	
@@ -229,7 +241,9 @@ void AP_Win32Dialog_CollaborationShare::_populateWindowData()
 	{
 		// nope, we don't have any account handler :'-( 
 		// Add a sample item to show that we can.  Then, disable the box and the ok button
-		m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, (LPCSTR) "No Accounts Available!");
+		const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
+		const char * none = pSS ? pSS->getValue(AP_STRING_ID_DLG_COLLAB_Share_NoAccounts) : nullptr;
+		m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, (none && *none) ? none : "No Accounts Available!");
 		m_pWin32Dialog->selectComboItem(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, 0);
 	}
 }

@@ -20,6 +20,15 @@
 #include <boost/lexical_cast.hpp>
 
 #include "TCPAccountHandler.h"
+#include "ap_Strings.h"
+#include "xap_App.h"
+
+static const char * tcp_text(XAP_String_Id id, const char * fallback)
+{
+	const XAP_StringSet * strings = XAP_App::getApp() ? XAP_App::getApp()->getStringSet() : nullptr;
+	const char * value = strings ? strings->getValue(id) : nullptr;
+	return (value && *value) ? value : fallback;
+}
 #include "TCPBuddy.h"
 
 #include <account/xp/AccountEvent.h>
@@ -49,14 +58,14 @@ UT_UTF8String TCPAccountHandler::getDescription()
 	const std::string port = getProperty("port");	
 	
 	if (host == "")
-		return UT_UTF8String_sprintf("Listening on port %s", port.c_str());
+		return UT_UTF8String_sprintf(tcp_text(AP_STRING_ID_DLG_COLLAB_TCP_Listening, "Listening on port %s"), port.c_str());
 
-	return UT_UTF8String_sprintf("Connection to %s:%s", host.c_str(), port.c_str());
+	return UT_UTF8String_sprintf(tcp_text(AP_STRING_ID_DLG_COLLAB_TCP_Connection, "Connection to %s:%s"), host.c_str(), port.c_str());
 }
 
 UT_UTF8String TCPAccountHandler::getDisplayType()
 {
-	return "Direct Connection (TCP)";
+	return tcp_text(AP_STRING_ID_DLG_COLLAB_TCP_Type, "Direct Connection (TCP)");
 }
 
 UT_UTF8String TCPAccountHandler::getStaticStorageType()

@@ -24,6 +24,8 @@
 #include "xap_Win32App.h"
 #include "xap_Frame.h"
 #include "xap_Win32DialogHelper.h"
+#include "xap_Win32DialogBase.h"
+#include "ap_Strings.h"
 #include "ut_string_class.h"
 #include <session/xp/AbiCollabSessionManager.h>
 #include <account/xp/Event.h>
@@ -133,7 +135,18 @@ BOOL AP_Win32Dialog_CollaborationJoin::_onInitDialog(HWND hWnd, WPARAM, LPARAM)
 	// Get ourselves a custom DialogHelper
 	DELETEP(p_win32Dialog);
 	p_win32Dialog = new XAP_Win32DialogHelper(hWnd);
-	
+
+	const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
+	if (pSS)
+	{
+		p_win32Dialog->setDialogTitle(pSS->getValue(AP_STRING_ID_DLG_COLLAB_Join_Title));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONJOIN_AVAILABLE_LABEL, pSS->getValue(AP_STRING_ID_DLG_COLLAB_Join_Available));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONJOIN_ADDBUDDY_BUTTON, pSS->getValue(AP_STRING_ID_DLG_COLLAB_Join_AddBuddy));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONJOIN_REFRESH_BUTTON, pSS->getValue(AP_STRING_ID_DLG_COLLAB_Join_Refresh));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONJOIN_OPEN_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_Open));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONJOIN_CANCEL_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_Cancel));
+	}
+
 	// Set up dialog initial state
 	_refreshAllDocHandlesAsync();
 	_populateWindowData();
