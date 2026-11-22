@@ -41,7 +41,6 @@ bool ODe_PicturesWriter::writePictures(PD_Document* pDoc, GsfOutfile* pODT)
 {
     const char * szName;
     std::string mimeType;
-	std::string extension;
 	std::string fullName;
     UT_ConstByteBufPtr pByteBuf;
     GsfOutput* pImg;
@@ -61,8 +60,7 @@ bool ODe_PicturesWriter::writePictures(PD_Document* pDoc, GsfOutfile* pODT)
                 // create Pictures directory
                 pPicsDir = gsf_outfile_new_child(pODT, "Pictures", TRUE);
             }
-			pDoc->getDataItemFileExtension(szName, extension, true);
-			fullName = szName + extension;
+			fullName = ODe_dataItemFileName(pDoc, szName);
             pImg = gsf_outfile_new_child(GSF_OUTFILE(pPicsDir),
                                          fullName.c_str(), FALSE);    
                                                     

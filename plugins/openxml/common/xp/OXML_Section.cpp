@@ -242,7 +242,7 @@ UT_Error OXML_Section::serializeProperties(IE_Exp_OpenXML* exporter, OXML_Elemen
 			return err;
 	}
 
-	err = exporter->setContinuousSection(m_target);
+	err = exporter->setNextPageSection(m_target);
 	if(err != UT_OK)
 		return err;
 

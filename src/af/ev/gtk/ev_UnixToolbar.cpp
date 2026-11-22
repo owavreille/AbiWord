@@ -34,6 +34,7 @@
 #include <stdlib.h>
 
 #include <string>
+#include <vector>
 
 #include <gdk/gdkkeysyms.h>
 #include <gtk/gtk.h>
@@ -67,6 +68,7 @@
 #include "ap_Toolbar_Id.h"
 #include "ap_UnixStockIcons.h"
 #include "ev_UnixFontCombo.h"
+#include "ap_FontMenu.h"
 #include "xap_GtkUtils.h"
 
 #ifdef ENABLE_MENUBUTTON
@@ -385,6 +387,9 @@ public:									// we create...
 
 	static void s_font_prelight(GtkComboBox * combo, const gchar *text, _wd * wd)
 	{
+		if (AP_fontMenuIsSeparator(text))
+			return;
+
 		GtkWidget 	*widget;
 		gint 		 x;
 		gint 		 y;
@@ -413,6 +418,30 @@ public:									// we create...
 		wd->m_pUnixToolbar->m_pFontPreview->setText(text);
 		wd->m_pUnixToolbar->m_pFontPreview->draw();
 	};
+
+	static void s_font_popup_shown(GObject * object, GParamSpec * /*pspec*/, _wd * wd)
+	{
+		GtkComboBox * combo = GTK_COMBO_BOX (object);
+		if (!wd || !wd->m_pUnixToolbar || !gtk_combo_box_get_popup_shown (combo))
+			return;
+		if (wd->m_blockSignal)
+			return;
+
+		gchar * current = nullptr;
+		GtkTreeIter iter;
+		if (gtk_combo_box_get_active_iter (combo, &iter))
+			gtk_tree_model_get (gtk_combo_box_get_model (combo), &iter, 0, &current, -1);
+
+		bool wasBlocked = wd->m_blockSignal;
+		wd->m_blockSignal = true;
+		g_signal_handler_block (G_OBJECT (combo), wd->m_handlerId);
+		wd->m_pUnixToolbar->refillFontCombo (GTK_WIDGET (combo));
+		if (current && !AP_fontMenuIsSeparator (current))
+			combo_box_set_active_text (combo, current, wd->m_handlerId);
+		g_signal_handler_unblock (G_OBJECT (combo), wd->m_handlerId);
+		wd->m_blockSignal = wasBlocked;
+		g_free (current);
+	}
 
 	static void s_font_popup_opened(GtkComboBox * /*combo*/, 
 									GdkRectangle *position, _wd * wd)
@@ -470,7 +499,16 @@ public:									// we create...
 		// TODO Rob: move this into ev_UnixFontCombo
 		gchar *buffer = nullptr;
 		GtkTreeModel *model = gtk_combo_box_get_model (combo);
-		if (GTK_IS_TREE_MODEL_SORT (model)) {
+		if (ABI_IS_FONT_COMBO (combo)) {
+			GtkTreeIter iter;
+			if (!gtk_combo_box_get_active_iter (combo, &iter))
+				return;
+			gtk_tree_model_get (model, &iter, 0, &buffer, -1);
+			if (AP_fontMenuIsSeparator (buffer)) {
+				g_free (buffer);
+				return;
+			}
+		} else if (GTK_IS_TREE_MODEL_SORT (model)) {
 
 			GtkTreeIter sort_iter;
 			gtk_combo_box_get_active_iter (combo, &sort_iter);
@@ -848,6 +886,9 @@ bool EV_UnixToolbar::synthesize(void)
 									  wd);
 					g_signal_connect (G_OBJECT(combo), "popup-closed", 
 									  G_CALLBACK(_wd::s_font_popup_closed), 
+									  wd);
+					g_signal_connect (G_OBJECT(combo), "notify::popup-shown",
+									  G_CALLBACK(_wd::s_font_popup_shown),
 									  wd);
 					g_object_set_data (G_OBJECT (combo), PROP_HANDLER_ID,
 									   GUINT_TO_POINTER(handler_id));
@@ -1274,6 +1315,34 @@ void EV_UnixToolbar::hide(void)
  * Combo box with what is in the document. It returns false if no styles 
  * combo box was found. True if it all worked.
  */
+void EV_UnixToolbar::refillFontCombo(GtkWidget * combo)
+{
+	if (!combo || !ABI_IS_FONT_COMBO (combo))
+		return;
+
+	XAP_Toolbar_ControlFactory * pFactory = m_pUnixApp->getControlFactory();
+	if (!pFactory)
+		return;
+	EV_Toolbar_Control * pControl = pFactory->getControl(this, AP_TOOLBAR_ID_FMT_FONT);
+	if (!pControl || !pControl->populate())
+	{
+		DELETEP(pControl);
+		return;
+	}
+
+	const UT_GenericVector<const char*> * v = pControl->getContents();
+	std::vector<const char *> fonts;
+	if (v)
+	{
+		fonts.reserve(static_cast<size_t>(v->getItemCount()) + 1);
+		for (UT_sint32 i = 0; i < v->getItemCount(); ++i)
+			fonts.push_back(v->getNthItem(i));
+	}
+	fonts.push_back(nullptr);
+	abi_font_combo_set_fonts (ABI_FONT_COMBO (combo), fonts.data());
+	DELETEP(pControl);
+}
+
 bool EV_UnixToolbar::repopulateStyles(void)
 {
 //

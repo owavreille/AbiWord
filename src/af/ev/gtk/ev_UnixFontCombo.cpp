@@ -22,8 +22,19 @@
 
 #include "ut_assert.h"
 #include "ev_UnixFontCombo.h"
+#include "ap_FontMenu.h"
 
 #define PREVIEW_TEXT "AaBb"
+
+static gboolean
+abi_font_row_is_separator (GtkTreeModel *model, GtkTreeIter *iter, gpointer)
+{
+	gchar *text = nullptr;
+	gtk_tree_model_get (model, iter, 0, &text, -1);
+	gboolean separator = AP_fontMenuIsSeparator (text);
+	g_free (text);
+	return separator;
+}
 
 /* builtin GtkCellRendererText subclass */
 
@@ -286,11 +297,15 @@ abi_font_combo_dispose (GObject *instance)
 
 	self->is_disposed = TRUE;
 
-	g_object_unref (G_OBJECT (self->sort));
-	self->sort = nullptr;
+	if (self->sort) {
+		g_object_unref (G_OBJECT (self->sort));
+		self->sort = nullptr;
+	}
 
-	g_object_unref (G_OBJECT (self->model));
-	self->model = nullptr;
+	if (self->model) {
+		g_object_unref (G_OBJECT (self->model));
+		self->model = nullptr;
+	}
 
 	G_OBJECT_CLASS (abi_font_combo_parent_class)->dispose (instance);
 }
@@ -373,9 +388,9 @@ abi_font_combo_new (void)
 
 	self = (AbiFontCombo *) g_object_new (ABI_TYPE_FONT_COMBO, nullptr);
 	self->model = (GtkTreeModel *) gtk_list_store_new (NUM_COLS, G_TYPE_STRING);
-	self->sort = gtk_tree_model_sort_new_with_model (self->model);
-	gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (self->sort), FONT, GTK_SORT_ASCENDING);
-	gtk_combo_box_set_model (GTK_COMBO_BOX (self), self->sort);
+	self->sort = nullptr;
+	gtk_combo_box_set_model (GTK_COMBO_BOX (self), self->model);
+	gtk_combo_box_set_row_separator_func (GTK_COMBO_BOX (self), abi_font_row_is_separator, nullptr, nullptr);
 
 	cell = abi_cell_renderer_font_new (GTK_WIDGET (self));
 	gtk_cell_layout_pack_start (GTK_CELL_LAYOUT (self), cell, FALSE);
@@ -405,12 +420,8 @@ abi_font_combo_insert_font (AbiFontCombo 	*self,
 			    FONT, font, 
 			    -1);
 
-	if (select) {
-		GtkTreeIter sorted_iter;
-		gtk_tree_model_sort_convert_child_iter_to_iter (
-			GTK_TREE_MODEL_SORT (self->sort), &sorted_iter, &iter);
-		gtk_combo_box_set_active_iter (GTK_COMBO_BOX (self), &sorted_iter);
-	}
+	if (select)
+		gtk_combo_box_set_active_iter (GTK_COMBO_BOX (self), &iter);
 }
 
 /*!
@@ -428,10 +439,14 @@ abi_font_combo_set_fonts (AbiFontCombo 	 *self,
 	g_return_if_fail (fonts);
 
 	gtk_combo_box_set_model (GTK_COMBO_BOX (self), nullptr);
-	g_object_unref (G_OBJECT (self->sort)); self->sort = nullptr;
-	gtk_list_store_clear (GTK_LIST_STORE (self->model));
-
-    g_object_unref (G_OBJECT (self->model));
+	if (self->sort) {
+		g_object_unref (G_OBJECT (self->sort));
+		self->sort = nullptr;
+	}
+	if (self->model) {
+		g_object_unref (G_OBJECT (self->model));
+		self->model = nullptr;
+	}
 	self->model = (GtkTreeModel *) gtk_list_store_new (NUM_COLS, G_TYPE_STRING);
 	font_iter = fonts;
 	while (font_iter && *font_iter) {
@@ -442,7 +457,6 @@ abi_font_combo_set_fonts (AbiFontCombo 	 *self,
 		font_iter++;
 	}
 
-	self->sort = gtk_tree_model_sort_new_with_model (self->model);
-	gtk_tree_sortable_set_sort_column_id (GTK_TREE_SORTABLE (self->sort), FONT, GTK_SORT_ASCENDING);
-	gtk_combo_box_set_model (GTK_COMBO_BOX (self), self->sort);
+	gtk_combo_box_set_model (GTK_COMBO_BOX (self), self->model);
+	gtk_combo_box_set_row_separator_func (GTK_COMBO_BOX (self), abi_font_row_is_separator, nullptr, nullptr);
 }

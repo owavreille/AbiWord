@@ -46,7 +46,7 @@ public:
     const gchar* getName() const {return m_name.utf8_str();}
 
     void fetchAttributesFromAbiDoc(PD_Document* pAbiDoc);
-    void fetchAttributesFromAbiSection(const PP_AttrProp* pAP);
+    void fetchAttributesFromAbiSection(const PP_AttrProp* pAP, PD_Document* pDoc);
 
     static bool hasPageLayoutInfo(const PP_AttrProp* pAP);
 

@@ -54,6 +54,74 @@
 #include "pt_PieceTable.h"
 #include "ap_Toolbar_Id.h"
 #include "ap_QtStockIcons.h"
+#include "ap_FontMenu.h"
+#include "xap_Toolbar_ControlFactory.h"
+
+class AbiUsedFontCombo : public QFontComboBox
+{
+public:
+	AbiUsedFontCombo(EV_QtToolbar * toolbar, QWidget * parent = nullptr)
+		: QFontComboBox(parent),
+		  m_toolbar(toolbar),
+		  m_prefix(0),
+		  m_refilling(false)
+	{
+	}
+
+	void showPopup() override
+	{
+		refill();
+		QFontComboBox::showPopup();
+	}
+
+	void refill()
+	{
+		if (m_refilling || !m_toolbar)
+			return;
+		m_refilling = true;
+		const QString current = currentText();
+		while (m_prefix > 0 && count() > 0)
+		{
+			removeItem(0);
+			--m_prefix;
+		}
+
+		XAP_Toolbar_ControlFactory * factory = XAP_App::getApp()->getControlFactory();
+		EV_Toolbar_Control * control = factory ? factory->getControl(m_toolbar, AP_TOOLBAR_ID_FMT_FONT) : nullptr;
+		int at = 0;
+		if (control && control->populate())
+		{
+			const UT_GenericVector<const char*> * names = control->getContents();
+			if (names)
+			{
+				for (UT_sint32 i = 0; i < names->getItemCount(); ++i)
+				{
+					const char * sz = names->getNthItem(i);
+					if (!sz)
+						continue;
+					if (AP_fontMenuIsSeparator(sz))
+					{
+						insertSeparator(at);
+						++at;
+						break;
+					}
+					insertItem(at, QString::fromUtf8(sz));
+					++at;
+				}
+			}
+		}
+		delete control;
+		m_prefix = at;
+		if (!current.isEmpty())
+			setCurrentText(current);
+		m_refilling = false;
+	}
+
+private:
+	EV_QtToolbar * m_toolbar;
+	int m_prefix;
+	bool m_refilling;
+};
 
 EV_QtToolbar::EV_QtToolbar(XAP_QtApp   *pQtApp, 
 						XAP_Frame 	*pFrame, 
@@ -231,9 +299,11 @@ bool EV_QtToolbar::synthesize(void)
 						else if(id == AP_TOOLBAR_ID_FMT_FONT)
 						{
 							isFontCombo = true;
-							combo = new QFontComboBox();
+							AbiUsedFontCombo * fonts = new AbiUsedFontCombo(this);
+							fonts->refill();
+							combo = fonts;
 							QString str = "AbiFontCombo";
-							combo->setAccessibleName(str); 
+							combo->setAccessibleName(str);
 						}
 						else if(id == AP_TOOLBAR_ID_ZOOM) 
 						{
@@ -259,13 +329,10 @@ bool EV_QtToolbar::synthesize(void)
 							const UT_GenericVector<const char*> * v = pControl->getContents();
 							UT_ASSERT(v);
 							gint items = v->getItemCount();	
-							if (isFontCombo) 
+							if (isFontCombo)
 							{
-								for (gint m=0; m < items; m++) 
-								{
-									QString str = v->getNthItem(m);
-									combo->addItem(str);
-								}	
+								// Installed faces come from QFontComboBox.
+								// refill() already inserted the document faces.
 							}
 							else
 							{

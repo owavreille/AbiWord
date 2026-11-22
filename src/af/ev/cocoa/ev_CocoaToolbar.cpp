@@ -41,6 +41,7 @@
 #include "xap_Prefs.h"
 #include "xap_EncodingManager.h"
 #include "ap_CocoaFrame.h"
+#include "ap_FontMenu.h"
 #include "xap_CocoaFrameImpl.h"
 #include "gr_CocoaGraphics.h"
 #include "pd_Style.h"
@@ -59,6 +60,7 @@
 - (IBAction)aColor_FG:(id)sender;
 - (IBAction)aColor_BG:(id)sender;
 - (void)toolbarSelected:(id)sender;
+- (void)fontMenuWillPop:(id)sender;
 - (void)setXAPOwner:(EV_CocoaToolbar*)owner;
 @end
 
@@ -67,6 +69,7 @@
 
 - (void)dealloc
 {
+	[[NSNotificationCenter defaultCenter] removeObserver:self];
 	NSColorPanel * colorPanel = [NSColorPanel sharedColorPanel];
 
 	[colorPanel setAction:nil];
@@ -110,6 +113,13 @@
 {
 	UT_UNUSED(sender);
 	[self setColor:AP_TOOLBAR_ID_COLOR_BACK];
+}
+
+- (void)fontMenuWillPop:(id)sender
+{
+	UT_UNUSED(sender);
+	if (_xap)
+		_xap->refillFontMenu();
 }
 
 - (void)toolbarSelected:(id)sender
@@ -650,6 +660,11 @@ bool EV_CocoaToolbar::synthesize(void)
 						{
 							const char * sz = v->getNthItem(m);
 							
+							if (popupButton && AP_fontMenuIsSeparator(sz))
+							{
+								[[popupButton menu] addItem:[NSMenuItem separatorItem]];
+								continue;
+							}
 							NSString * str = [NSString stringWithUTF8String:sz];	// autoreleased
 							if (comboBox)
 								[comboBox addItemWithObjectValue:str];
@@ -671,6 +686,13 @@ bool EV_CocoaToolbar::synthesize(void)
 							}
 						}
 					}
+				}
+				if (tlbrID == AP_TOOLBAR_ID_FMT_FONT && popupButton)
+				{
+					[[NSNotificationCenter defaultCenter] addObserver:m_target
+						selector:@selector(fontMenuWillPop:)
+						name:NSPopUpButtonWillPopUpNotification
+						object:popupButton];
 				}
 				// for now, we never repopulate, so can just toss it
 				DELETEP(pControl);
@@ -1004,6 +1026,51 @@ void EV_CocoaToolbar::hide(void)
  * Combo box with what is in the document. It returns false if no styles 
  * combo box was found. True if it all worked.
  */
+void EV_CocoaToolbar::refillFontMenu(void)
+{
+	static bool refilling = false;
+	if (refilling || m_wToolbar == nil)
+		return;
+
+	NSPopUpButton * button = (NSPopUpButton *)[m_wToolbar viewWithTag:AP_TOOLBAR_ID_FMT_FONT];
+	if (button == nil || ![button isKindOfClass:[NSPopUpButton class]])
+		return;
+
+	refilling = true;
+	NSString * current = [button titleOfSelectedItem];
+	SEL action = [button action];
+	id target = [button target];
+	[button setAction:nil];
+	[button removeAllItems];
+
+	XAP_Toolbar_ControlFactory * pFactory = XAP_App::getApp()->getControlFactory();
+	EV_Toolbar_Control * pControl = pFactory ? pFactory->getControl(this, AP_TOOLBAR_ID_FMT_FONT) : nullptr;
+	if (pControl && pControl->populate())
+	{
+		const UT_GenericVector<const char*> * v = pControl->getContents();
+		if (v)
+		{
+			for (UT_uint32 m = 0; m < v->getItemCount(); ++m)
+			{
+				const char * sz = v->getNthItem(m);
+				if (!sz)
+					continue;
+				if (AP_fontMenuIsSeparator(sz))
+					[[button menu] addItem:[NSMenuItem separatorItem]];
+				else
+					[button addItemWithTitle:[NSString stringWithUTF8String:sz]];
+			}
+		}
+	}
+	delete pControl;
+
+	if (current && [button indexOfItemWithTitle:current] >= 0)
+		[button selectItemWithTitle:current];
+	[button setTarget:target];
+	[button setAction:action];
+	refilling = false;
+}
+
 bool EV_CocoaToolbar::repopulateStyles(void)
 {
 #if 0

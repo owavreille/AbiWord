@@ -28,6 +28,7 @@
 
 
 // Abiword includes
+#include "pd_Document.h"
 #include "ut_debugmsg.h"
 #include "ut_assert.h"
 #include "ut_string_class.h"
@@ -39,6 +40,21 @@
 #include <string>
 
 #include <glib.h>
+
+std::string ODe_dataItemFileName(PD_Document* doc, const char* dataId)
+{
+    std::string name = (dataId && *dataId) ? dataId : "";
+    std::string extension;
+    if (doc && !name.empty())
+        doc->getDataItemFileExtension(name.c_str(), extension, true);
+    if (extension.empty())
+        return name;
+    const bool already = name.size() >= extension.size()
+        && name.compare(name.size() - extension.size(), extension.size(), extension) == 0;
+    if (!already)
+        name += extension;
+    return name;
+}
 
 // ODF 1.3 length units are cm, mm, in, pt, pc and px. AbiWord names a pica "pi".
 static UT_UTF8String ode_odfValue(const UT_UTF8String& value)

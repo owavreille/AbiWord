@@ -127,6 +127,8 @@ public:
     { m_openedODNote = b;}
     void setIgnoreFirstTab(bool b)
     { m_bIgoreFirstTab = b;}
+    void setInHeaderFooter(bool inHeaderFooter)
+    { m_inHeaderFooter = inHeaderFooter; }
 
 private:
     void _initDefaultHeadingStyles();
@@ -151,6 +153,7 @@ private:
     bool m_openedODTextboxFrame;
     bool m_openedODNote;
     bool m_bIgoreFirstTab;
+    bool m_inHeaderFooter;
 
     // Content of the current paragraph.
     GsfOutput* m_pParagraphContent;

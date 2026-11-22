@@ -23,6 +23,9 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include <string>
+#include <vector>
+
 #include "xap_Types.h"
 #include "ev_CocoaToolbar.h"
 #include "ev_Toolbar_Control.h"
@@ -39,7 +42,7 @@ public:
 	virtual bool					populate(void);
 
 protected:
-
+	std::vector<std::string> m_menuOrder;
 };
 
 #endif /* AP_COCOATOOLBAR_FONTCOMBO_H */

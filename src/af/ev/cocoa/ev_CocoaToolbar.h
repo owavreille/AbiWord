@@ -57,6 +57,7 @@ public:
 	UT_sint32 destroy(void);
 	void      rebuildToolbar(UT_sint32 oldpos);
 	AP_CocoaFrame * getFrame(void);
+	void refillFontMenu(void);
 	virtual void show(void);
 	virtual void hide(void);
 

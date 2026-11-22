@@ -22,8 +22,9 @@
 /*
  * Word 97 binary document, as specified by [MS-DOC] and written by
  * LibreOffice's ww8 exporter: a FIB at the start of WordDocument, Unicode
- * text at fcMin, formatted-disk pages after the text, and the piece table,
- * stylesheet, section table and document properties in the 1Table stream.
+ * text at fcMin, formatted-disk pages after the text, a Sepx for the single
+ * section, and the piece table, stylesheet, section table and document
+ * properties in the 1Table stream.
  */
 
 #include <cstdlib>
@@ -335,21 +336,44 @@ static std::vector<FkpPage> pack_chpx(const std::vector<ChRun> & runs, unsigned 
 	return pages;
 }
 
+static const unsigned PAPX_BYTES = 6;
+static const unsigned PAPX_MAX = 0x1D;
+
 static bool papx_fits(unsigned count)
 {
-	return (count + 1) * 4 + count * 13 + 1 <= PAGE;
+	if (count == 0 || count > PAPX_MAX)
+		return false;
+	unsigned at = (count + 1) * 4 + count * 13;
+	if (at & 1)
+		++at;
+	return at + PAPX_BYTES < PAGE;
 }
 
+// PapxInFkp: cb = 3, so the following GrpPrlAndIstd is 2*cb-1 = 5 bytes.
+// Those bytes are the paragraph style (istd 0, Normal) and sprmPJc80 = left.
 static Buf make_papx(const std::vector<unsigned> & bounds, size_t from, size_t until)
 {
 	Buf page(PAGE, 0);
+	const unsigned count = static_cast<unsigned>(until - from);
 	unsigned pos = 0;
 	for (size_t i = from; i <= until; ++i)
 	{
 		poke_u32(page, pos, bounds[i]);
 		pos += 4;
 	}
-	page[511] = static_cast<unsigned char>(until - from);
+	unsigned papx = pos + count * 13;
+	if (papx & 1)
+		++papx;
+	page[papx] = 3;
+	page[papx + 1] = 0;
+	page[papx + 2] = 0;
+	page[papx + 3] = 0x03;
+	page[papx + 4] = 0x24;
+	page[papx + 5] = 0x00;
+	const unsigned word = papx / 2;
+	for (unsigned i = 0; i < count; ++i)
+		page[pos + i * 13] = static_cast<unsigned char>(word);
+	page[511] = static_cast<unsigned char>(count);
 	return page;
 }
 
@@ -380,27 +404,32 @@ static std::vector<FkpPage> pack_papx(const std::vector<unsigned> & bounds)
 
 static Buf stylesheet()
 {
-	Buf std;
-	append_u16(std, 0);
-	append_u16(std, 1 | (0x0FFF << 4));
-	append_u16(std, 2);
-	append_u16(std, 0);
-	append_u16(std, 0);
-	append_u16(std, 6);
+	// StdfBase, then the Unicode name, then the two UPX records of a
+	// paragraph style (paragraph properties, then character properties).
+	// bchUpe must equal the STD size. Slots 1..14 exist and are empty:
+	// the fixed-index styles are required, and 13 and 14 must be empty.
+	Buf normal;
+	append_u16(normal, 0);
+	append_u16(normal, 1 | (0x0FFF << 4));
+	append_u16(normal, 2);
+	append_u16(normal, 0);
+	append_u16(normal, 0);
+	append_u16(normal, 6);
 	const char * name = "Normal";
 	for (const char * p = name; *p; ++p)
-		append_u16(std, static_cast<unsigned char>(*p));
-	append_u16(std, 0);
-	append_u16(std, 2);
-	append_u16(std, 0);
-	append_u16(std, 0);
+		append_u16(normal, static_cast<unsigned char>(*p));
+	append_u16(normal, 0);
+	append_u16(normal, 2);
+	append_u16(normal, 0);
+	append_u16(normal, 0);
+	poke_u16(normal, 6, static_cast<unsigned>(normal.size()));
 
 	Buf stshi;
-	append_u16(stshi, 1);
+	append_u16(stshi, 15);
 	append_u16(stshi, 10);
 	append_u16(stshi, 1);
-	append_u16(stshi, 0);
-	append_u16(stshi, 0);
+	append_u16(stshi, 15);
+	append_u16(stshi, 15);
 	append_u16(stshi, 0);
 	append_u16(stshi, 0);
 	append_u16(stshi, 0);
@@ -409,32 +438,61 @@ static Buf stylesheet()
 	Buf out;
 	append_u16(out, static_cast<unsigned>(stshi.size()));
 	out.insert(out.end(), stshi.begin(), stshi.end());
-	append_u16(out, static_cast<unsigned>(std.size()));
-	out.insert(out.end(), std.begin(), std.end());
+	append_u16(out, static_cast<unsigned>(normal.size()));
+	out.insert(out.end(), normal.begin(), normal.end());
+	for (int slot = 1; slot < 15; ++slot)
+		append_u16(out, 0);
 	return out;
 }
 
 static Buf font_table()
 {
+	// SttbfFfn is a non-extended STTB. cData 0xFFFF would mark it extended
+	// and Word then rejects the file. The string is one FFN: Roman TrueType
+	// Times New Roman, weight 400, no alternate name.
 	const char * name = "Times New Roman";
-	Buf body;
-	body.push_back(0);
-	body.push_back(static_cast<unsigned char>(2 | 4 | (1 << 4)));
-	append_u16(body, 400);
-	body.push_back(0);
-	body.push_back(0);
-	body.insert(body.end(), 10, 0);
-	body.insert(body.end(), 24, 0);
+	Buf ffn;
+	ffn.push_back(static_cast<unsigned char>(0x02 | 0x04 | (0x01 << 4)));
+	append_u16(ffn, 400);
+	ffn.push_back(0);
+	ffn.push_back(0);
+	ffn.insert(ffn.end(), 10, 0);
+	ffn.insert(ffn.end(), 24, 0);
 	for (const char * p = name; *p; ++p)
-		append_u16(body, static_cast<unsigned char>(*p));
-	append_u16(body, 0);
-	body[0] = static_cast<unsigned char>(body.size() - 1);
+		append_u16(ffn, static_cast<unsigned char>(*p));
+	append_u16(ffn, 0);
 
 	Buf out;
-	append_u16(out, 0xFFFF);
 	append_u16(out, 1);
 	append_u16(out, 0);
-	out.insert(out.end(), body.begin(), body.end());
+	out.push_back(static_cast<unsigned char>(ffn.size()));
+	out.insert(out.end(), ffn.begin(), ffn.end());
+	return out;
+}
+
+static Buf section_properties()
+{
+	// Sepx. Every section must state its page size and its four margins.
+	const unsigned sprm[][2] = {
+		{ 0xB01F, 12240 },
+		{ 0xB020, 15840 },
+		{ 0xB021, 1440 },
+		{ 0xB022, 1440 },
+		{ 0x9023, 1440 },
+		{ 0x9024, 1440 },
+		{ 0xB025, 0 },
+		{ 0xB017, 720 },
+		{ 0xB018, 720 }
+	};
+	Buf grp;
+	for (unsigned i = 0; i < sizeof(sprm) / sizeof(sprm[0]); ++i)
+	{
+		append_u16(grp, sprm[i][0]);
+		append_u16(grp, sprm[i][1]);
+	}
+	Buf out;
+	append_u16(out, static_cast<unsigned>(grp.size()));
+	out.insert(out.end(), grp.begin(), grp.end());
 	return out;
 }
 
@@ -589,13 +647,17 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned stsh_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), stsh.begin(), stsh.end());
 
+	const Buf sepx = section_properties();
+	const unsigned sepx_at = static_cast<unsigned>(word.size());
+	word.insert(word.end(), sepx.begin(), sepx.end());
+
 	const unsigned sed_at = static_cast<unsigned>(table.size());
 	append_u32(table, 0);
 	append_u32(table, ccp);
 	append_u16(table, 0);
-	append_u32(table, 0xFFFFFFFF);
+	append_u32(table, sepx_at);
 	append_u16(table, 0);
-	append_u32(table, 0);
+	append_u32(table, 0xFFFFFFFF);
 	const unsigned sed_len = static_cast<unsigned>(table.size() - sed_at);
 
 	const Buf ch_bin = bin_table(ch_pages, ch_pns);

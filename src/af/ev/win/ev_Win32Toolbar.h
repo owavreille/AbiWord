@@ -85,6 +85,7 @@ protected:
 	void							_releaseListener(void);
 	HWND							_getControlWindow(XAP_Toolbar_Id id);
 
+	void							refillFontCombo(HWND hwndCombo);
 	bool							_refreshID(XAP_Toolbar_Id id);
 	bool							_refreshItem(AV_View * pView,
 												 const EV_Toolbar_Action * pAction,
@@ -105,6 +106,7 @@ private:
 	HWND							m_hwnd;
 	UT_Vector						m_vecToolbarWidgets;
 	AP_Win32Toolbar_FontCombo*		m_pFontCtrl;
+	bool							m_fontRefilling;
 	bool							m_bVisible;
 	UT_GenericVector<UT_UTF8String *> 	m_vecOrgStylesNames;
 

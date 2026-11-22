@@ -31,7 +31,9 @@
 #include "ut_debugmsg.h"
 
 #include "ap_UnixToolbar_FontCombo.h"
+#include "ap_FontMenu.h"
 #include "ap_Toolbar_Id.h"
+#include "pd_Document.h"
 #include "xap_UnixApp.h"
 #include "xap_Frame.h"
 
@@ -75,32 +77,13 @@ bool AP_UnixToolbar_FontCombo::populate(void)
 		return false;
 	}
 
-	const std::vector<std::string>& names =
-		GR_CairoGraphics::getAllFontNames();
+	EV_UnixToolbar * toolbar = static_cast<EV_UnixToolbar *>(m_pToolbar);
+	PD_Document * doc = AP_documentFromFrame(toolbar ? toolbar->getFrame() : nullptr);
+	AP_buildFontMenu(doc, GR_CairoGraphics::getAllFontNames(), m_menuOrder);
 
 	m_vecContents.clear();
+	for (const std::string & name : m_menuOrder)
+		m_vecContents.addItem(name.c_str());
 
-	for (std::vector<std::string>::const_iterator i = names.begin(); 
-		 i != names.end(); ++i)
-	{
-		const std::string & fName = *i;
-		
-		int foundAt = -1;
-
-		for (UT_sint32 j = 0; j < m_vecContents.size(); j++)
-		{
-			// sort out dups
-			const char * str = m_vecContents.getNthItem(j);
-			if (str && (fName == str))
-			{
-				foundAt = j;
-				break;
-			}
-		}
-
-		if (foundAt == -1)
-			m_vecContents.addItem(fName.c_str());
-	}
-	
 	return true;
 }

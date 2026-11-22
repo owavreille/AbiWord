@@ -717,11 +717,11 @@ void ODe_Style_Style::fetchAttributesFromAbiTable(const PP_AttrProp* pAP) {
 /**
  * Defines the style from attributes and properties of an AbiWord <cell>.
  */
-void ODe_Style_Style::fetchAttributesFromAbiCell(const PP_AttrProp* pAP) {
+void ODe_Style_Style::fetchAttributesFromAbiCell(const PP_AttrProp* pAP, PD_Document* pDoc) {
     if (m_pCellProps == nullptr) {
         m_pCellProps = new CellProps();
     }
-    m_pCellProps->fetchAttributesFromAbiProps(*pAP);
+    m_pCellProps->fetchAttributesFromAbiProps(*pAP, pDoc);
 }
 
 
@@ -2165,7 +2165,7 @@ bool ODe_Style_Style::CellProps::isEmpty() const {
  * 
  */
 void ODe_Style_Style::CellProps::
-fetchAttributesFromAbiProps(const PP_AttrProp& rAP) {
+fetchAttributesFromAbiProps(const PP_AttrProp& rAP, PD_Document* pDoc) {
     const gchar* pValue;
     bool ok;
     
@@ -2259,7 +2259,7 @@ fetchAttributesFromAbiProps(const PP_AttrProp& rAP) {
     if (ok && pValue != nullptr)
     {
         m_backgroundImage = "Pictures/";
-        m_backgroundImage += pValue;
+        m_backgroundImage += ODe_dataItemFileName(pDoc, pValue).c_str();
     }
 
     // Vertical alignment

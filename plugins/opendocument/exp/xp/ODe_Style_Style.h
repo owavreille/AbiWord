@@ -32,6 +32,7 @@
 #include "ut_string_class.h"
 
 // AbiWord classes
+class PD_Document;
 class PP_AttrProp;
 class ODe_Style_List;
 
@@ -77,7 +78,7 @@ public:
     void fetchAttributesFromAbiTable(const PP_AttrProp* pAP);
 
     // Defines the style from attributes and properties of an AbiWord <cell>.
-    void fetchAttributesFromAbiCell(const PP_AttrProp* pAP);
+    void fetchAttributesFromAbiCell(const PP_AttrProp* pAP, PD_Document* pDoc = nullptr);
 
     // Defines the style from attributes and properties of an AbiWord <frame>.
     void fetchAttributesFromAbiFrame(const PP_AttrProp& rAP);
@@ -318,7 +319,7 @@ private:
         public:
 
         bool isEmpty() const;
-        void fetchAttributesFromAbiProps(const PP_AttrProp& rAP);
+        void fetchAttributesFromAbiProps(const PP_AttrProp& rAP, PD_Document* pDoc);
         void write(UT_UTF8String& rOutput, const UT_UTF8String& rSpacesOffset) const ;
         CellProps& operator=(const CellProps& rCellProps);
         bool operator==(const CellProps& rCellProps) const;

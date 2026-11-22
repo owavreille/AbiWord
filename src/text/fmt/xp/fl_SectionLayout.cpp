@@ -1395,6 +1395,12 @@ void fl_DocSectionLayout::doMarginChangeOnly(void)
  */
 bool fl_DocSectionLayout::setHdrFtrHeightChange(bool bHdrFtr, UT_sint32 newHeight)
 {
+	// Paper output clips a header or footer that does not fit its margin.
+	// Growing the margin here schedules a piece-table change, and the
+	// export message pump can apply it before the pages are drawn.
+	GR_Graphics * pPaper = getDocLayout() ? getDocLayout()->getGraphics() : nullptr;
+	if (pPaper && pPaper->queryProperties(GR_Graphics::DGP_PAPER))
+		return false;
 //
 // Look to see if we've already sent a signal and if we have to adjust
 // the height of the HdrFtr
