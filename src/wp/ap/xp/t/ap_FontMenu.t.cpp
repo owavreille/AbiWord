@@ -19,7 +19,7 @@
 
 #define TFSUITE "core.wp.ap.fontmenu"
 
-static PT_DocPosition first_block_content(PD_Document * doc)
+static PT_DocPosition font_menu_block_content(PD_Document * doc)
 {
 	pt_PieceTable * table = doc ? doc->getPieceTable() : nullptr;
 	if (!table)
@@ -55,7 +55,7 @@ TFTEST_MAIN("Font menu keeps document faces above the installed list")
 		return;
 	}
 
-	const PT_DocPosition at = first_block_content(doc);
+	const PT_DocPosition at = font_menu_block_content(doc);
 	const std::string words = "Bonjour";
 	if (!TFPASS(doc->insertSpan(at, words)))
 	{
