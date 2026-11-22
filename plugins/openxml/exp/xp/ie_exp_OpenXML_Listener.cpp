@@ -959,6 +959,23 @@ bool IE_Exp_OpenXML_Listener::populateStrux(pf_Frag_Strux* sdh, const PX_ChangeR
 				bInPositionedImage = true;
 			}
 
+			// A frame is stored just before the block it belongs to, so the
+			// paragraph has not been opened yet. Appending to it crashed.
+			if((bInTextbox || bInPositionedImage) && !paragraph)
+			{
+				if(!section)
+					return true;
+				paragraph = new OXML_Element_Paragraph(getNextId());
+				OXML_SharedElement shared_paragraph(static_cast<OXML_Element*>(paragraph));
+				if(!m_cellStack.empty())
+				{
+					if(m_cellStack.top()->appendElement(shared_paragraph) != UT_OK)
+						return false;
+				}
+				else if(section->appendElement(shared_paragraph) != UT_OK)
+					return false;
+			}
+
 			if(bInTextbox)
 			{
 				textbox = new OXML_Element_TextBox(getNextId());
