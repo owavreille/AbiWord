@@ -2016,7 +2016,7 @@ TFTEST_MAIN("DOC export keeps the header text and an inline image")
 	}
 
 	const std::string word = ole_read(ole, "WordDocument");
-	const std::string table = ole_read(ole, "1Table");
+	const std::string table_bytes = ole_read(ole, "1Table");
 	const std::string data = ole_read(ole, "Data");
 	TFPASS(word.find(utf16_ascii("EnteteImage")) != std::string::npos);
 	TFPASS(word.size() >= FMT_CCP_HDD + 4 && le32(word, FMT_CCP_HDD) > 0);
@@ -2036,7 +2036,7 @@ TFTEST_MAIN("DOC export keeps the header text and an inline image")
 	TFPASS(image_chars >= 2);
 
 	const unsigned sed_at = le32(word, 0x9A + 6 * 8);
-	const unsigned fc_sepx = le32(table, sed_at + 10);
+	const unsigned fc_sepx = le32(table_bytes, sed_at + 10);
 	const unsigned sepx_len = le16(word, fc_sepx);
 	bool header_flag = false;
 	if (fc_sepx + 2 + sepx_len <= word.size())
