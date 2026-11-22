@@ -97,6 +97,7 @@ public:
 
 	inline void			suppressDialog (bool disable = true) { m_bSuppressDialog = disable; }
 	inline void			set_HTML4 (bool enable = true) { m_exp_opt.bIs4 = enable; }
+	inline void			set_EmbedImages (bool enable = true) { m_exp_opt.bEmbedImages = enable; }
 	inline void			set_PHTML (bool enable = true) { m_exp_opt.bIsAbiWebDoc = enable; }
 	inline void			set_MHTML (bool enable = true) { m_exp_opt.bMultipart = enable; }
 	inline void			set_AddIdentifiers(bool enable = true) { m_exp_opt.bAddIdentifiers = enable; }

@@ -653,9 +653,12 @@ void fl_AnnotationLayout::_createAnnotationContainer(void)
 
 	fp_Container * pCon = pCL->getLastContainer();
 	UT_return_if_fail(pCon);
-	UT_sint32 iWidth = pDSL->getRightMargin() - pCon->getGraphics()->tlu(6);
-	if (iWidth < pCon->getGraphics()->tlu(72))
-		iWidth = pCon->getGraphics()->tlu(96);
+	fp_Page * pPage = pCon->getPage();
+	UT_sint32 pageWidth = pPage ? pPage->getWidth() : pDSL->getRightMargin() + 100000;
+	UT_sint32 iWidth = 0;
+	UT_sint32 x = 0;
+	fp_AnnotationContainer::placeInRightMargin(pCon->getGraphics(), pageWidth,
+		pDSL->getRightMargin(), x, iWidth);
 	pAnnotationContainer->setWidth(iWidth);
 }
 

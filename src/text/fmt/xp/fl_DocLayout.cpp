@@ -2864,6 +2864,9 @@ void FL_DocLayout::updateOnViewModeChange()
 	// force margin properties lookup
 	fl_SectionLayout* pSL = m_pFirstSection;
 	m_docViewPageSize = getDocument()->m_docPageSize;
+	// Leaving web layout must put the paper width back. The view
+	// still reads the cached layout-unit size.
+	_setDocPageDimensions();
 	UT_DebugOnly<UT_Dimension> orig_ut = DIM_IN;
 	orig_ut = m_docViewPageSize.getDims();
 	UT_DEBUGMSG(("updateOnViewModeChange - docViewPageSize width %f \n",m_docViewPageSize.Width(orig_ut)));

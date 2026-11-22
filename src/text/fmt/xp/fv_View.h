@@ -776,6 +776,8 @@ public:
 	virtual UT_uint32	calculateZoomPercentForPageHeight() const override;
 	virtual UT_uint32	calculateZoomPercentForWholePage() const override;
 	void 			    setViewMode (ViewMode vm);
+	// Web layout follows the window. Print and normal keep the paper width.
+	void				reflowWebPageToWindow(void);
 	ViewMode 			getViewMode (void) const  {return m_viewMode;}
 	bool				isPreview(void) const {return VIEW_PREVIEW == m_viewMode;}
 	void				setPreviewMode(PreViewMode pre) {m_previewMode = pre;}
@@ -1009,6 +1011,7 @@ protected:
 
 	UT_Error			_deleteBookmark(const char* szName, bool bSignal, PT_DocPosition * pos1 = nullptr, PT_DocPosition * pos2 = nullptr);
 	UT_Error			_deleteHyperlink(PT_DocPosition &i, bool bSignal);
+	UT_Error			_deleteAnnotation(fl_AnnotationLayout * pAL, bool bSignal);
 
 	UT_Error			_deleteXMLID( const std::string& xmlid, bool bSignal, PT_DocPosition& posStart, PT_DocPosition& posEnd );
 	UT_Error			_deleteXMLID( const std::string& xmlid, bool bSignal );

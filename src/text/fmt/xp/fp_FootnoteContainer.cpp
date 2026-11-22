@@ -385,6 +385,50 @@ UT_sint32 fp_AnnotationContainer::getValue(void)
 	return pDL->getAnnotationVal(pAL->getAnnotationPID());
 }
 
+void fp_AnnotationContainer::placeInRightMargin(GR_Graphics * pG, UT_sint32 pageWidth,
+	UT_sint32 rightMargin, UT_sint32 & x, UT_sint32 & width)
+{
+	const UT_sint32 pad = pG ? pG->tlu(4) : 4;
+	const UT_sint32 edge = pG ? pG->tlu(2) : 2;
+	if (pageWidth < 1)
+		pageWidth = 1;
+	if (rightMargin < 0)
+		rightMargin = 0;
+
+	// Drawn left is x - pad, drawn right is x + width + pad.
+	UT_sint32 outer = rightMargin - edge * 2;
+	if (outer >= pad * 2 + 1 && outer <= pageWidth)
+	{
+		x = pageWidth - rightMargin + edge + pad;
+		width = outer - pad * 2;
+	}
+	else
+	{
+		UT_sint32 maxOuter = pageWidth - edge;
+		if (maxOuter < 1)
+			maxOuter = pageWidth;
+		outer = rightMargin;
+		if (outer < pad * 2 + 1)
+			outer = pad * 2 + 1;
+		if (outer > maxOuter)
+			outer = maxOuter;
+		width = outer - pad * 2;
+		if (width < 1)
+			width = 1;
+		x = pageWidth - edge - pad - width;
+	}
+	if (width < 1)
+		width = 1;
+	if (x < pad)
+		x = pad;
+	if (x + width + pad > pageWidth)
+	{
+		width = pageWidth - x - pad;
+		if (width < 1)
+			width = 1;
+	}
+}
+
 static void annotationCallout(const fp_AnnotationContainer * box, GR_Graphics * graphics,
 	UT_sint32 & x, UT_sint32 & y, UT_sint32 & width, UT_sint32 & height,
 	UT_sint32 & closeX, UT_sint32 & closeY, UT_sint32 & close);

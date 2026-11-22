@@ -37,12 +37,10 @@
 #include <vector>
 
 #include <glib.h>
-#include <glib/gstdio.h>
 
 #include <gsf/gsf-outfile.h>
 #include <gsf/gsf-outfile-msole.h>
 #include <gsf/gsf-output-memory.h>
-#include <gsf/gsf-output-stdio.h>
 #include <gsf/gsf-output.h>
 
 #include "ut_go_file.h"
@@ -1213,19 +1211,84 @@ IE_Exp_MsWord_97::~IE_Exp_MsWord_97()
 {
 }
 
-GsfOutput * IE_Exp_MsWord_97::_openFile(const char * szFilename)
+// The dialog hands back a file URI. g_filename_from_uri turns
+// file:///C:/Dir/name.doc into C:\Dir\name.doc. A raw path is kept.
+static char *
+local_path_for_save(const char * name)
 {
-	// The usual saver writes .gsf-save-XXXXXX and renames it when the
-	// file is closed. Windows refuses that rename for a .doc name, so
-	// the export reports that it could not write. Open the destination.
-	char * local = UT_go_filename_from_uri(szFilename);
-	const char * path = (local && *local) ? local : szFilename;
-	FILE * file = path ? g_fopen(path, "wb") : nullptr;
-	GsfOutput * output = nullptr;
-	if (file)
-		output = gsf_output_stdio_new_FILE(path ? path : szFilename, file, FALSE);
+	if (!name || !*name)
+		return nullptr;
+	if (!UT_go_path_is_uri(name))
+		return g_strdup(name);
+
+	char * local = UT_go_filename_from_uri(name);
+	if (local && *local)
+		return local;
 	g_free(local);
-	return output;
+
+	if (g_ascii_strncasecmp(name, "file:", 5) != 0)
+		return nullptr;
+	const char * path = name + 5;
+	if (path[0] == '/' && path[1] == '/' && path[2] == '/')
+		path += 2;
+	else if (path[0] == '/' && path[1] == '/')
+	{
+		path += 2;
+		const char * slash = strchr(path, '/');
+		if (!slash)
+			return nullptr;
+		path = slash;
+	}
+	char * decoded = g_uri_unescape_string(path, nullptr);
+	if (!decoded || !*decoded)
+	{
+		g_free(decoded);
+		return nullptr;
+	}
+#ifdef G_OS_WIN32
+	if (decoded[0] == '/' &&
+	    g_ascii_isalpha(static_cast<unsigned char>(decoded[1])) &&
+	    (decoded[2] == ':' || decoded[2] == '|'))
+	{
+		if (decoded[2] == '|')
+			decoded[2] = ':';
+		memmove(decoded, decoded + 1, strlen(decoded + 1) + 1);
+	}
+	for (char * p = decoded; *p; ++p)
+		if (*p == '/')
+			*p = '\\';
+#endif
+	return decoded;
+}
+
+// libgsf's stdio saver, and g_file_set_contents(), write name.XXXXXX and
+// rename it onto the destination. Windows refuses that rename when the
+// destination ends in .doc, and every failure is shown as "could not write".
+// Write the bytes straight into the chosen file.
+static bool
+save_word_bytes(const char * name, const guint8 * bytes, size_t size)
+{
+	char * path = local_path_for_save(name);
+	if (!path || !bytes || size == 0 || size > static_cast<size_t>(G_MAXSSIZE))
+	{
+		g_free(path);
+		return false;
+	}
+	const gboolean ok = g_file_set_contents_full(path,
+		reinterpret_cast<const gchar *>(bytes),
+		static_cast<gssize>(size),
+		G_FILE_SET_CONTENTS_NONE,
+		0666,
+		nullptr);
+	g_free(path);
+	return ok;
+}
+
+GsfOutput * IE_Exp_MsWord_97::_openFile(const char * /*szFilename*/)
+{
+	// The OLE file is assembled in this buffer, then copied to disk in
+	// _writeDocument. Closing the buffer does not rename anything.
+	return gsf_output_memory_new();
 }
 
 UT_Error IE_Exp_MsWord_97::_writeDocument(void)
@@ -1415,6 +1478,13 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	memcpy(&word[0], &fib[0], FIB_BYTES);
 
 	if (!getFp() || !write_ole(getFp(), word, table, data))
+		return UT_IE_COULDNOTWRITE;
+	if (!GSF_IS_OUTPUT_MEMORY(getFp()))
+		return UT_OK;
+	const guint8 * bytes = gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(getFp()));
+	const gsf_off_t size = gsf_output_size(getFp());
+	if (!bytes || size <= 0 ||
+	    !save_word_bytes(getFileName(), bytes, static_cast<size_t>(size)))
 		return UT_IE_COULDNOTWRITE;
 	return UT_OK;
 }

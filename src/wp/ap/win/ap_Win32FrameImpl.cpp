@@ -1485,7 +1485,11 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 				int nHeight = HIWORD(lParam);
 
 				pView->setWindowSize(nWidth, nHeight);
-				
+				FV_View * pFVSize = static_cast<FV_View *>(pView);
+				if (pFVSize->getViewMode() == VIEW_WEB && pFVSize->getLayout() &&
+				    !pFVSize->getLayout()->isLayoutFilling())
+					pFVSize->reflowWebPageToWindow();
+
 				// when resizing, set the rulers to their new height/width
 				if ((f->getAPFrameData()->m_pTopRuler) && (f->getAPFrameData()->m_pLeftRuler))
 				{

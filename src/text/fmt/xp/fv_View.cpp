@@ -8190,11 +8190,16 @@ bool FV_View::tryDeleteAnnotationClose(UT_sint32 xPos, UT_sint32 yPos)
 	UT_sint32 xClick = 0;
 	UT_sint32 yClick = 0;
 	fp_AnnotationContainer * box = annotation_box_at(_getPageForXY(xPos, yPos, xClick, yClick), xClick, yClick, true);
-	if (!box || !point_at_annotation(this, box))
+	fl_AnnotationLayout * layout = box ? static_cast<fl_AnnotationLayout *>(box->getSectionLayout()) : nullptr;
+	if (!layout)
 		return false;
 	if (isAnnotationPreviewActive())
 		killAnnotationPreview();
-	cmdDeleteHyperlink();
+	if (!_deleteAnnotation(layout, true))
+		return false;
+	m_prevMouseContext = EV_EMC_TEXT;
+	setCursorToContext();
+	notifyListeners(AV_CHG_ALL);
 	return true;
 }
 
@@ -9317,6 +9322,64 @@ UT_uint32 FV_View::getTabToggleAreaWidth() const
 #else
 			return m_pG->tlu(AP_TopRuler::getFixedWidth());
 #endif
+}
+
+void FV_View::reflowWebPageToWindow(void)
+{
+	// A resize during formatAll posts another size event. Formatting
+	// again from that event would rebuild the layout while it is rebuilt.
+	static bool s_inside = false;
+	if (s_inside || getViewMode() != VIEW_WEB || !m_pLayout || !m_pDoc || !m_pG)
+		return;
+	if (getWindowWidth() < 20)
+		return;
+
+	s_inside = true;
+	bool changed = false;
+	// The scrollbar can appear on the first pass and narrow the window.
+	for (int pass = 0; pass < 2; ++pass)
+	{
+		const UT_sint32 pad = m_pG->tlu(4);
+		double new_width = static_cast<double>(getWindowWidth() - pad) / 1440.0;
+		if (new_width < 1.0)
+			new_width = 1.0;
+		if (new_width > 50.0)
+			new_width = 50.0;
+
+		double orig_height = m_pDoc->m_docPageSize.Height(DIM_IN);
+		double current = m_pLayout->m_docViewPageSize.Width(DIM_IN);
+		double delta = new_width - current;
+		if (delta < 0)
+			delta = -delta;
+		if (delta < 0.02)
+			break;
+
+		m_pLayout->m_docViewPageSize.Set(new_width, orig_height, DIM_IN);
+		m_pLayout->m_docViewPageSize.Set(fp_PageSize::psCustom, DIM_IN);
+		// Width() follows the stored width only in portrait. A landscape
+		// document would otherwise keep the paper height as its width.
+		m_pLayout->m_docViewPageSize.setPortrait();
+		m_pLayout->syncViewPageDimensions();
+
+		fl_SectionLayout * pSL = m_pLayout->getFirstSection();
+		while (pSL)
+		{
+			pSL->lookupMarginProperties();
+			pSL = static_cast<fl_SectionLayout *>(pSL->getNext());
+		}
+		rebuildLayout();
+		m_pLayout->formatAll();
+		changed = true;
+		XAP_Frame * pFrame = static_cast<XAP_Frame *>(getParentData());
+		if (pFrame)
+		{
+			pFrame->setXScrollRange();
+			pFrame->setYScrollRange();
+		}
+	}
+	s_inside = false;
+	if (changed)
+		updateScreen(false);
 }
 
 void FV_View::setViewMode (ViewMode vm)

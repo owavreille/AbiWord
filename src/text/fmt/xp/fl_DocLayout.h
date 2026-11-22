@@ -237,6 +237,8 @@ public:
 	GR_EmbedManager * getEmbedManager(const char * szEmbedType);
 	UT_sint32       getDocPageHeight(void) const {return m_iPageHeight;}
 	UT_sint32       getDocPageWidth(void) const {return m_iPageWidth;}
+	// getWidth() reads these integers, not the page-size object.
+	void            syncViewPageDimensions(void) { _setDocPageDimensions(); }
 
 // --------------------------------------------------------------------
 // Footnote Methods

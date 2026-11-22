@@ -59,6 +59,8 @@
 #include "fg_Graphic.h"
 #include "fg_GraphicRaster.h"
 #include "pd_Document.h"
+#include "pf_Frag_Object.h"
+#include "pf_Frag_Strux.h"
 #include "pd_DocumentRDF.h"
 #include "pd_Style.h"
 #include "pp_Property.h"
@@ -4649,14 +4651,20 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 				}
 				iPageHeight = s_visiblePageHeight(pOwned, pDSL);
 				iPageWidth = pOwned->getWidth();
-				if (yRemaining < iPageHeight * pDSL->getPageCount())
+				// The page offset uses the same stride. Dividing by the
+				// height alone walks past the page that is on screen,
+				// then the loop stops and nothing below is painted.
+				UT_sint32 stride = iPageHeight + getPageViewSep();
+				if (stride < 1)
+					stride = 1;
+				if (yRemaining < stride * pDSL->getPageCount())
 				{
-					iFirstVisiblePageNumber += yRemaining/iPageHeight;
+					iFirstVisiblePageNumber += yRemaining/stride;
 					break;
 				}
 				else
 				{
-					yRemaining -= iPageHeight * pDSL->getPageCount();
+					yRemaining -= stride * pDSL->getPageCount();
 					iFirstVisiblePageNumber += pDSL->getPageCount();
 				}
 				pDSL = pDSL->getNextDocSection();
@@ -4728,7 +4736,9 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 			case VIEW_NORMAL:
 			case VIEW_WEB:
 			adjustedTop = iPageYOffset - getYScrollOffset() + ( pPage->getPageNumber() * (m_pG->tlu(1) - getPageViewSep()) );
-			adjustedLeft = 0;
+			// The paper can be wider than the window. Leaving this at 0
+			// kept the page stuck to the left edge while the bar moved.
+			adjustedLeft = -getXScrollOffset();
 			break;
 
 			case VIEW_PRINT:
@@ -4769,8 +4779,16 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		if(!bDirtyRunsOnly || (pPage->needsRedraw() && (getViewMode() == VIEW_PRINT)))
 		{
 			const UT_RGBColor * pClr = pPage->getFillType().getColor();
-			if(getViewMode() == VIEW_NORMAL || getViewMode() == VIEW_WEB) // Normal/web view pages take up the whole window
-				painter.fillRect(*pClr, adjustedRight, adjustedTop, getWindowWidth() - adjustedRight + m_pG->tlu(1), iPageHeight);
+			if(getViewMode() == VIEW_NORMAL || getViewMode() == VIEW_WEB)
+			{
+				// The old width was the paper's right edge minus the window.
+				// Once the paper is wider than the window that width is
+				// negative and the page band stays the gray canvas color.
+				UT_sint32 fillWidth = getWindowWidth();
+				if (fillWidth < 1)
+					fillWidth = 1;
+				painter.fillRect(*pClr, 0, adjustedTop, fillWidth, iPageHeight);
+			}
 			else
 				painter.fillRect(*pClr, adjustedLeft + m_pG->tlu(1), adjustedTop + m_pG->tlu(1), iPageWidth - m_pG->tlu(1), iPageHeight - m_pG->tlu(1));
 			xxx_UT_DEBUGMSG(("   ---PAINTING PAGE %i---\n", pPage->getPageNumber()));
@@ -4782,8 +4800,49 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 			da.bDirtyRunsOnly = false;
 		}
 
-		// Draw the page and all its subcontainers (i.e., the content)
-		pPage->draw(&da);
+		// Draw the page and all its subcontainers (i.e., the content).
+		// In normal and web layout the slot is the paper minus the
+		// margins. The page still paints its full paper height, which
+		// covers the next page and the separator line.
+		UT_Rect outerCopy;
+		bool haveOuter = false;
+		if (getViewMode() == VIEW_NORMAL || getViewMode() == VIEW_WEB)
+		{
+			if (const UT_Rect * pOuter = m_pG->getClipRect())
+			{
+				outerCopy = *pOuter;
+				haveOuter = true;
+			}
+			UT_sint32 bandLeft = adjustedLeft;
+			UT_sint32 bandTop = adjustedTop;
+			UT_sint32 bandRight = adjustedLeft + (iPageWidth > 0 ? iPageWidth : 1);
+			UT_sint32 bandBottom = adjustedTop + iPageHeight;
+			if (haveOuter)
+			{
+				if (outerCopy.left > bandLeft)
+					bandLeft = outerCopy.left;
+				if (outerCopy.top > bandTop)
+					bandTop = outerCopy.top;
+				const UT_sint32 outerRight = outerCopy.left + outerCopy.width;
+				const UT_sint32 outerBottom = outerCopy.top + outerCopy.height;
+				if (outerRight < bandRight)
+					bandRight = outerRight;
+				if (outerBottom < bandBottom)
+					bandBottom = outerBottom;
+			}
+			if (bandRight > bandLeft && bandBottom > bandTop)
+			{
+				UT_Rect band(bandLeft, bandTop, bandRight - bandLeft, bandBottom - bandTop);
+				m_pG->setClipRect(&band);
+				pPage->draw(&da);
+			}
+			if (haveOuter)
+				m_pG->setClipRect(&outerCopy);
+			else
+				m_pG->setClipRect(nullptr);
+		}
+		else
+			pPage->draw(&da);
 
 		// draw page decorations
 		UT_RGBColor clr(0,0,0);
@@ -5650,6 +5709,118 @@ fp_HyperlinkRun * FV_View::_getHyperlinkInRange(PT_DocPosition &posStart,
 	return nullptr;
 }
 
+static bool annotationObjectIsStart(PD_Document * pDoc, const pf_Frag_Object * pObj)
+{
+	const PP_AttrProp * pAP = nullptr;
+	if (!pDoc->getAttrProp(pObj->getIndexAP(), &pAP) || !pAP)
+		return false;
+	const gchar * psz = nullptr;
+	return pAP->getAttribute("annotation", psz) || pAP->getAttribute("Annotation", psz);
+}
+
+// The closing annotation object sits after the annotated text, which
+// itself sits after the EndAnnotation strux. Section length stops at
+// that strux, so the walk starts just past it.
+static PT_DocPosition findAnnotationEndObject(PD_Document * pDoc, PT_DocPosition afterSection)
+{
+	pf_Frag * pf = pDoc->getFragFromPosition(afterSection);
+	while (pf && pf->getType() != pf_Frag::PFT_EndOfDoc)
+	{
+		if (pf->getType() == pf_Frag::PFT_Strux)
+		{
+			auto * pfs = static_cast<pf_Frag_Strux *>(pf);
+			if (pfs->getStruxType() != PTX_Block)
+				break;
+		}
+		else if (pf->getType() == pf_Frag::PFT_Object)
+		{
+			auto * pObj = static_cast<pf_Frag_Object *>(pf);
+			if (pObj->getObjectType() == PTO_Annotation)
+			{
+				if (!annotationObjectIsStart(pDoc, pObj))
+					return pf->getPos();
+				break;
+			}
+		}
+		pf = pf->getNext();
+	}
+	return 0;
+}
+
+// _getHyperlinkInRange refuses the first two offsets of a block, so an
+// annotation that starts a paragraph is invisible to it.
+static fp_HyperlinkRun * annotationRunNear(fl_BlockLayout * pBlock, PT_DocPosition pos)
+{
+	if (!pBlock)
+		return nullptr;
+	const PT_DocPosition base = pBlock->getPosition(false);
+	if (pos < base)
+		return nullptr;
+	const PT_DocPosition cur = pos - base;
+	fp_Run * pRun = pBlock->getFirstRun();
+	while (pRun && (pRun->getBlockOffset() + pRun->getLength()) <= cur)
+		pRun = pRun->getNextRun();
+	fp_Run * candidates[3] = {
+		pRun,
+		pRun ? pRun->getPrevRun() : nullptr,
+		pRun ? pRun->getNextRun() : nullptr
+	};
+	for (fp_Run * candidate : candidates)
+	{
+		if (!candidate || candidate->getType() != FPRUN_HYPERLINK)
+			continue;
+		auto * pH = static_cast<fp_HyperlinkRun *>(candidate);
+		if (pH->getHyperlinkType() == HYPERLINK_ANNOTATION)
+			return pH;
+	}
+	return nullptr;
+}
+
+UT_Error FV_View::_deleteAnnotation(fl_AnnotationLayout * pAL, bool bSignal)
+{
+	UT_return_val_if_fail(pAL && m_pDoc, false);
+	PT_DocPosition sectionStart = pAL->getDocPosition();
+	const UT_uint32 sectionLen = pAL->getLength();
+	PT_DocPosition sectionEnd = sectionStart + sectionLen;
+	// Past this point the layout may be destroyed by the section delete.
+	const PT_DocPosition endMarker = (sectionLen > 0)
+		? findAnnotationEndObject(m_pDoc, sectionEnd) : 0;
+
+	if (!isSelectionEmpty())
+		_clearSelection();
+	if (bSignal)
+		_saveAndNotifyPieceTableChange();
+
+	m_pDoc->beginUserAtomicGlob();
+	UT_uint32 deleted = 0;
+	bool removed = false;
+	// The end object is not a start, so the hyperlink delete removes the
+	// matching start marker as well and leaves the annotation section.
+	if (endMarker > sectionEnd)
+	{
+		if (m_pDoc->deleteSpan(endMarker, endMarker + 1, nullptr, deleted))
+		{
+			removed = true;
+			if (sectionStart > 0)
+				sectionStart--;
+			if (sectionEnd > 0)
+				sectionEnd--;
+		}
+	}
+	if (sectionEnd > sectionStart)
+	{
+		if (m_pDoc->deleteSpan(sectionStart, sectionEnd, nullptr, deleted))
+			removed = true;
+	}
+	m_pDoc->endUserAtomicGlob();
+	if (bSignal)
+	{
+		_restorePieceTableState();
+		_generalUpdate();
+	}
+	return removed;
+}
+
 /*
 	NB: this function assumes that the position it is passed is inside a
 	hyperlink and will assert if it is not so.
@@ -5657,17 +5828,23 @@ fp_HyperlinkRun * FV_View::_getHyperlinkInRange(PT_DocPosition &posStart,
 
 UT_Error FV_View::_deleteHyperlink(PT_DocPosition &pos1, bool bSignal)
 {
+	fl_BlockLayout * pAt = _findBlockAtPosition(pos1);
+	if (pAt && pAt->getSectionLayout()
+		&& pAt->getSectionLayout()->getContainerType() == FL_CONTAINER_ANNOTATION)
+	{
+		return _deleteAnnotation(static_cast<fl_AnnotationLayout *>(pAt->getSectionLayout()), bSignal);
+	}
 	fp_HyperlinkRun * pH1 = _getHyperlinkInRange(pos1, pos1);
+	if (!pH1)
+		pH1 = annotationRunNear(pAt, pos1);
 	UT_return_val_if_fail(pH1,false);
-	fp_AnnotationRun  * pAR = nullptr;
 	UT_uint32 iRunLen = 1;
 	if(pH1->getHyperlinkType() ==  HYPERLINK_ANNOTATION)
 	{
-			pAR = static_cast<fp_AnnotationRun *>(pH1);
+			auto * pAR = static_cast<fp_AnnotationRun *>(pH1);
 			fl_AnnotationLayout * pAL = getLayout()->findAnnotationLayout(pAR->getPID());
 			UT_return_val_if_fail(pAL,false);
-			iRunLen = pAL->getLength();
-			
+			return _deleteAnnotation(pAL, bSignal);
 	}
 
 	if (!isSelectionEmpty())

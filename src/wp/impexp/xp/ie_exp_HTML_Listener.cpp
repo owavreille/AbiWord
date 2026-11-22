@@ -3048,7 +3048,7 @@ void IE_Exp_HTML_Listener::_makeStylesheet(PT_AttrPropIndex api)
 	PD_Style * pStyle = nullptr;
 	m_pDocument->getStyle("Normal", &pStyle);
 	UT_UTF8String value;
-	for (UT_uint32 i = 0; i < pStyle->getPropertyCount(); i++) {
+	for (UT_uint32 i = 0; pStyle && i < pStyle->getPropertyCount(); i++) {
 		pStyle->getNthProperty(i, szName, szValue);
 
 		if ((szName == nullptr) || (szValue == nullptr))
@@ -3085,8 +3085,8 @@ void IE_Exp_HTML_Listener::_makeStylesheet(PT_AttrPropIndex api)
 	if (szValue && *szValue && !IS_TRANSPARENT_COLOR(szValue)) {
 		value= UT_colorToHex(szValue, true);
 
-		bodyStyle += UT_UTF8String_sprintf("background-color:%s;\n", 
-										 szName, value.utf8_str());
+		bodyStyle += UT_UTF8String_sprintf("background-color:%s;\n",
+										 value.utf8_str());
 	}
 	
 	bodyStyle += "}";
