@@ -776,10 +776,7 @@ static std::string pdf_inflate_streams(const std::string & bytes)
 		const std::string::size_type marker = bytes.find("stream", i);
 		if (marker == std::string::npos)
 			break;
-		const bool keyword = marker > 0
-			&& (bytes[marker - 1] == '\n' || bytes[marker - 1] == '\r' || bytes[marker - 1] == ' ')
-			&& !(marker >= 3 && bytes.compare(marker - 3, 3, "end") == 0);
-		if (!keyword)
+		if (marker >= 3 && bytes.compare(marker - 3, 3, "end") == 0)
 		{
 			i = marker + 6;
 			continue;
@@ -789,28 +786,7 @@ static std::string pdf_inflate_streams(const std::string & bytes)
 			start += 2;
 		else if (start < bytes.size() && (bytes[start] == '\n' || bytes[start] == '\r'))
 			start += 1;
-		std::string::size_type end = std::string::npos;
-		const std::string::size_type look = marker > 120 ? marker - 120 : 0;
-		const std::string::size_type lenAt = bytes.rfind("/Length", marker);
-		if (lenAt != std::string::npos && lenAt >= look)
-		{
-			std::string::size_type n = lenAt + 7;
-			while (n < marker && (bytes[n] == ' ' || bytes[n] == '\t' || bytes[n] == '\r' || bytes[n] == '\n'))
-				++n;
-			if (n < marker && bytes[n] >= '0' && bytes[n] <= '9')
-			{
-				unsigned long length = 0;
-				while (n < marker && bytes[n] >= '0' && bytes[n] <= '9')
-				{
-					length = length * 10 + static_cast<unsigned long>(bytes[n] - '0');
-					++n;
-				}
-				if (start + length <= bytes.size())
-					end = start + length;
-			}
-		}
-		if (end == std::string::npos)
-			end = bytes.find("endstream", start);
+		const std::string::size_type end = bytes.find("endstream", start);
 		if (end == std::string::npos)
 			break;
 		std::string raw = bytes.substr(start, end - start);
@@ -845,13 +821,7 @@ static std::string pdf_inflate_streams(const std::string & bytes)
 		}
 		else
 			text += raw;
-		if (bytes.compare(end, 9, "endstream") == 0)
-			i = end + 9;
-		else
-		{
-			const std::string::size_type tail = bytes.find("endstream", end);
-			i = tail == std::string::npos ? end : tail + 9;
-		}
+		i = end + 9;
 	}
 	return text;
 }
