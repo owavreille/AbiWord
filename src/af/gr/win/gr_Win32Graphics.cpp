@@ -27,6 +27,8 @@
 #include <windows.h>
 #include <winspool.h>
 #include <cstring>
+#include <map>
+#include <string>
 
 #include "gr_Win32Graphics.h"
 #include "gr_Win32Image.h"
@@ -2452,6 +2454,64 @@ UT_uint32 GR_Win32Font::getHeight(HDC hdc, HDC printHDC)
 }
 
 
+namespace {
+
+struct Win32WidthKey
+{
+	std::wstring face;
+	LONG height;
+	LONG weight;
+	BYTE italic;
+	BYTE charset;
+	UT_UCS4Char base;
+
+	bool operator<(const Win32WidthKey & other) const
+	{
+		if (face != other.face)
+			return face < other.face;
+		if (height != other.height)
+			return height < other.height;
+		if (weight != other.weight)
+			return weight < other.weight;
+		if (italic != other.italic)
+			return italic < other.italic;
+		if (charset != other.charset)
+			return charset < other.charset;
+		return base < other.base;
+	}
+};
+
+struct Win32WidthPage
+{
+	UT_sint32 width[256];
+};
+
+std::map<Win32WidthKey, Win32WidthPage> & widthPages()
+{
+	static std::map<Win32WidthKey, Win32WidthPage> pages;
+	return pages;
+}
+
+bool recallWidthPage(const Win32WidthKey & key, GR_CharWidths * widths)
+{
+	std::map<Win32WidthKey, Win32WidthPage>::const_iterator found = widthPages().find(key);
+	if (found == widthPages().end())
+		return false;
+	for (UT_uint32 i = 0; i < 256; ++i)
+		widths->setWidth(key.base + i, found->second.width[i]);
+	return true;
+}
+
+void storeWidthPage(const Win32WidthKey & key, const GR_CharWidths * widths)
+{
+	Win32WidthPage page;
+	for (UT_uint32 i = 0; i < 256; ++i)
+		page.width[i] = widths->getWidth(key.base + i);
+	widthPages()[key] = page;
+}
+
+} // namespace
+
 UT_sint32 GR_Win32Font::measureUnremappedCharForCache(UT_UCS4Char cChar) const
 {
 #ifndef ABI_GRAPHICS_PLUGIN_NO_WIDTHS
@@ -2467,6 +2527,21 @@ UT_sint32 GR_Win32Font::measureUnremappedCharForCache(UT_UCS4Char cChar) const
 	// calculate the limits of the 256-char page
 	UT_UCS4Char base = (cChar & 0xffffff00);
 	UT_UCS4Char limit = (cChar | 0x000000ff);
+	LOGFONTW face;
+	memset(&face, 0, sizeof(face));
+	Win32WidthKey key{};
+	key.base = base;
+	const bool haveFace = m_layoutFont && GetObjectW(m_layoutFont, static_cast<int>(sizeof(face)), &face) == static_cast<int>(sizeof(face));
+	if (haveFace)
+	{
+		key.face = face.lfFaceName;
+		key.height = face.lfHeight;
+		key.weight = face.lfWeight;
+		key.italic = face.lfItalic;
+		key.charset = face.lfCharSet;
+		if (recallWidthPage(key, _getCharWidths()))
+			return _getCharWidths()->getWidth(cChar);
+	}
 	// One screen DC for the process. Creating and deleting a DC for every
 	// 256-glyph page made the first characters of a font wait on GDI.
 	static HDC measureDC = nullptr;
@@ -2484,6 +2559,8 @@ UT_sint32 GR_Win32Font::measureUnremappedCharForCache(UT_UCS4Char cChar) const
 		return 0;
 	_getCharWidths()->setCharWidthsOfRange(measureDC, base, limit);
 	UT_Win32TraceHeap("widths-range");
+	if (haveFace)
+		storeWidthPage(key, _getCharWidths());
 	if (previous)
 		SelectObject(measureDC, previous);
 	return _getCharWidths()->getWidth(cChar);

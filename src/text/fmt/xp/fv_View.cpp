@@ -325,6 +325,12 @@ FV_View::FV_View(XAP_App * pApp, void* pParentData, FL_DocLayout* pLayout)
 		m_bAllowSmartQuoteReplacement(true),
 		m_bubbleBlockerCount(0),
 		m_iOldPageCount(-1),
+		m_fmtKeyValid(false),
+		m_fmtBlock(nullptr),
+		m_fmtSpan(0),
+		m_fmtBlockAP(0),
+		m_fmtSectionAP(0),
+		m_fmtStyleAP(0),
 		m_pStatusPageCache(nullptr),
 		m_iStatusPageCache(0),
 		m_iStatusPageSeq(0),
@@ -2526,6 +2532,90 @@ FL_DocLayout* FV_View::getLayout() const
 	return m_pLayout;
 }
 
+static PT_AttrPropIndex indexOfAttrProp(PD_Document * doc, const pf_Frag * start, const PP_AttrProp * wanted)
+{
+	if (!doc || !start || !wanted)
+		return 0;
+	const pf_Frag * frag = start;
+	for (int i = 0; i < 8 && frag; ++i)
+	{
+		const PP_AttrProp * found = nullptr;
+		if (doc->getAttrProp(frag->getIndexAP(), &found) && found == wanted)
+			return frag->getIndexAP();
+		frag = frag->getPrev();
+	}
+	frag = start->getNext();
+	for (int i = 0; i < 4 && frag; ++i)
+	{
+		const PP_AttrProp * found = nullptr;
+		if (doc->getAttrProp(frag->getIndexAP(), &found) && found == wanted)
+			return frag->getIndexAP();
+		frag = frag->getNext();
+	}
+	return 0;
+}
+
+bool FV_View::_typingFormatUnchanged(void)
+{
+	if (!isSelectionEmpty() || !m_pDoc)
+	{
+		m_fmtKeyValid = false;
+		return false;
+	}
+	fl_BlockLayout * block = _findBlockAtPosition(getPoint());
+	const pf_Frag_Strux * strux = block ? block->getStruxDocHandle() : nullptr;
+	if (!block || !strux)
+	{
+		m_fmtKeyValid = false;
+		return false;
+	}
+	const PT_DocPosition origin = block->getPosition(false);
+	if (getPoint() < origin)
+	{
+		m_fmtKeyValid = false;
+		return false;
+	}
+	const PP_AttrProp * span = nullptr;
+	block->getSpanAP(static_cast<UT_uint32>(getPoint() - origin), true, span);
+	const pf_Frag * frag = nullptr;
+	m_pDoc->getPieceTable()->getFragFromPosition(getPoint(), &frag, nullptr);
+	const PT_AttrPropIndex spanAP = indexOfAttrProp(m_pDoc, frag, span);
+	if (span && spanAP == 0)
+	{
+		m_fmtKeyValid = false;
+		return false;
+	}
+	const PP_AttrProp * blockAP = nullptr;
+	block->getAP(blockAP);
+	PT_AttrPropIndex sectionAP = 0;
+	fl_DocSectionLayout * section = block->getDocSectionLayout();
+	if (section && section->getStruxDocHandle())
+		sectionAP = section->getStruxDocHandle()->getIndexAP();
+	PT_AttrPropIndex styleAP = 0;
+	const gchar * styleName = nullptr;
+	if (blockAP && blockAP->getAttribute(PT_STYLE_ATTRIBUTE_NAME, styleName) && styleName)
+	{
+		PD_Style * style = nullptr;
+		if (m_pDoc->getStyle(styleName, &style) && style)
+			styleAP = style->getIndexAP();
+	}
+	const PT_AttrPropIndex blockIndex = strux->getIndexAP();
+	if (m_fmtKeyValid
+		&& m_fmtBlock == block
+		&& m_fmtSpan == spanAP
+		&& m_fmtBlockAP == blockIndex
+		&& m_fmtSectionAP == sectionAP
+		&& m_fmtStyleAP == styleAP)
+		return true;
+	m_fmtKeyValid = true;
+	m_fmtBlock = block;
+	m_fmtSpan = spanAP;
+	m_fmtBlockAP = blockIndex;
+	m_fmtSectionAP = sectionAP;
+	m_fmtStyleAP = styleAP;
+	return false;
+}
+
 bool FV_View::notifyListeners(const AV_ChangeMask hint)
 {
 //
@@ -2603,6 +2693,9 @@ bool FV_View::notifyListeners(const AV_ChangeMask hint)
 	{
 		// NOTE: we don't attempt to filter this
 	}
+
+	if ((mask & (AV_CHG_FMTCHAR | AV_CHG_FMTBLOCK | AV_CHG_FMTSTYLE)) && _typingFormatUnchanged())
+		mask &= ~(AV_CHG_FMTCHAR | AV_CHG_FMTBLOCK | AV_CHG_FMTSTYLE);
 
 	if (mask & AV_CHG_FMTBLOCK)
 	{

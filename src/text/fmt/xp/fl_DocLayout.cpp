@@ -666,8 +666,10 @@ void FL_DocLayout::fillLayouts(void)
 		// breaks that section without emptying the columns. On paper the
 		// header, the body and the footer then land on different pages.
 		const bool paper = pG && pG->queryProperties(GR_Graphics::DGP_PAPER);
+		// Columns now exist. Revisit only the blocks that still have no
+		// lines. A later keystroke uses the dirty queue.
 		if (!paper)
-			m_pView->updateLayout();
+			updateLayout(true);
 		if(!paper)
 		{
 			m_pView->queueDraw();
@@ -681,7 +683,7 @@ void FL_DocLayout::fillLayouts(void)
 	setLayoutIsFilling(false);
 	if(!m_pView)
 	{
-		updateLayout();
+		updateLayout(true);
 	}
 
 	// Layout of any TOC that is built only from a restricted document range is tentative, because
@@ -2974,15 +2976,12 @@ void FL_DocLayout::rebuildFromHere( fl_DocSectionLayout * pFirstDSL)
 	}
 }
 
-void FL_DocLayout::updateLayout()
+void FL_DocLayout::updateLayout(bool bDoFull)
 {
 	/*
-	  TODO the following routine checks every paragraph in the
-	  document to see if it needs a reformat.  How is this going
-	  to perform on a 50-page document?
-
-
-	  Very good point. We need a isOnScreen() method!!!
+	  A full pass still walks every paragraph, but only a block that
+	  still needs a format is rebuilt. Typing passes false and the
+	  section uses the queue of dirty blocks.
 	*/
 	UT_ASSERT(m_pDoc);
 
@@ -2991,7 +2990,7 @@ void FL_DocLayout::updateLayout()
 	{
 		if(!isLayoutFilling())
 		{
-		        pSL->updateLayout(false);
+		        pSL->updateLayout(bDoFull);
 		}
 		if(pSL->getType() == FL_SECTION_DOC)
 		{

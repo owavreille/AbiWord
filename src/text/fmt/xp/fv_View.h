@@ -298,6 +298,7 @@ public:
 	const PP_AttrProp * getAttrPropForPoint() const;
 
 	virtual bool	notifyListeners(const AV_ChangeMask hint);
+	bool		_typingFormatUnchanged(void);
 
 	virtual bool	canDo(bool bUndo) const override;
 	virtual UT_uint32 undoCount (bool bUndo) const;
@@ -1198,6 +1199,12 @@ private:
 														// This allows temporarily disabling smart quotes to allow inserting ANSI quote.
     int                 m_bubbleBlockerCount;
 	UT_sint32           m_iOldPageCount;
+	bool                m_fmtKeyValid;
+	fl_BlockLayout *    m_fmtBlock;
+	PT_AttrPropIndex    m_fmtSpan;
+	PT_AttrPropIndex    m_fmtBlockAP;
+	PT_AttrPropIndex    m_fmtSectionAP;
+	PT_AttrPropIndex    m_fmtStyleAP;
 	mutable const fp_Page * m_pStatusPageCache;
 	mutable UT_uint32   m_iStatusPageCache;
 	mutable UT_uint32   m_iStatusPageSeq;

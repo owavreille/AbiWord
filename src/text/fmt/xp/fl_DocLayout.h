@@ -187,7 +187,7 @@ public:
 	void		deletePage(fp_Page* pPage, bool bDontNotify);
 
 	void		formatAll();
-	void  		updateLayout();
+	void  		updateLayout(bool bDoFull = false);
 	void        updateOnViewModeChange();
 	void        rebuildFromHere(fl_DocSectionLayout * pDSL);
 	void        updateColor();
