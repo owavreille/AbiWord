@@ -681,7 +681,9 @@ void FL_DocLayout::fillLayouts(void)
 		}
 	}
 	setLayoutIsFilling(false);
-	if(!m_pView)
+	// A paper export has no screen view. The same second pass that splits a
+	// header and a footer must not run here either.
+	if(!m_pView && !(pG && pG->queryProperties(GR_Graphics::DGP_PAPER)))
 	{
 		updateLayout(true);
 	}
@@ -709,7 +711,8 @@ void FL_DocLayout::fillLayouts(void)
 		if (pTOC->isTOCEmpty())
 		{
 			pTOC->fillTOC();
-			m_pView->updateLayout();
+			if (m_pView && !(pG && pG->queryProperties(GR_Graphics::DGP_PAPER)))
+				m_pView->updateLayout();
 		}
 
 		// because the incremental load is sequential, the TOCs are in the order they have in the
@@ -755,8 +758,9 @@ void FL_DocLayout::fillLayouts(void)
 		
 		if(m_pView)
 		{
-			m_pView->updateLayout();
-			if(!pG->queryProperties(GR_Graphics::DGP_PAPER))
+			if(!(pG && pG->queryProperties(GR_Graphics::DGP_PAPER)))
+				m_pView->updateLayout();
+			if(pG && !pG->queryProperties(GR_Graphics::DGP_PAPER))
 			{
 			  //				m_pView->updateScreen(false);
 				XAP_Frame * pFrame = static_cast<XAP_Frame *>(m_pView->getParentData());

@@ -1706,8 +1706,8 @@ UT_Error IE_Exp_OpenXML::setColumns(int target, const gchar* num, const gchar* s
 }
 
 /**
- * Section break used between AbiWord sections. LibreOffice writes nextPage
- * for a page section and omits w:type on the final body sectPr.
+ * Section break. LibreOffice writes nextPage for every sectPr, including
+ * the one that is the last child of w:body. continuous is never written.
  */
 UT_Error IE_Exp_OpenXML::setNextPageSection(int target)
 {
@@ -3818,6 +3818,10 @@ UT_Error IE_Exp_OpenXML::startHeaderStream(const char* id)
 
 	std::string str("<w:hdr ");
 	str += oxmlRelationshipNs;
+	str += "xmlns:v=\"urn:schemas-microsoft-com:vml\" ";
+	str += "xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" ";
+	str += "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" ";
+	str += "xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\" ";
 	str += oxmlWordNs;
 	str += ">";
 
@@ -3851,6 +3855,10 @@ UT_Error IE_Exp_OpenXML::startFooterStream(const char* id)
 
 	std::string str("<w:ftr ");
 	str += oxmlRelationshipNs;
+	str += "xmlns:v=\"urn:schemas-microsoft-com:vml\" ";
+	str += "xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" ";
+	str += "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" ";
+	str += "xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\" ";
 	str += oxmlWordNs;
 	str += ">";
 

@@ -905,6 +905,452 @@ static bool pdf_has_text(const std::string & bytes, const char * marker)
 		|| joined.find(marker) != std::string::npos;
 }
 
+// FibRgLw97 starts at 0x40. ie_exp_MsWord_97.cpp stores ccpText at 0x4C;
+// ccpFtn is the next dword and ccpHdd follows ccpFtn.
+static const unsigned FMT_CCP_TEXT = 0x4C;
+static const unsigned FMT_CCP_HDD = FMT_CCP_TEXT + 8;
+
+static PD_Document * header_footer_document(const char * body, const char * header, const char * footer)
+{
+	PD_Document * doc = new PD_Document();
+	if (doc->newDocument() != UT_OK)
+	{
+		doc->unref();
+		return nullptr;
+	}
+
+	const PT_DocPosition bodyAt = first_block_content(doc);
+	if (!doc->insertSpan(bodyAt, std::string(body)))
+	{
+		doc->unref();
+		return nullptr;
+	}
+
+	const PP_PropertyVector sectionAtts = {"header", "1", "footer", "2"};
+	const PP_PropertyVector sectionProps = {
+		"page-margin-top", "1in",
+		"page-margin-header", "0.5in",
+		"page-margin-bottom", "1in",
+		"page-margin-footer", "0.5in"
+	};
+	if (!doc->changeStruxFmt(PTC_AddFmt, first_strux(doc, PTX_Section), first_strux(doc, PTX_Section),
+		sectionAtts, sectionProps, PTX_Section))
+	{
+		doc->unref();
+		return nullptr;
+	}
+
+	pf_Frag_Strux * hdr = nullptr;
+	const PP_PropertyVector headerAtts = {"type", "header", "id", "1"};
+	if (!doc->insertStrux(document_end(doc), PTX_SectionHdrFtr, headerAtts, PP_NOPROPS, &hdr) ||
+		!hdr)
+	{
+		doc->unref();
+		return nullptr;
+	}
+	const PT_DocPosition headerAt = hdr->getPos() + hdr->getLength();
+	if (!doc->insertStrux(headerAt, PTX_Block) ||
+		!doc->insertSpan(headerAt + 1, std::string(header)))
+	{
+		doc->unref();
+		return nullptr;
+	}
+
+	pf_Frag_Strux * ftr = nullptr;
+	const PP_PropertyVector footerAtts = {"type", "footer", "id", "2"};
+	if (!doc->insertStrux(document_end(doc), PTX_SectionHdrFtr, footerAtts, PP_NOPROPS, &ftr) ||
+		!ftr)
+	{
+		doc->unref();
+		return nullptr;
+	}
+	const PT_DocPosition footerAt = ftr->getPos() + ftr->getLength();
+	if (!doc->insertStrux(footerAt, PTX_Block) ||
+		!doc->insertSpan(footerAt + 1, std::string(footer)))
+	{
+		doc->unref();
+		return nullptr;
+	}
+	return doc;
+}
+
+template <typename Factory>
+static GsfInfile * package_open(const std::string & path, GsfInput *& input, Factory factory)
+{
+	input = nullptr;
+	GError * error = nullptr;
+	input = gsf_input_stdio_new(path.c_str(), &error);
+	if (error)
+	{
+		g_error_free(error);
+		error = nullptr;
+	}
+	GsfInfile * container = input ? factory(input, &error) : nullptr;
+	if (error)
+	{
+		g_error_free(error);
+		error = nullptr;
+	}
+	if (!container && input)
+	{
+		g_object_unref(input);
+		input = nullptr;
+	}
+	return container;
+}
+
+static void package_close(GsfInput * input, GsfInfile * container)
+{
+	if (container)
+		g_object_unref(container);
+	if (input)
+		g_object_unref(input);
+}
+
+static bool markup_next(const std::string & xml, std::string::size_type from, std::string::size_type limit,
+			std::string & name, bool & closing, bool & self_closing,
+			std::string::size_type & start, std::string::size_type & end)
+{
+	std::string::size_type i = from;
+	while (i < limit)
+	{
+		const std::string::size_type lt = xml.find('<', i);
+		if (lt == std::string::npos || lt >= limit)
+			return false;
+		if (xml.compare(lt, 4, "<!--") == 0)
+		{
+			const std::string::size_type comment = xml.find("-->", lt + 4);
+			const std::string::size_type next = comment == std::string::npos ? limit : comment + 3;
+			i = next > limit ? limit : next;
+			continue;
+		}
+		if (lt + 1 < xml.size() && xml[lt + 1] == '?')
+		{
+			const std::string::size_type pi = xml.find("?>", lt + 2);
+			const std::string::size_type next = pi == std::string::npos ? limit : pi + 2;
+			i = next > limit ? limit : next;
+			continue;
+		}
+		if (xml.compare(lt, 9, "<![CDATA[") == 0)
+		{
+			const std::string::size_type data = xml.find("]]>", lt + 9);
+			const std::string::size_type next = data == std::string::npos ? limit : data + 3;
+			i = next > limit ? limit : next;
+			continue;
+		}
+		if (lt + 1 < xml.size() && xml[lt + 1] == '!')
+		{
+			const std::string::size_type decl = xml.find('>', lt + 2);
+			const std::string::size_type next = decl == std::string::npos ? limit : decl + 1;
+			i = next > limit ? limit : next;
+			continue;
+		}
+
+		std::string::size_type cursor = lt + 1;
+		closing = false;
+		if (cursor < xml.size() && xml[cursor] == '/')
+		{
+			closing = true;
+			++cursor;
+		}
+		const std::string::size_type name_at = cursor;
+		while (cursor < xml.size())
+		{
+			const unsigned char c = static_cast<unsigned char>(xml[cursor]);
+			if (std::isalnum(c) || c == ':' || c == '_' || c == '-' || c == '.')
+				++cursor;
+			else
+				break;
+		}
+		if (cursor == name_at)
+		{
+			i = lt + 1;
+			continue;
+		}
+
+		bool in_quote = false;
+		char quote = 0;
+		std::string::size_type gt = cursor;
+		for (; gt < xml.size(); ++gt)
+		{
+			const char c = xml[gt];
+			if (in_quote)
+			{
+				if (c == quote)
+					in_quote = false;
+				continue;
+			}
+			if (c == '"' || c == '\'')
+			{
+				in_quote = true;
+				quote = c;
+				continue;
+			}
+			if (c == '>')
+				break;
+		}
+		if (gt >= xml.size() || gt >= limit)
+			return false;
+
+		name = xml.substr(name_at, cursor - name_at);
+		std::string::size_type slash = gt;
+		while (slash > cursor && std::isspace(static_cast<unsigned char>(xml[slash - 1])))
+			--slash;
+		self_closing = !closing && slash > cursor && xml[slash - 1] == '/';
+		start = lt;
+		end = gt + 1;
+		return true;
+	}
+	return false;
+}
+
+static bool markup_inner(const std::string & xml, const char * wanted, std::string::size_type from,
+			 std::string & inner, std::string::size_type & after)
+{
+	std::string::size_type i = from;
+	while (i < xml.size())
+	{
+		std::string name;
+		bool closing = false;
+		bool self_closing = false;
+		std::string::size_type start = 0;
+		std::string::size_type end = 0;
+		if (!markup_next(xml, i, xml.size(), name, closing, self_closing, start, end))
+			return false;
+		if (!closing && name == wanted)
+		{
+			if (self_closing)
+			{
+				inner.clear();
+				after = end;
+				return true;
+			}
+			int depth = 1;
+			const std::string::size_type inner_at = end;
+			std::string::size_type j = end;
+			while (depth > 0)
+			{
+				if (!markup_next(xml, j, xml.size(), name, closing, self_closing, start, end))
+					return false;
+				if (name == wanted)
+				{
+					if (closing)
+						--depth;
+					else if (!self_closing)
+						++depth;
+				}
+				j = end;
+				if (depth == 0)
+				{
+					inner = xml.substr(inner_at, start - inner_at);
+					after = end;
+					return true;
+				}
+			}
+		}
+		i = end;
+	}
+	return false;
+}
+
+static bool docx_final_body_sectpr(const std::string & document, std::string & markup)
+{
+	std::string body;
+	std::string::size_type after = 0;
+	if (!markup_inner(document, "w:body", 0, body, after))
+		return false;
+
+	std::string last_name;
+	std::string::size_type last_start = 0;
+	std::string::size_type last_end = 0;
+	bool have = false;
+	int depth = 0;
+	std::string::size_type i = 0;
+	while (i < body.size())
+	{
+		std::string name;
+		bool closing = false;
+		bool self_closing = false;
+		std::string::size_type start = 0;
+		std::string::size_type end = 0;
+		if (!markup_next(body, i, body.size(), name, closing, self_closing, start, end))
+			break;
+		if (!closing && !self_closing)
+		{
+			if (depth == 0)
+			{
+				last_name = name;
+				last_start = start;
+				have = true;
+			}
+			++depth;
+		}
+		else if (!closing && self_closing)
+		{
+			if (depth == 0)
+			{
+				last_name = name;
+				last_start = start;
+				last_end = end;
+				have = true;
+			}
+		}
+		else if (closing)
+		{
+			if (depth == 1 && have)
+				last_end = end;
+			if (depth > 0)
+				--depth;
+		}
+		i = end;
+	}
+	if (!have || last_name != "w:sectPr" || last_end <= last_start)
+		return false;
+	markup = body.substr(last_start, last_end - last_start);
+	return true;
+}
+
+static bool docx_run_before_paragraph_defaults(const std::string & styles)
+{
+	std::string defaults;
+	std::string::size_type after = 0;
+	if (!markup_inner(styles, "w:docDefaults", 0, defaults, after))
+		return false;
+	const std::string::size_type run = defaults.find("<w:rPrDefault");
+	const std::string::size_type para = defaults.find("<w:pPrDefault");
+	return run != std::string::npos && para != std::string::npos && run < para;
+}
+
+static std::string docx_relation_target(const std::string & rels, const char * type_tail)
+{
+	const std::string tail(type_tail);
+	std::string::size_type at = 0;
+	while ((at = rels.find("<Relationship ", at)) != std::string::npos)
+	{
+		const std::string::size_type end = rels.find("/>", at);
+		if (end == std::string::npos)
+			return std::string();
+		const std::string tag = rels.substr(at, end - at);
+		at = end + 2;
+		if (tag.find("TargetMode=\"External\"") != std::string::npos)
+			continue;
+		const std::string type_key = "Type=\"";
+		const std::string::size_type type_at = tag.find(type_key);
+		if (type_at == std::string::npos)
+			continue;
+		const std::string::size_type type_start = type_at + type_key.size();
+		const std::string::size_type type_end = tag.find('"', type_start);
+		if (type_end == std::string::npos)
+			continue;
+		const std::string type = tag.substr(type_start, type_end - type_start);
+		if (type.size() < tail.size() || type.compare(type.size() - tail.size(), tail.size(), tail) != 0)
+			continue;
+		const std::string target_key = "Target=\"";
+		const std::string::size_type value = tag.find(target_key);
+		if (value == std::string::npos)
+			continue;
+		const std::string::size_type start = value + target_key.size();
+		const std::string::size_type quote = tag.find('"', start);
+		if (quote == std::string::npos)
+			continue;
+		return tag.substr(start, quote - start);
+	}
+	return std::string();
+}
+
+static std::string docx_target_path(const std::string & target)
+{
+	if (target.empty())
+		return target;
+	if (target[0] == '/')
+		return target.substr(1);
+	return std::string("word/") + target;
+}
+
+static bool frames_are_in_paragraphs(const std::string & region)
+{
+	int depth = 0;
+	std::string::size_type i = 0;
+	while (i < region.size())
+	{
+		std::string name;
+		bool closing = false;
+		bool self_closing = false;
+		std::string::size_type start = 0;
+		std::string::size_type end = 0;
+		if (!markup_next(region, i, region.size(), name, closing, self_closing, start, end))
+			break;
+		if (name == "text:p")
+		{
+			if (closing)
+			{
+				if (depth > 0)
+					--depth;
+			}
+			else if (!self_closing)
+				++depth;
+		}
+		else if (!closing && name == "draw:frame" && depth <= 0)
+			return false;
+		i = end;
+	}
+	return true;
+}
+
+static bool odt_header_footer_frames_in_paragraphs(const std::string & styles)
+{
+	const char * elements[] = {"style:header", "style:footer", nullptr};
+	for (const char ** element = elements; *element; ++element)
+	{
+		std::string inner;
+		std::string::size_type from = 0;
+		while (markup_inner(styles, *element, from, inner, from))
+		{
+			if (!frames_are_in_paragraphs(inner))
+				return false;
+		}
+	}
+	return true;
+}
+
+static bool markup_has_text(const std::string & xml)
+{
+	bool in_tag = false;
+	for (std::string::size_type i = 0; i < xml.size(); ++i)
+	{
+		const char c = xml[i];
+		if (in_tag)
+		{
+			if (c == '>')
+				in_tag = false;
+			continue;
+		}
+		if (c == '<')
+		{
+			in_tag = true;
+			continue;
+		}
+		if (!std::isspace(static_cast<unsigned char>(c)))
+			return true;
+	}
+	return false;
+}
+
+static bool fo_min_height_non_negative(const std::string & xml)
+{
+	const std::string key = "fo:min-height=\"";
+	std::string::size_type at = 0;
+	while ((at = xml.find(key, at)) != std::string::npos)
+	{
+		at += key.size();
+		while (at < xml.size() && std::isspace(static_cast<unsigned char>(xml[at])))
+			++at;
+		if (at < xml.size() && xml[at] == '-')
+			return false;
+	}
+	return true;
+}
+
 }
 
 TFTEST_MAIN("ABW, RTF, DOC, DOCX and ODT exporters are available")
@@ -1081,7 +1527,8 @@ TFTEST_MAIN("ODT header, footer and images share one package path")
 		TFPASS(styles.find("<style:footer>") != std::string::npos) &&
 		TFPASS(styles.find("PiedTexte") != std::string::npos) &&
 		TFPASS(styles.find("fo:min-height=") != std::string::npos) &&
-		TFPASS(styles.find("style:dynamic-spacing=\"true\"") != std::string::npos);
+		TFPASS(styles.find("style:dynamic-spacing=\"true\"") != std::string::npos) &&
+		TFPASS(odt_header_footer_frames_in_paragraphs(styles));
 	if (zip)
 		g_object_unref(zip);
 	if (input)
@@ -1191,4 +1638,174 @@ TFTEST_MAIN("PDF export keeps header, body and footer on one page")
 	TFPASS(pdf_has_text(bytes, "EntetePdf"));
 	TFPASS(pdf_has_text(bytes, "CorpsPdf"));
 	TFPASS(pdf_has_text(bytes, "PiedPdf"));
+}
+
+TFTEST_MAIN("DOCX export keeps header, body and footer in separate parts")
+{
+	ensure_plugin(".docx", "openxml");
+	if (!exporter_known(".docx"))
+		return;
+
+	PD_Document * doc = header_footer_document("CorpsDocx", "EnteteDocx", "PiedDocx");
+	if (!TFPASS(doc != nullptr))
+		return;
+
+	const std::string path = UT_createTmpFile("fmtdocx", ".docx");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * zip = package_open(path, input, gsf_infile_zip_new);
+	if (!TFPASS(zip != nullptr))
+	{
+		package_close(input, zip);
+		std::remove(path.c_str());
+		return;
+	}
+
+	TFPASS(zip_has(zip, "[Content_Types].xml"));
+	TFPASS(zip_has(zip, "word/document.xml"));
+	TFPASS(zip_has(zip, "word/styles.xml"));
+	TFPASS(zip_has(zip, "word/_rels/document.xml.rels"));
+
+	const std::string document = zip_read(zip, "word/document.xml");
+	const std::string styles = zip_read(zip, "word/styles.xml");
+	const std::string rels = zip_read(zip, "word/_rels/document.xml.rels");
+	std::string sect;
+	const bool final_sect = docx_final_body_sectpr(document, sect);
+	const std::string header_target = docx_relation_target(rels, "/header");
+	const std::string footer_target = docx_relation_target(rels, "/footer");
+	const std::string header_path = docx_target_path(header_target);
+	const std::string footer_path = docx_target_path(footer_target);
+
+	TFPASS(final_sect);
+	TFPASS(final_sect && sect.find("w:val=\"continuous\"") == std::string::npos);
+	TFPASS(docx_run_before_paragraph_defaults(styles));
+	TFPASS(document.find("CorpsDocx") != std::string::npos);
+	TFPASS(!header_target.empty() && zip_has(zip, header_path));
+	TFPASS(!footer_target.empty() && zip_has(zip, footer_path));
+	TFPASS(!header_path.empty() && zip_read(zip, header_path).find("EnteteDocx") != std::string::npos);
+	TFPASS(!footer_path.empty() && zip_read(zip, footer_path).find("PiedDocx") != std::string::npos);
+
+	package_close(input, zip);
+	std::remove(path.c_str());
+}
+
+TFTEST_MAIN("ODT export keeps header and footer in the styles and the body in content")
+{
+	ensure_plugin(".odt", "opendocument");
+	if (!exporter_known(".odt"))
+		return;
+
+	PD_Document * doc = header_footer_document("CorpsOdt", "EnteteOdt", "PiedOdt");
+	if (!TFPASS(doc != nullptr))
+		return;
+
+	const std::string path = UT_createTmpFile("fmtodt", ".odt");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * zip = package_open(path, input, gsf_infile_zip_new);
+	if (!TFPASS(zip != nullptr))
+	{
+		package_close(input, zip);
+		std::remove(path.c_str());
+		return;
+	}
+
+	const std::string content = zip_read(zip, "content.xml");
+	const std::string styles = zip_read(zip, "styles.xml");
+	std::string header;
+	std::string footer;
+	std::string::size_type header_after = 0;
+	std::string::size_type footer_after = 0;
+	const bool has_header = markup_inner(styles, "style:header", 0, header, header_after);
+	const bool has_footer = markup_inner(styles, "style:footer", 0, footer, footer_after);
+
+	TFPASS(zip_has(zip, "mimetype"));
+	TFPASS(zip_has(zip, "content.xml"));
+	TFPASS(zip_has(zip, "styles.xml"));
+	TFPASS(zip_has(zip, "META-INF/manifest.xml"));
+	TFPASS(content.find("CorpsOdt") != std::string::npos);
+	TFPASS(has_header && header.find("EnteteOdt") != std::string::npos);
+	TFPASS(has_footer && footer.find("PiedOdt") != std::string::npos);
+	TFPASS(has_header && markup_has_text(header));
+	TFPASS(fo_min_height_non_negative(styles));
+	TFPASS(odt_header_footer_frames_in_paragraphs(styles));
+
+	package_close(input, zip);
+	std::remove(path.c_str());
+}
+
+TFTEST_MAIN("DOC export keeps the header text in WordDocument")
+{
+	if (!exporter_known(".doc"))
+		return;
+
+	PD_Document * doc = header_footer_document("CorpsDoc", "EnteteDoc", "PiedDoc");
+	if (!TFPASS(doc != nullptr))
+		return;
+
+	const std::string path = UT_createTmpFile("fmthdr", ".doc");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * ole = package_open(path, input, gsf_infile_msole_new);
+	if (!TFPASS(ole != nullptr))
+	{
+		package_close(input, ole);
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * word_stream = gsf_infile_child_by_name(ole, "WordDocument");
+	GsfInput * table_stream = gsf_infile_child_by_name(ole, "1Table");
+	TFPASS(word_stream != nullptr);
+	TFPASS(table_stream != nullptr);
+	if (word_stream)
+		g_object_unref(word_stream);
+	if (table_stream)
+		g_object_unref(table_stream);
+
+	const std::string word = ole_read(ole, "WordDocument");
+	TFPASS(word.find(utf16_ascii("CorpsDoc")) != std::string::npos);
+	TFPASS(word.find(utf16_ascii("EnteteDoc")) != std::string::npos);
+	TFPASS(word.size() >= FMT_CCP_HDD + 4 && le32(word, FMT_CCP_HDD) > 0);
+	// fComplex is bit 2 of the FibBase flags word at 0x0A.
+	TFPASS(word.size() >= 0x0C && (le16(word, 0x0A) & 0x0004u) == 0);
+
+	package_close(input, ole);
+	std::remove(path.c_str());
 }

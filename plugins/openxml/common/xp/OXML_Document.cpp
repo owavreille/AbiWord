@@ -497,6 +497,12 @@ UT_Error OXML_Document::serialize(IE_Exp_OpenXML* exporter)
 	if(ret != UT_OK)
 		return ret;
 
+	// LibreOffice writes w:type nextPage on the final sectPr as well. That
+	// sectPr is still the last child of w:body, and it is never continuous.
+	ret = exporter->setNextPageSection(TARGET_DOCUMENT);
+	if(ret != UT_OK)
+		return ret;
+
 	bool firstPageHdrFtr = false;
 	bool evenPageHdrFtr = false;
 	bool handled = false;
