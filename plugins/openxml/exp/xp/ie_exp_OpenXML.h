@@ -72,6 +72,8 @@ public:
 	UT_Error startParagraph(int target);
 	UT_Error finishParagraph(int target);
 	UT_Error startText(int target);
+	UT_Error startDelText(int target);
+	UT_Error finishDelText(int target);
 	UT_Error startRevision(int target, bool deletion, const char* id);
 	UT_Error finishRevision(int target, bool deletion);
 	UT_Error startContentControl(int target, const char* id, const char* alias, const char* tag, bool block);
