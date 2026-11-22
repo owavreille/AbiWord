@@ -46,6 +46,7 @@
 
 #include "ie_types.h"
 #include "ie_imp.h"
+#include "ie_exp.h"
 #include "ie_impGraphic.h"
 
 #include "fg_Graphic.h"
@@ -392,13 +393,14 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 	if( m_nDefaultFileType != XAP_DIALOG_FILEOPENSAVEAS_FILE_TYPE_AUTO )
 	{
 		// Find the index of the type we were given
-		UT_uint32 iCounter, iNumTypes = g_strv_length((gchar **) m_nTypeList);
+		UT_uint32 iCounter, iNumTypes = g_strv_length((gchar **) m_szDescriptions);
 
 		for( iCounter = 0; iCounter < iNumTypes; iCounter++ )
 		{
 			if( m_nTypeList[ iCounter ] == m_nDefaultFileType )
 			{
 				ofn.nFilterIndex = iCounter + 1;
+				ofn.lpstrDefExt = _getDefaultExtension(iCounter);
 				break;
 			}
 		}
@@ -497,50 +499,61 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 		UT_uint32 end = g_strv_length((gchar **) m_szSuffixes);
 		UT_Win32LocaleString sfile;
 		sfile.fromLocale (szFile);
+		std::string path = sfile.utf8_str().utf8_str();
 
-		if ((m_id == XAP_DIALOG_ID_FILE_SAVEAS) &&
-			(UT_pathSuffix(sfile.utf8_str().utf8_str()).empty()))
+		// nFilterIndex is 1-based. The stored value is the exporter or
+		// importer type, which is not the position in the list.
+		m_nFileType = XAP_DIALOG_FILEOPENSAVEAS_FILE_TYPE_AUTO;
+		if (ofn.nFilterIndex > 0 && ofn.nFilterIndex <= end && m_nTypeList)
+			m_nFileType = m_nTypeList[ofn.nFilterIndex - 1];
+
+		const bool naming = (m_id == XAP_DIALOG_ID_FILE_SAVEAS ||
+			m_id == XAP_DIALOG_ID_FILE_EXPORT);
+		if (naming && m_nFileType > 0)
 		{
-			// add suffix based on selected file type
-			// if selected file is "all documents" or "all"
-			// default to .abw, since that is how it will get saved
-			UT_ASSERT(ofn.nFilterIndex > 0);
-
-			std::string suffix;
-			char abw_sfx[] = ".abw";
-			
-			if(ofn.nFilterIndex <= end)
-				suffix = UT_pathSuffix(m_szSuffixes[ofn.nFilterIndex - 1]);
-			else
-				suffix = abw_sfx;
-			
-			UT_ASSERT(!suffix.empty());
-
-			m_finalPathname = sfile.utf8_str().utf8_str();
-			m_finalPathname += suffix;
+			std::string suffix = UT_pathSuffix(path);
+			IEFileType docType = IE_Exp::fileTypeForSuffix(".doc");
+			if (!suffix.empty() && !g_ascii_strcasecmp(suffix.c_str(), ".doc") &&
+				docType != IEFT_Unknown)
+			{
+				// The name says Word. Write a Word document, even if the
+				// highlighted filter was still the previous format.
+				m_nFileType = docType;
+			}
+			else if (static_cast<IEFileType>(m_nFileType) == docType)
+			{
+				if (suffix.empty())
+					path += ".doc";
+				else
+				{
+					const std::string::size_type dot = path.find_last_of('.');
+					if (dot != std::string::npos)
+						path.replace(dot, std::string::npos, ".doc");
+				}
+			}
+			else if (suffix.empty())
+			{
+				IE_ExpSniffer * sniffer = IE_Exp::snifferForFileType(static_cast<IEFileType>(m_nFileType));
+				if (sniffer)
+					path += sniffer->getPreferredSuffix().utf8_str();
+			}
 		}
+
+		char *uri = UT_go_filename_to_uri(path.c_str());
+		if (uri)
+		{
+			m_finalPathname = uri;
+			FREEP(uri);
+		}
+		else if (!path.empty())
+			m_finalPathname = path;
 		else
 		{
-			char *uri = UT_go_filename_to_uri(sfile.utf8_str().utf8_str());
-			if(uri)
-			{
-				m_finalPathname = uri;
-				FREEP(uri);
-			}
-			else
-			{
-				UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
-				m_finalPathname.clear();
-			}
+			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+			m_finalPathname.clear();
 		}
 
 		m_answer = a_OK;
-
-		// Set filetype to auto if a generic filter was set
-		if (ofn.nFilterIndex > g_strv_length((gchar **) m_szSuffixes))
-			m_nFileType = XAP_DIALOG_FILEOPENSAVEAS_FILE_TYPE_AUTO;
-		else
-			m_nFileType = ofn.nFilterIndex;
 	}
 	else
 	{

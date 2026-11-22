@@ -806,6 +806,7 @@ void add_to_menus()
 	configure->setIconName("Menu_AbiWord_Help");
 	app->getMenuActionSet()->addAction(configure);
 	app->getToolbarFactory()->addIconAfter(STANDARD_TOOLBAR, AP_TOOLBAR_ID_LLM, AP_TOOLBAR_ID_ZOOM);
+	app->getToolbarFactory()->addSpacerAfter(STANDARD_TOOLBAR, AP_TOOLBAR_ID_ZOOM);
 
 	const int frames = app->getFrameCount();
 	for (int i = 0; i < frames; ++i)
@@ -823,6 +824,7 @@ void remove_from_menus()
 	XAP_App * app = XAP_App::getApp();
 	XAP_Menu_Factory * factory = app->getMenuFactory();
 	factory->removeMenuItem("Main", nullptr, MENU_LABEL);
+	app->getToolbarFactory()->removeSpacerBefore(STANDARD_TOOLBAR, AP_TOOLBAR_ID_LLM);
 	app->getToolbarFactory()->removeIcon(STANDARD_TOOLBAR, AP_TOOLBAR_ID_LLM);
 	const int frames = app->getFrameCount();
 	for (int i = 0; i < frames; ++i)
