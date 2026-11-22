@@ -9783,6 +9783,156 @@ msgstr "&Voir la session"
 msgid "Load a recorded session from disk and show the packets"
 msgstr "Charger une session enregistrée et afficher les paquets"
 
+#. DLG_COLLAB_Share_Title
+#: po/tmp/ap_String_Id.h
+msgid "Share Document"
+msgstr "Partager le document"
+
+#. DLG_COLLAB_Share_Account
+#: po/tmp/ap_String_Id.h
+msgid "Account"
+msgstr "Compte"
+
+#. DLG_COLLAB_Share_Buddies
+#: po/tmp/ap_String_Id.h
+msgid "Select the buddies you want to share this document with:"
+msgstr "Sélectionnez les correspondants avec qui partager ce document :"
+
+#. DLG_COLLAB_Share_NoAccounts
+#: po/tmp/ap_String_Id.h
+msgid "No Accounts Available!"
+msgstr "Aucun compte disponible !"
+
+#. DLG_COLLAB_Join_Title
+#: po/tmp/ap_String_Id.h
+msgid "Open Shared Document"
+msgstr "Ouvrir un document partagé"
+
+#. DLG_COLLAB_Join_Available
+#: po/tmp/ap_String_Id.h
+msgid "Available Documents"
+msgstr "Documents disponibles"
+
+#. DLG_COLLAB_Join_AddBuddy
+#: po/tmp/ap_String_Id.h
+msgid "Add"
+msgstr "Ajouter"
+
+#. DLG_COLLAB_Join_Refresh
+#: po/tmp/ap_String_Id.h
+msgid "Refresh"
+msgstr "Actualiser"
+
+#. DLG_COLLAB_Accounts_Title
+#: po/tmp/ap_String_Id.h
+msgid "Collaboration Accounts"
+msgstr "Comptes de collaboration"
+
+#. DLG_COLLAB_Accounts_Available
+#: po/tmp/ap_String_Id.h
+msgid "Available Accounts"
+msgstr "Comptes disponibles"
+
+#. DLG_COLLAB_Accounts_Add
+#: po/tmp/ap_String_Id.h
+msgid "Add"
+msgstr "Ajouter"
+
+#. DLG_COLLAB_Accounts_Properties
+#: po/tmp/ap_String_Id.h
+msgid "Properties"
+msgstr "Propriétés"
+
+#. DLG_COLLAB_Accounts_Online
+#: po/tmp/ap_String_Id.h
+msgid "Online"
+msgstr "En ligne"
+
+#. DLG_COLLAB_Accounts_Account
+#: po/tmp/ap_String_Id.h
+msgid "Account"
+msgstr "Compte"
+
+#. DLG_COLLAB_Accounts_Type
+#: po/tmp/ap_String_Id.h
+msgid "Type"
+msgstr "Type"
+
+#. DLG_COLLAB_AddAccount_Title
+#: po/tmp/ap_String_Id.h
+msgid "Add Collaboration Account"
+msgstr "Ajouter un compte de collaboration"
+
+#. DLG_COLLAB_AddAccount_Details
+#: po/tmp/ap_String_Id.h
+msgid "Account Details"
+msgstr "Détails du compte"
+
+#. DLG_COLLAB_AddAccount_Type
+#: po/tmp/ap_String_Id.h
+msgid "Account Type"
+msgstr "Type de compte"
+
+#. DLG_COLLAB_AddAccount_NoHandlers
+#: po/tmp/ap_String_Id.h
+msgid "No Handlers!"
+msgstr "Aucun gestionnaire !"
+
+#. DLG_COLLAB_EditAccount_Title
+#: po/tmp/ap_String_Id.h
+msgid "Edit Collaboration Account"
+msgstr "Modifier le compte de collaboration"
+
+#. DLG_COLLAB_EditAccount_Properties
+#: po/tmp/ap_String_Id.h
+msgid "Account Properties"
+msgstr "Propriétés du compte"
+
+#. DLG_COLLAB_TCP_Address
+#: po/tmp/ap_String_Id.h
+msgid "Address:"
+msgstr "Adresse :"
+
+#. DLG_COLLAB_TCP_Port
+#: po/tmp/ap_String_Id.h
+msgid "Port:"
+msgstr "Port :"
+
+#. DLG_COLLAB_TCP_Accept
+#: po/tmp/ap_String_Id.h
+msgid "Accept Incoming Connections"
+msgstr "Accepter les connexions entrantes"
+
+#. DLG_COLLAB_TCP_Connect
+#: po/tmp/ap_String_Id.h
+msgid "Connect to Another Computer"
+msgstr "Se connecter à un autre ordinateur"
+
+#. DLG_COLLAB_TCP_Grant
+#: po/tmp/ap_String_Id.h
+msgid "Automatically grant buddies access to shared documents"
+msgstr "Autoriser automatiquement l'accès aux documents partagés"
+
+#. DLG_COLLAB_TCP_Startup
+#: po/tmp/ap_String_Id.h
+msgid "Connect on Application Startup"
+msgstr "Se connecter au démarrage"
+
+#. DLG_COLLAB_TCP_Listening
+#: po/tmp/ap_String_Id.h
+msgid "Listening on port %s"
+msgstr "Écoute sur le port %s"
+
+#. DLG_COLLAB_TCP_Connection
+#: po/tmp/ap_String_Id.h
+msgid "Connection to %s:%s"
+msgstr "Connexion vers %s:%s"
+
+#. DLG_COLLAB_TCP_Type
+#: po/tmp/ap_String_Id.h
+msgid "Direct Connection (TCP)"
+msgstr "Connexion directe (TCP)"
+
 #~ msgid "About G&NOME Office"
 #~ msgstr "A propos de G&NOME Office"
 

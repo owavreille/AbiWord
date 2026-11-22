@@ -22,6 +22,8 @@
 #include "xap_Win32App.h"
 #include "xap_Frame.h"
 #include "xap_Win32DialogHelper.h"
+#include "xap_Win32DialogBase.h"
+#include "ap_Strings.h"
 #include "ut_string_class.h"
 #include <session/xp/AbiCollabSessionManager.h>
 #include <account/xp/AccountHandler.h>
@@ -155,7 +157,16 @@ BOOL AP_Win32Dialog_CollaborationEditAccount::_onInitDialog(HWND hWnd, WPARAM, L
 	// Get ourselves a custom DialogHelper
 	DELETEP(m_pWin32Dialog);
 	m_pWin32Dialog = new XAP_Win32DialogHelper(hWnd);
-	
+
+	const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
+	if (pSS)
+	{
+		m_pWin32Dialog->setDialogTitle(pSS->getValue(AP_STRING_ID_DLG_COLLAB_EditAccount_Title));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONEDITACCOUNT_DETAILS_BOX, pSS->getValue(AP_STRING_ID_DLG_COLLAB_EditAccount_Properties));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONEDITACCOUNT_OK_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_OK));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONEDITACCOUNT_CANCEL_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_Cancel));
+	}
+
 	// Set up dialog initial state
 	_populateWindowData();
 	

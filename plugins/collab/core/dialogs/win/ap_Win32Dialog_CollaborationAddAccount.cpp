@@ -24,6 +24,8 @@
 #include "xap_Win32App.h"
 #include "xap_Frame.h"
 #include "xap_Win32DialogHelper.h"
+#include "xap_Win32DialogBase.h"
+#include "ap_Strings.h"
 #include "ut_string_class.h"
 #include <session/xp/AbiCollabSessionManager.h>
 #include <account/xp/AccountHandler.h>
@@ -157,7 +159,17 @@ BOOL AP_Win32Dialog_CollaborationAddAccount::_onInitDialog(HWND hWnd, WPARAM, LP
 	// Get ourselves a custom DialogHelper
 	DELETEP(m_pWin32Dialog);
 	m_pWin32Dialog = new XAP_Win32DialogHelper(hWnd);
-	
+
+	const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
+	if (pSS)
+	{
+		m_pWin32Dialog->setDialogTitle(pSS->getValue(AP_STRING_ID_DLG_COLLAB_AddAccount_Title));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONADDACCOUNT_DETAILS_BOX, pSS->getValue(AP_STRING_ID_DLG_COLLAB_AddAccount_Details));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONADDACCOUNT_ACCTTYPEBOX, pSS->getValue(AP_STRING_ID_DLG_COLLAB_AddAccount_Type));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONADDACCOUNT_OK_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_OK));
+		XAP_Win32DialogBase::setDlgItemText(hWnd, AP_RID_DIALOG_COLLABORATIONADDACCOUNT_CANCEL_BUTTON, pSS->getValue(XAP_STRING_ID_DLG_Cancel));
+	}
+
 	// Set up dialog initial state
 	_populateWindowData();
 	
@@ -318,7 +330,9 @@ void AP_Win32Dialog_CollaborationAddAccount::_populateWindowData()
 	{
 		// nope, we don't have any account handler :'-( 
 		// Add a sample item to show that we can.  Then, disable the box and the ok button
-		m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONADDACCOUNT_TYPECOMBO, (LPCSTR) "No Handlers!");
+		const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
+		const char * none = pSS ? pSS->getValue(AP_STRING_ID_DLG_COLLAB_AddAccount_NoHandlers) : nullptr;
+		m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONADDACCOUNT_TYPECOMBO, (none && *none) ? none : "No Handlers!");
 		m_pWin32Dialog->selectComboItem(AP_RID_DIALOG_COLLABORATIONADDACCOUNT_TYPECOMBO, 0);
 		m_pWin32Dialog->enableControl(AP_RID_DIALOG_COLLABORATIONADDACCOUNT_TYPECOMBO, false);
 		m_pWin32Dialog->enableControl(AP_RID_DIALOG_COLLABORATIONADDACCOUNT_OK_BUTTON, false);
