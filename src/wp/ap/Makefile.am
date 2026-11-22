@@ -118,6 +118,8 @@ libap_la_SOURCES = \
 	xp/ap_EditMethods.h \
 	xp/ap_EmbeddedFeatures.h \
 	xp/ap_Features.h \
+	xp/ap_FontMenu.cpp \
+	xp/ap_FontMenu.h \
 	xp/ap_Frame.cpp \
 	xp/ap_FrameData.cpp \
 	xp/ap_FrameData.h \

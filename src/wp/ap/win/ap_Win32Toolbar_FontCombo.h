@@ -21,6 +21,8 @@
 #define AP_WIN32TOOLBAR_FONTCOMBO_H
 
 #include <windows.h>
+#include <string>
+#include <vector>
 #include "xap_Types.h"
 #include "ev_Toolbar_Control.h"
 class EV_Toolbar;
@@ -46,6 +48,8 @@ protected:
 												   LPARAM lParam);
 
 	UT_Vector			m_vecFontCharSet;
+	std::vector<std::string>	m_installed;
+	std::vector<std::string>	m_menuOrder;
 };
 
 #endif /* AP_WIN32TOOLBAR_FONTCOMBO_H */

@@ -33,6 +33,34 @@
 #include <cstring>
 #include <cctype>
 
+namespace {
+
+const char oxmlRelationshipNs[] =
+	"xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ";
+
+const char oxmlWordNs[] =
+	"xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" "
+	"xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\" "
+	"xmlns:w15=\"http://schemas.microsoft.com/office/word/2012/wordml\" "
+	"xmlns:mc=\"http://schemas.openxmlformats.org/markup-compatibility/2006\" "
+	"mc:Ignorable=\"w14 w15\"";
+
+UT_Error writeZipXml(GsfOutfile* dir, const char* name, const std::string& body)
+{
+	GsfOutput* file = gsf_outfile_new_child(dir, name, FALSE);
+	if (!file)
+		return UT_SAVE_EXPORTERROR;
+	std::string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>";
+	xml += body;
+	gboolean wrote = gsf_output_write(file, xml.size(), reinterpret_cast<const guint8*>(xml.data()));
+	gboolean closed = gsf_output_close(file);
+	if (!wrote || !closed)
+		return UT_SAVE_EXPORTERROR;
+	return UT_OK;
+}
+
+}
+
 /**
  * Constructor
  */
@@ -111,12 +139,11 @@ UT_Error IE_Exp_OpenXML::startDocument()
 
 	if(err || !root)
 	{
-		UT_DEBUGMSG(("FRT: ERROR, Zip root file couldn't be created\n"));	
-		g_object_unref (G_OBJECT (sink));
-		return UT_IE_COULDNOTWRITE;		
+		UT_DEBUGMSG(("FRT: ERROR, Zip root file couldn't be created\n"));
+		if (err)
+			g_error_free(err);
+		return UT_IE_COULDNOTWRITE;
 	}
-
-	g_object_unref (G_OBJECT (sink));
 
 	error = startEndnotes();
 	if(error != UT_OK)
@@ -231,6 +258,29 @@ UT_Error IE_Exp_OpenXML::finishDocument()
 	error = finishComments();
 	if(error != UT_OK)
 		return error;
+
+	GsfOutfile* props = GSF_OUTFILE(gsf_outfile_new_child(root, "docProps", TRUE));
+	if (!props)
+		return UT_SAVE_EXPORTERROR;
+	error = writeZipXml(props, "core.xml",
+		"<cp:coreProperties xmlns:cp=\"http://schemas.openxmlformats.org/package/2006/metadata/core-properties\" "
+		"xmlns:dc=\"http://purl.org/dc/elements/1.1/\">"
+		"<dc:creator>AbiWord</dc:creator>"
+		"<cp:lastModifiedBy>AbiWord</cp:lastModifiedBy>"
+		"</cp:coreProperties>");
+	if (error != UT_OK)
+	{
+		gsf_output_close(GSF_OUTPUT(props));
+		return error;
+	}
+	error = writeZipXml(props, "app.xml",
+		"<Properties xmlns=\"http://schemas.openxmlformats.org/officeDocument/2006/extended-properties\" "
+		"xmlns:vt=\"http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes\">"
+		"<Application>AbiWord</Application>"
+		"<AppVersion>3.1</AppVersion>"
+		"</Properties>");
+	if (!gsf_output_close(GSF_OUTPUT(props)) || error != UT_OK)
+		return error == UT_OK ? UT_SAVE_EXPORTERROR : error;
 
 	if(!gsf_output_close(GSF_OUTPUT(root)))
 	{
@@ -1153,6 +1203,9 @@ UT_Error IE_Exp_OpenXML::setTextColor(int target, const gchar* color)
  */
 UT_Error IE_Exp_OpenXML::setBackgroundColor(int target, const gchar* color)
 {
+	if (!color || !*color || !strcmp(color, "transparent"))
+		return UT_OK;
+
 	std::string str("<w:shd w:val=\"clear\" w:fill=\"");
 	str += UT_colorToHex(color);
 	str += "\"/>";
@@ -1253,9 +1306,9 @@ UT_Error IE_Exp_OpenXML::setTextDirection(int target, const gchar* direction)
 	std::string str(direction);
 	const char* markup = nullptr;
 	if(str.compare("rtl") == 0)
-		markup = "<w:rtl w:val=\"on\"/>";
+		markup = "<w:rtl w:val=\"1\"/>";
 	else if(str.compare("ltr") == 0)
-		markup = "<w:rtl w:val=\"off\"/>";
+		markup = "<w:rtl w:val=\"0\"/>";
 	if (!markup)
 		return UT_OK;
 	if (m_captureRPr)
@@ -1277,10 +1330,10 @@ UT_Error IE_Exp_OpenXML::setWidows(int target, const gchar* widows)
 	{
 		if (m_capturePPr)
 		{
-			m_pWidow = "<w:widowControl w:val=\"on\"/>";
+			m_pWidow = "<w:widowControl/>";
 			return UT_OK;
 		}
-		return writeTargetStream(target, "<w:widowControl w:val=\"on\"/>");
+		return writeTargetStream(target, "<w:widowControl/>");
 	}
 	return UT_OK;
 }
@@ -1468,7 +1521,8 @@ UT_Error IE_Exp_OpenXML::setTitlePage()
  */
 UT_Error IE_Exp_OpenXML::setEvenAndOddHeaders()
 {
-	return writeTargetStream(TARGET_SETTINGS, "<w:evenAndOddHeaders/>");
+	m_settingsEven = "<w:evenAndOddHeaders/>";
+	return UT_OK;
 }
 
 /**
@@ -1636,15 +1690,12 @@ UT_Error IE_Exp_OpenXML::setColumns(int target, const gchar* num, const gchar* s
 		return UT_OK;
 	}
 
-	std::string str("");
-	str += "<w:cols ";
-	str += "w:num=\"";
+	std::string str("<w:cols w:num=\"");
 	str += num;
-	str += "\" ";
-	str += "w:sep=\"";
-	str += sep;
-	str += "\" ";
-	str += "w:equalWidth=\"1\"/>";
+	str += "\"";
+	if (!strcmp(sep, "on"))
+		str += " w:sep=\"1\"";
+	str += " w:equalWidth=\"1\"/>";
 
 	if (m_captureSectPr)
 	{
@@ -1655,12 +1706,13 @@ UT_Error IE_Exp_OpenXML::setColumns(int target, const gchar* num, const gchar* s
 }
 
 /**
- * Sets the section type continuous
+ * Section break used between AbiWord sections. LibreOffice writes nextPage
+ * for a page section and omits w:type on the final body sectPr.
  */
-UT_Error IE_Exp_OpenXML::setContinuousSection(int target)
+UT_Error IE_Exp_OpenXML::setNextPageSection(int target)
 {
 	std::string str("");
-	str += "<w:type w:val=\"continuous\"/>";
+	str += "<w:type w:val=\"nextPage\"/>";
 	if (m_captureSectPr)
 	{
 		m_sectType = str;
@@ -2686,6 +2738,8 @@ void IE_Exp_OpenXML::_cleanup ()
 		GsfOutput* root_out = GSF_OUTPUT(root);
 		if(!gsf_output_is_closed(root_out))
 			gsf_output_close(root_out);
+		g_object_unref(root);
+		root = nullptr;
 	}
 }
 
@@ -2779,8 +2833,9 @@ UT_Error IE_Exp_OpenXML::startStyles()
 	}	
 
 	std::string str("<w:styles ");
-	str += "xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ";
-	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">";
+	str += oxmlRelationshipNs;
+	str += oxmlWordNs;
+	str += ">";
 
 	return writeTargetStream(TARGET_STYLES, str.c_str());
 }
@@ -2873,6 +2928,10 @@ UT_Error IE_Exp_OpenXML::startContentTypes()
 	str += "ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.comments+xml\"/>";
 	str += "<Override PartName=\"/word/commentsExtended.xml\" ";
 	str += "ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.commentsExtended+xml\"/>";
+	str += "<Override PartName=\"/docProps/core.xml\" ";
+	str += "ContentType=\"application/vnd.openxmlformats-package.core-properties+xml\"/>";
+	str += "<Override PartName=\"/docProps/app.xml\" ";
+	str += "ContentType=\"application/vnd.openxmlformats-officedocument.extended-properties+xml\"/>";
 
 	return writeTargetStream(TARGET_CONTENT, str.c_str());
 }
@@ -2942,7 +3001,13 @@ UT_Error IE_Exp_OpenXML::startRelations()
 	str += "<Relationship Id=\"rId1\" ";
 	str += "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" ";
 	str += "Target=\"word/document.xml\"/>";
-	
+	str += "<Relationship Id=\"rId2\" ";
+	str += "Type=\"http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties\" ";
+	str += "Target=\"docProps/core.xml\"/>";
+	str += "<Relationship Id=\"rId3\" ";
+	str += "Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties\" ";
+	str += "Target=\"docProps/app.xml\"/>";
+
 	return writeTargetStream(TARGET_RELATION, str.c_str());
 
 }
@@ -3178,14 +3243,15 @@ UT_Error IE_Exp_OpenXML::startMainPart()
 		return err;
 	}	
 
-	std::string str("<w:document xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ");
+	std::string str("<w:document ");
+	str += oxmlRelationshipNs;
 	str += "xmlns:v=\"urn:schemas-microsoft-com:vml\" ";
-	str += "xmlns:wx=\"http://schemas.microsoft.com/office/word/2003/auxHint\" ";
 	str += "xmlns:wp=\"http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing\" ";
 	str += "xmlns:m=\"http://schemas.openxmlformats.org/officeDocument/2006/math\" ";
 	str += "xmlns:a=\"http://schemas.openxmlformats.org/drawingml/2006/main\" ";
 	str += "xmlns:pic=\"http://schemas.openxmlformats.org/drawingml/2006/picture\" ";
-	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"><w:body>";
+	str += oxmlWordNs;
+	str += "><w:body>";
 	
 	return writeTargetStream(TARGET_DOCUMENT, str.c_str());
 }
@@ -3258,8 +3324,10 @@ UT_Error IE_Exp_OpenXML::startSettings()
 		return err;
 	}	
 
-	std::string str("<w:settings xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ");
-	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">";
+	std::string str("<w:settings ");
+	str += oxmlRelationshipNs;
+	str += oxmlWordNs;
+	str += ">";
 	
 	return writeTargetStream(TARGET_SETTINGS, str.c_str());
 }
@@ -3270,6 +3338,15 @@ UT_Error IE_Exp_OpenXML::startSettings()
 UT_Error IE_Exp_OpenXML::finishSettings()
 {
 	UT_Error err = UT_OK;
+
+	std::string body("<w:zoom w:percent=\"100\"/>");
+	body += "<w:defaultTabStop w:val=\"720\"/>";
+	body += m_settingsEven;
+	body += "<w:compat><w:compatSetting w:name=\"compatibilityMode\" ";
+	body += "w:uri=\"http://schemas.microsoft.com/office/word\" w:val=\"15\"/></w:compat>";
+	err = writeTargetStream(TARGET_SETTINGS, body.c_str());
+	if (err != UT_OK)
+		return err;
 
 	err = writeTargetStream(TARGET_SETTINGS, "</w:settings>");
 	if(err != UT_OK)
@@ -3423,7 +3500,8 @@ UT_Error IE_Exp_OpenXML::startFootnotes()
 	}	
 
 	std::string str("<w:footnotes ");
-	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"";
+	str += oxmlRelationshipNs;
+	str += oxmlWordNs;
 	str += ">";
 	str += "<w:footnote w:type=\"separator\" w:id=\"-1\"><w:p><w:r><w:separator/></w:r></w:p></w:footnote>";
 	str += "<w:footnote w:type=\"continuationSeparator\" w:id=\"0\"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:footnote>";
@@ -3493,7 +3571,8 @@ UT_Error IE_Exp_OpenXML::startEndnotes()
 	}	
 
 	std::string str("<w:endnotes ");
-	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\"";
+	str += oxmlRelationshipNs;
+	str += oxmlWordNs;
 	str += ">";
 	str += "<w:endnote w:type=\"separator\" w:id=\"-1\"><w:p><w:r><w:separator/></w:r></w:p></w:endnote>";
 	str += "<w:endnote w:type=\"continuationSeparator\" w:id=\"0\"><w:p><w:r><w:continuationSeparator/></w:r></w:p></w:endnote>";
@@ -3555,8 +3634,9 @@ UT_Error IE_Exp_OpenXML::startComments()
 	}
 	m_commentEx.clear();
 	std::string str("<w:comments ");
-	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\" ";
-	str += "xmlns:w14=\"http://schemas.microsoft.com/office/word/2010/wordml\">";
+	str += oxmlRelationshipNs;
+	str += oxmlWordNs;
+	str += ">";
 	return writeTargetStream(TARGET_COMMENT, str.c_str());
 }
 
@@ -3736,8 +3816,10 @@ UT_Error IE_Exp_OpenXML::startHeaderStream(const char* id)
 	if(err != UT_OK)
 		return err;
 
-	std::string str("<w:hdr xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ");
-	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">";
+	std::string str("<w:hdr ");
+	str += oxmlRelationshipNs;
+	str += oxmlWordNs;
+	str += ">";
 
 	std::string strId("");
 	strId += id;
@@ -3767,8 +3849,10 @@ UT_Error IE_Exp_OpenXML::startFooterStream(const char* id)
 	if(err != UT_OK)
 		return err;
 
-	std::string str("<w:ftr xmlns:r=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships\" ");
-	str += "xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">";
+	std::string str("<w:ftr ");
+	str += oxmlRelationshipNs;
+	str += oxmlWordNs;
+	str += ">";
 
 	std::string strId("");
 	strId += id;

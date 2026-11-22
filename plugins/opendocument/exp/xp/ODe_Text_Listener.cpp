@@ -68,6 +68,7 @@ ODe_Text_Listener::ODe_Text_Listener(ODe_Styles& rStyles,
                         m_openedODTextboxFrame(false),
                         m_openedODNote(false),
                         m_bIgoreFirstTab(false),
+                        m_inHeaderFooter(false),
                         m_pParagraphContent(nullptr),
                         m_currentListLevel(0),
                         m_pCurrentListStyle(nullptr),
@@ -106,6 +107,7 @@ ODe_Text_Listener::ODe_Text_Listener(ODe_Styles& rStyles,
                         m_openedODTextboxFrame(false),
                         m_openedODNote(false),
 			m_bIgoreFirstTab(false),
+                        m_inHeaderFooter(false),
                         m_pParagraphContent(nullptr),
                         m_currentListLevel(0),
                         m_pCurrentListStyle(nullptr),
@@ -314,7 +316,8 @@ void ODe_Text_Listener::openFrame(const PP_AttrProp* pAP,
     } else if (pValue && !strcmp(pValue, "image")) {
         ok = pAP->getAttribute(PT_STRUX_IMAGE_DATAID, pValue);
         if(ok && pValue) {
-            insertPositionedImage(pValue, pAP);
+            const std::string fileName = ODe_dataItemFileName(m_rAuxiliaryData.m_pDoc, pValue);
+            insertPositionedImage(fileName.c_str(), pAP);
         }
         m_openedODTextboxFrame = true;
     }
@@ -1093,12 +1096,16 @@ void ODe_Text_Listener::insertInlinedImage(const gchar* pImageName,
     ODe_writeAttribute(output, "draw:z-index", str);
     ODe_writeAttribute(output, "draw:style-name", pStyle->getName());
 
-    ok = pAP->getProperty("width", pValue);
+    ok = pAP && pAP->getProperty("width", pValue);
+    if (!(ok && pValue))
+        ok = pAP && pAP->getProperty("frame-width", pValue);
     if (ok && pValue != nullptr) {
         ODe_writeAttribute(output, "svg:width", pValue);
     }
     
-    ok = pAP->getProperty("height", pValue);
+    ok = pAP && pAP->getProperty("height", pValue);
+    if (!(ok && pValue))
+        ok = pAP && pAP->getProperty("frame-height", pValue);
     if (ok && pValue != nullptr) {
         ODe_writeAttribute(output, "svg:height", pValue);
     }
@@ -1134,13 +1141,28 @@ void ODe_Text_Listener::insertInlinedImage(const gchar* pImageName,
 
     output += "</draw:frame>";
 
-    ODe_writeUTF8String(m_pParagraphContent, output);
+    // ODF 1.3 §16.10: style:header does not accept a draw:frame as a direct
+    // child. §5.1.3 puts the frame inside the paragraph.
+    if (m_pParagraphContent) {
+        ODe_writeUTF8String(m_pParagraphContent, output);
+    } else if (m_pTextOutput) {
+        ODe_writeUTF8String(m_pTextOutput, "<text:p>");
+        ODe_writeUTF8String(m_pTextOutput, output);
+        ODe_writeUTF8String(m_pTextOutput, "</text:p>");
+    }
 }
 
 
 void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
                                                  const PP_AttrProp* pAP)
 {
+    // ODF 1.3 §19.759: a page-anchored frame is not allowed in a header or a
+    // footer. Keep the image in the paragraph, as a character.
+    if (m_inHeaderFooter) {
+        insertInlinedImage(pImageName, pAP);
+        return;
+    }
+
     UT_UTF8String output;
     UT_UTF8String str;
     UT_UTF8String escape;
@@ -1306,8 +1328,14 @@ void ODe_Text_Listener::insertPositionedImage(const gchar* pImageName,
     }
 
     output += "</draw:frame>";
-    
-    ODe_writeUTF8String(m_pParagraphContent, output);
+
+    if (m_pParagraphContent) {
+        ODe_writeUTF8String(m_pParagraphContent, output);
+    } else if (m_pTextOutput) {
+        ODe_writeUTF8String(m_pTextOutput, "<text:p>");
+        ODe_writeUTF8String(m_pTextOutput, output);
+        ODe_writeUTF8String(m_pTextOutput, "</text:p>");
+    }
 }
 
 

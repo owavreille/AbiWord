@@ -196,6 +196,7 @@ UT_Error IE_Exp_OpenDocument::_writeDocument(void)
 {
 	ODe_DocumentData docData(getDoc());
 	ODe_AuxiliaryData auxData;
+	auxData.m_pDoc = getDoc();
 	ODe_AbiDocListener* pAbiDocListener = nullptr;
 	ODe_AbiDocListenerImpl* pAbiDocListenerImpl = nullptr;
     

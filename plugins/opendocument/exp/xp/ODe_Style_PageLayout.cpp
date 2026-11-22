@@ -65,7 +65,8 @@ void ODe_Style_PageLayout::fetchAttributesFromAbiDoc(PD_Document* pAbiDoc) {
 /**
  * Fetch attributes from an AbiWord <section> tag. Mostly page margins.
  */
-void ODe_Style_PageLayout::fetchAttributesFromAbiSection(const PP_AttrProp* pAP) {
+void ODe_Style_PageLayout::fetchAttributesFromAbiSection(const PP_AttrProp* pAP,
+                                                         PD_Document* pDoc) {
     const gchar* pValue;
     bool ok; 
     bool hasHeader = false;
@@ -125,8 +126,12 @@ void ODe_Style_PageLayout::fetchAttributesFromAbiSection(const PP_AttrProp* pAP)
         
             // Set the header height
             abiTopMarginCM = UT_convertToDimension(m_marginTop.utf8_str(), DIM_CM);
-            UT_UTF8String_sprintf(m_headerHeight, "%fcm",
-                                  abiTopMarginCM - abiHeaderMarginCM);
+            // ODF 1.3 §20.407.2 / §18.3.18: a negative height clips the header
+            // away. Keep a non-negative minimum and let the content grow.
+            double headerHeight = abiTopMarginCM - abiHeaderMarginCM;
+            if (headerHeight < 0.0)
+                headerHeight = 0.0;
+            UT_UTF8String_sprintf(m_headerHeight, "%fcm", headerHeight);
         
             // Redefine the top margin
             UT_UTF8String_sprintf(m_marginTop, "%fcm",abiHeaderMarginCM);
@@ -154,8 +159,10 @@ void ODe_Style_PageLayout::fetchAttributesFromAbiSection(const PP_AttrProp* pAP)
         
             // Set the footer height
             abiBottomMarginCM = UT_convertToDimension(m_marginBottom.utf8_str(), DIM_CM);
-            UT_UTF8String_sprintf(m_footerHeight, "%fcm",
-                                  abiBottomMarginCM - abiFooterMarginCM);
+            double footerHeight = abiBottomMarginCM - abiFooterMarginCM;
+            if (footerHeight < 0.0)
+                footerHeight = 0.0;
+            UT_UTF8String_sprintf(m_footerHeight, "%fcm", footerHeight);
         
             // Redefine the bottom margin
             UT_UTF8String_sprintf(m_marginBottom, "%fcm",abiFooterMarginCM);
@@ -182,7 +189,7 @@ void ODe_Style_PageLayout::fetchAttributesFromAbiSection(const PP_AttrProp* pAP)
 
     ok = pAP->getAttribute("strux-image-dataid", pValue);
     if (ok && pValue != nullptr) {
-        m_backgroundImage = pValue;
+        m_backgroundImage = ODe_dataItemFileName(pDoc, pValue).c_str();
     }
 }
 
@@ -296,7 +303,8 @@ bool ODe_Style_PageLayout::write(GsfOutput* pODT,
         // Write <style:header-footer-properties/> tag
         UT_UTF8String_sprintf(output, "%s  <style:header-footer-properties",
                               rSpacesOffset.utf8_str());
-        ODe_writeAttribute(output, "svg:height", m_headerHeight);
+        ODe_writeAttribute(output, "fo:min-height", m_headerHeight);
+        ODe_writeAttribute(output, "style:dynamic-spacing", "true");
         output += "/>\n";
         ODe_writeUTF8String(pODT, output);
         
@@ -319,7 +327,8 @@ bool ODe_Style_PageLayout::write(GsfOutput* pODT,
         // Write <style:header-footer-properties/> tag.
         UT_UTF8String_sprintf(output, "%s  <style:header-footer-properties",
                               rSpacesOffset.utf8_str());
-        ODe_writeAttribute(output, "svg:height", m_footerHeight);
+        ODe_writeAttribute(output, "fo:min-height", m_footerHeight);
+        ODe_writeAttribute(output, "style:dynamic-spacing", "true");
         output += "/>\n";
         ODe_writeUTF8String(pODT, output);
         

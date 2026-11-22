@@ -5142,6 +5142,9 @@ bool PD_Document::getDataItemFileExtension(const char *szDataID, std::string &sE
 {
 	UT_return_val_if_fail(szDataID && *szDataID, false);
 
+	// A failed lookup must not keep the extension of the previous data item.
+	sExt.clear();
+
     std::string mimeType;
 	UT_ConstByteBufPtr bb;
 
@@ -5150,27 +5153,29 @@ bool PD_Document::getDataItemFileExtension(const char *szDataID, std::string &sE
 		if(mimeType.empty())
 			return false;
 
+		const char* ext = nullptr;
 		if(mimeType == "image/png")
-		{
-			sExt = (bDot ? "." : "");
-			sExt += "png";
-			return true;
-		}
-		if(mimeType == "image/jpeg")
-		{
-			sExt = (bDot ? "." : "");
-			sExt += "jpg";
-			return true;
-		}
-		else if(mimeType ==  "image/svg+xml")
-		{
-			sExt = (bDot ? "." : "");
-			sExt += "svg";
-			return true;	
-		}
+			ext = "png";
+		else if(mimeType == "image/jpeg" || mimeType == "image/jpg")
+			ext = "jpg";
+		else if(mimeType == "image/gif")
+			ext = "gif";
+		else if(mimeType == "image/bmp" || mimeType == "image/x-ms-bmp")
+			ext = "bmp";
+		else if(mimeType == "image/tiff" || mimeType == "image/tif")
+			ext = "tif";
+		else if(mimeType == "image/webp")
+			ext = "webp";
+		else if(mimeType == "image/svg+xml" || mimeType == "image/svg" || mimeType == "image/svg-xml")
+			ext = "svg";
 		else
-		{
 			UT_DEBUGMSG(("getDataItemFileExtension(): unhandled/ignored mime type: %s\n", mimeType.c_str()));
+
+		if (ext)
+		{
+			sExt = (bDot ? "." : "");
+			sExt += ext;
+			return true;
 		}
 	}
 

@@ -23,6 +23,7 @@
 #include "ODe_Main_Listener.h"
 
 // Internal includes
+#include "ODe_AuxiliaryData.h"
 #include "ODe_Common.h"
 #include "ODe_Style_MasterPage.h"
 #include "ODe_Style_PageLayout.h"
@@ -85,7 +86,7 @@ void ODe_Main_Listener::openSection(const PP_AttrProp* pAP,
             // Use stantard master page and page layout.
 
             ODe_Style_PageLayout* pPageLayout = m_rDocumentData.m_stylesAutoStyles.getPageLayout("Standard");
-            pPageLayout->fetchAttributesFromAbiSection(pAP);
+            pPageLayout->fetchAttributesFromAbiSection(pAP, m_rAuxiliaryData.m_pDoc);
             pMPStyle = m_rDocumentData.m_masterStyles.pick("Standard");
             pMPStyle->fetchAttributesFromAbiSection(pAP);
             UT_DEBUGMSG(("Got PageLayout %p AutoStyles %p \n",pPageLayout,&m_rDocumentData.m_stylesAutoStyles));
@@ -105,7 +106,7 @@ void ODe_Main_Listener::openSection(const PP_AttrProp* pAP,
             if (pMPStyle->hasProperties())
             {
                 ODe_Style_PageLayout* pPageLayout = m_rDocumentData.m_stylesAutoStyles.addPageLayout();
-                pPageLayout->fetchAttributesFromAbiSection(pAP);
+                pPageLayout->fetchAttributesFromAbiSection(pAP, m_rAuxiliaryData.m_pDoc);
                 pMPStyle->setPageLayoutName(pPageLayout->getName());
 
                 m_rDocumentData.m_masterStyles.insert(styleName.utf8_str(),pMPStyle);
@@ -122,7 +123,7 @@ void ODe_Main_Listener::openSection(const PP_AttrProp* pAP,
 	UT_UTF8String sName = "Standard";
 	pStandard->setName(sName);
         m_rDocumentData.m_contentAutoStyles.addPageLayout(pStandard);
-	pStandard->fetchAttributesFromAbiSection(pAP);
+	pStandard->fetchAttributesFromAbiSection(pAP, m_rAuxiliaryData.m_pDoc);
     } else {
         // Without this, '!strcmp(pId, pValue)' fails in _isHeaderFooterSection()
         // below, which ultimately leads to a crash due to an uninitialized
@@ -142,7 +143,7 @@ void ODe_Main_Listener::openSection(const PP_AttrProp* pAP,
         m_rDocumentData.m_contentAutoStyles.storeSectionStyle(pSectionStyle);
 
         ODe_Style_PageLayout* pPageLayout = m_rDocumentData.m_contentAutoStyles.addPageLayout();
-	pPageLayout->fetchAttributesFromAbiSection(pAP);
+	pPageLayout->fetchAttributesFromAbiSection(pAP, m_rAuxiliaryData.m_pDoc);
        
         UT_UTF8String output;
         
@@ -294,11 +295,12 @@ void ODe_Main_Listener::_openHeaderFooterSection(
 
     m_openedODSection = false;
     m_onHeaderFooterSection = true;
-	rAction.pushListenerImpl(new ODe_Text_Listener(
+    ODe_Text_Listener* pHeaderFooterListener = new ODe_Text_Listener(
                                      m_rDocumentData.m_styles,
                                      m_rDocumentData.m_stylesAutoStyles,
                                      pTextOutput,
                                      m_rAuxiliaryData,
-                                     0, 4),
-                             true);
+                                     0, 4);
+    pHeaderFooterListener->setInHeaderFooter(true);
+	rAction.pushListenerImpl(pHeaderFooterListener, true);
 }

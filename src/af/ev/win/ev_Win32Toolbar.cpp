@@ -55,6 +55,7 @@
 #include "fv_View.h"
 #include "pt_PieceTable.h"
 #include "ap_Win32Toolbar_FontCombo.h"
+#include "ap_FontMenu.h"
 #include "ap_Win32Toolbar_StyleCombo.h"
 #include "ap_Win32App.h"
 #include "ap_Strings.h"
@@ -139,7 +140,8 @@ EV_Win32Toolbar::EV_Win32Toolbar(XAP_Win32App * pWin32App, XAP_Frame * pFrame,
 	m_pViewListener(nullptr),
 	m_lid(0),				// view listener id
 	m_hwnd(nullptr),
-	m_pFontCtrl(nullptr)
+	m_pFontCtrl(nullptr),
+	m_fontRefilling(false)
 {
 }
 
@@ -444,6 +446,23 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 			const char * fontName = (v != nullptr) ? v->getNthItem(static_cast<UT_sint32>(dis->itemData)) : nullptr;
 			if (!fontName)
 				return TRUE;
+			if (AP_fontMenuIsSeparator(fontName))
+			{
+				FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_WINDOW));
+				if (!(dis->itemState & ODS_COMBOBOXEDIT))
+				{
+					HPEN pen = CreatePen(PS_SOLID, 1, GetSysColor(COLOR_3DSHADOW));
+					HPEN old = pen ? (HPEN)SelectObject(dis->hDC, pen) : nullptr;
+					int y = (dis->rcItem.top + dis->rcItem.bottom) / 2;
+					MoveToEx(dis->hDC, dis->rcItem.left + 4, y, nullptr);
+					LineTo(dis->hDC, dis->rcItem.right - 4, y);
+					if (old)
+						SelectObject(dis->hDC, old);
+					if (pen)
+						DeleteObject(pen);
+				}
+				return TRUE;
+			}
 			str.fromUTF8 (fontName);
 
 			hUIFont = toolbarUIFont();
@@ -550,8 +569,24 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 		{
 			switch (HIWORD(wParam))
 			{								
+				case CBN_DROPDOWN:
+				{
+					EV_Win32Toolbar * t = (EV_Win32Toolbar *) GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+					if (t)
+					{
+						UINT u = GetDlgCtrlID(hWnd);
+						if (t->ItemIdFromWmCommand(u) == AP_TOOLBAR_ID_FMT_FONT)
+							t->refillFontCombo(hWnd);
+					}
+					break;
+				}
+
 				case CBN_SELCHANGE:
 				{
+					EV_Win32Toolbar * drop = (EV_Win32Toolbar *) GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+					if (drop && drop->m_fontRefilling)
+						break;
+
 					UT_sint32 iSelected = SendMessageW(hWnd, CB_GETCURSEL, 0, 0);
 									
 					if(iSelected != -1)
@@ -580,6 +615,19 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 
 								UINT u = GetDlgCtrlID(hWnd);
 								XAP_Toolbar_Id id = t->ItemIdFromWmCommand(u);
+
+								if (id == AP_TOOLBAR_ID_FMT_FONT && t->m_pFontCtrl)
+								{
+									int nData = static_cast<int>(SendMessageW(hWnd, CB_GETITEMDATA, iSelected, 0));
+									const char * chosen = (nData >= 0) ? t->m_pFontCtrl->getNthItem(static_cast<UT_uint32>(nData)) : nullptr;
+									if (AP_fontMenuIsSeparator(chosen))
+									{
+										dataLength = 0;
+										t->m_fontRefilling = true;
+										t->_refreshID(id);
+										t->m_fontRefilling = false;
+									}
+								}
 
 								// If is a STYLE_NAME we should pass the internal one, not the localised
 								if (id==AP_TOOLBAR_ID_FMT_STYLE)
@@ -919,27 +967,37 @@ bool EV_Win32Toolbar::synthesize(void)
 						if (pControl)
 						{
 							SendMessageW(hwndCombo, CB_SETDROPPEDWIDTH,(WPARAM)pControl->getDroppedWidth(), 0);
-							pControl->populate();
 
-							const UT_GenericVector<const char*> * v = pControl->getContents();
-							UT_ASSERT_HARMLESS(v);
-
-							SendMessageW(hwndCombo, WM_SETREDRAW, FALSE,0);
-
-							if (v)
+							if (id == AP_TOOLBAR_ID_FMT_FONT)
 							{
-								UT_uint32 items = v->getItemCount();
-								int nIndex;
-                                UT_Win32LocaleString localised;
-								for (UT_uint32 item = 0; item < items; item++)
-								{
-									localised.fromUTF8(v->getNthItem(item));
-    								nIndex = SendMessageW(hwndCombo, CB_ADDSTRING,(WPARAM)0, (LPARAM)localised.c_str());
- 	     							SendMessageW(hwndCombo,CB_SETITEMDATA, nIndex, item);
-								}
+								delete m_pFontCtrl;
+								m_pFontCtrl = static_cast<AP_Win32Toolbar_FontCombo *>(pControl);
+								refillFontCombo(hwndCombo);
 							}
+							else
+							{
+								pControl->populate();
 
-							SendMessageW(hwndCombo, WM_SETREDRAW, TRUE,0);
+								const UT_GenericVector<const char*> * v = pControl->getContents();
+								UT_ASSERT_HARMLESS(v);
+
+								SendMessageW(hwndCombo, WM_SETREDRAW, FALSE,0);
+
+								if (v)
+								{
+									UT_uint32 items = v->getItemCount();
+									int nIndex;
+									UT_Win32LocaleString localised;
+									for (UT_uint32 item = 0; item < items; item++)
+									{
+										localised.fromUTF8(v->getNthItem(item));
+										nIndex = SendMessageW(hwndCombo, CB_ADDSTRING,(WPARAM)0, (LPARAM)localised.c_str());
+										SendMessageW(hwndCombo,CB_SETITEMDATA, nIndex, item);
+									}
+								}
+
+								SendMessageW(hwndCombo, WM_SETREDRAW, TRUE,0);
+							}
 						}
 
 						// override the window procedure for the combo box
@@ -968,14 +1026,9 @@ bool EV_Win32Toolbar::synthesize(void)
 						// bind this separator to its control
 						tbb.dwData = (DWORD_PTR) hwndCombo;
 
-						// Keep the font list. The owner-draw path would otherwise
-						// enumerate every installed face a second time.
-						if (id == AP_TOOLBAR_ID_FMT_FONT)
-						{
-							delete m_pFontCtrl;
-							m_pFontCtrl = static_cast<AP_Win32Toolbar_FontCombo *>(pControl);
-						}
-						else
+						// The font list stays alive: owner-draw reads the names
+						// back from it. Every other combo is finished here.
+						if (id != AP_TOOLBAR_ID_FMT_FONT)
 							DELETEP(pControl);
 					}
 					break;
@@ -1596,6 +1649,45 @@ void EV_Win32Toolbar::_addToRebar()
 XAP_Frame * EV_Win32Toolbar::getFrame(void)
 {
 	return m_pWin32Frame;
+}
+
+void EV_Win32Toolbar::refillFontCombo(HWND hwndCombo)
+{
+	if (m_fontRefilling || !m_pFontCtrl || !hwndCombo)
+		return;
+
+	m_fontRefilling = true;
+
+	wchar_t kept[512];
+	kept[0] = 0;
+	GetWindowTextW(hwndCombo, kept, 512);
+
+	SendMessageW(hwndCombo, WM_SETREDRAW, FALSE, 0);
+	SendMessageW(hwndCombo, CB_RESETCONTENT, 0, 0);
+	m_pFontCtrl->populate();
+
+	const UT_GenericVector<const char*> * v = m_pFontCtrl->getContents();
+	if (v)
+	{
+		UT_uint32 items = v->getItemCount();
+		UT_Win32LocaleString localised;
+		for (UT_uint32 item = 0; item < items; ++item)
+		{
+			const char * name = v->getNthItem(item);
+			if (!name)
+				continue;
+			localised.fromUTF8(name);
+			int nIndex = static_cast<int>(SendMessageW(hwndCombo, CB_ADDSTRING, 0, (LPARAM)localised.c_str()));
+			if (nIndex != CB_ERR)
+				SendMessageW(hwndCombo, CB_SETITEMDATA, nIndex, item);
+		}
+	}
+
+	if (kept[0])
+		SetWindowTextW(hwndCombo, kept);
+
+	SendMessageW(hwndCombo, WM_SETREDRAW, TRUE, 0);
+	m_fontRefilling = false;
 }
 
 

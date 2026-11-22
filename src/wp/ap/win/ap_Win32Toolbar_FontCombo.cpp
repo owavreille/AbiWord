@@ -24,7 +24,10 @@
 #include "ut_vector.h"
 #include "ut_string.h"
 #include "ap_Win32Toolbar_FontCombo.h"
+#include "ap_FontMenu.h"
 #include "ap_Toolbar_Id.h"
+#include "ev_Win32Toolbar.h"
+#include "pd_Document.h"
 #include "xap_Frame.h"
 #include "ut_debugmsg.h"
 #include "ut_Win32LocaleString.h"
@@ -46,13 +49,13 @@ AP_Win32Toolbar_FontCombo::AP_Win32Toolbar_FontCombo(EV_Toolbar * pToolbar,
 
 	m_nPixels = 160;		// TODO: do a better calculation
 	m_nLimit = LF_FACESIZE;
-	m_bSort = true;
+	// The menu keeps the document faces above the full list, so the
+	// control itself must not alphabetize the rows.
+	m_bSort = false;
 }
 
 AP_Win32Toolbar_FontCombo::~AP_Win32Toolbar_FontCombo(void)
 {
-	UT_VECTOR_FREEALL(char *, m_vecContents);
-	
 }
 
 /*****************************************************************/
@@ -62,24 +65,30 @@ static std::set<std::string> seenFonts;
 
 bool AP_Win32Toolbar_FontCombo::populate(void)
 {
-	// clear anything that's already there
+	if (m_installed.empty())
+	{
+		m_vecFontCharSet.clear();
+		seenFonts.clear();
+
+		// GetDC(NULL) is the screen DC. A failed call must not be released.
+		HDC hdc = GetDC(nullptr);
+		if (!hdc)
+			return false;
+		LOGFONTW lf;
+		memset(&lf, 0, sizeof(lf));
+		lf.lfCharSet = DEFAULT_CHARSET;
+		EnumFontFamiliesExW(hdc, &lf, (FONTENUMPROCW) AP_Win32Toolbar_FontCombo::_EnumFontsProc, (LONG_PTR) this, 0);
+		ReleaseDC(nullptr, hdc);
+		seenFonts.clear();
+	}
+
+	EV_Win32Toolbar * toolbar = static_cast<EV_Win32Toolbar *>(m_pToolbar);
+	PD_Document * doc = AP_documentFromFrame(toolbar ? toolbar->getFrame() : nullptr);
+	AP_buildFontMenu(doc, m_installed, m_menuOrder);
+
 	m_vecContents.clear();
-	m_vecFontCharSet.clear();
-
-	seenFonts.clear();
-
-	// populate the vector
-	// GetDC(NULL) is the screen DC. A failed call must not be released.
-	HDC hdc = GetDC(nullptr);
-	if (!hdc)
-		return false;
-	LOGFONTW lf;
-	memset(&lf, 0, sizeof(lf));
-	lf.lfCharSet = DEFAULT_CHARSET;
-    EnumFontFamiliesExW(hdc, &lf, (FONTENUMPROCW) AP_Win32Toolbar_FontCombo::_EnumFontsProc, (LONG_PTR) this, 0) ;
-    ReleaseDC(nullptr, hdc) ;
-
-	seenFonts.clear();
+	for (const std::string & name : m_menuOrder)
+		m_vecContents.addItem(name.c_str());
 
 	return true;
 }
@@ -114,22 +123,14 @@ int CALLBACK AP_Win32Toolbar_FontCombo::_EnumFontsProc(LPLOGFONTW lplf,
 
 	UT_Win32LocaleString str;
 	str.fromLocale (lplf->lfFaceName);
-	const char * utf8 = str.utf8_str().utf8_str();
-	if (!utf8 || !*utf8)
-		return 1;
-	char * p = g_strdup(utf8);
-	if (!p)
+	const std::string face = str.utf8_str().utf8_str();
+	if (face.empty() || seenFonts.find(face) != seenFonts.end())
 		return 1;
 
-	if (seenFonts.find(p)!=seenFonts.end()) {
-		FREEP(p);
-		return 1;
-	}
-
-	ctl->m_vecContents.addItem(p);
+	ctl->m_installed.push_back(face);
 	ctl->m_vecFontCharSet.addItem(reinterpret_cast<void *>(static_cast<UINT_PTR>(lplf->lfCharSet)));
 
-	seenFonts.insert(p);
+	seenFonts.insert(face);
 
 	return 1;
 }

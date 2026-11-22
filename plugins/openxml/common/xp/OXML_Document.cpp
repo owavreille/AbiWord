@@ -539,10 +539,6 @@ UT_Error OXML_Document::serialize(IE_Exp_OpenXML* exporter)
 		}
 	}
 
-	ret = exporter->setContinuousSection(TARGET_DOCUMENT);
-	if(ret != UT_OK)
-		return ret;
-
 	if(firstPageHdrFtr)
 	{
 		ret = exporter->setTitlePage();

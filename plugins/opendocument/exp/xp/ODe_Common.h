@@ -33,9 +33,13 @@
 
 #include "ut_types.h"
 
-
 // Abiword classes
+class PD_Document;
 class UT_UTF8String;
+
+// ODF 1.3 §19.916.15: xlink:href names the image file inside the package.
+// Part 2 §3.2: that same path is the manifest:full-path of the stored file.
+std::string ODe_dataItemFileName(PD_Document* doc, const char* dataId);
 
 void ODe_gsf_output_write(GsfOutput* output, size_t num_bytes,
     guint8 const *data);

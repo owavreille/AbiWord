@@ -28,6 +28,7 @@
 
 // Internal includes
 #include "ODe_AbiDocListenerImpl.h"
+#include "ODe_Common.h"
 #include "ODe_Main_Listener.h"
 
 // Abiword includes
@@ -1286,7 +1287,6 @@ const gchar* ODe_AbiDocListener::_getObjectKey(const PT_AttrPropIndex& api,
  */
 void ODe_AbiDocListener::_insertInlinedImage(PT_AttrPropIndex api) {
     std::string fullName;
-    std::string extension;
 	const gchar* pImageName;
     const PP_AttrProp* pAP;
     bool ok;
@@ -1298,8 +1298,7 @@ void ODe_AbiDocListener::_insertInlinedImage(PT_AttrPropIndex api) {
 
     pImageName = 
         _getObjectKey(api, static_cast<const gchar*>("dataid"));
-    m_pDocument->getDataItemFileExtension(pImageName, extension, true);
-    fullName = pImageName + extension;
+    fullName = ODe_dataItemFileName(m_pDocument, pImageName);
 
     m_pCurrentImpl->insertInlinedImage(fullName.c_str(), pAP);
 }
@@ -1324,7 +1323,8 @@ void ODe_AbiDocListener::_insertEmbeddedImage(PT_AttrPropIndex api) {
 
     if(pImageName) {
         snapshot+=pImageName;
-        m_pCurrentImpl->insertInlinedImage(snapshot.utf8_str(), pAP);
+        const std::string fileName = ODe_dataItemFileName(m_pDocument, snapshot.utf8_str());
+        m_pCurrentImpl->insertInlinedImage(fileName.c_str(), pAP);
     }
 }
 

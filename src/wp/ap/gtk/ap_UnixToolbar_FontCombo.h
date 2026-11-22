@@ -21,6 +21,8 @@
 #define AP_UNIXTOOLBAR_FONTCOMBO_H
 
 #include <glib.h>
+#include <string>
+#include <vector>
 #include "xap_Types.h"
 #include "ev_UnixToolbar.h"
 #include "ev_Toolbar_Control.h"
@@ -37,7 +39,7 @@ public:
 	virtual bool populate(void) override;
 
 protected:
-
+	std::vector<std::string> m_menuOrder;
 };
 
 #endif /* AP_UNIXTOOLBAR_FONTCOMBO_H */

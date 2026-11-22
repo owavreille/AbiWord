@@ -132,12 +132,12 @@ bool ODe_ManifestWriter::writeManifest(PD_Document* pDoc, GsfOutfile* pODT)
             std::string automaticPathPrefix = "Pictures/";
             if( absolutePathMimeTypes.count(mimeType) )
                 automaticPathPrefix = "";
-            std::string extension;
-			
-            pDoc->getDataItemFileExtension(szName, extension, true);
+            const std::string fileName = (automaticPathPrefix.empty())
+                ? std::string(szName)
+                : automaticPathPrefix + ODe_dataItemFileName(pDoc, szName);
             name = UT_std_string_sprintf(
-                " <manifest:file-entry manifest:media-type=\"%s\" manifest:full-path=\"%s%s%s\"/>\n",
-                mimeType.c_str(), automaticPathPrefix.c_str(), szName, extension.c_str());
+                " <manifest:file-entry manifest:media-type=\"%s\" manifest:full-path=\"%s\"/>\n",
+                mimeType.c_str(), fileName.c_str());
             
             ODe_gsf_output_write (manifest, name.size(),
                 reinterpret_cast<const guint8 *>(name.c_str()));

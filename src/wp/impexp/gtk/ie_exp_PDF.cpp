@@ -124,8 +124,15 @@ public:
 	print_graphics = new GR_CairoPrintGraphics(cr, dpi);
     pDocLayout = new FL_DocLayout(getDoc(), print_graphics);
     printView = new FV_View(XAP_App::getApp(), nullptr, pDocLayout);
+	// The print layout is built once, inside fillLayouts(), while the layout
+	// is still filling. That pass empties the first column and breaks the
+	// section, so the header, the body and the footer share each page.
+	// A later formatAll() sees every block still marked for reformat and
+	// breaks the section again without emptying the columns. The body is
+	// then dropped, and the header and the footer land on different pages.
+	if (printView->getViewMode() != VIEW_PRINT)
+		printView->setViewMode(VIEW_PRINT);
     printView->getLayout()->fillLayouts();
-    printView->getLayout()->formatAll();
     printView->getLayout()->recalculateTOCFields();
 
 	// TODO lifecycle of "surface" and "cr"?

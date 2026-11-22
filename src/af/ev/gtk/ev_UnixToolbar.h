@@ -56,6 +56,7 @@ public:
 	void      rebuildToolbar(UT_sint32 oldpos);
 	XAP_UnixApp *	getApp(void);
 	XAP_Frame * getFrame(void);
+	void refillFontCombo(GtkWidget * combo);
 	void setCurrentEvent(GdkEvent * event) {m_eEvent = event;}
 	virtual void show(void) override;
 	virtual void hide(void) override;

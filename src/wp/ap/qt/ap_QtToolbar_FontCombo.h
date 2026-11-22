@@ -23,6 +23,8 @@
 #define AP_QTTOOLBAR_FONTCOMBO_H
 
 #include <glib.h>
+#include <string>
+#include <vector>
 #include "xap_Types.h"
 #include "ev_QtToolbar.h"
 #include "ev_Toolbar_Control.h"
@@ -39,7 +41,7 @@ public:
 	virtual bool					populate(void);
 
 protected:
-
+	std::vector<std::string> m_menuOrder;
 };
 
 #endif /* AP_QTTOOLBAR_FONTCOMBO_H */

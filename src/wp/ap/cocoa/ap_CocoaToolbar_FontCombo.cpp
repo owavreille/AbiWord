@@ -26,9 +26,12 @@
 #include "ut_debugmsg.h"
 
 #include "ap_CocoaToolbar_FontCombo.h"
+#include "ap_FontMenu.h"
 #include "ap_Toolbar_Id.h"
+#include "pd_Document.h"
 #include "xap_CocoaApp.h"
 #include "xap_Frame.h"
+#include "ap_CocoaFrame.h"
 
 #include "ev_CocoaToolbar.h"
 #include "ev_Toolbar.h"
@@ -54,37 +57,29 @@ AP_CocoaToolbar_FontCombo::AP_CocoaToolbar_FontCombo(EV_Toolbar * pToolbar,
 
 AP_CocoaToolbar_FontCombo::~AP_CocoaToolbar_FontCombo(void)
 {
-	UT_VECTOR_FREEALL(char *, m_vecContents);
-}
-
-// this is the comparator to sort the combo box.
-// TODO: move it else where in a place it is reusable by anybody.
-static  int compareStrings(const void * ppS1, const void * ppS2)
-{
-	#warning TODO: move it else where in a place it is reusable by anybody.
-	const char ** sz1 = (const char **) (ppS1);
-	const char ** sz2 = (const char **) (ppS2);
-	return strcmp(*sz1, *sz2);
 }
 
 bool AP_CocoaToolbar_FontCombo::populate(void)
 {
     UT_ASSERT(m_pToolbar);
 
-    // Things are relatively easy with the font manager.  Just
-    // request all fonts and ask them their names.
     NSArray *list = [[NSFontManager sharedFontManager] availableFontFamilies];
-
-    m_vecContents.clear();
-
+    std::vector<std::string> installed;
     NSEnumerator* e = [list objectEnumerator];
     while(NSString *item = [e nextObject])
     {
-        const char *fName = g_strdup([item UTF8String]);
-        UT_ASSERT (fName);
-        m_vecContents.addItem(fName);
+        const char *fName = [item UTF8String];
+        if (fName && *fName)
+            installed.push_back(fName);
     }
-    m_vecContents.qsort(compareStrings);
+
+    EV_CocoaToolbar * toolbar = static_cast<EV_CocoaToolbar *>(m_pToolbar);
+    PD_Document * doc = AP_documentFromFrame(toolbar ? toolbar->getFrame() : nullptr);
+    AP_buildFontMenu(doc, installed, m_menuOrder);
+
+    m_vecContents.clear();
+    for (const std::string & name : m_menuOrder)
+        m_vecContents.addItem(name.c_str());
 
     return true;
 }

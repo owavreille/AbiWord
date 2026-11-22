@@ -36,6 +36,24 @@
 #include "ap_Win32App.h"
 
 #define BUFSIZE 1024
+
+// A new up-down control starts at 100..0. Up then means "toward 0", so
+// UDN_DELTAPOS reports a negative iDelta and the number falls. An ascending
+// range makes the up arrow raise the value. The position is parked on the
+// number already shown, otherwise the first click replaces it with 0 or 1.
+static void s_armImageSpin(HWND dialog, int spinId, int minimum, int maximum, int value)
+{
+	HWND spin = GetDlgItem(dialog, spinId);
+	if (!spin)
+		return;
+	SendMessageW(spin, UDM_SETRANGE, 0, (LPARAM)MAKELONG((short)maximum, (short)minimum));
+	if (value < minimum)
+		value = minimum;
+	else if (value > maximum)
+		value = maximum;
+	SendMessageW(spin, UDM_SETPOS, 0, (LPARAM)MAKELPARAM((WORD)(short)value, 0));
+}
+
 /*****************************************************************/
 
 XAP_Dialog * XAP_Win32Dialog_Image::static_constructor(XAP_DialogFactory * pFactory,
@@ -130,6 +148,17 @@ BOOL XAP_Win32Dialog_Image::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_LEFT, number);
 	snprintf(number, sizeof(number), "%d", getCropRight());
 	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_RIGHT, number);
+
+	// Size spins have no buddy integer. Only the range is needed so the
+	// up arrow reports a positive iDelta.
+	s_armImageSpin(hWnd, XAP_RID_DIALOG_IMAGE_SPN_WIDTH, 0, 100, 0);
+	s_armImageSpin(hWnd, XAP_RID_DIALOG_IMAGE_SPN_HEIGHT, 0, 100, 0);
+	s_armImageSpin(hWnd, XAP_RID_DIALOG_IMAGE_SPN_OPACITY, 0, 100, getOpacity());
+	s_armImageSpin(hWnd, XAP_RID_DIALOG_IMAGE_SPN_BRIGHTNESS, -100, 100, getBrightness());
+	s_armImageSpin(hWnd, XAP_RID_DIALOG_IMAGE_SPN_CROP_TOP, 0, 80, getCropTop());
+	s_armImageSpin(hWnd, XAP_RID_DIALOG_IMAGE_SPN_CROP_BOTTOM, 0, 80, getCropBottom());
+	s_armImageSpin(hWnd, XAP_RID_DIALOG_IMAGE_SPN_CROP_LEFT, 0, 80, getCropLeft());
+	s_armImageSpin(hWnd, XAP_RID_DIALOG_IMAGE_SPN_CROP_RIGHT, 0, 80, getCropRight());
 
 	// Initialize text wrapping radio buttons
 	if(getWrapping() == WRAP_INLINE)
@@ -410,6 +439,14 @@ BOOL XAP_Win32Dialog_Image::_onDeltaPos(NM_UPDOWN * pnmud)
 	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_LEFT, number);
 	snprintf(number, sizeof(number), "%d", getCropRight());
 	setControlText(XAP_RID_DIALOG_IMAGE_EBX_CROP_RIGHT, number);
+	// Keep the control on the number just written. The handler already
+	// applied the step and returns TRUE so the up-down does not apply it again.
+	s_armImageSpin(m_hDlg, XAP_RID_DIALOG_IMAGE_SPN_OPACITY, 0, 100, getOpacity());
+	s_armImageSpin(m_hDlg, XAP_RID_DIALOG_IMAGE_SPN_BRIGHTNESS, -100, 100, getBrightness());
+	s_armImageSpin(m_hDlg, XAP_RID_DIALOG_IMAGE_SPN_CROP_TOP, 0, 80, getCropTop());
+	s_armImageSpin(m_hDlg, XAP_RID_DIALOG_IMAGE_SPN_CROP_BOTTOM, 0, 80, getCropBottom());
+	s_armImageSpin(m_hDlg, XAP_RID_DIALOG_IMAGE_SPN_CROP_LEFT, 0, 80, getCropLeft());
+	s_armImageSpin(m_hDlg, XAP_RID_DIALOG_IMAGE_SPN_CROP_RIGHT, 0, 80, getCropRight());
 	return 1;
 }
 

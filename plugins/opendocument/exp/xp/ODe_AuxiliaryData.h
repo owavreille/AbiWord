@@ -42,6 +42,8 @@
  * So, when translating an AbiWord paragraph, we must know wheter it will map
  * into an OpenDocument <text:p> or into a <text:h>.
  */
+class PD_Document;
+
 class ODe_HeadingStyles {
 public:
 
@@ -70,6 +72,10 @@ public:
     ~ODe_AuxiliaryData();
 
     ODe_HeadingStyles m_headingStyles;
+
+    // The document being exported. Image names need its data items so the
+    // package path, the manifest and xlink:href stay the same string.
+    PD_Document* m_pDoc;
 
     // Content of the TOC
     // Note: we only support 1 TOC body per document right now. It's wasted

@@ -200,7 +200,7 @@ public:
 	UT_Error setTitlePage();
 	UT_Error setEvenAndOddHeaders();
 	UT_Error setColumns(int target, const gchar* num, const gchar* sep);
-	UT_Error setContinuousSection(int target);
+	UT_Error setNextPageSection(int target);
 	UT_Error setPageBreak(int target);
 	UT_Error setPageSize(int target, const char* width, const char* height, const char* orientation);
 	UT_Error setPageMargins(int target, const char* top, const char* left, const char* right, const char* bottom);
@@ -233,6 +233,7 @@ private:
 	GsfOutput* endnoteStream; //word/endnotes.xml
 	GsfOutput* commentStream; //word/comments.xml
 	std::string m_commentEx;
+	std::string m_settingsEven;
 	std::string m_nextParaId;
 	std::map<std::string, GsfOutput*> mediaStreams; // all image filename, stream pairs
 	std::map<std::string, GsfOutput*> headerStreams; //all header id, stream pairs

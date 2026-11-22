@@ -102,7 +102,7 @@ void ODe_Table_Listener::openTable(const PP_AttrProp* pAP,
     // writing out redundant properties when the user-selected style properties 
     // exactly match the default OpenDocument default properties; we will just ignore
     // this case.
-    m_tableWideCellStyle.fetchAttributesFromAbiCell(pAP);
+    m_tableWideCellStyle.fetchAttributesFromAbiCell(pAP, m_rAuxiliaryData.m_pDoc);
 
     // NOTE: Don't use the number of table-column-props values to determine
     // the number of columns in the table. There can be more values than there
@@ -301,7 +301,7 @@ void ODe_Table_Listener::openCell(const PP_AttrProp* pAP,
     // writing out redundant properties when the user-selected style properties 
     // exactly match the default OpenDocument default properties; we will just ignore
     // this case.
-    pCellStyle->fetchAttributesFromAbiCell(pAP);
+    pCellStyle->fetchAttributesFromAbiCell(pAP, m_rAuxiliaryData.m_pDoc);
     
 
     ////
