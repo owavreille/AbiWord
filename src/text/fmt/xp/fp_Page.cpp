@@ -1913,12 +1913,12 @@ void fp_Page::_reformatColumns(void)
 	// the text back into the paper width. A one-inch floor crammed
 	// every line when the window size was not ready.
 	if (m_pView && m_pView->getViewMode() == VIEW_WEB && m_pLayout &&
-	    m_pLayout->getGraphics() && m_pLayout->getDocument() &&
+	    m_pLayout->getGraphics() &&
 	    !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
 	{
 		const UT_sint32 pad = m_pLayout->getGraphics()->tlu(8);
 		UT_sint32 windowLu = m_pView->getWindowWidth() - pad;
-		double paperIn = m_pLayout->getDocument()->m_docPageSize.Width(DIM_IN);
+		double paperIn = m_pView->getPageSize().Width(DIM_IN);
 		if (paperIn < 1.0)
 			paperIn = 1.0;
 		double wantIn = static_cast<double>(windowLu) / static_cast<double>(UT_LAYOUT_RESOLUTION);
