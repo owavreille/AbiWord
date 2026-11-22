@@ -33,7 +33,14 @@ DiskSessionRecorder::DiskSessionRecorder(AbiCollab* pSession)
 #ifndef _WIN32
 	pidStr = str(boost::format( "%1%" ) % int(getpid()) );
 #endif
-	gchar *s = g_build_filename(getTargetDirectory(), std::string(getPrefix() + pSession->getSessionId()).c_str(), nullptr);
+	std::string safeSessionId = pSession->getSessionId();
+	for (char & c : safeSessionId)
+	{
+		const unsigned char uc = static_cast<unsigned char>(c);
+		if (!g_ascii_isalnum(uc) && c != '-' && c != '_')
+			c = '_';
+	}
+	gchar *s = g_build_filename(getTargetDirectory(), std::string(getPrefix() + safeSessionId).c_str(), nullptr);
 	std::string fn = (char*)s;
 	fn += ".";
 	fn += pidStr;
@@ -79,7 +86,15 @@ bool DiskSessionRecorder::getPackets(const std::string& filename, bool& bLocally
 	UT_return_val_if_fail(in,false);
 	
 	// read contents
-	size_t fileSize = gsf_input_size(in);
+	size_t headerLen = strlen( DiskSessionRecorder::getHeader() );
+	size_t minSize = headerLen + sizeof(UT_sint32) + sizeof(char);
+	gsf_off_t rawSize = gsf_input_size(in);
+	if (rawSize < static_cast<gsf_off_t>(minSize) || rawSize > static_cast<gsf_off_t>(64 * 1024 * 1024))
+	{
+		g_object_unref(G_OBJECT(in));
+		UT_return_val_if_fail(false,false);
+	}
+	size_t fileSize = static_cast<size_t>(rawSize);
 	guint8 const* contents = gsf_input_read(in, fileSize, NULL);
 	if (!contents)
 	{
@@ -91,9 +106,9 @@ bool DiskSessionRecorder::getPackets(const std::string& filename, bool& bLocally
 	std::string buffer;
 	buffer.resize( fileSize );
 	memcpy( &buffer[0], contents, fileSize );
+	g_object_unref(G_OBJECT(in));
 	
 	// check header
-	size_t headerLen = strlen( DiskSessionRecorder::getHeader() );
 	if (memcmp( DiskSessionRecorder::getHeader(), &buffer[0], headerLen )) 
 	{
 		UT_DEBUGMSG(("%s does not seem to be a session file\n", filename.c_str() ));
@@ -148,6 +163,11 @@ bool DiskSessionRecorder::getPackets(const std::string& filename, bool& bLocally
 			}
 			SessionPacket* newPacket = static_cast<SessionPacket*>(created);
 			is << *newPacket;
+			if (is.failed())
+			{
+				delete newPacket;
+				UT_return_val_if_fail(false,false);
+			}
 			
 			packets.push_back(new RecordedPacket(incoming, hasBuddy, buddyName, timestamp, newPacket));
 		}

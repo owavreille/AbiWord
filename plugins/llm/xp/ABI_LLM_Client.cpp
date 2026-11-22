@@ -87,44 +87,52 @@ std::string json_unescape(const std::string & raw)
 	for (std::size_t i = 0; i < raw.size(); ++i)
 	{
 		char c = raw[i];
-		unsigned long code = 0;
 		if (c != '\\' || i + 1 >= raw.size())
 		{
-			code = static_cast<unsigned char>(c);
-		}
-		else
-		{
-			char e = raw[++i];
-			switch (e)
+			if (pending)
 			{
-			case '"':
-			case '\\':
-			case '/': code = static_cast<unsigned char>(e); break;
-			case 'b': code = '\b'; break;
-			case 'f': code = '\f'; break;
-			case 'n': code = '\n'; break;
-			case 'r': code = '\r'; break;
-			case 't': code = '\t'; break;
-			case 'u':
-				if (i + 4 < raw.size())
-				{
-					int h0 = hex_value(raw[i + 1]);
-					int h1 = hex_value(raw[i + 2]);
-					int h2 = hex_value(raw[i + 3]);
-					int h3 = hex_value(raw[i + 4]);
-					if (h0 >= 0 && h1 >= 0 && h2 >= 0 && h3 >= 0)
-					{
-						code = (h0 << 12) | (h1 << 8) | (h2 << 4) | h3;
-						i += 4;
-						break;
-					}
-				}
-				code = 'u';
-				break;
-			default:
-				code = static_cast<unsigned char>(e);
-				break;
+				append_utf8(out, pending);
+				pending = 0;
 			}
+			out.push_back(c);
+			continue;
+		}
+		unsigned long code = 0;
+		char e = raw[++i];
+		switch (e)
+		{
+		case '"':
+		case '\\':
+		case '/': code = static_cast<unsigned char>(e); break;
+		case 'b': code = '\b'; break;
+		case 'f': code = '\f'; break;
+		case 'n': code = '\n'; break;
+		case 'r': code = '\r'; break;
+		case 't': code = '\t'; break;
+		case 'u':
+			if (i + 4 < raw.size())
+			{
+				int h0 = hex_value(raw[i + 1]);
+				int h1 = hex_value(raw[i + 2]);
+				int h2 = hex_value(raw[i + 3]);
+				int h3 = hex_value(raw[i + 4]);
+				if (h0 >= 0 && h1 >= 0 && h2 >= 0 && h3 >= 0)
+				{
+					code = (h0 << 12) | (h1 << 8) | (h2 << 4) | h3;
+					i += 4;
+					break;
+				}
+			}
+			code = 'u';
+			break;
+		default:
+			if (pending)
+			{
+				append_utf8(out, pending);
+				pending = 0;
+			}
+			out.push_back(e);
+			continue;
 		}
 		if (pending)
 		{
@@ -241,8 +249,24 @@ std::string request_body(const ABI_LLM_Settings & settings, const std::string & 
 size_t curl_write(char * ptr, size_t size, size_t nmemb, void * userdata)
 {
 	const size_t bytes = size * nmemb;
-	static_cast<std::string *>(userdata)->append(ptr, bytes);
+	auto * out = static_cast<std::string *>(userdata);
+	const size_t kMaxResponseBytes = 4 * 1024 * 1024;
+	if (bytes > kMaxResponseBytes || out->size() > kMaxResponseBytes - bytes)
+		return 0;
+	out->append(ptr, bytes);
 	return bytes;
+}
+
+std::string sanitize_header_value(const std::string & value)
+{
+	std::string clean;
+	clean.reserve(value.size());
+	for (char c : value)
+	{
+		if (c != '\r' && c != '\n')
+			clean.push_back(c);
+	}
+	return clean;
 }
 
 int curl_abort(void * userdata, curl_off_t, curl_off_t, curl_off_t, curl_off_t)
@@ -337,9 +361,13 @@ ABI_LLM_Result abi_llm_complete(const ABI_LLM_Settings & incoming, const std::st
 	result.ok = false;
 	ABI_LLM_Settings settings = incoming;
 	abi_llm_apply_defaults(settings);
-	const std::string url = abi_llm_request_url(settings);
-	const std::string body = abi_llm_request_json(settings, documentText);
+	settings.apiKey = sanitize_header_value(settings.apiKey);
 	const std::string provider = provider_key(settings.provider);
+	ABI_LLM_Settings urlSettings = settings;
+	if (provider == "gemini")
+		urlSettings.apiKey.clear();
+	const std::string url = abi_llm_request_url(urlSettings);
+	const std::string body = abi_llm_request_json(settings, documentText);
 	std::string response;
 	char errorBuffer[CURL_ERROR_SIZE];
 	errorBuffer[0] = '\0';
@@ -355,6 +383,7 @@ ABI_LLM_Result abi_llm_complete(const ABI_LLM_Settings & incoming, const std::st
 	headers = curl_slist_append(headers, "Content-Type: application/json");
 	std::string auth;
 	std::string anthropicKey;
+	std::string geminiKey;
 	if (provider == "anthropic")
 	{
 		headers = curl_slist_append(headers, "anthropic-version: 2023-06-01");
@@ -364,7 +393,15 @@ ABI_LLM_Result abi_llm_complete(const ABI_LLM_Settings & incoming, const std::st
 			headers = curl_slist_append(headers, anthropicKey.c_str());
 		}
 	}
-	else if (!settings.apiKey.empty() && provider != "gemini")
+	else if (provider == "gemini")
+	{
+		if (!settings.apiKey.empty())
+		{
+			geminiKey = "x-goog-api-key: " + settings.apiKey;
+			headers = curl_slist_append(headers, geminiKey.c_str());
+		}
+	}
+	else if (!settings.apiKey.empty())
 	{
 		auth = "Authorization: Bearer " + settings.apiKey;
 		headers = curl_slist_append(headers, auth.c_str());
@@ -381,7 +418,13 @@ ABI_LLM_Result abi_llm_complete(const ABI_LLM_Settings & incoming, const std::st
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "AbiWord-LLM");
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
-	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
+#ifdef CURLOPT_PROTOCOLS_STR
+	curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");
+#endif
+#if defined(_WIN32) && defined(CURLSSLOPT_NATIVE_CA)
+	curl_easy_setopt(curl, CURLOPT_SSL_OPTIONS, CURLSSLOPT_NATIVE_CA);
+#endif
 	curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, curl_abort);
 	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &abi_llm_stop_requested);

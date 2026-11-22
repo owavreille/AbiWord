@@ -278,8 +278,8 @@ bool XMPPAccountHandler::authenticate()
 	if (!lm_connection_authenticate(m_pConnection, username.c_str(), password.c_str(),
 				resource.c_str(), lm_connection_authenticate_async_cb, this, NULL, &error))
 	{
-		UT_DEBUGMSG(("connect() - couldn't authenticate with '%s' '%s':\n%s\n", 
-				username.c_str(), password.c_str(), (error ? error->message : "")));
+		UT_DEBUGMSG(("connect() - couldn't authenticate with '%s':\n%s\n", 
+				username.c_str(), (error ? error->message : "")));
 				
 		lm_connection_close(m_pConnection, NULL);
 		lm_connection_unref(m_pConnection);

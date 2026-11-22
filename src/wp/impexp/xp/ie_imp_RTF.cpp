@@ -3174,9 +3174,18 @@ bool IE_Imp_RTF::ReadKeyword(unsigned char* pKeyword, UT_sint32* pParam, bool* p
     // If the delimeter was '-' then the following parameter is negative
     if (ch == '-')
     {
-        fNegative = true;
-		if (!ReadCharFromFileWithCRLF(&ch))
+		unsigned char nextCh = 0;
+		if (!ReadCharFromFileWithCRLF(&nextCh))
 			return false;
+		if (isdigit(nextCh))
+		{
+			fNegative = true;
+			ch = nextCh;
+		}
+		else
+		{
+			SkipBackChar(nextCh);
+		}
     }
 
     // Read the numeric parameter (if there is one)

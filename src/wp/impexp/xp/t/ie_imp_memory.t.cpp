@@ -84,4 +84,10 @@ TFTEST_MAIN("An RTF import field cannot name an absolute path")
 	TFPASS(UT_IS_IE_SUCCESS(load_bytes(
 		"{\\rtf1\\ansi{\\field{\\*\\fldinst IMPORT /etc/passwd}}\\par}",
 		".rtf")));
+	TFPASS(UT_IS_IE_SUCCESS(load_bytes(
+		"{\\rtf1\\ansi{\\field{\\*\\fldinst \\import /etc/passwd}}\\par}",
+		".rtf")));
+	TFPASS(UT_IS_IE_SUCCESS(load_bytes(
+		"{\\rtf1\\ansi{\\field{\\*\\fldinst \\import ../secret.jpg}}\\par}",
+		".rtf")));
 }

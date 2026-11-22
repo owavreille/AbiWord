@@ -2644,6 +2644,8 @@ bool FV_View::notifyListeners(const AV_ChangeMask hint)
 //
 	if(mask & m_iFreePass)
 	{
+		if (mask & AV_CHG_FMTSTYLE)
+			m_fmtKeyValid = false;
 		m_iFreePass = 0;
 		return AV_View::notifyListeners(mask);
 	}
@@ -2695,8 +2697,8 @@ bool FV_View::notifyListeners(const AV_ChangeMask hint)
 		// NOTE: we don't attempt to filter this
 	}
 
-	if ((mask & (AV_CHG_FMTCHAR | AV_CHG_FMTBLOCK | AV_CHG_FMTSTYLE)) && _typingFormatUnchanged())
-		mask &= ~(AV_CHG_FMTCHAR | AV_CHG_FMTBLOCK | AV_CHG_FMTSTYLE);
+	if ((mask & (AV_CHG_FMTCHAR | AV_CHG_FMTBLOCK | AV_CHG_FMTSECTION)) && _typingFormatUnchanged())
+		mask &= ~(AV_CHG_FMTCHAR | AV_CHG_FMTBLOCK | AV_CHG_FMTSECTION);
 
 	if (mask & AV_CHG_FMTBLOCK)
 	{
@@ -2824,6 +2826,7 @@ bool FV_View::notifyListeners(const AV_ChangeMask hint)
 	{
 		// NOTE: we don't attempt to filter this
 		// TODO: we probably should
+		m_fmtKeyValid = false;
 	}
 
 	if (mask & AV_CHG_PAGECOUNT)

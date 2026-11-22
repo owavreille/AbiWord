@@ -79,10 +79,13 @@ AC_ARG_ENABLE([collab-backend-tcp],
 	fi
 ], [
 	AC_LANG_PUSH(C++)
-	AC_CHECK_HEADERS([boost/asio.hpp], [AC_DEFINE([HAVE_BOOST_ASIO_HPP])],
+	AC_CHECK_HEADERS([boost/asio.hpp],
 	[
+		AC_DEFINE([HAVE_BOOST_ASIO_HPP])
 		enable_collab_backend_tcp="yes"
 		collab_deps="yes"
+	], [
+		enable_collab_backend_tcp="no"
 	])
 	AC_LANG_POP
 ])
@@ -124,15 +127,18 @@ AC_ARG_ENABLE([collab-backend-service],
 	fi
 ], [
 	AC_LANG_PUSH(C++)
-	AC_CHECK_HEADERS([boost/asio.hpp], [AC_DEFINE([HAVE_BOOST_ASIO_HPP])],
+	AC_CHECK_HEADERS([boost/asio.hpp],
 	[
+		AC_DEFINE([HAVE_BOOST_ASIO_HPP])
 		PKG_CHECK_EXISTS([ $collab_service_req ], [
 			enable_collab_backend_service="yes"
 			collab_deps="yes"
 		], [
 			enable_collab_backend_service="no"
 		])
-        ])
+	], [
+		enable_collab_backend_service="no"
+	])
 	AC_LANG_POP
 ])
 test "$enable_collab_backend_service" = "yes" && collab_pkgs="$collab_pkgs $collab_service_req"

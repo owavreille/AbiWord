@@ -90,7 +90,9 @@ void TimeStamp::load(GsfInput* aStream) {
 }
 
 std::string TimeStamp::ToString() const {
-	struct tm theDate;
+	if (mDate == 0)
+		return "";
+	struct tm theDate = {};
 	theDate.tm_sec = (mTime / 100) % 100;
 	theDate.tm_min = (mTime / 10000) % 100;
 	theDate.tm_hour = (mTime / 1000000) % 100;
@@ -99,9 +101,11 @@ std::string TimeStamp::ToString() const {
 	theDate.tm_year = (mDate / 10000) - 1900;
 	theDate.tm_isdst = -1;
 
-	mktime(&theDate);
+	if (mktime(&theDate) == (time_t)-1)
+		return "";
 	char buf[64];
-	strftime(buf, sizeof(buf), "%x %X", &theDate);
+	if (strftime(buf, sizeof(buf), "%x %X", &theDate) == 0)
+		return "";
 	UT_DEBUGMSG(("SDW: (TimeStamp is %s)\n", buf));
 	return buf;
 }
@@ -122,7 +126,7 @@ void SDWDocInfo::load(GsfInfile* aDoc, PD_Document* aPDDoc)
 		aPDDoc->setMetaDataProp(PD_META_KEY_GENERATOR, "StarOffice");
 		AutoGsfInput docInfo =  gsf_infile_child_by_name(aDoc, "SfxDocumentInfo");
 		if (!(GsfInput*)docInfo)
-			throw UT_IE_BOGUSDOCUMENT;
+			return;
 
 		readByteString(docInfo, headStr);
 		if (strcmp(headStr, "SfxDocumentInfo") != 0)

@@ -130,7 +130,6 @@ void GR_Win32CairoImage::adoptSurface(cairo_surface_t *surface, bool hasAlpha)
 
 bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 {
-	png_bytep volatile pngRow = nullptr;
 	png_structp png = png_create_read_struct(PNG_LIBPNG_VER_STRING, nullptr, nullptr, nullptr);
 	if (!png)
 		return false;
@@ -142,7 +141,6 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 	}
 	if (setjmp(png_jmpbuf(png)))
 	{
-		g_free(pngRow);
 		png_destroy_read_struct(&png, &info, nullptr);
 		if (m_surface)
 		{
@@ -165,22 +163,25 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 	int colorType = 0;
 	png_get_IHDR(png, info, &width, &height, &bitDepth, &colorType, nullptr, nullptr, nullptr);
 	(void)bitDepth;
-	(void)colorType;
 	if (width == 0 || height == 0 || width > c_MaxImageSide || height > c_MaxImageSide)
 	{
 		png_destroy_read_struct(&png, &info, nullptr);
 		return false;
 	}
 
+	const bool hasAlpha = ((colorType & PNG_COLOR_MASK_ALPHA) != 0)
+		|| (png_get_valid(png, info, PNG_INFO_tRNS) != 0);
+
 	png_set_packing(png);
 	png_set_expand(png);
 	png_set_strip_16(png);
 	png_set_gray_to_rgb(png);
 	png_set_bgr(png);
+	if (!hasAlpha)
+		png_set_filler(png, 0xFF, PNG_FILLER_AFTER);
 	const int passes = png_set_interlace_handling(png);
 	png_read_update_info(png, info);
 
-	const bool hasAlpha = png_get_channels(png, info) == 4;
 	cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, (int)width, (int)height);
 	if (cairo_surface_status(surface) != CAIRO_STATUS_SUCCESS)
 	{
@@ -192,13 +193,6 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 
 	unsigned char* pixels = cairo_image_surface_get_data(m_surface);
 	const int stride = cairo_image_surface_get_stride(m_surface);
-	if (!hasAlpha)
-		pngRow = static_cast<png_bytep>(g_try_malloc(width * 3));
-	if (!hasAlpha && !pngRow)
-	{
-		png_destroy_read_struct(&png, &info, nullptr);
-		return false;
-	}
 
 	// Adam7 needs one full pass per interlace stage. png_combine_row writes
 	// into the same row, so earlier passes must stay until the last one.
@@ -208,10 +202,7 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 		for (png_uint_32 y = 0; y < height; y++)
 		{
 			unsigned char* dest = pixels + y * stride;
-			if (hasAlpha)
-				png_read_row(png, dest, nullptr);
-			else
-				png_read_row(png, pngRow, nullptr);
+			png_read_row(png, dest, nullptr);
 			if (!last)
 				continue;
 			if (hasAlpha)
@@ -221,15 +212,10 @@ bool GR_Win32CairoImage::loadPng(const UT_ConstByteBufPtr & pBB)
 			}
 			for (png_uint_32 x = 0; x < width; x++)
 			{
-				dest[x * 4 + 0] = pngRow[x * 3 + 0];
-				dest[x * 4 + 1] = pngRow[x * 3 + 1];
-				dest[x * 4 + 2] = pngRow[x * 3 + 2];
 				dest[x * 4 + 3] = 255;
 			}
 		}
 	}
-	g_free(pngRow);
-	pngRow = nullptr;
 	cairo_surface_mark_dirty(m_surface);
 	png_read_end(png, info);
 	png_destroy_read_struct(&png, &info, nullptr);

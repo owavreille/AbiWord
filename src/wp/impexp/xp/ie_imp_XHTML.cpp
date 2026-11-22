@@ -1243,7 +1243,7 @@ void IE_Imp_XHTML::startElement(const gchar *name,
 				UT_Dimension units = UT_determineDimension (szHeight.c_str());
 				if(units == DIM_PERCENT)
 					{
-						getDoc()->convertPercentToInches(szWidth.c_str(), sHeight);
+						getDoc()->convertPercentToInches(szHeight.c_str(), sHeight);
 						szHeight = sHeight.utf8_str();
 					}
 			}

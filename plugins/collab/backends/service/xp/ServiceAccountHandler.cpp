@@ -478,7 +478,7 @@ void ServiceAccountHandler::getSessionsAsync()
 	AbiCollabSessionManager* pManager = AbiCollabSessionManager::getManager();
 	UT_return_if_fail(pManager);			
 	
-	bool verify_webapp_host = (getProperty("verify-webapp-host") == "true");
+	bool verify_webapp_host = (getProperty("verify-webapp-host") != "false");
 
 	pManager->beginAsyncOperation(this);
 	soa::function_call_ptr fc_ptr = constructListDocumentsCall();
@@ -500,7 +500,7 @@ void ServiceAccountHandler::getSessionsAsync(const Buddy& /*buddy*/)
 	AbiCollabSessionManager* pManager = AbiCollabSessionManager::getManager();
 	UT_return_if_fail(pManager);		
 	
-	bool verify_webapp_host = (getProperty("verify-webapp-host") == "true");
+	bool verify_webapp_host = (getProperty("verify-webapp-host") != "false");
 
 	// TODO: we shouldn't ignore the buddy parameter, but for now, we do ;)
 
@@ -530,7 +530,7 @@ bool ServiceAccountHandler::startSession(PD_Document* pDoc, const std::vector<st
 	const std::string uri = getProperty("uri");
 	const std::string email = getProperty("email");
 	std::string password = getProperty("password");
-	bool verify_webapp_host = (getProperty("verify-webapp-host") == "true");
+	bool verify_webapp_host = (getProperty("verify-webapp-host") != "false");
 
 	std::string filename;
 	bool bFilenameChanged = false;
@@ -813,7 +813,7 @@ acs::SOAP_ERROR ServiceAccountHandler::openDocument(UT_uint64 doc_id, UT_uint64 
 	const std::string uri = getProperty("uri");
 	const std::string email = getProperty("email");
 	const std::string password = getProperty("password");
-	bool verify_webapp_host = (getProperty("verify-webapp-host") == "true");
+	bool verify_webapp_host = (getProperty("verify-webapp-host") != "false");
 
 	// construct a SOAP method call to gets our documents
 	soa::function_call fc("openDocument", "openDocumentResponse");
@@ -856,7 +856,12 @@ acs::SOAP_ERROR ServiceAccountHandler::openDocument(UT_uint64 doc_id, UT_uint64 
 	}
 	// check the filename; it shouldn't ever be empty, but just check nonetheless
 	// TODO: append a number if the filename happens to be empty
-	std::string filename = filename_ptr->value().size() > 0 ? filename_ptr->value() : "Untitled";
+	std::string filename = filename_ptr->value();
+	const std::string::size_type sep = filename.find_last_of("/\\");
+	if (sep != std::string::npos)
+		filename.erase(0, sep + 1);
+	if (filename.empty() || filename == "." || filename == "..")
+		filename = "Untitled";
 
 	// open a connection with the realm
 	ConnectionPtr connection = _realmConnect(rcp, doc_id, session_id, master->value());
@@ -1048,7 +1053,7 @@ bool ServiceAccountHandler::_getConnections()
 	const std::string uri = getProperty("uri");
 	const std::string email = getProperty("email");
 	std::string password = getProperty("password");
-	bool verify_webapp_host = (getProperty("verify-webapp-host") == "true");
+	bool verify_webapp_host = (getProperty("verify-webapp-host") != "false");
 
 	soa::GenericPtr soap_result;
 	do
@@ -1150,7 +1155,7 @@ bool ServiceAccountHandler::_getPermissions(uint64_t doc_id, DocumentPermissions
 	const std::string uri = getProperty("uri");
 	const std::string email = getProperty("email");
 	std::string password = getProperty("password");
-	bool verify_webapp_host = (getProperty("verify-webapp-host") == "true");
+	bool verify_webapp_host = (getProperty("verify-webapp-host") != "false");
 
 	soa::GenericPtr soap_result;
 	do
@@ -1211,7 +1216,7 @@ bool ServiceAccountHandler::_setPermissions(UT_uint64 doc_id, DocumentPermission
 	const std::string uri = getProperty("uri");
 	const std::string email = getProperty("email");
 	std::string password = getProperty("password");
-	bool verify_webapp_host = (getProperty("verify-webapp-host") == "true");
+	bool verify_webapp_host = (getProperty("verify-webapp-host") != "false");
 
 	soa::GenericPtr soap_result;
 	do
@@ -1404,7 +1409,7 @@ bool ServiceAccountHandler::parseUserInfo(const std::string& userinfo, uint64_t&
 		return false;
 	}
 	std::string id_str(reinterpret_cast<char *>(id));
-	FREEP(id);
+	xmlFree(id);
 
 	try
 	{
@@ -1463,7 +1468,7 @@ void ServiceAccountHandler::_listDocuments_cb(bool success,
 				{
 					// FIXME: should we ask for a password in an async callback?
 					const std::string email = getProperty("email");
-					bool verify_webapp_host = (getProperty("verify-webapp-host") == "true");
+					bool verify_webapp_host = (getProperty("verify-webapp-host") != "false");
 
 					std::string password;
 					if (askPassword(email, password))

@@ -26,9 +26,20 @@ TFTEST_MAIN("UT_go_url_may_open allows documents and refuses programs")
 
 	TFPASS(UT_go_url_may_open("file:///tmp/notes.txt"));
 	TFPASS(UT_go_url_may_open("file:///tmp/picture.png"));
+	TFPASS(UT_go_url_may_open("file://localhost/tmp/notes.txt"));
+	TFPASS(!UT_go_url_may_open("file://attacker/share/notes.txt"));
+	TFPASS(!UT_go_url_may_open("file:////attacker/share/notes.txt"));
+	TFPASS(!UT_go_url_may_open("file:///\\attacker\\share\\notes.txt"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/"));
+	TFPASS(!UT_go_url_may_open("file:///C:/tmp\\setup.exe"));
 	TFPASS(!UT_go_url_may_open("file:///tmp/setup.exe"));
 	TFPASS(!UT_go_url_may_open("file:///tmp/run.bat"));
 	TFPASS(!UT_go_url_may_open("file:///tmp/script.ps1"));
 	TFPASS(!UT_go_url_may_open("file:///tmp/link.lnk"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/disk.vhdx"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/macro.docm"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/script.py"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/run.sh"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/app.desktop"));
 	TFPASS(!UT_go_url_may_open("FILE:///TMP/SETUP.EXE"));
 }

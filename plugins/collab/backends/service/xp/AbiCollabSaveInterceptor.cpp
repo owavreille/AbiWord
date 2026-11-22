@@ -173,7 +173,7 @@ bool AbiCollabSaveInterceptor::save(PD_Document* pDoc)
 			// FIXME: guarantee save order!
 			
 			std::string uri = pServiceHandler->getProperty("uri");
-			bool verify_webapp_host = (pServiceHandler->getProperty("verify-webapp-host") == "true");
+			bool verify_webapp_host = (pServiceHandler->getProperty("verify-webapp-host") != "false");
 			soa::function_call_ptr fc_ptr = pServiceHandler->constructSaveDocumentCall(pDoc, connection_ptr);
 			std::string ssl_ca_file = pServiceHandler->getCA();
 			std::shared_ptr<std::string> result_ptr(new std::string());
@@ -251,7 +251,7 @@ void AbiCollabSaveInterceptor::_save_cb(bool success, ServiceAccountHandler* pAc
 				{
 					const std::string email = pAccount->getProperty("email");
 					std::string uri = pAccount->getProperty("uri");
-					bool verify_webapp_host = (pAccount->getProperty("verify-webapp-host") == "true");
+					bool verify_webapp_host = (pAccount->getProperty("verify-webapp-host") != "false");
 					std::string ssl_ca_file = pAccount->getCA();
 
 					std::string password;

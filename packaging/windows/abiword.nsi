@@ -58,7 +58,8 @@ BrandingText "AbiWord ${VERSION}"
 !define MUI_LANGDLL_REGISTRY_ROOT HKLM
 !define MUI_LANGDLL_REGISTRY_KEY "Software\AbiWord"
 !define MUI_LANGDLL_REGISTRY_VALUENAME "Installer Language"
-!define MUI_FINISHPAGE_RUN "$INSTDIR\bin\abiword.exe"
+!define MUI_FINISHPAGE_RUN
+!define MUI_FINISHPAGE_RUN_FUNCTION LaunchAbiWordAsUser
 !define MUI_FINISHPAGE_RUN_TEXT "$(FINISH_RUN)"
 
 !insertmacro MUI_PAGE_WELCOME
@@ -109,8 +110,13 @@ Function un.onInit
   !insertmacro MUI_UNGETLANGUAGE
 FunctionEnd
 
+Function LaunchAbiWordAsUser
+  Exec '"$WINDIR\explorer.exe" "$INSTDIR\bin\abiword.exe"'
+FunctionEnd
+
 Section "AbiWord" SecMain
   SectionIn RO
+  SetShellVarContext all
 
   SetOutPath "$INSTDIR"
   File "${LICENSE}"
@@ -139,6 +145,7 @@ Section "AbiWord" SecMain
 SectionEnd
 
 Section "$(SEC_DESKTOP)" SecDesktop
+  SetShellVarContext all
   CreateShortcut "$DESKTOP\AbiWord.lnk" "$INSTDIR\bin\abiword.exe"
 SectionEnd
 
@@ -177,6 +184,7 @@ Function AssociateAbiWord
 FunctionEnd
 
 Section "Uninstall"
+  SetShellVarContext all
   Delete "$DESKTOP\AbiWord.lnk"
   Delete "$SMPROGRAMS\AbiWord\AbiWord.lnk"
   Delete "$SMPROGRAMS\AbiWord\Désinstaller AbiWord.lnk"
@@ -186,6 +194,7 @@ Section "Uninstall"
   RMDir /r "$INSTDIR\bin"
   RMDir /r "$INSTDIR\lib"
   RMDir /r "$INSTDIR\share"
+  RMDir /r "$INSTDIR\etc"
   Delete "$INSTDIR\COPYING"
   Delete "$INSTDIR\LICENSE.icons.txt"
   Delete "$INSTDIR\THIRD-PARTY-NOTICES.txt"

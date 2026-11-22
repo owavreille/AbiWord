@@ -341,6 +341,8 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 				nameMatches(rqst->pName, NS_W_KEY, "spacing") ||
 				nameMatches(rqst->pName, NS_W_KEY, "pStyle")) {
 	//Verify the context...
+	if (rqst->context->size() < 2)
+		return;
 	std::string contextTag = rqst->context->at(rqst->context->size() - 2);
 	if (contextMatches(contextTag, NS_W_KEY, "p") ||
 		contextMatches(contextTag, NS_W_KEY, "pPrDefault") ||
@@ -417,13 +419,14 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 				final += "pt";
 				UT_return_if_fail( _error_if_fail( UT_OK == para->setProperty("margin-bottom", final.c_str()) ));
 			}
-			if (lineRule != nullptr && !strcmp(lineRule, "auto")) {
+			if (lineRule == nullptr || !strcmp(lineRule, "auto")) {
 				//For now, we only handle "auto".
 				const gchar * line = attrMatches(NS_W_KEY, "line", rqst->ppAtts);
-				UT_return_if_fail( _error_if_fail(line != nullptr) );
-				double ln_spc = UT_convertDimensionless(line) / 240;
-				final = UT_convertToDimensionlessString(ln_spc);
-				UT_return_if_fail( _error_if_fail( UT_OK == para->setProperty("line-height", final.c_str()) ));
+				if (line != nullptr) {
+					double ln_spc = UT_convertDimensionless(line) / 240;
+					final = UT_convertToDimensionlessString(ln_spc);
+					UT_return_if_fail( _error_if_fail( UT_OK == para->setProperty("line-height", final.c_str()) ));
+				}
 			}
 		} else if (nameMatches(rqst->pName, NS_W_KEY, "pStyle")) {
 			const gchar * val = attrMatches(NS_W_KEY, "val", rqst->ppAtts);
@@ -460,6 +463,8 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 				nameMatches(rqst->pName, NS_W_KEY, "vanish") ||
 				nameMatches(rqst->pName, NS_W_KEY, "sz") ) {
 		//Verify the context...
+		if (rqst->context->size() < 2)
+			return;
 		std::string contextTag = rqst->context->at(rqst->context->size() - 2);
 		if (contextMatches(contextTag, NS_W_KEY, "r") ||
 			contextMatches(contextTag, NS_W_KEY, "rPrDefault") || 
@@ -720,6 +725,8 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 				}
 
 				OXML_SharedSection ftr = doc->getFooter(id);
+				if (!ftr)
+					return;
 				UT_return_if_fail(_error_if_fail( UT_OK == ftr->setAttribute("type", type) ));
 
 			} else if (nameMatches(rqst->pName, NS_W_KEY, "headerReference")) {
@@ -747,6 +754,8 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 				}
 
 				OXML_SharedSection hdr = doc->getHeader(id);
+				if (!hdr)
+					return;
 				UT_return_if_fail(_error_if_fail( UT_OK == hdr->setAttribute("type", type) ));
 			}
 			else if (nameMatches(rqst->pName, NS_W_KEY, "cols")) {
@@ -1057,17 +1066,26 @@ void OXMLi_ListenerState_Common::charData (OXMLi_CharDataRequest * rqst)
 		std::string overline = "\\to";
 		std::string underline = "\\bo";
 		std::string eq = "EQ";
-		std::string pageNumber = "PAGE   \\* MERGEFORMAT";
 		std::string v(rqst->buffer);
 		std::string value = "";
 		size_t isOverline = v.find(overline);
 		size_t isUnderline = v.find(underline);
 		size_t isEQ = v.find(eq);
-		size_t isPageNumber = v.find(pageNumber);
+		size_t isPageNumber = std::string::npos;
+		for (size_t pos = v.find("PAGE"); pos != std::string::npos; pos = v.find("PAGE", pos + 4))
+		{
+			bool beforeOk = (pos == 0 || v[pos - 1] == ' ' || v[pos - 1] == '\t');
+			bool afterOk = (pos + 4 == v.size() || v[pos + 4] == ' ' || v[pos + 4] == '\t' || v[pos + 4] == '\\');
+			if (beforeOk && afterOk)
+			{
+				isPageNumber = pos;
+				break;
+			}
+		}
 		size_t openingParenthesis;
 		size_t closingParenthesis;
 		UT_Error err;
-		if(isEQ != std::string::npos) // handle EQ fields
+		if(isEQ != std::string::npos && v.find("SEQ") == std::string::npos) // handle EQ fields
 		{
 			if(isOverline != std::string::npos && isUnderline == std::string::npos)
 			{
@@ -1094,7 +1112,12 @@ void OXMLi_ListenerState_Common::charData (OXMLi_CharDataRequest * rqst)
 			m_pageNumberField = false;
 			openingParenthesis = v.find("(");
 			closingParenthesis = v.find(")");
-			value = v.substr(int(openingParenthesis)+1, int(closingParenthesis)-int(openingParenthesis)-1); // the string between parentheses is extracted
+			if (openingParenthesis != std::string::npos &&
+				closingParenthesis != std::string::npos &&
+				closingParenthesis > openingParenthesis)
+			{
+				value = v.substr(openingParenthesis + 1, closingParenthesis - openingParenthesis - 1); // the string between parentheses is extracted
+			}
 			OXML_Element* elem = sharedElem.get();
 			OXML_Element_Text* textElement = static_cast<OXML_Element_Text*>(elem);
 			textElement->setText(value.c_str(), value.size());

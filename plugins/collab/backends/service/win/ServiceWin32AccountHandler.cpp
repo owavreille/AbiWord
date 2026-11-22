@@ -113,7 +113,27 @@ void ServiceWin32AccountHandler::removeDialogWidgets(void* pEmbeddingParent)
 	RedrawWindow(GetParent(hBox), NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW);	
 }
 
-#define READ_STRING(E, S) std::string S(255*sizeof(TCHAR), ' '); S.resize(SendMessage(E, WM_GETTEXT, S.size()-1, (LPARAM)&S[0]));
+static std::string read_window_utf8(HWND hWnd)
+{
+	if (!hWnd)
+		return std::string();
+	const int len = GetWindowTextLengthW(hWnd);
+	if (len <= 0)
+		return std::string();
+	std::wstring wide(static_cast<size_t>(len) + 1, L'\0');
+	const int copied = GetWindowTextW(hWnd, &wide[0], len + 1);
+	if (copied <= 0)
+		return std::string();
+	wide.resize(static_cast<size_t>(copied));
+	gchar* utf8 = g_utf16_to_utf8(reinterpret_cast<const gunichar2*>(wide.c_str()), -1, nullptr, nullptr, nullptr);
+	if (!utf8)
+		return std::string();
+	std::string result(utf8);
+	g_free(utf8);
+	return result;
+}
+
+#define READ_STRING(E, S) std::string S = read_window_utf8(E);
 
 void ServiceWin32AccountHandler::loadProperties()
 {
@@ -129,6 +149,7 @@ void ServiceWin32AccountHandler::storeProperties()
 	UT_return_if_fail(m_hEmailEntry || m_hPasswordEntry);
 
 	addProperty("uri", "https://abicollab.net/soap/");
+	addProperty("verify-webapp-host", "true");
 	
 	READ_STRING(m_hEmailEntry, email);
 	addProperty("email", email);

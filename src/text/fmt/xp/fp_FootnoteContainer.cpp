@@ -589,8 +589,15 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 		}
 		if (!heading.empty())
 		{
+			GR_Graphics * pDrawG = pDA->pG ? pDA->pG : pG;
+			GR_Font * pFont = pDrawG->findFont("sans-serif", "normal", "", "bold", "", "8pt", nullptr);
+			if (!pFont && onScreen)
+				pFont = pDrawG->getGUIFont();
+			if (pFont)
+				pDrawG->setFont(pFont);
+			pDrawG->setColor(UT_RGBColor(40, 40, 40));
 			UT_UCS4String text(heading);
-			GR_Painter painter(pG);
+			GR_Painter painter(pDrawG);
 			painter.drawChars(text.ucs4_str(), 0, static_cast<int>(text.size()), pDA->xoff, pDA->yoff);
 		}
 		GR_Painter painter(pG);

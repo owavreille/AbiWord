@@ -134,12 +134,22 @@ TCPWin32AccountHandler::TCPWin32AccountHandler()
 	m_hServerLabel(NULL),
 	m_hPortLabel(NULL),
 	m_hAllowAllCheck(NULL),
-	m_hAutoconnectCheck(NULL)
+	m_hAutoconnectCheck(NULL),
+	m_hFont(nullptr)
 {
 	AbiCollabSessionManager * pSessionManager = AbiCollabSessionManager::getManager();
 	if (pSessionManager)
 	{
 		m_hInstance = pSessionManager->getInstance();
+	}
+}
+
+TCPWin32AccountHandler::~TCPWin32AccountHandler()
+{
+	if (m_hFont)
+	{
+		DeleteObject(m_hFont);
+		m_hFont = nullptr;
 	}
 }
 
@@ -171,12 +181,12 @@ void TCPWin32AccountHandler::embedDialogWidgets(void* pEmbeddingParent)
 	
 	/* Radio Button Group */
 	m_hServerRadio = CreateWindowExW(WS_EX_NOPARENTNOTIFY |  WS_EX_TRANSPARENT, L"BUTTON", accept.c_str(), BS_NOTIFY | BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-	15, 15, 200, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_SERVERRADIO,  m_hInstance, 0);
+	15, 15, 240, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_SERVERRADIO,  m_hInstance, 0);
 	UT_return_if_fail(m_hServerRadio);
 	
 	// Join a Server radio button
 	m_hJoinRadio = CreateWindowExW(WS_EX_NOPARENTNOTIFY |  WS_EX_TRANSPARENT, L"BUTTON", connect.c_str(), BS_NOTIFY  | BS_AUTORADIOBUTTON | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-	15, 35, 200, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_JOINRADIO,  m_hInstance, 0);
+	15, 35, 240, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_JOINRADIO,  m_hInstance, 0);
 	UT_return_if_fail(m_hJoinRadio);
 	
 	// Entry box for IP address of server
@@ -197,7 +207,7 @@ void TCPWin32AccountHandler::embedDialogWidgets(void* pEmbeddingParent)
 
 	// Checkbox for Connect on Startup
 	m_hAutoconnectCheck = CreateWindowExW(WS_EX_NOPARENTNOTIFY, L"BUTTON", startup.c_str(), BS_CHECKBOX | BS_AUTOCHECKBOX | WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-	14, 135, 174, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_AUTOCONNECTCHECK,  m_hInstance, 0);
+	14, 135, 225, 15, hBox,  (HMENU) ABI_RID_DIALOG_COLLABTCP_AUTOCONNECTCHECK,  m_hInstance, 0);
 	UT_return_if_fail(m_hAutoconnectCheck);
 	
 	// Font setting code borrowed from XAP_Win32Dlg_About
@@ -205,11 +215,16 @@ void TCPWin32AccountHandler::embedDialogWidgets(void* pEmbeddingParent)
 	wcscpy(lf.lfFaceName, L"MS Sans Serif");
 	lf.lfHeight = 12;
 	lf.lfWeight = 0;
-	HFONT hfontPrimary = CreateFontIndirectW(&lf);
+	if (m_hFont)
+	{
+		DeleteObject(m_hFont);
+		m_hFont = nullptr;
+	}
+	m_hFont = CreateFontIndirectW(&lf);
 	HWND rgFontReceivers[] =
 		{ m_hServerRadio, m_hJoinRadio, m_hServerLabel, m_hPortLabel, m_hServerEntry, m_hPortEntry, m_hAllowAllCheck, m_hAutoconnectCheck};
 	for (UT_uint32 iWnd = 0; iWnd < G_N_ELEMENTS(rgFontReceivers); iWnd++)
-		SendMessage(rgFontReceivers[iWnd], WM_SETFONT, (WPARAM) hfontPrimary, 0);
+		SendMessage(rgFontReceivers[iWnd], WM_SETFONT, (WPARAM) m_hFont, 0);
 	
 	// default to serve
 	_checkButtonHwnd(m_hServerRadio, true);
@@ -237,6 +252,11 @@ void TCPWin32AccountHandler::removeDialogWidgets(void* pEmbeddingParent)
 	DESTROY_WINDOW(m_hJoinRadio);
 	DESTROY_WINDOW(m_hAllowAllCheck);
 	DESTROY_WINDOW(m_hAutoconnectCheck);
+	if (m_hFont)
+	{
+		DeleteObject(m_hFont);
+		m_hFont = nullptr;
+	}
 
 	// destroying a window does not repaint the area it owned, so do it here
 	RedrawWindow(GetParent(hBox), NULL, NULL, RDW_ERASE | RDW_INVALIDATE | RDW_UPDATENOW);

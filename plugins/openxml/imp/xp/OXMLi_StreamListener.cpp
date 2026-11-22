@@ -53,7 +53,8 @@ OXMLi_StreamListener::OXMLi_StreamListener() :
 	m_context(new OXMLi_ContextVector()),
 	m_parseStatus(UT_OK),
 	m_namespaces(new OXMLi_Namespace_Common()),
-	m_fallbackDepth(0)
+	m_fallbackDepth(0),
+	m_useFallback(false)
 {
 	clearStates();
 }
@@ -120,6 +121,10 @@ void OXMLi_StreamListener::setupStates(OXML_PartType type, const char * partId)
 		this->pushState(state);
 		state = new OXMLi_ListenerState_Field();
 		this->pushState(state);
+		state = new OXMLi_ListenerState_Table();
+		this->pushState(state);
+		state = new OXMLi_ListenerState_Image();
+		this->pushState(state);
 		break;
 	case FOOTNOTES_PART: 
 		state = new OXMLi_ListenerState_Footnote();
@@ -184,11 +189,35 @@ void OXMLi_StreamListener::startElement (const gchar* pName, const gchar** ppAtt
 
 	std::map<std::string, std::string>* atts = m_namespaces->processAttributes(pName, ppAtts);
 	std::string name = m_namespaces->processName(pName);
-	bool fallback = name == "VE:Fallback" || (name.size() >= 9 && name.compare(name.size() - 9, 9, ":Fallback") == 0);
-	if (m_fallbackDepth > 0 || fallback)
+	if (m_fallbackDepth > 0)
 	{
 		m_fallbackDepth++;
 		return;
+	}
+	bool choice = name == "VE:Choice" || (name.size() >= 7 && name.compare(name.size() - 7, 7, ":Choice") == 0);
+	if (choice)
+	{
+		auto req = atts->find("VE:Requires");
+		if (req != atts->end() && req->second.find("wps") != std::string::npos)
+		{
+			m_useFallback = true;
+			m_fallbackDepth = 1;
+			return;
+		}
+		m_useFallback = false;
+	}
+	bool fallback = name == "VE:Fallback" || (name.size() >= 9 && name.compare(name.size() - 9, 9, ":Fallback") == 0);
+	if (fallback)
+	{
+		if (m_useFallback)
+		{
+			m_useFallback = false;
+		}
+		else
+		{
+			m_fallbackDepth++;
+			return;
+		}
 	}
 
 	OXMLi_StartElementRequest rqst = { name, atts, m_pElemStack, m_pSectStack, m_context, false, false };

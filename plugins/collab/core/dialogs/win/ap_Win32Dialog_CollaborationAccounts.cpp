@@ -150,7 +150,7 @@ BOOL AP_Win32Dialog_CollaborationAccounts::_onInitDialog(HWND hWnd, WPARAM, LPAR
 	// setup our listview columns
 
 	// column 0
-	LVCOLUMNW lvc;
+	LVCOLUMNW lvc = {};
 	lvc.mask = LVCF_WIDTH | LVCF_TEXT; 
 	lvc.pszText = const_cast<LPWSTR>(onlineText.c_str());
 	lvc.cx = 70;
@@ -216,7 +216,7 @@ void AP_Win32Dialog_CollaborationAccounts::_populateWindowData()
 		UT_Win32LocaleString sAccountTypeText = AP_Win32App::s_fromUTF8ToWinLocale(pAccount->getDisplayType().utf8_str());
 
 		// insert a new account record
-		LVITEMW lviAccount;
+		LVITEMW lviAccount = {};
 		lviAccount.mask = LVIF_STATE | LVIF_IMAGE | LVIF_PARAM;
 		lviAccount.state = 1;
 		lviAccount.iItem = i;
@@ -268,7 +268,7 @@ BOOL AP_Win32Dialog_CollaborationAccounts::_onCommand(HWND hWnd, WPARAM wParam, 
 			UT_sint32 iIndex = ListView_GetSelectionMark(m_hAccountList);
 			UT_return_val_if_fail(iIndex >= 0, false);
 
-			LVITEM lviAccount;
+			LVITEM lviAccount = {};
 			lviAccount.mask = LVIF_PARAM;
 			lviAccount.iItem = iIndex;
 			lviAccount.iSubItem = 0;

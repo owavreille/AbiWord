@@ -157,7 +157,7 @@ UT_Error UT_HTML::parse (const char * szFilename)
 			xmlCharEncoding encoding = xmlParseCharEncoding (m_encoding.c_str());
 
 			ctxt = htmlCreatePushParserCtxt (&hdl, static_cast<void *>(this),
-											 buffer, static_cast<int>(length),
+											 nullptr, 0,
 											 szFilename, encoding);
 			if (ctxt == nullptr)
 				{
@@ -165,12 +165,19 @@ UT_Error UT_HTML::parse (const char * szFilename)
 					reader->closeFile ();
 					return UT_ERROR;
 				}
-			xmlCtxtUseOptions (ctxt, XML_PARSE_NONET | XML_PARSE_NOENT);
+			htmlCtxtUseOptions (ctxt, HTML_PARSE_NONET);
 #if defined(LIBXML_VERSION) && LIBXML_VERSION >= 21200
 			xmlCtxtSetMaxAmplification (ctxt, 5);
 #endif
+			if (htmlParseChunk (ctxt, buffer, static_cast<int>(length), 0))
+				{
+					UT_DEBUGMSG (("Error parsing '%s' (Line: %d, Column: %d)\n",
+								  szFilename, xmlSAX2GetLineNumber(ctxt),
+								  xmlSAX2GetColumnNumber(ctxt)));
+					ret = UT_IE_IMPORTERROR;
+				}
 
-			while (!done && !m_bStopped)
+			while (ret == UT_OK && !done && !m_bStopped)
 				{
 					length = reader->readBytes (buffer, sizeof (buffer));
 					done = (length < sizeof (buffer));

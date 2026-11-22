@@ -96,9 +96,11 @@ static bool s_targetUsesList(int row)
 
 static void s_fillJumpList(AP_Win32Dialog_Goto * dlg, HWND list, int row)
 {
-	if (!list)
+	if (!list || !dlg)
 		return;
 	SendMessageW(list, LB_RESETCONTENT, 0, 0);
+	if (!dlg->getActiveFrame())
+		return;
 
 	UT_Win32LocaleString str;
 	if (row == static_cast<int>(AP_JUMPTARGET_BOOKMARK))
@@ -186,7 +188,7 @@ static void s_gotoNumber(AP_Win32Dialog_Goto * dlg, UT_uint32 number)
 // Next stays put at the end, matching the Linux dialog.
 static void s_prevPageOrLine(AP_Win32Dialog_Goto * dlg, int row)
 {
-	FV_View * view = dlg->getView();
+	FV_View * view = (dlg && dlg->getActiveFrame()) ? dlg->getView() : nullptr;
 	if (!view)
 	{
 		dlg->GoTo("-1");
@@ -275,12 +277,24 @@ void AP_Win32Dialog_Goto::destroy(void)
 
 void AP_Win32Dialog_Goto::notifyActiveFrame(XAP_Frame *pFrame)
 {
-	if((HWND)GetWindowLongPtrW(m_hWnd, GWLP_HWNDPARENT) != static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow())
+	if (!pFrame)
+	{
+		m_pView = nullptr;
+		return;
+	}
+	m_pView = static_cast<FV_View *>(pFrame->getCurrentView());
+	if (!m_hWnd)
+		return;
+	if (s_targetUsesList(m_iRow))
+		s_fillJumpList(this, GetDlgItem(m_hWnd, AP_RID_DIALOG_GOTO_LIST_BOOKMARKS), m_iRow);
+	XAP_Win32FrameImpl * frameImpl = static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl());
+	HWND topLevel = frameImpl ? frameImpl->getTopLevelWindow() : nullptr;
+	if ((HWND)GetWindowLongPtrW(m_hWnd, GWLP_HWNDPARENT) != topLevel)
 	{
 		// Update the caption
 		ConstructWindowName();
-        setDialogTitle(m_WindowName);
-		SetWindowLongPtrW(m_hWnd, GWLP_HWNDPARENT, (LONG_PTR)static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow());
+		setDialogTitle(m_WindowName);
+		SetWindowLongPtrW(m_hWnd, GWLP_HWNDPARENT, (LONG_PTR)topLevel);
 		SetWindowPos(m_hWnd, nullptr, 0, 0, 0, 0,
 						SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGED);
 	}
@@ -288,7 +302,13 @@ void AP_Win32Dialog_Goto::notifyActiveFrame(XAP_Frame *pFrame)
 
 void AP_Win32Dialog_Goto::notifyCloseFrame(XAP_Frame *pFrame)
 {
-	if((HWND)GetWindowLongPtrW(m_hWnd, GWLP_HWNDPARENT) == static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow())
+	if (m_pView && m_pView->getParentData() == pFrame)
+		m_pView = nullptr;
+	if (!pFrame || !m_hWnd)
+		return;
+	XAP_Win32FrameImpl * frameImpl = static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl());
+	HWND topLevel = frameImpl ? frameImpl->getTopLevelWindow() : nullptr;
+	if ((HWND)GetWindowLongPtrW(m_hWnd, GWLP_HWNDPARENT) == topLevel)
 	{
 		SetWindowLongPtrW(m_hWnd, GWLP_HWNDPARENT, 0);
 		SetWindowPos(m_hWnd, nullptr, 0, 0, 0, 0,
@@ -304,16 +324,19 @@ void AP_Win32Dialog_Goto::runModeless(XAP_Frame * pFrame)
 	// Save dialog the ID number and pointer to the widget
 	UT_sint32 sid =(UT_sint32)	getDialogId();
 	m_pApp->rememberModelessId( sid, (XAP_Dialog_Modeless *) m_pDialog);
- 	m_pView->focusChange(AV_FOCUS_MODELESS);
+	if (m_pView)
+		m_pView->focusChange(AV_FOCUS_MODELESS);
 }
 
 void AP_Win32Dialog_Goto::GoTo (const char *number)
 {
+	if (!m_pView)
+		return;
 	UT_UCS4Char *ucsnumber = (UT_UCS4Char *) g_try_malloc (sizeof (UT_UCS4Char) * (strlen(number) + 1));
 	UT_return_if_fail(ucsnumber);
 	UT_UCS4_strcpy_utf8_char(ucsnumber, number);
 	int target = this->getSelectedRow ();
-	this->getView()->gotoTarget ((AP_JumpTarget) target, ucsnumber);
+	m_pView->gotoTarget ((AP_JumpTarget) target, ucsnumber);
 	g_free (ucsnumber);
 }
 
@@ -385,15 +408,21 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 	HWND hWndCtrl = (HWND)lParam;
 	DWORD dwTextLength, dwCounter, dwStart;
 
+	if (wId == IDCANCEL)				// also AP_RID_DIALOG_GOTO_BTN_CLOSE
+	{
+		destroy();
+		return 1;
+	}
+
+	if (!m_pView)
+		return 0;
+
 	// before doing anything else, make sure that the main window is not entirely
 	// without focus
 	m_pView->focusChange(AV_FOCUS_MODELESS);
 
 	switch (wId)
 	{
-	case IDCANCEL:						// also AP_RID_DIALOG_GOTO_BTN_CLOSE
-		destroy();
-		return 1;
 
 	case AP_RID_DIALOG_GOTO_LIST_WHAT:
 		switch( wNotifyCode )

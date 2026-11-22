@@ -1204,10 +1204,10 @@ void IE_Imp_AbiWord_1::endElement(const gchar *name)
 		}
 		trim = m_currentDataItem->getLength();
 		buffer = m_currentDataItem->getPointer(0);
-		while (trim > 0 && MyIsWhite(buffer[trim])) {
+		while (trim > 0 && MyIsWhite(buffer[trim - 1])) {
 			trim--;
 		}
-		m_currentDataItem->truncate(trim+1);
+		m_currentDataItem->truncate(trim);
 #undef MyIsWhite
 		X_CheckError(getDoc()->createDataItem(m_currentDataItemName.c_str(),
                                               m_currentDataItemEncoded,

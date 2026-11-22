@@ -92,7 +92,13 @@ void ODi_Table_ListenerState::startElement (const gchar* pName,
         _parseCellStart (ppAtts, rAction);
     }
     else if(!strcmp(pName,"table:covered-table-cell")){
-      m_col++;
+        const gchar* pRepeated = UT_getAttribute("table:number-columns-repeated", ppAtts);
+        UT_sint32 repeated = !pRepeated ? 1 : atoi(pRepeated);
+        if (repeated < 1)
+            repeated = 1;
+        else if (repeated > 1024)
+            repeated = 1024;
+        m_col += repeated;
     }
 
     m_elementLevel++;
@@ -277,6 +283,10 @@ void ODi_Table_ListenerState::_parseRowStart (const gchar** ppAtts,
         const gchar* pNumberRowsRepeated = UT_getAttribute("table:number-rows-repeated", ppAtts);           
         UT_sint32 nRowsRepeated = !pNumberRowsRepeated ? 1 : atoi(pNumberRowsRepeated);
         UT_ASSERT_HARMLESS(nRowsRepeated > 0);
+        if (nRowsRepeated < 1)
+            nRowsRepeated = 1;
+        else if (nRowsRepeated > 1024)
+            nRowsRepeated = 1024;
 
         std::string rowHeight = "";
 
@@ -310,6 +320,10 @@ void ODi_Table_ListenerState::_parseRowStart (const gchar** ppAtts,
             const gchar* pNumberRowsRepeated = UT_getAttribute("table:number-rows-repeated", ppAtts);           
             m_rowsLeftToRepeat = !pNumberRowsRepeated ? 1 : atoi(pNumberRowsRepeated);
             UT_ASSERT_HARMLESS(m_rowsLeftToRepeat > 0);
+            if (m_rowsLeftToRepeat < 1)
+                m_rowsLeftToRepeat = 1;
+            else if (m_rowsLeftToRepeat > 1024)
+                m_rowsLeftToRepeat = 1024;
         }
 
         m_row++;
@@ -353,6 +367,10 @@ void ODi_Table_ListenerState::_parseColumnStart (const gchar** ppAtts,
                 if (pNumberColumnsRepeated != nullptr) {
                     nColsRepeated = atoi(pNumberColumnsRepeated);
                     UT_ASSERT(nColsRepeated > 0);
+                    if (nColsRepeated < 1)
+                        nColsRepeated = 1;
+                    else if (nColsRepeated > 1024)
+                        nColsRepeated = 1024;
                 } 
                 else 
                 {

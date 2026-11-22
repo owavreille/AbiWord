@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <glib/gstdio.h>
 
 #include "ut_string.h"
 #include "ut_types.h"
@@ -56,16 +57,22 @@ static UT_Error temp_name (UT_String& out_filename)
 	GError *err = nullptr;
 	gint tmp_fp = g_file_open_tmp ("XXXXXX", &temporary_file, &err);
 	
-	if (err) 
+	if (tmp_fp == -1 || err) 
 		{
-			g_warning ("%s", err->message);
-			g_error_free (err); err = nullptr;
+			if (err)
+				{
+					g_warning ("%s", err->message);
+					g_error_free (err);
+					err = nullptr;
+				}
+			g_free (temporary_file);
 			return UT_ERROR;
 		}
 
+	g_close (tmp_fp, nullptr);
+	g_chmod (temporary_file, 0600);
 	out_filename = temporary_file;
 	g_free (temporary_file);
-	close(tmp_fp);
 	return UT_OK;
 }
 
@@ -129,7 +136,11 @@ public:
 	if (rval != UT_OK) return rval;
 
 	rval = temp_name (abw_on_disk);
-	if (rval != UT_OK) return rval;
+	if (rval != UT_OK)
+		{
+			g_unlink (pdf_on_disk.c_str ());
+			return rval;
+		}
 
 	GsfOutput * output = gsf_output_stdio_new (pdf_on_disk.c_str (), nullptr);
 	if (output)

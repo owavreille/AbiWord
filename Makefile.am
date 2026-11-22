@@ -35,7 +35,7 @@ DISTCHECK_CONFIGURE_FLAGS = \
 endif
 
 EXTRA_DIST = \
-	AUTHORS \
+	AUTHORS.md \
 	BiDiReadme.txt \
 	BUILD.TXT \
 	COPYING	\
@@ -44,7 +44,7 @@ EXTRA_DIST = \
 	NEWS \
 	README \
 	ChangeLog \
-	abiword.desktop \
+	com.abisource.AbiWord.desktop \
 	abiword.keys \
 	abiword.png \
 	libabiword.pc.in \

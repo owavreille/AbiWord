@@ -67,9 +67,10 @@ bool RealmConnection::connect()
 		if (m_tls)
 		{
 			// setup our local TLS tunnel to the realm
-			m_tls_tunnel_ptr.reset(new tls_tunnel::ClientProxy(m_address, m_port, m_ca_file, false));
+			m_tls_tunnel_ptr.reset(new tls_tunnel::ClientProxy(m_address, m_port, m_ca_file, true));
 			m_tls_tunnel_ptr->setup();
 			std::thread thread(std::bind(&tls_tunnel::ClientProxy::run, m_tls_tunnel_ptr));
+			thread.detach();
 
 			// make sure we connect to the tunnel, and not directly to the realm
 			address = m_tls_tunnel_ptr->local_address();

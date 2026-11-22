@@ -64,7 +64,8 @@ void OXMLi_PackageManager::destroyInstance()
 
 OXMLi_PackageManager::OXMLi_PackageManager() :
 	m_pPkg(nullptr),
-	m_pDocPart(nullptr)
+	m_pDocPart(nullptr),
+	m_pActivePart(nullptr)
 {
 }
 
@@ -76,6 +77,7 @@ OXMLi_PackageManager::~OXMLi_PackageManager()
 	if (m_pDocPart) {
 		g_object_unref (G_OBJECT(m_pDocPart));
 	}
+	m_pActivePart = nullptr;
 	m_parsedParts.clear();
 }
 
@@ -86,7 +88,9 @@ void OXMLi_PackageManager::setContainer(GsfInfile * pPkg)
 	}
 	if (m_pDocPart) {
 		g_object_unref (G_OBJECT(m_pDocPart));
+		m_pDocPart = nullptr;
 	}
+	m_pActivePart = nullptr;
 	m_pPkg = pPkg;
 }
 
@@ -289,13 +293,21 @@ UT_Error OXMLi_PackageManager::_parseStream( GsfInput * stream, OXMLi_StreamList
 	UT_return_val_if_fail(stream != nullptr && pListener != nullptr , UT_ERROR);
 
 	//First, we check if this stream has already been parsed before
-	std::string part_name = gsf_input_name(stream); //TODO: determine if part names are truly unique
+	const char* sname = gsf_input_name(stream);
+	std::string part_name(sname ? sname : ""); //TODO: determine if part names are truly unique
 	std::map<std::string, bool>::iterator it;
 	it = m_parsedParts.find(part_name);
-	if (it != m_parsedParts.end() && it->second) {
+	if (!part_name.empty() && it != m_parsedParts.end() && it->second) {
 		//this stream has already been parsed successfully
 		return UT_OK;
 	}
+
+	struct ActivePartScope {
+		GsfInput*& ref;
+		GsfInput* prev;
+		ActivePartScope(GsfInput*& r, GsfInput* next) : ref(r), prev(r) { ref = next; }
+		~ActivePartScope() { ref = prev; }
+	} activeScope(m_pActivePart, stream);
 
 	UT_Error ret = UT_OK;
 	guint8 const *data = nullptr;
@@ -322,7 +334,7 @@ UT_Error OXMLi_PackageManager::_parseStream( GsfInput * stream, OXMLi_StreamList
 	}
 
 	//There are two error codes to check here.  
-	if (ret == UT_OK && pListener->getStatus() == UT_OK)
+	if (ret == UT_OK && pListener->getStatus() == UT_OK && !part_name.empty())
 		m_parsedParts[part_name] = true;
 
 	//We prioritize the one from UT_XML when returning.
@@ -336,10 +348,16 @@ UT_ConstByteBufPtr OXMLi_PackageManager::parseImageStream(const char * id)
 {
 	if (!id || !*id)
 		return UT_ConstByteBufPtr();
-	GsfInput * parent = _getDocumentStream();
-	if (!parent)
-		return UT_ConstByteBufPtr();
-	GsfInput * stream = getChildById(parent, id);
+	GsfInput * stream = nullptr;
+	if (m_pActivePart)
+		stream = getChildById(m_pActivePart, id);
+	if (!stream)
+	{
+		GsfInput * parent = _getDocumentStream();
+		if (!parent)
+			return UT_ConstByteBufPtr();
+		stream = getChildById(parent, id);
+	}
 	if (!stream)
 		return UT_ConstByteBufPtr();
 	if (gsf_input_size(stream) > (gsf_off_t)(256 * 1024 * 1024))
@@ -348,22 +366,16 @@ UT_ConstByteBufPtr OXMLi_PackageManager::parseImageStream(const char * id)
 		return UT_ConstByteBufPtr();
 	}
 
-	//First, we check if this stream has already been parsed before
 	const char * raw_name = gsf_input_name(stream);
 	std::string part_name = raw_name ? raw_name : "";
-	std::map<std::string, bool>::iterator it;
-	it = m_parsedParts.find(part_name);
-	if (it != m_parsedParts.end() && it->second) {
-		// The relation was opened above. Release it before leaving.
-		g_object_unref(G_OBJECT(stream));
-		return nullptr;
-	}
 
+	gsf_input_seek(stream, 0, G_SEEK_SET);
 	UT_ByteBufPtr buffer(new UT_ByteBuf);
 	buffer->insertFromInput(0, stream);
 	g_object_unref (G_OBJECT (stream));
 
-	m_parsedParts[part_name] = true;
+	if (!part_name.empty())
+		m_parsedParts[part_name] = true;
 
 	return buffer;
 }
@@ -436,10 +448,16 @@ std::string OXMLi_PackageManager::readPartText(const char * id)
 {
 	if (!id || !*id)
 		return std::string();
-	GsfInput * parent = _getDocumentStream();
-	if (!parent)
-		return std::string();
-	GsfInput * stream = getChildById(parent, id);
+	GsfInput * stream = nullptr;
+	if (m_pActivePart)
+		stream = getChildById(m_pActivePart, id);
+	if (!stream)
+	{
+		GsfInput * parent = _getDocumentStream();
+		if (!parent)
+			return std::string();
+		stream = getChildById(parent, id);
+	}
 	if (!stream)
 		return std::string();
 	const gsf_off_t cap = 2 * 1024 * 1024;
@@ -448,6 +466,7 @@ std::string OXMLi_PackageManager::readPartText(const char * id)
 		g_object_unref(G_OBJECT(stream));
 		return std::string();
 	}
+	gsf_input_seek(stream, 0, G_SEEK_SET);
 	UT_ByteBufPtr buffer(new UT_ByteBuf);
 	buffer->insertFromInput(0, stream);
 	g_object_unref(G_OBJECT(stream));
@@ -461,10 +480,16 @@ std::string OXMLi_PackageManager::getPartName(const char * id)
 {
 	if (!id || !*id)
 		return std::string();
-	GsfInput * parent = _getDocumentStream();
-	if (!parent)
-		return std::string();
-	auto rel = gsf_open_pkg_lookup_rel_by_id(parent, id);
+	GsfOpenPkgRel const * rel = nullptr;
+	if (m_pActivePart)
+		rel = gsf_open_pkg_lookup_rel_by_id(m_pActivePart, id);
+	if (!rel)
+	{
+		GsfInput * parent = _getDocumentStream();
+		if (!parent)
+			return std::string();
+		rel = gsf_open_pkg_lookup_rel_by_id(parent, id);
+	}
 	if (!rel)
 		return std::string();
 	const char* target = gsf_open_pkg_rel_get_target(rel);

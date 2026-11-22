@@ -40,6 +40,7 @@
 
 #ifdef TOOLKIT_WIN
 #include <windows.h>
+#include "xap_Win32FrameImpl.h"
 #endif
 
 #ifdef ABI_PLUGIN_BUILTIN
@@ -169,17 +170,56 @@ bool review_proposal(XAP_Frame * frame, const std::string & proposal);
 
 void insert_proposal_page(FV_View * view, const std::string & proposal)
 {
+	if (!view)
+		return;
+	PD_Document * document = view->getDocument();
+	if (!document)
+		return;
+	const bool hasExistingText = !document_text(view).empty();
+	document->beginUserAtomicGlob();
 	view->cmdUnselectSelection();
 	PT_DocPosition docEnd = 0;
-	view->getDocument()->getBounds(true, docEnd);
+	document->getBounds(true, docEnd);
 	view->moveInsPtTo(docEnd);
-	if (!document_text(view).empty())
+	if (hasExistingText)
 	{
 		const UT_UCS4Char page = UCS_FF;
 		view->cmdCharInsert(&page, 1);
 	}
-	UT_UCS4String ucs(proposal);
-	view->cmdCharInsert(ucs.ucs4_str(), static_cast<UT_uint32>(ucs.size()));
+	std::string normalized;
+	normalized.reserve(proposal.size());
+	for (std::size_t i = 0; i < proposal.size(); ++i)
+	{
+		if (proposal[i] == '\r')
+		{
+			if (i + 1 < proposal.size() && proposal[i + 1] == '\n')
+				++i;
+			normalized.push_back('\n');
+		}
+		else
+		{
+			normalized.push_back(proposal[i]);
+		}
+	}
+	std::size_t start = 0;
+	while (start <= normalized.size())
+	{
+		const std::size_t nl = normalized.find('\n', start);
+		const std::string line = (nl == std::string::npos)
+			? normalized.substr(start)
+			: normalized.substr(start, nl - start);
+		if (!line.empty())
+		{
+			UT_UCS4String utext(line);
+			if (utext.size() > 0)
+				view->cmdCharInsert(utext.ucs4_str(), static_cast<UT_uint32>(utext.size()));
+		}
+		if (nl == std::string::npos)
+			break;
+		view->insertParagraphBreak();
+		start = nl + 1;
+	}
+	document->endUserAtomicGlob();
 }
 
 FV_View * live_view(FV_View * candidate)
@@ -200,12 +240,17 @@ FV_View * live_view(FV_View * candidate)
 void apply_pending(PendingInsert * pending)
 {
 	FV_View * view = live_view(pending->view);
-	XAP_Frame * frame = XAP_App::getApp() ? XAP_App::getApp()->getLastFocussedFrame() : nullptr;
+	XAP_Frame * frame = view
+		? static_cast<XAP_Frame *>(view->getParentData())
+		: (XAP_App::getApp() ? XAP_App::getApp()->getLastFocussedFrame() : nullptr);
 	if (frame)
 		frame->setStatusMessage("");
 	if (view && pending->error.empty())
 	{
-		if (review_proposal(frame, pending->text))
+		const bool accepted = review_proposal(frame, pending->text);
+		view = live_view(pending->view);
+		frame = view ? static_cast<XAP_Frame *>(view->getParentData()) : nullptr;
+		if (accepted && view)
 		{
 			insert_proposal_page(view, pending->text);
 			if (frame)
@@ -427,6 +472,26 @@ std::string control_text(HWND dialog, int id)
 	return narrow(std::wstring(buffer, length));
 }
 
+std::string to_crlf(const std::string & text)
+{
+	std::string out;
+	out.reserve(text.size() + 16);
+	for (std::size_t i = 0; i < text.size(); ++i)
+	{
+		if (text[i] == '\n' && (i == 0 || text[i - 1] != '\r'))
+			out.push_back('\r');
+		out.push_back(text[i]);
+	}
+	return out;
+}
+
+HWND parent_hwnd(XAP_Frame * frame)
+{
+	if (!frame || !frame->getFrameImpl())
+		return nullptr;
+	return static_cast<XAP_Win32FrameImpl *>(frame->getFrameImpl())->getTopLevelWindow();
+}
+
 class DialogTemplate
 {
 public:
@@ -481,7 +546,7 @@ INT_PTR CALLBACK settings_dialog(HWND dialog, UINT message, WPARAM wparam, LPARA
 		SetDlgItemTextW(dialog, 102, widen(settings->endpoint).c_str());
 		SetDlgItemTextW(dialog, 103, widen(settings->model).c_str());
 		SetDlgItemTextW(dialog, 104, widen(settings->apiKey).c_str());
-		SetDlgItemTextW(dialog, 105, widen(settings->prompt).c_str());
+		SetDlgItemTextW(dialog, 105, widen(to_crlf(settings->prompt)).c_str());
 		return TRUE;
 	case WM_COMMAND:
 		if (LOWORD(wparam) == IDOK && settings)
@@ -539,7 +604,7 @@ bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings & settings)
 	const INT_PTR answer = DialogBoxIndirectParamW(
 		GetModuleHandleW(nullptr),
 		reinterpret_cast<LPCDLGTEMPLATEW>(dialog.bytes.data()),
-		nullptr,
+		parent_hwnd(frame),
 		settings_dialog,
 		reinterpret_cast<LPARAM>(&settings));
 	if (answer == -1)
@@ -556,7 +621,7 @@ INT_PTR CALLBACK request_dialog(HWND dialog, UINT message, WPARAM wparam, LPARAM
 		SetWindowLongPtrW(dialog, DWLP_USER, lparam);
 		question = reinterpret_cast<std::string *>(lparam);
 		if (question)
-			SetDlgItemTextW(dialog, 201, widen(*question).c_str());
+			SetDlgItemTextW(dialog, 201, widen(to_crlf(*question)).c_str());
 		return TRUE;
 	case WM_COMMAND:
 		if (LOWORD(wparam) == IDOK && question)
@@ -603,7 +668,7 @@ bool ask_request(XAP_Frame * frame, std::string & question)
 	const INT_PTR answer = DialogBoxIndirectParamW(
 		GetModuleHandleW(nullptr),
 		reinterpret_cast<LPCDLGTEMPLATEW>(dialog.bytes.data()),
-		nullptr,
+		parent_hwnd(frame),
 		request_dialog,
 		reinterpret_cast<LPARAM>(&question));
 	if (answer == -1)
@@ -621,7 +686,7 @@ INT_PTR CALLBACK proposal_dialog(HWND dialog, UINT message, WPARAM wparam, LPARA
 		proposal = reinterpret_cast<const std::string *>(lparam);
 		if (proposal)
 		{
-			SetDlgItemTextW(dialog, 301, widen(*proposal).c_str());
+			SetDlgItemTextW(dialog, 301, widen(to_crlf(*proposal)).c_str());
 		}
 		return TRUE;
 	case WM_COMMAND:
@@ -666,7 +731,7 @@ bool review_proposal(XAP_Frame * frame, const std::string & proposal)
 	const INT_PTR answer = DialogBoxIndirectParamW(
 		GetModuleHandleW(nullptr),
 		reinterpret_cast<LPCDLGTEMPLATEW>(dialog.bytes.data()),
-		nullptr,
+		parent_hwnd(frame),
 		proposal_dialog,
 		reinterpret_cast<LPARAM>(&proposal));
 	if (answer == -1)
@@ -768,6 +833,12 @@ bool llm_ask(AV_View * view, EV_EditMethodCallData *)
 	std::string question;
 	if (!ask_request(frame, question))
 		return true;
+	document = live_view(document);
+	if (!document)
+		return false;
+	frame = static_cast<XAP_Frame *>(document->getParentData());
+	if (!frame)
+		return false;
 	if (question.empty())
 	{
 		tell(frame, "Ecrivez la demande a envoyer.");
@@ -862,8 +933,7 @@ int abi_plugin_unregister(XAP_ModuleInfo * info)
 	if (g_worker.joinable())
 		g_worker.join();
 	PendingInsert * leftover = g_ready.exchange(nullptr);
-	if (leftover)
-		apply_pending(leftover);
+	delete leftover;
 	if (g_timer)
 	{
 		g_timer->stop();

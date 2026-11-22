@@ -25,6 +25,7 @@
 #include <gsf/gsf.h>
 
 #include "ut_types.h"
+#include "ut_locale.h"
 #include "ut_std_string.h"
 #include "ut_string.h"
 #include "ut_iconv.h"
@@ -204,7 +205,9 @@ void streamRead(GsfInput* aStream, TextAttr& aAttr, gsf_off_t aEoa)
 		throw UT_IE_BOGUSDOCUMENT;
 
 	gsf_off_t curPos = gsf_input_tell(aStream);
-	if (curPos != aEoa) {
+	if (curPos > aEoa || aEoa > gsf_input_size(aStream))
+		throw UT_IE_BOGUSDOCUMENT;
+	if (curPos < aEoa) {
 		// there is data
 		aAttr.dataLen = aEoa - curPos;
 		aAttr.data = new UT_uint8[aAttr.dataLen];
@@ -505,8 +508,11 @@ UT_Confidence_t IE_Imp_StarOffice_Sniffer::recognizeContents(GsfInput * input) {
 }
 
 UT_Error IE_Imp_StarOffice_Sniffer::constructImporter(PD_Document *pDocument, IE_Imp **ppie) {
+	if (!pDocument || !ppie)
+		return UT_ERROR;
+	*ppie = nullptr;
 	*ppie = new IE_Imp_StarOffice(pDocument);
-	if (!ppie)
+	if (!*ppie)
 		return UT_OUTOFMEM;
 	return UT_OK;
 }
@@ -728,7 +734,7 @@ UT_Error IE_Imp_StarOffice::_loadFile(GsfInput * input)
 								UT_UCS4Char* str;
 								readByteString(mDocStream, str);
 								UT_UCS4String textNode(str);
-								free(str);
+								FREEP(str);
 								UT_DEBUGMSG(("SDW: ...length=%zu contents are: |%s|\n", textNode.length(), textNode.utf8_str()));
 
 								// now get the attributes
@@ -925,6 +931,7 @@ UT_Error IE_Imp_StarOffice::_loadFile(GsfInput * input)
 									if (orient < sizeof(sdwOrientToAbi)/sizeof(*sdwOrientToAbi)) {
 										attributes[3] = sdwOrientToAbi[orient];
                                     }
+									UT_LocaleTransactor t(LC_NUMERIC, "C");
 									attributes[5] = UT_std_string_sprintf("%f", static_cast<double>(width)/100);
 									attributes[7] = UT_std_string_sprintf("%f", static_cast<double>(height)/100);
 

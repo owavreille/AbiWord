@@ -432,26 +432,31 @@ void AP_Win32FrameImpl::_toggleTopRuler(AP_Win32Frame *pFrame, bool bRulerOn)
 
 	if (bRulerOn)
 	{
-		AP_TopRuler * pTop = pFrameData->m_pTopRuler;
-		if(pTop)
+		if (m_hwndTopRuler)
 		{
-			delete pTop;
+			DestroyWindow(m_hwndTopRuler);
+			m_hwndTopRuler = nullptr;
 		}
+		DELETEP(pFrameData->m_pTopRuler);
 
 		_createTopRuler(pFrame);
 
-		pFrameData->m_pTopRuler->setView(pFrame->getCurrentView(), pFrame->getZoomPercentage());
+		if (pFrameData->m_pTopRuler)
+			pFrameData->m_pTopRuler->setView(pFrame->getCurrentView(), pFrame->getZoomPercentage());
 	}
 	else
 	{
 		// delete the actual widgets
 		if (m_hwndTopRuler)
+		{
 			DestroyWindow(m_hwndTopRuler);
+			m_hwndTopRuler = nullptr;
+		}
 
 		DELETEP(pFrameData->m_pTopRuler);
 		FV_View * pFV = static_cast<FV_View *>(pFrame->getCurrentView());
-		pFV->setTopRuler(nullptr);
-		m_hwndTopRuler = nullptr;
+		if (pFV)
+			pFV->setTopRuler(nullptr);
 	}
 
 	// repack the child windows
@@ -469,30 +474,31 @@ void AP_Win32FrameImpl::_toggleLeftRuler(AP_Win32Frame *pFrame, bool bRulerOn)
 
 	if (bRulerOn && pFrameData->m_pViewMode == VIEW_PRINT)
 	{
-		//
-		// If There is an old ruler just return
-		//
-		AP_LeftRuler * pLeft = pFrameData->m_pLeftRuler;
-		if(pLeft)
+		if (m_hwndLeftRuler)
 		{
-			delete pLeft;
+			DestroyWindow(m_hwndLeftRuler);
+			m_hwndLeftRuler = nullptr;
 		}
+		DELETEP(pFrameData->m_pLeftRuler);
 
 		_createLeftRuler(pFrame);
 
-		pFrameData->m_pLeftRuler->setView(pFrame->getCurrentView(), pFrame->getZoomPercentage());
+		if (pFrameData->m_pLeftRuler)
+			pFrameData->m_pLeftRuler->setView(pFrame->getCurrentView(), pFrame->getZoomPercentage());
 	}
 	else
 	{
 		// delete the actual widgets
 		if (m_hwndLeftRuler)
+		{
 			DestroyWindow(m_hwndLeftRuler);
+			m_hwndLeftRuler = nullptr;
+		}
 
 		DELETEP(pFrameData->m_pLeftRuler);
 		FV_View * pFV = static_cast<FV_View *>(pFrame->getCurrentView());
-		pFV->setLeftRuler(nullptr);
-
-		m_hwndLeftRuler = nullptr;
+		if (pFV)
+			pFV->setLeftRuler(nullptr);
 	}
 
 	// repack the child windows
@@ -1255,9 +1261,12 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 
 		case WM_SETCURSOR:
 		{
+			if (!pView)
+				break;
 			FV_View * pFV = static_cast<FV_View *>(pView);
-			GR_Graphics * pG = pFV->getGraphics();
-			GR_Win32Graphics * pGWin32 = static_cast<GR_Win32Graphics *>(pG);
+			GR_Win32Graphics * pGWin32 = static_cast<GR_Win32Graphics *>(pFV->getGraphics());
+			if (!pGWin32)
+				break;
 			pGWin32->handleSetCursorMessage();
 			return 1;
 		}

@@ -17,9 +17,12 @@ on:
     types: [published]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: windows-installer-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.event_name != 'release' }}
 
 jobs:
   tests:
@@ -50,7 +53,7 @@ jobs:
           NOCONFIGURE=1 ./autogen.sh
           mkdir -p build-tests
           cd build-tests
-          ../configure --enable-plugins="opendocument openxml llm"
+          ../configure --enable-plugins="opendocument openxml sdw llm"
           make -j"$(nproc)"
           set +e
           xvfb-run -a make check
@@ -58,7 +61,7 @@ jobs:
           set -e
           if [ "$status" -ne 0 ]; then
             echo "----- test-suite.log -----"
-            cat src/wp/test/test-suite.log || true
+            find . -name test-suite.log -exec head -n 500 {} + || true
             exit "$status"
           fi
 
@@ -97,6 +100,7 @@ jobs:
         run: |
           curl -fsSL -o /tmp/wv.tar.gz \
             https://ftp.debian.org/debian/pool/main/w/wv/wv_1.2.9.orig.tar.gz
+          echo "4c730d3b325c0785450dd3a043eeb53e1518598c4f41f155558385dd2635c19d  /tmp/wv.tar.gz" | sha256sum -c -
           tar -xzf /tmp/wv.tar.gz -C /tmp
           cd /tmp/wv-1.2.9
           patch -p1 < "$GITHUB_WORKSPACE/packaging/windows/wv-1.2.9-bounds.patch"
@@ -120,6 +124,8 @@ jobs:
         env:
           PKG_CONFIG: /usr/bin/x86_64-w64-mingw32-pkg-config
           WINDRES: x86_64-w64-mingw32-windres
+          CFLAGS: -O2 -g -fstack-protector-strong -D_FORTIFY_SOURCE=2
+          CXXFLAGS: -O2 -g -fstack-protector-strong -D_FORTIFY_SOURCE=2
         run: |
           NOCONFIGURE=1 ./autogen.sh
           mkdir -p build
@@ -158,7 +164,7 @@ jobs:
 
   installer:
     name: Installateur NSIS
-    needs: compile
+    needs: [tests, compile]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -179,6 +185,10 @@ jobs:
             "https://sourceforge.net/projects/nsis/files/NSIS%203/3.13/nsis-3.13-src.tar.bz2/download"
           curl -fsSL -o /tmp/nsis.zip \
             "https://sourceforge.net/projects/nsis/files/NSIS%203/3.13/nsis-3.13.zip/download"
+          printf '%s\n' \
+            "a8ffe024602d46b6d766f9e1ce30c324ad2a24daeacd3efc2642d436a0c157ac  /tmp/nsis-src.tar.bz2" \
+            "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8  /tmp/nsis.zip" \
+            | sha256sum -c -
           unzip -q /tmp/nsis.zip -d "$HOME"
           tar -xjf /tmp/nsis-src.tar.bz2 -C /tmp
           scons -C /tmp/nsis-3.13-src \
@@ -197,6 +207,7 @@ jobs:
           NSISDIR="$HOME/nsis-3.13" "$HOME/nsis-3.13/Bin/makensis" -VERSION
 
       - name: Signer le programme
+        if: github.event_name != 'pull_request'
         env:
           WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
@@ -223,6 +234,7 @@ jobs:
           echo "SETUP=dist/AbiWord-${version}-windows-x64-setup.exe" >> "$GITHUB_ENV"
 
       - name: Signer l'installateur
+        if: github.event_name != 'pull_request'
         env:
           WINDOWS_CERT_BASE64: ${{ secrets.WINDOWS_CERT_BASE64 }}
           WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}

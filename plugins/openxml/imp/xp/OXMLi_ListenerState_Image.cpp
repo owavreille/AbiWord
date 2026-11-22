@@ -506,6 +506,8 @@ void OXMLi_ListenerState_Image::charData (OXMLi_CharDataRequest * rqst)
 	int posOffset = contextMatches(contextTag, NS_WP_KEY, "posOffset");
 	if(posOffset && !m_isInlineImage)
 	{
+		if (rqst->stck->empty())
+			return;
 		OXML_SharedElement imgElem = rqst->stck->top();
 		rqst->stck->pop();
 

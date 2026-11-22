@@ -289,11 +289,18 @@ UT_Error IE_Imp_OpenDocument::_handleMimetype ()
     }
 
     UT_UTF8String mimetype;
-    
-    if (gsf_input_size (pInput) > 0) {
-        mimetype.append(
-            (const char *)gsf_input_read(pInput, gsf_input_size (pInput), nullptr),
-            gsf_input_size (pInput));
+    gsf_off_t sz = gsf_input_size (pInput);
+    if (sz > 1024) {
+        g_object_unref (G_OBJECT (pInput));
+        return UT_IE_BOGUSDOCUMENT;
+    }
+    if (sz > 0) {
+        const guint8* data = gsf_input_read(pInput, sz, nullptr);
+        if (!data) {
+            g_object_unref (G_OBJECT (pInput));
+            return UT_IE_BOGUSDOCUMENT;
+        }
+        mimetype.append((const char *)data, sz);
     }
 
     UT_Error err = UT_OK;
@@ -447,7 +454,11 @@ UT_Error IE_Imp_OpenDocument::_loadRDFFromFile ( GsfInput* pInput,
     return UT_OK;
 #else
     
-    int sz = gsf_input_size (pInput);
+    gsf_off_t sz = gsf_input_size (pInput);
+    if (sz > 16 * 1024 * 1024)
+    {
+        return UT_ERROR;
+    }
     if (sz > 0)
     {
         // I would have liked to pass 0 to input_read() and
@@ -456,8 +467,7 @@ UT_Error IE_Imp_OpenDocument::_loadRDFFromFile ( GsfInput* pInput,
         // smart_ptr to an array an explicitly nul-terminate it.
         std::unique_ptr<char[]> data( new char[sz+1] );
         data[sz] = '\0';
-        gsf_input_read ( pInput, sz, (guint8*)data.get() );
-        if( sz && !data )
+        if( !gsf_input_read ( pInput, sz, (guint8*)data.get() ) )
         {
             return UT_ERROR;
         }

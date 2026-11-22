@@ -316,7 +316,8 @@ GR_Win32Graphics::~GR_Win32Graphics()
 	_releasePersistentBuffer();
 	_destroyFonts ();
 	UT_VECTOR_SPARSEPURGEALL( UT_Rect*, m_vSaveRect);
-	s_iInstanceCount--;
+	if (!m_bPrint)
+		s_iInstanceCount--;
 		
 	/* Release saved bitmaps */
 	HBITMAP hBit;
@@ -346,8 +347,11 @@ GR_Win32Graphics::~GR_Win32Graphics()
 	if(m_printHDC && m_printHDC != m_defPrintHDC)
 		DeleteDC(m_printHDC);
 	
-	if (s_iInstanceCount == 0)
+	if (!m_bPrint && s_iInstanceCount == 0 && m_defPrintHDC)
+	{
 		DeleteDC(m_defPrintHDC);
+		m_defPrintHDC = nullptr;
+	}
 
 	if (m_bOwnHDC && m_hdc)
 	{
@@ -1855,18 +1859,18 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 		return;
 	}
 
-	int left = tune.cropLeft * srcW / 100;
-	int right = tune.cropRight * srcW / 100;
-	int top = tune.cropTop * srcH / 100;
-	int bottom = tune.cropBottom * srcH / 100;
+	int left = (int)((int64_t)tune.cropLeft * srcW / 100);
+	int right = (int)((int64_t)tune.cropRight * srcW / 100);
+	int top = (int)((int64_t)tune.cropTop * srcH / 100);
+	int bottom = (int)((int64_t)tune.cropBottom * srcH / 100);
 	if (left < 0) left = 0;
-	if (right < 0) right = 0;
+	if (left > srcW - 1) left = srcW - 1;
 	if (top < 0) top = 0;
+	if (top > srcH - 1) top = srcH - 1;
+	if (right < 0) right = 0;
+	if (right > srcW - 1 - left) right = srcW - 1 - left;
 	if (bottom < 0) bottom = 0;
-	if (left + right >= srcW)
-		right = srcW - left - 1;
-	if (top + bottom >= srcH)
-		bottom = srcH - top - 1;
+	if (bottom > srcH - 1 - top) bottom = srcH - 1 - top;
 	const int cropW = srcW - left - right;
 	const int cropH = srcH - top - bottom;
 	if (cropW <= 0 || cropH <= 0)
@@ -1877,6 +1881,8 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 	const UT_Byte* srcBits = reinterpret_cast<const UT_Byte*>(pDIB) + pDIB->bmiHeader.biSize + colorBytes;
 
 	const size_t outBytes = (size_t)cropW * (size_t)cropH * 4;
+	if (outBytes == 0 || outBytes > 0x7fffffffu)
+		return;
 	UT_Byte* out = static_cast<UT_Byte*>(UT_calloc(1, (UT_uint32)outBytes));
 	if (!out)
 		return;
@@ -1886,7 +1892,11 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 	for (int y = 0; y < cropH; ++y)
 	{
 		const int visualY = top + y;
-		const int memY = bottomUp ? (srcH - 1 - visualY) : visualY;
+		int memY = bottomUp ? (srcH - 1 - visualY) : visualY;
+		if (memY < 0)
+			memY = 0;
+		else if (memY > srcH - 1)
+			memY = srcH - 1;
 		const UT_Byte* srow = srcBits + (size_t)memY * (size_t)srcStride + (size_t)left * (size_t)bpp;
 		UT_Byte* drow = out + (size_t)(cropH - 1 - y) * (size_t)cropW * 4;
 		for (int x = 0; x < cropW; ++x)

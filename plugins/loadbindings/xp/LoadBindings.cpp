@@ -544,14 +544,17 @@ LoadBindings::LoadBindings(EV_EditMethodCallData * d, _FROM_URI)
 	struct stat buf;
 	GsfInput* in = nullptr;
 	if (stat(input, &buf)==0) {
-		m_pXMLDoc = xmlReadFile( input, nullptr, XML_PARSE_NOBLANKS );
+		m_pXMLDoc = xmlReadFile( input, nullptr, XML_PARSE_NOBLANKS | XML_PARSE_NONET );
 	} 
 	// check for URI
 	else if ( (in = UT_go_file_open(input, nullptr)) ) {
-		size_t fileSize = gsf_input_size(in);
-		guint8 const* contents = gsf_input_read(in, fileSize, nullptr);
-		if (contents) {
-			m_pXMLDoc = xmlReadMemory( reinterpret_cast<const char*>(contents), fileSize, "", nullptr, XML_PARSE_NOBLANKS );
+		gsf_off_t rawSize = gsf_input_size(in);
+		if (rawSize > 0 && rawSize <= 16 * 1024 * 1024) {
+			size_t fileSize = static_cast<size_t>(rawSize);
+			guint8 const* contents = gsf_input_read(in, fileSize, nullptr);
+			if (contents) {
+				m_pXMLDoc = xmlReadMemory( reinterpret_cast<const char*>(contents), static_cast<int>(fileSize), "", nullptr, XML_PARSE_NOBLANKS | XML_PARSE_NONET );
+			}
 		}
 		g_object_unref(G_OBJECT(in));
 	}
@@ -564,7 +567,7 @@ LoadBindings::LoadBindings (EV_EditMethodCallData * d, _FROM_MEMORY )
 {
 	UT_UCS4String ucs4(reinterpret_cast<const UT_UCS4Char *>(d->m_pData),d->m_dataLength);
 	const char* input = ucs4.utf8_str();
-	m_pXMLDoc = xmlReadMemory(input, strlen(input), "", nullptr, XML_PARSE_NOBLANKS);
+	m_pXMLDoc = xmlReadMemory(input, strlen(input), "", nullptr, XML_PARSE_NOBLANKS | XML_PARSE_NONET);
 }
 
 LoadBindings::~LoadBindings() 
@@ -608,6 +611,7 @@ bool LoadBindings::Load()
 	const char* modeStr = FindAttribute( node, "mode" );
 	if (!modeStr) {
 		ReportError("editbinding missing mandatory mode attribute");
+		return false;
 	}
 	if (!strcmp( modeStr, "replace" )) {
 		m_bReplace = true;

@@ -127,7 +127,11 @@ bool IE_Imp_RTF::LoadPictData(PictFormat format, const char * image_name,
 				goto cleanup;
 			}
 		}
+		// We let the caller handle this
+		SkipBackChar(ch);
 	} else {
+		if (binaryLen < 0 || binaryLen > 64 * 1024 * 1024)
+			return false;
 		UT_ASSERT_HARMLESS(binaryLen);
 		UT_DEBUGMSG(("Loading binary data image of %ld bytes\n", binaryLen));
 		for (long i = 0; i < binaryLen; i++) {
@@ -138,9 +142,6 @@ bool IE_Imp_RTF::LoadPictData(PictFormat format, const char * image_name,
 			pictData->append(&ch, 1);
 		}
 	}
-
-	// We let the caller handle this
-	SkipBackChar(ch);
 
 	error = IE_ImpGraphic::loadGraphic(pictData, iegftForRTF(format), pFG);
 
@@ -889,15 +890,10 @@ bool IE_Imp_TextParaPropParser::tokenCloseBrace(IE_Imp_RTF * ie)
 bool IE_Imp_TextParaPropParser::tokenData(IE_Imp_RTF * ie, UT_UTF8String & data)
 {
 	UT_DEBUGMSG(("IE_Imp_TextParPropParser::tokenData()\n"));	
-	const char * str = data.utf8_str();
 	bool ok = true;
-
-	while(*str && ok) {
-		// This code is actually unsage FIXME
-        // because str supposedly points to UTF-8
-        // but ParseChar() is completely flawed in that regard.
-		ok = ie->ParseChar(*str);
-		str++;
+	UT_UCS4String ucs4(data.utf8_str());
+	for (size_t i = 0; i < ucs4.size() && ok; ++i) {
+		ok = ie->ParseChar(ucs4[i], true);
 	}
 
 	return ok;
@@ -1261,12 +1257,12 @@ void IE_Imp_RTF::addFrame(RTFProps_FrameProps & frame)
 			sP= "frame-height";
 			UT_std_string_setProperty(sPropString,sP,sV); 
 			
-			dV = static_cast<double>(frame.m_iRightPad + frame.m_iLeftPad)/9114400.0; // EMU
+			dV = static_cast<double>(frame.m_iRightPad + frame.m_iLeftPad)/914400.0; // EMU
 			sV= UT_std_string_sprintf("%fin",dV);
 			sP= "xpad";
 			UT_std_string_setProperty(sPropString,sP,sV); 
 			
-			dV = static_cast<double>(frame.m_iBotPad + frame.m_iTopPad)/9114400.0; //EMU
+			dV = static_cast<double>(frame.m_iBotPad + frame.m_iTopPad)/914400.0; //EMU
 			sV= UT_std_string_sprintf("%fin",dV);
 			sP= "ypad";
 			UT_std_string_setProperty(sPropString,sP,sV); 

@@ -88,7 +88,7 @@ SPARQL. AbiWord est ensuite configuré ainsi :
   --host=x86_64-w64-mingw32 \
   --prefix=/usr/x86_64-w64-mingw32/sys-root/mingw \
   --with-boost=/usr/x86_64-w64-mingw32/sys-root/mingw \
-  --enable-plugins="opendocument openxml sdw collab" \
+  --enable-plugins="opendocument openxml sdw collab llm" \
   --enable-collab-backend-tcp \
   --disable-collab-backend-service \
   --disable-collab-backend-telepathy \
@@ -99,7 +99,7 @@ SPARQL. AbiWord est ensuite configuré ainsi :
 ```
 
 `packaging/windows/stage-dist.sh` rassemble `abiword.exe`,
-`libabiword-3.1.dll`, les quatre greffons, les dictionnaires Hunspell et
+`libabiword-3.1.dll`, les cinq greffons, les dictionnaires Hunspell et
 les bibliothèques MinGW. L'installateur est produit sur Ubuntu par NSIS
 3.13 (`packaging/windows/abiword.nsi`). Ses pages sont en français et en
 anglais. La licence des icônes Colibre (CC0) et des dessins originaux est
@@ -115,7 +115,7 @@ Cairo, Enchant et les bibliothèques d'image habituelles.
 ```sh
 NOCONFIGURE=1 ./autogen.sh
 mkdir build-tests && cd build-tests
-../configure --enable-plugins="opendocument openxml"
+../configure --enable-plugins="opendocument openxml sdw llm"
 make -j"$(nproc)"
 xvfb-run -a make check
 ```
@@ -133,7 +133,7 @@ greffons détecte ceux qui peuvent être construits. Pour retrouver le
 périmètre de l'installateur :
 
 ```sh
-../configure --enable-plugins="opendocument openxml sdw collab" \
+../configure --enable-plugins="opendocument openxml sdw collab llm" \
   --enable-collab-backend-tcp \
   --disable-collab-backend-service
 make -j"$(nproc)"

@@ -119,6 +119,7 @@ private:
 
 	GsfInfile* m_pPkg;
 	GsfInput* m_pDocPart;
+	GsfInput* m_pActivePart;
 	std::map<std::string, bool> m_parsedParts;
 };
 

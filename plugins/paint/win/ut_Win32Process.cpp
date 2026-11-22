@@ -57,15 +57,64 @@ BOOL CreateChildProcess(char * appName, char *cmdline,
 	);
 } 
 
+static std::wstring utf8_to_wide(const char * text)
+{
+	if (!text || !*text)
+		return std::wstring();
+	const int len = MultiByteToWideChar(CP_UTF8, 0, text, -1, nullptr, 0);
+	if (len <= 0)
+		return std::wstring();
+	std::wstring wide(static_cast<size_t>(len), L'\0');
+	MultiByteToWideChar(CP_UTF8, 0, text, -1, &wide[0], len);
+	if (!wide.empty() && wide.back() == L'\0')
+		wide.pop_back();
+	return wide;
+}
+
 // returns true if process successfully started, false otherwise
 bool createChildProcess(const char *app, const char *args, ProcessInfo *pI)
 {
-  STARTUPINFO startInfo;
-  std::string cmdline = app;
-  cmdline += " ";
-  cmdline += args;
+  if (!app || !*app || !pI)
+    return false;
+  STARTUPINFOW startInfo;
+  ZeroMemory(pI, sizeof(PROCESS_INFORMATION));
+  ZeroMemory(&startInfo, sizeof(STARTUPINFOW));
+  startInfo.cb = sizeof(STARTUPINFOW);
 
-  return CreateChildProcess(nullptr, const_cast<char *>(cmdline.c_str()), pI, &startInfo) != FALSE;
+  std::string appStr(app);
+  std::string cmdline;
+  if (appStr.front() != '"')
+  {
+    cmdline += '"';
+    cmdline += appStr;
+    cmdline += '"';
+  }
+  else
+  {
+    cmdline += appStr;
+  }
+  if (args && *args)
+  {
+    cmdline += ' ';
+    cmdline += args;
+  }
+
+  std::wstring wApp = utf8_to_wide(app);
+  std::wstring wCmd = utf8_to_wide(cmdline.c_str());
+  if (wApp.empty() || wCmd.empty())
+    return false;
+
+  return CreateProcessW(
+    wApp.c_str(),
+    &wCmd[0],
+    nullptr,
+    nullptr,
+    FALSE,
+    0,
+    nullptr,
+    nullptr,
+    &startInfo,
+    pI) != FALSE;
 }
 
 // will [try to] kill the process if it is still running

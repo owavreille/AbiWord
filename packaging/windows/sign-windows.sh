@@ -27,10 +27,15 @@ if ! command -v osslsigncode >/dev/null 2>&1; then
 	exit 1
 fi
 
-PFX=$(mktemp)
-trap 'rm -f "$PFX"' EXIT
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+chmod 0700 "$tmpdir"
 umask 077
-	printf '%s' "$WINDOWS_CERT_BASE64" | tr -d ' \t\r\n' | base64 -d > "$PFX"
+PFX="$tmpdir/cert.pfx"
+passfile="$tmpdir/pass.txt"
+printf '%s' "$WINDOWS_CERT_BASE64" | tr -d ' \t\r\n' | base64 -d > "$PFX"
+printf '%s\n' "${WINDOWS_CERT_PASSWORD:-}" > "$passfile"
+chmod 0600 "$PFX" "$passfile"
 
 help=$(osslsigncode sign -h 2>&1 || true)
 if grep -q -- '-ts ' <<<"$help"; then
@@ -41,8 +46,8 @@ fi
 
 timestamps=(
 	https://timestamp.sectigo.com
-	http://timestamp.digicert.com
-	http://timestamp.globalsign.com/tsa/r6advanced1
+	https://timestamp.digicert.com
+	https://timestamp.globalsign.com/tsa/r6advanced1
 )
 
 sign_one() {
@@ -52,7 +57,7 @@ sign_one() {
 	for ts in "${timestamps[@]}"; do
 		if osslsigncode sign \
 			-pkcs12 "$PFX" \
-			-pass "${WINDOWS_CERT_PASSWORD:-}" \
+			-readpass "$passfile" \
 			-n "AbiWord" \
 			-i "https://github.com/owavreille/AbiWord" \
 			-h sha256 \
@@ -71,8 +76,7 @@ sign_one() {
 		echo "signature échouée : $src" >&2
 		exit 1
 	fi
-	verify_out=$(osslsigncode verify -in "$tmp" 2>&1 || true)
-	if ! grep -Eq 'Succeeded|Signature verification: ok' <<<"$verify_out"; then
+	if ! verify_out=$(osslsigncode verify -in "$tmp" 2>&1) || ! grep -Eq 'Succeeded|Signature verification: ok' <<<"$verify_out"; then
 		rm -f "$tmp"
 		printf '%s\n' "$verify_out" >&2
 		echo "vérification de la signature échouée : $src" >&2

@@ -22,6 +22,7 @@
  * 02110-1301 USA.
  */
 
+#include <algorithm>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2133,19 +2134,22 @@ int IE_Imp_MsWord_97::_specCharProc (wvParseStruct *ps, U16 eachchar, CHP *achp)
 					}
 					sProps += sVal;
 
-					sProps += UT_std_string_sprintf("xpos:%fin; ", dLeft);
-					sProps += UT_std_string_sprintf("ypos:%fin; ", dTop);
-					sProps += UT_std_string_sprintf("frame-col-xpos:%fin; ",
-													dLeft);
-					sProps += UT_std_string_sprintf("frame-col-ypos:%fin; ",
-													dTop);
+					{
+						UT_LocaleTransactor t(LC_NUMERIC, "C");
+						sProps += UT_std_string_sprintf("xpos:%fin; ", dLeft);
+						sProps += UT_std_string_sprintf("ypos:%fin; ", dTop);
+						sProps += UT_std_string_sprintf("frame-col-xpos:%fin; ",
+														dLeft);
+						sProps += UT_std_string_sprintf("frame-col-ypos:%fin; ",
+														dTop);
 
-					sProps += UT_std_string_sprintf("frame-width:%fin; ",
-													dRight-dLeft);
+						sProps += UT_std_string_sprintf("frame-width:%fin; ",
+														dRight-dLeft);
 
-					UT_DEBUGMSG(("Inserting Frame of width %s \n",sVal.c_str()));
-					sProps += UT_std_string_sprintf("frame-height:%fin",
-													dBottom-dTop);
+						UT_DEBUGMSG(("Inserting Frame of width %s \n",sVal.c_str()));
+						sProps += UT_std_string_sprintf("frame-height:%fin",
+														dBottom-dTop);
+					}
 //
 // Turn off the borders.
 //
@@ -2826,7 +2830,8 @@ int IE_Imp_MsWord_97::_beginPara (wvParseStruct *ps, UT_uint32 /*tag*/,
 			UT_sint32 posRight =0;
 			if (ps->cellbounds)
 				posLeft = ps->cellbounds[0];
-			for (column = 1; column < ps->nocellbounds; column++) 
+			const int maxCol = std::min<int>(ps->nocellbounds, std::min<int>(apap->ptap.itcMac + 1, 65));
+			for (column = 1; column < maxCol; column++) 
 			{
 				int span = 0;
 				posRight = apap->ptap.rgdxaCenter[column];
@@ -4770,7 +4775,8 @@ void IE_Imp_MsWord_97::_table_close (const wvParseStruct * /*ps*/, const PAP *ap
   props += "table-line-ignore:0; table-line-type:1; table-line-thickness:0.8pt;";
   if(apap->ptap.dxaGapHalf > 0)
   {
-	  props += UT_String_sprintf("table-col-spacing:%din", (2 * apap->ptap.dxaGapHalf)/ 1440);
+	  UT_LocaleTransactor t(LC_NUMERIC, "C");
+	  props += UT_String_sprintf("table-col-spacing:%fin", (2.0 * apap->ptap.dxaGapHalf) / 1440.0);
   }
   else
   {
@@ -4837,7 +4843,7 @@ sConvertLineStyle (short lineType)
 {
   switch (lineType)
     {
-    case 0: return LS_NORMAL;
+    case 0: return LS_OFF;
     case 1:
       return LS_NORMAL;
 
@@ -4874,17 +4880,16 @@ void IE_Imp_MsWord_97::_cell_open (const wvParseStruct *ps, const PAP *apap)
   propsArray[0] = static_cast<const gchar*>("props");
   propsArray[1] = "";
   propsArray[2] = nullptr;
-	  
-  
-#if 0
-  if(m_iCurrentCell >= apap->ptap.itcMac)
+
+  if (!ps->cellbounds || ps->nocellbounds <= 0 ||
+      m_iCurrentCell < 0 || m_iCurrentCell >= apap->ptap.itcMac ||
+      m_iCurrentCell >= 64 ||
+      m_iCurrentCell >= m_vecColumnSpansForCurrentRow.getItemCount())
   {
-	  // this happens when the row contains no cell definitions; we
-	  // need to insert a dummy cell into our row
-	  goto do_insert;
+      m_bCellOpen = false;
+      return;
   }
-#endif
-  
+
   // add a new cell
   m_bCellOpen = true;
   if(m_iCurrentCell == 0)
@@ -4912,7 +4917,7 @@ void IE_Imp_MsWord_97::_cell_open (const wvParseStruct *ps, const PAP *apap)
 	  }
   }
 
-  if (ps->vmerges && ps->vmerges[m_iCurrentRow - 1])
+  if (ps->vmerges && m_iCurrentRow >= 1 && m_iCurrentRow <= ps->norows && ps->vmerges[m_iCurrentRow - 1])
     vspan = ps->vmerges[m_iCurrentRow - 1][m_iCurrentCell];
 
   if (vspan > 0)
@@ -4936,7 +4941,8 @@ void IE_Imp_MsWord_97::_cell_open (const wvParseStruct *ps, const PAP *apap)
   if(apap->ptap.dyaRowHeight < 0)
   {
 	  // absolute height
-	  double dHin = -(apap->ptap.dyaRowHeight/1440);
+	  UT_LocaleTransactor t(LC_NUMERIC, "C");
+	  double dHin = -(apap->ptap.dyaRowHeight / 1440.0);
 	  propBuffer += UT_String_sprintf("height:%fin;",dHin);
   }
   else if(apap->ptap.dyaRowHeight > 0)
@@ -5285,7 +5291,8 @@ void IE_Imp_MsWord_97::_generateParaProps(UT_String &s, const PAP * apap, wvPars
 	if (apap->itbdMac) {
 		propBuffer += "tabstops:";
 
-		for (int iTab = 0; iTab < apap->itbdMac; iTab++) {
+		const int maxTabs = std::min<int>(apap->itbdMac, 64);
+		for (int iTab = 0; iTab < maxTabs; iTab++) {
 			propBuffer += UT_String_sprintf("%s/",
 						UT_convertInchesToDimensionString(m_dim,
 										((static_cast<double>(apap->rgdxaTab[iTab])) / 1440)));

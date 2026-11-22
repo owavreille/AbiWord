@@ -34,7 +34,11 @@ wvWare                          GPL-2.0-or-later
 Raptor, Rasqal, Redland         LGPL-2.1-or-later, GPL-2.0-or-later, Apache-2.0
 PCRE                            BSD-3-Clause
 PCRE2                           BSD-3-Clause
-GNU libiconv, gettext           LGPL-2.1-or-later
+libcurl                         curl License (MIT/X derivate)
+libffi                          MIT
+Boost (Asio, headers/libs)      BSL-1.0
+win-iconv (iconv.dll)           Public Domain / BSD-2-Clause
+GNU gettext (libintl)           LGPL-2.1-or-later
 MinGW-w64 runtime               Zope Public License, exceptions MinGW
 
 Les dictionnaires Hunspell sont des données linguistiques indépendantes,

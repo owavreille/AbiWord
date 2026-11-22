@@ -312,6 +312,8 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     if (m_bFirstWrite)
         _beginOfDocument(api);
+    if (m_bSkipSection && pcrx->getStruxType() != PTX_Section)
+        return true;
     switch (pcrx->getStruxType())
     {
     case PTX_SectionHdrFtr:
@@ -334,7 +336,6 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     case PTX_SectionTable:
     {
-        m_bSkipSection = false;
         _closeSpan();
         _closeField();
         _closeBookmark();
@@ -350,7 +351,6 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     case PTX_SectionCell:
     {
-        m_bSkipSection = false;
         _closeSpan();
         _closeField();
         _closeBookmark();
@@ -379,7 +379,6 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     case PTX_SectionFootnote:
     {
-        m_bSkipSection = false;
         _closeSpan();
         _closeField();
         _closeBookmark();
@@ -390,7 +389,6 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     case PTX_SectionEndnote:
     {
-        m_bSkipSection = false;
         _closeSpan();
         _closeField();
         _closeBookmark();
@@ -401,7 +399,6 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     case PTX_SectionAnnotation:
     {
-        m_bSkipSection = false;        
         _closeSpan();
         _closeField();
         _closeBookmark();
@@ -414,7 +411,6 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     case PTX_SectionTOC:
     {
-        m_bSkipSection = false;
         _closeSpan();
         _closeField();
         _closeBookmark();
@@ -428,7 +424,6 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     case PTX_SectionMarginnote:
     {
-        m_bSkipSection = false;
         _closeSpan();
         _closeField();
         _closeBookmark();
@@ -442,7 +437,6 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
 
     case PTX_SectionFrame:
     {
-        m_bSkipSection = false;
         _closeSpan();
         _closeField();
         _closeBookmark();
@@ -903,6 +897,7 @@ void IE_Exp_HTML_Listener::_openSpan(PT_AttrPropIndex api)
 		char buf[16];
 
 		{
+			UT_LocaleTransactor t(LC_NUMERIC, "C");
 			sprintf(buf, "%g", UT_convertToPoints(szP_FontSize));
 		}
 
@@ -1422,7 +1417,7 @@ void IE_Exp_HTML_Listener::_openTable(PT_AttrPropIndex api, bool recursiveCall)
         pAP = nullptr;
     }
 	_fillColWidthsVector();
-
+	UT_LocaleTransactor t(LC_NUMERIC, "C");
 
 	//UT_sint32 cellPadding = 0;
 	UT_UTF8String styles;
@@ -1862,6 +1857,7 @@ void IE_Exp_HTML_Listener::_openCell(PT_AttrPropIndex api, bool recursiveCall)
     }
 
 	_setCellWidthInches();
+	UT_LocaleTransactor t(LC_NUMERIC, "C");
 	double dColSpacePT = 0;
 	double dRowSpacePT = 0;
 	const gchar * pszTableColSpacing = m_tableHelper.getTableProp("table-col-spacing");

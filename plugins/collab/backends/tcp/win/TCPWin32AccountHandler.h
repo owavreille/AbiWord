@@ -35,6 +35,7 @@ class TCPWin32AccountHandler : public TCPAccountHandler
 {
 public:
 	TCPWin32AccountHandler();
+	virtual ~TCPWin32AccountHandler();
 
 	static AccountHandler*					static_constructor();
 
@@ -59,6 +60,7 @@ private:
 	HWND									m_hPortLabel;
 	HWND									m_hAllowAllCheck;
 	HWND									m_hAutoconnectCheck;
+	HFONT									m_hFont;
 
 	void									_checkButtonHwnd(HWND hCtrl, bool bChecked);
 	bool									_isCheckedHwnd(HWND hCtrl);

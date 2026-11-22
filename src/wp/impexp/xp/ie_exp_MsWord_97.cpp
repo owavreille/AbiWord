@@ -191,6 +191,21 @@ static bool skipped_section(PTStruxType type)
 	}
 }
 
+static bool ended_skipped_section(PTStruxType kind)
+{
+	switch (kind)
+	{
+	case PTX_EndFootnote:
+	case PTX_EndEndnote:
+	case PTX_EndAnnotation:
+	case PTX_EndMarginnote:
+	case PTX_EndTOC:
+		return true;
+	default:
+		return false;
+	}
+}
+
 static bool append_image(PD_Document * doc, Paragraph & current, const PP_AttrProp * ap, std::vector<Picture> & pics);
 
 static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics)
@@ -200,6 +215,7 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 	bool accept = true;
 	bool in_paragraph = false;
 	int frame_depth = 0;
+	int skip_depth = 0;
 	pt_PieceTable * table = doc->getPieceTable();
 	if (!table)
 		return paragraphs;
@@ -214,7 +230,10 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 				if (kind == PTX_SectionFrame)
 					++frame_depth;
 				else if (kind == PTX_EndFrame)
+				{
 					--frame_depth;
+					accept = (frame_depth == 0 && skip_depth == 0);
+				}
 				continue;
 			}
 			if (kind == PTX_Block)
@@ -256,12 +275,25 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 					}
 				}
 				frame_depth = 1;
+				accept = false;
 				continue;
 			}
 			if (kind == PTX_Section)
-				accept = true;
+			{
+				skip_depth = 0;
+				accept = (frame_depth == 0 && skip_depth == 0);
+			}
 			else if (skipped_section(kind))
+			{
+				++skip_depth;
 				accept = false;
+			}
+			else if (ended_skipped_section(kind))
+			{
+				if (skip_depth > 0)
+					--skip_depth;
+				accept = (frame_depth == 0 && skip_depth == 0);
+			}
 			continue;
 		}
 		if (frame_depth || !accept)
@@ -666,7 +698,7 @@ static bool chpx_fits(const std::vector<ChRun> & runs, size_t from, size_t until
 			++size;
 		grp += size;
 	}
-	return (count + 1) * 4 + count + grp + 1 <= PAGE;
+	return (count + 1) * 4 + count + grp + 2 <= PAGE;
 }
 
 static Buf make_chpx(const std::vector<ChRun> & runs, size_t from, size_t until, unsigned limit)
@@ -1041,12 +1073,23 @@ static unsigned header_flags(const std::vector<Paragraph> slot_text[6])
 	return flags;
 }
 
-static Buf section_properties(unsigned hf_flags)
+static Buf section_properties(PD_Document * doc, unsigned hf_flags)
 {
+	unsigned page_w = 12240;
+	unsigned page_h = 15840;
+	if (doc)
+	{
+		const double w_in = doc->m_docPageSize.Width(DIM_IN);
+		const double h_in = doc->m_docPageSize.Height(DIM_IN);
+		if (w_in > 0.0)
+			page_w = static_cast<unsigned>(w_in * 1440.0 + 0.5);
+		if (h_in > 0.0)
+			page_h = static_cast<unsigned>(h_in * 1440.0 + 0.5);
+	}
 	// Sepx. Every section must state its page size and its four margins.
 	const unsigned sprm[][2] = {
-		{ 0xB01F, 12240 },
-		{ 0xB020, 15840 },
+		{ 0xB01F, page_w },
+		{ 0xB020, page_h },
 		{ 0xB021, 1440 },
 		{ 0xB022, 1440 },
 		{ 0x9023, 1440 },
@@ -1268,7 +1311,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned stsh_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), stsh.begin(), stsh.end());
 
-	const Buf sepx = section_properties(hf_flags);
+	const Buf sepx = section_properties(getDoc(), hf_flags);
 	const unsigned sepx_at = static_cast<unsigned>(word.size());
 	word.insert(word.end(), sepx.begin(), sepx.end());
 
@@ -1306,6 +1349,8 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned dop_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), 500, 0);
 	table[dop_at] = 0x02;
+	if (hf_flags & 0x05)
+		table[dop_at] |= 0x01;
 	poke_u16(table, dop_at + 10, 720);
 
 	const unsigned clx_at = static_cast<unsigned>(table.size());

@@ -57,11 +57,13 @@ void ODi_Style_MasterPage::startElement(const gchar* pName,
     
             pVal = UT_getAttribute ("style:name", ppAtts);
             UT_ASSERT(pVal);
-            m_name = pVal;
+            if (pVal)
+                m_name = pVal;
             
             pVal = UT_getAttribute ("style:page-layout-name", ppAtts);
             UT_ASSERT(pVal);
-            m_layoutName = pVal;
+            if (pVal)
+                m_layoutName = pVal;
             
             // We want a second pass after this one.
             rAction.repeatElement();

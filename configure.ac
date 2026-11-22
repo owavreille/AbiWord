@@ -188,7 +188,7 @@ AC_CHECK_FUNCS([localeconv strcspn strncasecmp strtoul],
 	AC_MSG_ERROR([$function_err])
 ])
 
-if test "$PLATFORM" = "cocoa"; then
+if test "$TOOLKIT" = "cocoa"; then
         AC_CHECK_FUNCS([floor mkdir],
         [], [
 	    AC_MSG_ERROR([$function_err])
@@ -574,10 +574,11 @@ AC_ARG_WITH([sanitizer],
             [with_sanitizer=$withval],
             [with_sanitizer=no])
 AS_IF([test "x$with_sanitizer" != "xno"],[
-	AX_CHECK_COMPILE_FLAG([-fsanitize=$withval],
-	                      [CFLAGS="$CFLAGS -fsanitize=$withval"
-			       CXXFLAGS="$CXXFLAGS -fsanitize=$withval"],
-	                      [AC_MSG_ERROR([-fsanitize=$withval is not supported])])
+	AX_CHECK_COMPILE_FLAG([-fsanitize=$with_sanitizer],
+	                      [CFLAGS="$CFLAGS -fsanitize=$with_sanitizer"
+			       CXXFLAGS="$CXXFLAGS -fsanitize=$with_sanitizer"
+			       LDFLAGS="$LDFLAGS -fsanitize=$with_sanitizer"],
+	                      [AC_MSG_ERROR([-fsanitize=$with_sanitizer is not supported])])
         AX_APPEND_COMPILE_FLAGS([-fno-omit-frame-pointer])
         AC_LANG_PUSH(C++)
         AX_APPEND_COMPILE_FLAGS([-fno-omit-frame-pointer])
@@ -686,7 +687,7 @@ if test "$TOOLKIT" = "win"; then
 	SYSTEM_CFLAGS="-mthreads"
 elif test "$TOOLKIT" = "cocoa"; then
 	deps_pkgs="$deps_pkgs $cocoa_pkgs"
-	SYSTEM_CLFLAGS="-DMAC_OS_X_VERSION_MIN_REQUIRED=MAC_OS_X_VERSION_10_11"
+	SYSTEM_CFLAGS="-DMAC_OS_X_VERSION_MIN_REQUIRED=MAC_OS_X_VERSION_10_11"
 	SYSTEM_LIBS="-framework Cocoa"
 	AC_CHECK_PROG([CONVERT], [convert], convert, AC_MSG_ERROR(Cannot find ImageMagick convert))
 elif test "$TOOLKIT" = "qt"; then
@@ -936,11 +937,11 @@ AM_CONDITIONAL(DEBUG, test "$abi_cv_debug" = "yes")
 #
 AM_PATH_LIBGCRYPT( 1.4.5,
 		   [
-		   abi_cv_gcrypt=no
+		   abi_cv_gcrypt=yes
  		   AC_DEFINE([HAVE_GCRYPT], [1], [Use gcrypt for the cryptos])
 		   ],
 		   [
-		   abi_cv_gcrypt=yes
+		   abi_cv_gcrypt=no
 		   ] )
 AM_CONDITIONAL(HAVE_GCRYPT, test "$abi_cv_gcrypt" = "yes")
 

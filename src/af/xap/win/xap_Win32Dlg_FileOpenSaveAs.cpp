@@ -321,7 +321,9 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 
 			if (s_copyW(szDir, G_N_ELEMENTS(szDir), path.c_str()))
 			{
-				wchar_t * pLastSlash = wcsrchr(szDir, L'/');
+				wchar_t * bslash = wcsrchr(szDir, L'\\');
+				wchar_t * fslash = wcsrchr(szDir, L'/');
+				wchar_t * pLastSlash = (bslash && fslash) ? (bslash > fslash ? bslash : fslash) : (bslash ? bslash : fslash);
 				if (pLastSlash)
 					pLastSlash[1] = 0;
 				ofn.lpstrInitialDir = szDir;
@@ -590,13 +592,20 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UI
 								break;
 							const wchar_t * ext = pThis->_getDefaultExtension(pNotify->lpOFN->nFilterIndex - 1);
 							// lpstrFile still holds the original name. The control has what was typed.
+							HWND hParent = GetParent(hDlg);
 							buff[0] = 0;
-							if (GetDlgItemTextW(GetParent(hDlg), edt1, buff, MAX_DLG_INS_PICT_STRING) <= 0)
-								buff[0] = 0;
+							if (SendMessageW(hParent, CDM_GETSPEC, G_N_ELEMENTS(buff), (LPARAM)buff) <= 0 || !buff[0])
+							{
+								if (GetDlgItemTextW(hParent, cmb13, buff, MAX_DLG_INS_PICT_STRING) <= 0 || !buff[0])
+								{
+									if (GetDlgItemTextW(hParent, edt1, buff, MAX_DLG_INS_PICT_STRING) <= 0)
+										buff[0] = 0;
+								}
+							}
 							buff[MAX_DLG_INS_PICT_STRING - 1] = 0;
-							wchar_t * slash = wcsrchr(buff, L'\\');
-							if (!slash)
-								slash = wcsrchr(buff, L'/');
+							wchar_t * bslash = wcsrchr(buff, L'\\');
+							wchar_t * fslash = wcsrchr(buff, L'/');
+							wchar_t * slash = (bslash && fslash) ? (bslash > fslash ? bslash : fslash) : (bslash ? bslash : fslash);
 							wchar_t * name = slash ? slash + 1 : buff;
 							wchar_t * dot = wcsrchr(name, L'.');
 							if (dot)
@@ -609,12 +618,16 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UI
 								{
 									buff[used] = L'.';
 									wcscpy(buff + used + 1, ext);
-									CommDlg_OpenSave_SetControlText(GetParent(hDlg), edt1, buff);
+									CommDlg_OpenSave_SetControlText(hParent, edt1, buff);
+									SetDlgItemTextW(hParent, cmb13, buff);
 								}
 							}
 							else if (dot)
-								CommDlg_OpenSave_SetControlText(GetParent(hDlg), edt1, buff);
-							CommDlg_OpenSave_SetDefExt(GetParent(hDlg), ext);
+							{
+								CommDlg_OpenSave_SetControlText(hParent, edt1, buff);
+								SetDlgItemTextW(hParent, cmb13, buff);
+							}
+							CommDlg_OpenSave_SetDefExt(hParent, ext);
 						}
 						break;
 				}

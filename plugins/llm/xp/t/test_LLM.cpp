@@ -113,6 +113,17 @@ int main()
 	ABI_LLM_Result emoji = abi_llm_interpret(200, "{\"content\":\"\\uD83D\\uDE00\"}");
 	expect_eq(emoji.text, "\xf0\x9f\x98\x80", "une paire de substituts devient un caractere UTF-8");
 
+	ABI_LLM_Result rawUtf8 = abi_llm_interpret(200,
+		"{\"content\":\"\xc3\xa9\xc3\xa0\xc3\xa8\xc3\xb9\xc3\xa7 \xe2\x80\x94 \xe2\x82\xac\"}");
+	expect(rawUtf8.ok, "une reponse contenant de l'UTF-8 brut est acceptee");
+	expect_eq(rawUtf8.text, "\xc3\xa9\xc3\xa0\xc3\xa8\xc3\xb9\xc3\xa7 \xe2\x80\x94 \xe2\x82\xac",
+		  "l'UTF-8 brut n'est pas double-encode");
+
+	ABI_LLM_Result mixedUtf8 = abi_llm_interpret(200,
+		"{\"content\":\"Caf\xc3\xa9 \\u00e9l\xc3\xa8ve\"}");
+	expect_eq(mixedUtf8.text, "Caf\xc3\xa9 \xc3\xa9l\xc3\xa8ve",
+		  "l'UTF-8 brut et les echappements unicode cohabitent");
+
 	ABI_LLM_Result denied = abi_llm_interpret(401, "{\"error\":{\"message\":\"cle refusee\"}}");
 	expect(!denied.ok, "une erreur HTTP n'est pas un texte a inserer");
 	expect_eq(denied.error, "HTTP 401 : cle refusee", "le message d'erreur est conserve");

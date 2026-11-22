@@ -1468,15 +1468,70 @@ UT_go_url_may_open (gchar const *url)
 	gchar * path = g_strndup(url, cut ? (gsize)(cut - url) : strlen(url));
 	gchar * decoded = path ? g_uri_unescape_string(path, nullptr) : nullptr;
 	g_free(path);
-	if (!decoded)
+	if (!decoded || strlen(decoded) <= 5)
+	{
+		g_free(decoded);
 		return FALSE;
+	}
+
+	// Validate file: authority/path prefix and reject remote UNC/SMB hosts.
+	const char * after_scheme = decoded + 5;
+	const char * local_path = nullptr;
+	if (after_scheme[0] == '/' && after_scheme[1] != '/' && after_scheme[1] != '\\')
+	{
+		local_path = after_scheme;
+	}
+	else if (after_scheme[0] == '/' && after_scheme[1] == '/')
+	{
+		const char * host_start = after_scheme + 2;
+		const char * host_end = strpbrk(host_start, "/\\");
+		if (!host_end || *host_end != '/')
+		{
+			g_free(decoded);
+			return FALSE;
+		}
+		const gsize host_len = (gsize)(host_end - host_start);
+		if (host_len != 0 && !(host_len == 9 && g_ascii_strncasecmp(host_start, "localhost", 9) == 0))
+		{
+			g_free(decoded);
+			return FALSE;
+		}
+		if (host_end[1] == '/' || host_end[1] == '\\' || host_end[1] == '\0')
+		{
+			g_free(decoded);
+			return FALSE;
+		}
+		local_path = host_end;
+	}
+	else
+	{
+		g_free(decoded);
+		return FALSE;
+	}
 
 	gsize len = strlen(decoded);
+	if (decoded[len - 1] == '/' || decoded[len - 1] == '\\')
+	{
+		g_free(decoded);
+		return FALSE;
+	}
 	while (len > 0 && (decoded[len - 1] == '.' || decoded[len - 1] == ' '))
 		decoded[--len] = '\0';
+	if (len <= (gsize)(local_path - decoded) || decoded[len - 1] == '/' || decoded[len - 1] == '\\')
+	{
+		g_free(decoded);
+		return FALSE;
+	}
 
-	const char * slash = strrchr(decoded, '/');
-	const char * base = slash ? slash + 1 : decoded;
+	const char * slash = strrchr(local_path, '/');
+	const char * bslash = strrchr(local_path, '\\');
+	const char * sep = (slash && bslash) ? (slash > bslash ? slash : bslash) : (slash ? slash : bslash);
+	const char * base = sep ? sep + 1 : local_path;
+	if (!*base || strchr(base, ':') != nullptr)
+	{
+		g_free(decoded);
+		return FALSE;
+	}
 	const char * dot = strrchr(base, '.');
 	if (!dot || !dot[1])
 	{
@@ -1491,6 +1546,11 @@ UT_go_url_may_open (gchar const *url)
 		".scf", ".chm", ".iso", ".application", ".appref-ms",
 		".settingcontent-ms", ".gadget", ".inf", ".job", ".sct",
 		".shb", ".shs", ".vb", ".ws", ".wsc", ".cab", ".diagcab",
+		".vhd", ".vhdx", ".img", ".msp", ".mst", ".msu", ".msix",
+		".appx", ".py", ".pyw", ".psm1", ".psd1", ".jnlp",
+		".library-ms", ".searchConnector-ms", ".website",
+		".docm", ".xlsm", ".pptm", ".sh", ".desktop", ".command",
+		".app",
 		nullptr
 	};
 	gboolean allowed = TRUE;

@@ -1636,6 +1636,7 @@ void s_RTF_ListenerWriteDoc::_outputData(const UT_UCS4Char * data, UT_uint32 len
 			} else if (!m_pie->m_atticFormat)
 			{
 				if (*pData > 0xffff) {
+					FlushBuffer();
 					m_pie->_rtf_keyword("uc", 1);
 					UT_UCS4Char ch = *pData - 0x10000;
 					short si;

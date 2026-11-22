@@ -409,26 +409,41 @@ session_ptr_t ClientProxy::setup_tls_session(socket_ptr_t remote_socket_ptr) {
 	return_val_if_neg(gnutls_handshake(*session_ptr), session_ptr_t());
 
 	// verify peer
-	unsigned int status;
-	if (gnutls_certificate_verify_peers2(*session_ptr, &status) != 0)
+	unsigned int status = 0;
+	if (gnutls_certificate_verify_peers2(*session_ptr, &status) != 0 || status != 0)
 		throw Exception(TLS_VERIFY_PEER_ERROR);
 
 	gnutls_x509_crt cert;
 	const gnutls_datum* cert_list;
-	unsigned int cert_list_size;
+	unsigned int cert_list_size = 0;
 
 	// check hostname
 	return_val_if_neg(gnutls_x509_crt_init(&cert), session_ptr_t());
 	cert_list = gnutls_certificate_get_peers(*session_ptr, &cert_list_size);
-	if (!cert_list)
+	if (!cert_list || cert_list_size == 0)
+	{
+		gnutls_x509_crt_deinit(cert);
 		throw Exception(TLS_CANT_GET_PEER_CERT_ERROR);
+	}
 
-	return_val_if_neg(gnutls_x509_crt_import(cert, &cert_list[0], GNUTLS_X509_FMT_DER), session_ptr_t());
+	if (gnutls_x509_crt_import(cert, &cert_list[0], GNUTLS_X509_FMT_DER) < 0)
+	{
+		gnutls_x509_crt_deinit(cert);
+		return session_ptr_t();
+	}
 	char name[256] = {0};
 	size_t namesize = sizeof(name);
-	return_val_if_neg(gnutls_x509_crt_get_dn(cert, name, &namesize), session_ptr_t());
+	if (gnutls_x509_crt_get_dn(cert, name, &namesize) < 0)
+	{
+		gnutls_x509_crt_deinit(cert);
+		return session_ptr_t();
+	}
 	if (check_hostname_ && gnutls_x509_crt_check_hostname(cert, connect_address_.c_str()) == 0)
+	{
+		gnutls_x509_crt_deinit(cert);
 		throw Exception(TLS_VERIFY_HOSTNAME_ERROR);
+	}
+	gnutls_x509_crt_deinit(cert);
 	
 	return session_ptr;
 }

@@ -50,10 +50,13 @@ INT_PTR CALLBACK AP_Win32Dialog_CollaborationShare::s_dlgProc(HWND hWnd, UINT ms
 		
 	case WM_DESTROY:
 		pThis = (AP_Win32Dialog_CollaborationShare *)GetWindowLongPtrW(hWnd,DWLP_USER);
-		pThis->_freeBuddyList();
-		if (pThis->m_pWin32Dialog)
+		if (pThis)
 		{
-			DELETEP(pThis->m_pWin32Dialog);
+			pThis->_freeBuddyList();
+			if (pThis->m_pWin32Dialog)
+			{
+				DELETEP(pThis->m_pWin32Dialog);
+			}
 		}
 		
 		// WM_DESTROY processed
@@ -127,7 +130,7 @@ BOOL AP_Win32Dialog_CollaborationShare::_onInitDialog(HWND hWnd, WPARAM, LPARAM)
 	m_hBuddyList = GetDlgItem(hWnd, AP_RID_DIALOG_COLLABORATIONSHARE_BUDDY_LIST);
 
 	// setup our listview columns
-	LVCOLUMN lvc;
+	LVCOLUMN lvc = {};
 	lvc.mask = LVCF_WIDTH; 
 	lvc.cx = 250;
 	ListView_InsertColumn(m_hBuddyList, 0, &lvc);
@@ -245,6 +248,8 @@ void AP_Win32Dialog_CollaborationShare::_populateWindowData()
 		const char * none = pSS ? pSS->getValue(AP_STRING_ID_DLG_COLLAB_Share_NoAccounts) : nullptr;
 		m_pWin32Dialog->addItemToCombo(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, (none && *none) ? none : "No Accounts Available!");
 		m_pWin32Dialog->selectComboItem(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, 0);
+		m_pWin32Dialog->enableControl(AP_RID_DIALOG_COLLABORATIONSHARE_ACCOUNTCOMBO, false);
+		m_pWin32Dialog->enableControl(AP_RID_DIALOG_COLLABORATIONSHARE_OK_BUTTON, false);
 	}
 }
 
@@ -284,7 +289,7 @@ void AP_Win32Dialog_CollaborationShare::_populateBuddyModel(bool refresh)
 		UT_Win32LocaleString sBuddyText = AP_Win32App::s_fromUTF8ToWinLocale(pBuddy->getDescription().utf8_str());
 
 		// insert a new item in the listview
-		LVITEMW lviBuddy;
+		LVITEMW lviBuddy = {};
 		lviBuddy.mask = LVIF_TEXT | LVIF_STATE | LVIF_IMAGE | LVIF_PARAM;
 		lviBuddy.state = 0;
 		lviBuddy.iItem = i;
@@ -332,7 +337,7 @@ void AP_Win32Dialog_CollaborationShare::_getSelectedBuddies(std::vector<std::str
 	int itemCount = ListView_GetItemCount(m_hBuddyList);
 	for (UT_sint32 i = 0; i < itemCount; i++)
 	{
-		LVITEMW lviBuddy;
+		LVITEMW lviBuddy = {};
 		lviBuddy.mask = LVIF_PARAM;
 		lviBuddy.iItem = i;
 		lviBuddy.iSubItem = 0;
@@ -356,7 +361,7 @@ void AP_Win32Dialog_CollaborationShare::_freeBuddyList()
 	int itemCount = ListView_GetItemCount(m_hBuddyList);
 	for (UT_sint32 i = 0; i < itemCount; i++)
 	{
-		LVITEMW lviBuddy;
+		LVITEMW lviBuddy = {};
 		lviBuddy.mask = LVIF_PARAM;
 		lviBuddy.iItem = i;
 		lviBuddy.iSubItem = 0;

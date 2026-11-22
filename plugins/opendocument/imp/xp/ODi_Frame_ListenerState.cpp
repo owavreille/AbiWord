@@ -283,7 +283,11 @@ void ODi_Frame_ListenerState::_drawImage (const gchar** ppAtts,
     if ( pChar && 
 		 (!strcmp(pChar, "as-char" ) || 
 		   m_rElementStack.hasElement("style:header") || 
-		   m_rElementStack.hasElement("style:footer") )) {
+		   m_rElementStack.hasElement("style:header-left") || 
+		   m_rElementStack.hasElement("style:header-first") || 
+		   m_rElementStack.hasElement("style:footer") || 
+		   m_rElementStack.hasElement("style:footer-left") || 
+		   m_rElementStack.hasElement("style:footer-first") )) {
         // No frames are used on AbiWord for in-line wrapping: it
         // uses a <image> tag right in the paragraph text.
         _drawInlineImage(ppAtts);
@@ -348,7 +352,12 @@ void ODi_Frame_ListenerState::_drawInlineImage (const gchar** ppAtts)
     pHeight = m_rElementStack.getStartTag(0)->getAttributeValue("svg:height");
     UT_ASSERT(pHeight);  
         
-    UT_String_sprintf(propsBuffer, "width:%s; height:%s", pWidth, pHeight);
+    if (pWidth && pHeight)
+        UT_String_sprintf(propsBuffer, "width:%s; height:%s", pWidth, pHeight);
+    else if (pWidth)
+        UT_String_sprintf(propsBuffer, "width:%s", pWidth);
+    else if (pHeight)
+        UT_String_sprintf(propsBuffer, "height:%s", pHeight);
         
 	m_mPendingImgProps["props"] = propsBuffer.c_str();
 	m_mPendingImgProps["dataid"] = dataId.c_str();
@@ -404,7 +413,8 @@ void ODi_Frame_ListenerState::_drawObject (const gchar** ppAtts,
 
 	std::string extraID;
 	std::string objectID;
-	objectID = (dataId.substr(9,dataId.length()-8)).c_str();
+	if (dataId.length() >= 9)
+		objectID = (dataId.substr(9,dataId.length()-8)).c_str();
 	extraID.assign("LatexMath");
 	extraID.append(objectID.c_str());
 
@@ -416,8 +426,13 @@ void ODi_Frame_ListenerState::_drawObject (const gchar** ppAtts,
         pHeight = m_rElementStack.getStartTag(0)->getAttributeValue("svg:height");
         UT_ASSERT(pHeight);  
         
-        std::string propsBuffer =
-            UT_std_string_sprintf("width:%s; height:%s", pWidth, pHeight);
+        std::string propsBuffer;
+        if (pWidth && pHeight)
+            propsBuffer = UT_std_string_sprintf("width:%s; height:%s", pWidth, pHeight);
+        else if (pWidth)
+            propsBuffer = UT_std_string_sprintf("width:%s", pWidth);
+        else if (pHeight)
+            propsBuffer = UT_std_string_sprintf("height:%s", pHeight);
         
         PP_PropertyVector attribs = {
             "props", propsBuffer,
@@ -753,7 +768,7 @@ bool ODi_Frame_ListenerState::_getFrameProperties(std::string& rProps,
         pVal = m_rElementStack.getStartTag(0)->getAttributeValue("svg:width");
         if (pVal == nullptr) {
             pVal = m_rElementStack.getStartTag(0)->getAttributeValue("fo:min-width");
-            if (UT_determineDimension(pVal, DIM_none) == DIM_PERCENT) {
+            if (pVal && UT_determineDimension(pVal, DIM_none) == DIM_PERCENT) {
                 // TODO: Do the conversion from percentage to a real
                 //       unit (ie: "cm" or "in").
                 UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED);
@@ -794,7 +809,7 @@ bool ODi_Frame_ListenerState::_getFrameProperties(std::string& rProps,
         pVal = m_rElementStack.getStartTag(0)->getAttributeValue("svg:height");
         if (pVal == nullptr) {
             pVal = m_rElementStack.getStartTag(0)->getAttributeValue("fo:min-height");
-            if (UT_determineDimension(pVal, DIM_none) == DIM_PERCENT) {
+            if (pVal && UT_determineDimension(pVal, DIM_none) == DIM_PERCENT) {
                 // TODO: Do the conversion from percentage to a real
                 //       unit (ie: "cm" or "in").
                 UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED);

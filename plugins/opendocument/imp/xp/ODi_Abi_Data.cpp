@@ -69,11 +69,11 @@ bool ODi_Abi_Data::addImageDataItem(UT_String& rDataId, const gchar** ppAtts) {
     // The file name of the picture. e.g.: "Object 1" or "10000201000000D100000108FF0E3707.png" 
     UT_String fileName;
     
-    const std::string id = m_href_to_id[pHRef];
-    if (!id.empty()) {
+    auto it = m_href_to_id.find(pHRef);
+    if (it != m_href_to_id.end() && !it->second.empty()) {
         // This image was already added.
         // Use the existing data item id.
-        rDataId = id;
+        rDataId = it->second;
         return true;
     }
     
@@ -165,11 +165,11 @@ bool ODi_Abi_Data::addObjectDataItem(UT_String& rDataId, const gchar** ppAtts, i
     // The file name of the picture. e.g.: "Object 1" or "10000201000000D100000108FF0E3707.png" 
     UT_String fileName;
 
-    const std::string id = m_href_to_id[pHRef];
-    if (!id.empty()) {
+    auto it = m_href_to_id.find(pHRef);
+    if (it != m_href_to_id.end() && !it->second.empty()) {
         // This object was already added.
         // Use the existing data item id.
-        rDataId = id;
+        rDataId = it->second;
         return true;
     }
 

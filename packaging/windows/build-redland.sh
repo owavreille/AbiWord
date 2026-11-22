@@ -19,7 +19,9 @@ trap 'rm -rf "$work"' EXIT
 fetch() {
 	local url=$1
 	local name=$2
+	local sha256=$3
 	curl -fsSL -o "$work/$name" "$url"
+	echo "$sha256  $work/$name" | sha256sum -c -
 	tar -xzf "$work/$name" -C "$work"
 }
 
@@ -39,7 +41,7 @@ mark_defined() {
 }
 
 if ! "$PKG_CONFIG" --exists raptor2; then
-fetch https://ftp.debian.org/debian/pool/main/r/raptor2/raptor2_2.0.16.orig.tar.gz raptor2.tar.gz
+fetch https://ftp.debian.org/debian/pool/main/r/raptor2/raptor2_2.0.16.orig.tar.gz raptor2.tar.gz 089db78d7ac982354bdbf39d973baf09581e6904ac4c92a98c5caadb3de44680
 (
 	cd "$work"/raptor2-2.0.16
 	# libxml2 2.11 a retiré le champ xmlEntity.checked.
@@ -77,7 +79,7 @@ fi
 # PCRE 8.45 est la dernière publication. Fedora 45 la fournit en
 # mingw64-pcre ; le téléchargement ne sert que si ce paquet est absent.
 if ! "$PKG_CONFIG" --exists libpcre; then
-fetch https://downloads.sourceforge.net/project/pcre/pcre/8.45/pcre-8.45.tar.gz pcre.tar.gz
+fetch https://downloads.sourceforge.net/project/pcre/pcre/8.45/pcre-8.45.tar.gz pcre.tar.gz 4e6ce03e0336e8b4a3d6c2b70b1c5e18590a5673a98186da90d4f33c23defc09
 (
 	cd "$work"/pcre-8.45
 	# config.h définit déjà ces macros via la visibilité GCC. Le bloc
@@ -100,7 +102,7 @@ PY
 fi
 
 if ! "$PKG_CONFIG" --exists rasqal; then
-fetch https://ftp.debian.org/debian/pool/main/r/rasqal/rasqal_0.9.33.orig.tar.gz rasqal.tar.gz
+fetch https://ftp.debian.org/debian/pool/main/r/rasqal/rasqal_0.9.33.orig.tar.gz rasqal.tar.gz 6924c9ac6570bd241a9669f83b467c728a322470bf34f4b2da4f69492ccfd97c
 (
 	cd "$work"/rasqal-0.9.33
 	python3 - << 'PY'
@@ -147,7 +149,7 @@ PY
 fi
 
 if ! "$PKG_CONFIG" --exists redland; then
-fetch https://ftp.debian.org/debian/pool/main/r/redland/redland_1.0.17.orig.tar.gz redland.tar.gz
+fetch https://ftp.debian.org/debian/pool/main/r/redland/redland_1.0.17.orig.tar.gz redland.tar.gz de1847f7b59021c16bdc72abb4d8e2d9187cd6124d69156f3326dd34ee043681
 (
 	cd "$work"/redland-1.0.17
 	python3 - << 'PY'

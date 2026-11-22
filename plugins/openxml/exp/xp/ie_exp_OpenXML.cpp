@@ -429,6 +429,7 @@ UT_Error IE_Exp_OpenXML::writeText(int target, const UT_UCS4Char* text, bool lis
 
 	UT_uint32 len = UT_UCS4_strlen(text);
 
+	std::string out;
 	UT_UTF8String sEscText;
 	sEscText.reserve(len);
 
@@ -438,6 +439,18 @@ UT_Error IE_Exp_OpenXML::writeText(int target, const UT_UCS4Char* text, bool lis
 		// Skipping first tab character of list element
 		if(list && pText == text && *pText == '\t')
 		{
+			continue;
+		}
+
+		if (!isOverline && (*pText == '\t' || *pText == '\n'))
+		{
+			sEscText.escapeXML();
+			out += sEscText.utf8_str();
+			sEscText.clear();
+			if (*pText == '\t')
+				out += "</w:t><w:tab/><w:t xml:space=\"preserve\">";
+			else
+				out += "</w:t><w:br/><w:t xml:space=\"preserve\">";
 			continue;
 		}
 
@@ -460,8 +473,9 @@ UT_Error IE_Exp_OpenXML::writeText(int target, const UT_UCS4Char* text, bool lis
 	}
 
 	sEscText.escapeXML();
+	out += sEscText.utf8_str();
 
-	return writeTargetStream(target, sEscText.utf8_str());
+	return writeTargetStream(target, out.c_str());
 }
 
 /**
@@ -1444,6 +1458,7 @@ UT_Error IE_Exp_OpenXML::setHyperlinkRelation(int target, const char* id, const 
 {
 	UT_UTF8String sEscAddr = addr;
 	sEscAddr.escapeURL();
+	sEscAddr.escapeXML();
 
 	std::string str("<Relationship Id=\"");
 	str += id;

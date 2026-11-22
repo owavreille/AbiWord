@@ -266,6 +266,10 @@ private:
 		if (ec)
 		{
 			UT_DEBUGMSG(("asyncWriteHeaderHandler generic error\n"));
+			{
+				abicollab::scoped_lock lock(queue_protector);
+				write_active = false;
+			}
 			disconnect();
 			return;
 		}

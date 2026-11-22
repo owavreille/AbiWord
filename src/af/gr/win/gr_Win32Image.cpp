@@ -168,24 +168,35 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 	  into a PNG image, storing it in a ByteBuf and returning it
 	  to the caller.
 	*/
+	if (!m_pDIB)
+		return false;
 
 	// Create our bytebuf
 	UT_ByteBufPtr pBB(new UT_ByteBuf());
 
 	png_structp png_ptr;
 	png_infop info_ptr;
+	UT_Byte* volatile pData = nullptr;
 
 	// initialize some libpng stuff
 	png_ptr = png_create_write_struct(PNG_LIBPNG_VER_STRING, (png_voidp)nullptr,
 									  (png_error_ptr)nullptr, (png_error_ptr)nullptr);
-	
+	if (!png_ptr)
+		return false;
+
 	info_ptr = png_create_info_struct(png_ptr);
+	if (!info_ptr)
+	{
+		png_destroy_write_struct(&png_ptr, (png_infopp)nullptr);
+		return false;
+	}
 
 	// libpng will longjmp back to here if a fatal error occurs
 	if (setjmp(png_jmpbuf(png_ptr)))
 	{
 		/* If we get here, we had a problem reading the file */
-		png_destroy_write_struct(&png_ptr,  (png_infopp)nullptr);
+		g_free(pData);
+		png_destroy_write_struct(&png_ptr, &info_ptr);
 		ppBB = UT_ByteBufPtr();
 		
 		return false;
@@ -239,8 +250,12 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 	RGBQUAD* pColors = (RGBQUAD*) (((unsigned char*) m_pDIB) + m_pDIB->bmiHeader.biSize);
 	UT_Byte* pBits = ((unsigned char*) m_pDIB) + m_pDIB->bmiHeader.biSize + iSizeOfColorData;
 	
-	UT_Byte* pData = (UT_Byte*) g_try_malloc(iWidth * iHeight * samples);
-	UT_return_val_if_fail(pData, false); // TODO outofmem
+	pData = (UT_Byte*) g_try_malloc((size_t)iWidth * (size_t)iHeight * (size_t)samples);
+	if (!pData)
+	{
+		png_destroy_write_struct(&png_ptr, &info_ptr);
+		return false;
+	}
 		
 	UT_uint32 	iRow;
 	UT_uint32 	iCol;
@@ -416,6 +431,7 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 	  We then g_free our 24-bit buffer.
 	*/
 	g_free(pData);
+	pData = nullptr;
 
 	/*
 	  Wrap things up with libpng
@@ -423,7 +439,7 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 	png_write_end(png_ptr, info_ptr);
 
 	/* clean up after the write, and g_free any memory allocated */
-	png_destroy_write_struct(&png_ptr, (png_infopp)nullptr);
+	png_destroy_write_struct(&png_ptr, &info_ptr);
 
 	// And pass the ByteBuf back to our caller
 	ppBB = pBB;
@@ -672,14 +688,27 @@ bool GR_Win32Image::_convertFromPNG(const UT_ConstByteBufPtr& pBB, UT_sint32 iDi
 	/* flip the RGB pixels to BGR (or RGBA to BGRA) */
 	png_set_bgr(png_ptr);
 
-	const UT_uint32 bytesPerPixel = hasAlpha ? 4 : 3;
-	UT_uint32 iBytesInRow = width * bytesPerPixel;
+	if (width == 0 || height == 0 || width > 16384 || height > 16384)
+	{
+		png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)nullptr);
+		return false;
+	}
+
+	const size_t bytesPerPixel = hasAlpha ? 4 : 3;
+	size_t iBytesInRow = (size_t)width * bytesPerPixel;
 	if (iBytesInRow % 4)
 	{
 		iBytesInRow += (4 - (iBytesInRow % 4));
 	}
+	const size_t totalImageBytes = (size_t)height * iBytesInRow;
+	if (totalImageBytes > 0x7fffffffu - sizeof(BITMAPINFOHEADER))
+	{
+		png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)nullptr);
+		return false;
+	}
 
-	m_pDIB = (BITMAPINFO*) g_try_malloc(sizeof(BITMAPINFOHEADER) + height * iBytesInRow);
+	FREEP(m_pDIB);
+	m_pDIB = (BITMAPINFO*) g_try_malloc(sizeof(BITMAPINFOHEADER) + totalImageBytes);
 	if (!m_pDIB)
 	{
 		png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)nullptr);
@@ -740,14 +769,20 @@ bool GR_Win32Image::_convertFromJPEG(const UT_ConstByteBufPtr& pBB, UT_sint32 iD
 	// create below, which saves us a potentially huge memory copy.
 	if (!UT_JPEG_getDimensions(pBB, iImageWidth, iImageHeight))
 		return false;
+	if (iImageWidth <= 0 || iImageHeight <= 0 || iImageWidth > 16384 || iImageHeight > 16384)
+		return false;
 
-	UT_uint32 iBytesInRow = iImageWidth * 3;
+	size_t iBytesInRow = (size_t)iImageWidth * 3;
 	if (iBytesInRow % 4)
 	{
 		iBytesInRow += (4 - (iBytesInRow % 4));
 	}
+	const size_t totalImageBytes = (size_t)iImageHeight * iBytesInRow;
+	if (totalImageBytes > 0x7fffffffu - sizeof(BITMAPINFOHEADER))
+		return false;
 
-	m_pDIB = (BITMAPINFO*) g_try_malloc(sizeof(BITMAPINFOHEADER) + iImageHeight * iBytesInRow);
+	FREEP(m_pDIB);
+	m_pDIB = (BITMAPINFO*) g_try_malloc(sizeof(BITMAPINFOHEADER) + totalImageBytes);
 	if (!m_pDIB)
 		return false;
 

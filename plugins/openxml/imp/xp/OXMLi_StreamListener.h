@@ -68,6 +68,7 @@ private:
 	UT_Error m_parseStatus;
 	OXMLi_Namespace_Common* m_namespaces;
 	int m_fallbackDepth;
+	bool m_useFallback;
 
 	void pushState(OXMLi_ListenerState * s);
 	void popState();

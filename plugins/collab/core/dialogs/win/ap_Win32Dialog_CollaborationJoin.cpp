@@ -52,10 +52,13 @@ INT_PTR CALLBACK AP_Win32Dialog_CollaborationJoin::s_dlgProc(HWND hWnd, UINT msg
 		
 	case WM_DESTROY:
 		pThis = (AP_Win32Dialog_CollaborationJoin *)GetWindowLongPtrW(hWnd,DWLP_USER);
-		pThis->_freeBuddyList();
-		if (pThis->p_win32Dialog)
+		if (pThis)
 		{
-			DELETEP(pThis->p_win32Dialog);
+			pThis->_freeBuddyList();
+			if (pThis->p_win32Dialog)
+			{
+				DELETEP(pThis->p_win32Dialog);
+			}
 		}
 		
 		// WM_DESTROY processed
@@ -208,7 +211,7 @@ HTREEITEM AP_Win32Dialog_CollaborationJoin::_addBuddyToTree(BuddyPtr pBuddy)
 	UT_UTF8String buddyDesc = pBuddy->getDescription();
 
 	UT_Win32LocaleString sBuddyText = AP_Win32App::s_fromUTF8ToWinLocale(buddyDesc.utf8_str());
-	TV_INSERTSTRUCTW tviBuddy;
+	TV_INSERTSTRUCTW tviBuddy = {};
 	tviBuddy.item.mask = TVIF_TEXT | TVIF_STATE | TVIF_PARAM;
 	tviBuddy.hInsertAfter = TVI_SORT;
 	tviBuddy.hParent = NULL; // top most level Item
@@ -226,7 +229,7 @@ HTREEITEM AP_Win32Dialog_CollaborationJoin::_addDocumentToBuddy(HTREEITEM buddyI
 
 	UT_UTF8String docDesc = pDocHandle->getName();
 	UT_Win32LocaleString sDocText = AP_Win32App::s_fromUTF8ToWinLocale(docDesc.utf8_str());
-	TV_INSERTSTRUCTW tviDocument;
+	TV_INSERTSTRUCTW tviDocument = {};
 	tviDocument.item.mask = TVIF_TEXT | TVIF_STATE | TVIF_PARAM;
 	tviDocument.hInsertAfter = TVI_SORT;
 	tviDocument.hParent = buddyItem;
@@ -351,7 +354,7 @@ void AP_Win32Dialog_CollaborationJoin::_addDocument(BuddyPtr pBuddy, DocHandle* 
 	HTREEITEM item = TreeView_GetRoot(m_hDocumentTreeview);
     while (item)
 	{
-		TVITEMW buddyItem;
+		TVITEMW buddyItem = {};
 		buddyItem.mask = TVIF_PARAM;
 		buddyItem.hItem = item;
 		UT_return_if_fail(SendMessageW(m_hDocumentTreeview, TVM_GETITEM, 0, (LPARAM) &buddyItem));		
@@ -383,7 +386,7 @@ static void s_treeview_delete_lparam(HWND hTreeView, HTREEITEM hItem)
 	UT_return_if_fail(hItem);
 
 	// fetch the lparam
-	TVITEM item;
+	TVITEM item = {};
 	item.mask = TVIF_PARAM;
 	item.hItem = hItem;
 	UT_return_if_fail(TreeView_GetItem(hTreeView, &item));

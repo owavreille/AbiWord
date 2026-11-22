@@ -168,23 +168,26 @@ UT_Error AbiCollabSessionManager::serializeDocument(const PD_Document* pDoc, std
 UT_Error AbiCollabSessionManager::deserializeDocument(PD_Document** pDoc, const std::string& document, bool isEncodedBase64)
 {
 	UT_return_val_if_fail(pDoc, UT_ERROR);
-	
+
+	const size_t kMaxDocumentBytes = 64u * 1024u * 1024u;
+	if (document.empty() || document.size() > kMaxDocumentBytes)
+		return UT_ERROR;
+
 	UT_Error res = UT_ERROR;
-	
-	// really bad abuse of std::string's below, but more efficient than copying 
-	// the whole buffer (which could be massive) into a temporary buffer
-	GsfInput *source;
+
+	std::string decoded;
+	GsfInput *source = nullptr;
 	if (isEncodedBase64)
 	{
-		char* base64gzBuf = const_cast<char*>(document.c_str());
-		size_t gzbufLen = gsf_base64_decode_simple((guint8*)base64gzBuf, strlen(base64gzBuf));
-		char* gzBuf = base64gzBuf;
-		source = gsf_input_memory_new((guint8*)gzBuf, gzbufLen, false);
+		decoded = document;
+		size_t gzbufLen = gsf_base64_decode_simple(reinterpret_cast<guint8*>(&decoded[0]), decoded.size());
+		decoded.resize(gzbufLen);
+		source = gsf_input_memory_new(reinterpret_cast<const guint8*>(decoded.data()), decoded.size(), false);
 	}
 	else
 	{
 		// string contains raw zipped data
-		source = gsf_input_memory_new((guint8*)document.c_str(), document.size(), false);
+		source = gsf_input_memory_new(reinterpret_cast<const guint8*>(document.data()), document.size(), false);
 	}
 
 	if (source)
@@ -192,21 +195,25 @@ UT_Error AbiCollabSessionManager::deserializeDocument(PD_Document** pDoc, const 
 		GsfInput *gzabwBuf = gsf_input_gzip_new (source, NULL); // todo: don't pass null here, but check for errors
 		if (gzabwBuf)
 		{
-			bool create = (*pDoc == NULL);
-			if (create)
+			const gsf_off_t uncompressedSize = gsf_input_size(gzabwBuf);
+			if (uncompressedSize > 0 && uncompressedSize <= static_cast<gsf_off_t>(kMaxDocumentBytes))
 			{
-				UT_DEBUGMSG(("Creating a new document in AbiCollabSessionManager::deserializeDocument()\n"));
-				(*pDoc) = new PD_Document();
-				(*pDoc)->createRawDocument();
+				bool create = (*pDoc == NULL);
+				if (create)
+				{
+					UT_DEBUGMSG(("Creating a new document in AbiCollabSessionManager::deserializeDocument()\n"));
+					(*pDoc) = new PD_Document();
+					(*pDoc)->createRawDocument();
+				}
+				IE_Imp* imp = (IE_Imp*)new IE_Imp_AbiWord_1(*pDoc);
+				imp->importFile(gzabwBuf); // todo: check for errors
+				(*pDoc)->repairDoc();
+				if (create)
+					(*pDoc)->finishRawCreation();
+				DELETEP(imp);
+				res = UT_OK;
 			}
-			IE_Imp* imp = (IE_Imp*)new IE_Imp_AbiWord_1(*pDoc);
-			imp->importFile(gzabwBuf); // todo: check for errors
-			(*pDoc)->repairDoc();
-			if (create)
-				(*pDoc)->finishRawCreation();
-			DELETEP(imp);
 			g_object_unref(G_OBJECT(gzabwBuf));
-			res = UT_OK;
         }
 		else
 		{
@@ -403,7 +410,10 @@ void AbiCollabSessionManager::loadProfile()
 										{
 											UT_continue_if_fail(buddyPropertyNode->type == XML_ELEMENT_NODE);
 											
-											UT_UTF8String buddyPropValue = reinterpret_cast<const char*>(xmlNodeGetContent(buddyPropertyNode));
+											xmlChar* content = xmlNodeGetContent(buddyPropertyNode);
+											UT_UTF8String buddyPropValue = content ? reinterpret_cast<const char*>(content) : "";
+											if (content)
+												xmlFree(content);
 											UT_continue_if_fail(buddyPropertyNode->name && *buddyPropertyNode->name && buddyPropValue.size() > 0);
 											
 											vBuddyProps.insert(PropertyMap::value_type(
@@ -424,7 +434,10 @@ void AbiCollabSessionManager::loadProfile()
 								else
 								{
 									// ... the rest are generic properties
-									UT_UTF8String propValue = reinterpret_cast<const char*>(xmlNodeGetContent(accountProp));
+									xmlChar* content = xmlNodeGetContent(accountProp);
+									UT_UTF8String propValue = content ? reinterpret_cast<const char*>(content) : "";
+									if (content)
+										xmlFree(content);
 									pHandler->addProperty(reinterpret_cast<const char*>(accountProp->name), propValue.utf8_str());
 								}
 							}

@@ -180,8 +180,11 @@ void OXML_Section::applyDocumentProperties()
 	if(num && sep)
 		pDoc->setColumns(num, sep);
 
-	if(marginTop && marginLeft && marginRight && marginBottom)
-		pDoc->setPageMargins(marginTop, marginLeft, marginRight, marginBottom);
+	if(marginTop || marginLeft || marginRight || marginBottom)
+		pDoc->setPageMargins(marginTop ? marginTop : "1in",
+							 marginLeft ? marginLeft : "1in",
+							 marginRight ? marginRight : "1in",
+							 marginBottom ? marginBottom : "1in");
 }
 
 UT_Error OXML_Section::serializeProperties(IE_Exp_OpenXML* exporter, OXML_Element_Paragraph* pParagraph)
@@ -270,9 +273,13 @@ UT_Error OXML_Section::serializeProperties(IE_Exp_OpenXML* exporter, OXML_Elemen
 		}
 	}
 
-	if(marginTop && marginLeft && marginRight && marginBottom)
+	if(marginTop || marginLeft || marginRight || marginBottom)
 	{	
-		err = exporter->setPageMargins(m_target, marginTop, marginLeft, marginRight, marginBottom);
+		err = exporter->setPageMargins(m_target,
+									   marginTop ? marginTop : "1in",
+									   marginLeft ? marginLeft : "1in",
+									   marginRight ? marginRight : "1in",
+									   marginBottom ? marginBottom : "1in");
 		if(err != UT_OK)
 			return err;
 	}

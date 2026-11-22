@@ -14,6 +14,7 @@ mkdir -p \
 	"$DEST/lib/abiword-3.1/plugins" \
 	"$DEST/lib/enchant-2" \
 	"$DEST/share/abiword-3.1/strings" \
+	"$DEST/share/abiword-3.1/templates" \
 	"$DEST/share/hunspell" \
 	"$DEST/share/enchant-2"
 
@@ -40,6 +41,8 @@ fi
 cp "$BUILDDIR"/po/*.strings "$DEST/share/abiword-3.1/strings/"
 ROOT=$(CDPATH= cd -- "$(dirname "$0")/../.." && pwd)
 cp "$ROOT/src/wp/ap/win/ToolbarIcons/LICENSE.icons.txt" "$DEST/share/abiword-3.1/"
+cp "$ROOT"/user/wp/system.profile* "$DEST/share/abiword-3.1/"
+cp "$ROOT"/user/wp/templates/normal.awt* "$DEST/share/abiword-3.1/templates/"
 
 cp "$PREFIX/lib/enchant-2/enchant_hunspell.dll" "$DEST/lib/enchant-2/"
 ordering=$(find "$PREFIX/share" -name enchant.ordering -print -quit)
@@ -55,7 +58,12 @@ if ((${#dicts[@]} == 0)); then
 	echo "Aucun dictionnaire hunspell dans /usr/share/hunspell" >&2
 	exit 1
 fi
-cp /usr/share/hunspell/*.dic /usr/share/hunspell/*.aff "$DEST/share/hunspell/"
+for f in /usr/share/hunspell/*.dic /usr/share/hunspell/*.aff; do
+	if [[ -L "$f" ]]; then
+		continue
+	fi
+	cp "$f" "$DEST/share/hunspell/"
+done
 
 mapfile -t search_dirs < <(
 	printf '%s\n' "$PREFIX/bin" "$PREFIX/lib"
@@ -129,11 +137,6 @@ copy_tree "$DEST/lib/abiword-3.1/plugins/sdw.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/collab.dll"
 copy_tree "$DEST/lib/abiword-3.1/plugins/llm.dll"
 copy_tree "$DEST/lib/enchant-2/enchant_hunspell.dll"
-
-hunspell=$(find "$DEST/bin" -maxdepth 1 -name 'libhunspell*.dll' -print -quit)
-if [[ -n "$hunspell" ]]; then
-	cp "$hunspell" "$DEST/lib/enchant-2/"
-fi
 
 STRIP=${STRIP:-x86_64-w64-mingw32-strip}
 if command -v "$STRIP" >/dev/null 2>&1; then

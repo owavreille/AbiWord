@@ -114,8 +114,8 @@ static void _errorSAXFunc(void *xmlp,
   {
     UT_DEBUGMSG(("nbsp found in stream errs %d \n",pXML->getNumMinorErrors()));
       pXML->incRecoveredErrors();
-      const char buffer []= { (char)0xa0};
-      pXML->charData(buffer,1); 
+      const char nbsp[] = { (char)0xc2, (char)0xa0, 0 };
+      pXML->charData(nbsp, 2);
   }
   else if(strstr(szErr,"not defined") != nullptr)
   {
@@ -197,19 +197,27 @@ UT_Error UT_XML::parse (const char * szFilename)
 	
 	if (length != 0)
     {
-		ctxt = xmlCreatePushParserCtxt (&hdl, static_cast<void *>(this), buffer, static_cast<int>(length), szFilename);
+		ctxt = xmlCreatePushParserCtxt (&hdl, static_cast<void *>(this), nullptr, 0, szFilename);
 		if (ctxt == nullptr)
 		{
 			UT_DEBUGMSG (("Unable to create libxml2 push-parser context!\n"));
 			reader->closeFile ();
 			return UT_ERROR;
 		}
-		xmlCtxtUseOptions (ctxt, XML_PARSE_NONET | XML_PARSE_NOENT);
+		xmlCtxtUseOptions (ctxt, XML_PARSE_NONET);
 #if defined(LIBXML_VERSION) && LIBXML_VERSION >= 21200
 		xmlCtxtSetMaxAmplification (ctxt, 5);
 #endif
+		if (xmlParseChunk (ctxt, buffer, static_cast<int>(length), 0))
+		{
+			if (getNumMinorErrors() > getNumRecoveredErrors())
+			{
+				UT_DEBUGMSG (("Error - 1 parsing '%s' (Line: %d, Column: %d)\n", szFilename, xmlSAX2GetLineNumber(ctxt), xmlSAX2GetColumnNumber(ctxt)));
+				ret = UT_IE_IMPORTERROR;
+			}
+		}
 		UT_sint32 chucks = -1;
-		while (!done && !m_bStopped)
+		while (ret == UT_OK && !done && !m_bStopped)
 		{
 			chucks++;
 			length = reader->readBytes (buffer, sizeof (buffer));
@@ -293,7 +301,7 @@ UT_Error UT_XML::parse (const char * buffer, UT_uint32 length)
     }
   memcpy(ctxt->sax, &hdl, sizeof(hdl));
   ctxt->userData = static_cast<void *>(this);
-  xmlCtxtUseOptions (ctxt, XML_PARSE_NONET | XML_PARSE_NOENT);
+  xmlCtxtUseOptions (ctxt, XML_PARSE_NONET);
 #if defined(LIBXML_VERSION) && LIBXML_VERSION >= 21200
   xmlCtxtSetMaxAmplification (ctxt, 5);
 #endif

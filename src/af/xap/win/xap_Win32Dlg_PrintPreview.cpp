@@ -422,6 +422,14 @@ public:
   virtual ~GR_Win32PrintPreviewGraphics()
   {
     d (g_print ("~GR_Win32PrintPreviewGraphics()\n"));
+    DELETEP(m_pGraphics);
+    if (metafile_dc != nullptr)
+      {
+	HENHMETAFILE hmf = CloseEnhMetaFile(metafile_dc);
+	if (hmf)
+	  DeleteEnhMetaFile(hmf);
+	metafile_dc = nullptr;
+      }
 	if (m_multiPageTiff)
       GdipDisposeImage (m_multiPageTiff);
     if (m_previewLaunched)
@@ -714,11 +722,9 @@ public:
     if (metafile_dc)
       {
 	GpStatus status;
-	HENHMETAFILE metafile;
-	
-	metafile = CloseEnhMetaFile (metafile_dc);
-	metafile_dc = nullptr;
 	DELETEP(m_pGraphics);
+	HENHMETAFILE metafile = CloseEnhMetaFile (metafile_dc);
+	metafile_dc = nullptr;
 	d (g_print ("metafile = %p\n", metafile));
 	if (!metafile)
 	  {
@@ -915,15 +921,17 @@ void XAP_Win32Dialog_PrintPreview::releasePrinterGraphicsContext(GR_Graphics * /
 
 void XAP_Win32Dialog_PrintPreview::runModal(XAP_Frame * pFrame)
 {
-  RECT rect;
-
+  UT_return_if_fail(pFrame);
   FV_View * pView = static_cast<FV_View*>(pFrame->getCurrentView());
+  UT_return_if_fail(pView);
 
+  RECT rect;
   rect.left = 0;
   rect.right = (LONG)(pView->getPageSize().Width (DIM_MM) * 100);
   rect.top = 0;
   rect.bottom = (LONG)(pView->getPageSize().Height (DIM_MM) * 100);
 
+  DELETEP(m_pPrintGraphics);
   try
     {
       m_pPrintGraphics = new GR_Win32PrintPreviewGraphics(rect);

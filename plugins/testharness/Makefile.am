@@ -29,7 +29,10 @@ testharness_la_SOURCES = \
 	@top_srcdir@/src/af/util/xp/t/ut_vector.t.cpp \
 	@top_srcdir@/src/af/util/xp/t/ut_string.t.cpp \
 	@top_srcdir@/src/af/util/xp/t/ut_units.t.cpp \
+	@top_srcdir@/src/af/util/xp/t/ut_stack.t.cpp \
 	@top_srcdir@/src/af/util/xp/t/ut_uuid.t.cpp \
+	@top_srcdir@/src/af/util/xp/t/ut_go_file.t.cpp \
+	@top_srcdir@/src/af/util/xp/t/ut_path.t.cpp \
 	@top_srcdir@/src/af/util/xp/t/ut_locale.t.cpp \
 	@top_srcdir@/src/af/xap/xp/t/xap_Prefs.t.cpp \
 	@top_srcdir@/src/text/ptbl/xp/t/pt_PieceTable.t.cpp \
@@ -39,7 +42,9 @@ testharness_la_SOURCES = \
 	@top_srcdir@/src/text/fmt/xp/t/fl_AutoNum.t.cpp \
 	@top_srcdir@/src/wp/impexp/xp/t/ie_mailmerge.t.cpp \
 	@top_srcdir@/src/wp/impexp/xp/t/ie_Table.t.cpp \
+	@top_srcdir@/src/wp/impexp/xp/t/ie_imp_memory.t.cpp \
 	@top_srcdir@/src/wp/impexp/xp/t/ie_formats.t.cpp \
+	@top_srcdir@/src/wp/ap/xp/t/ap_FontMenu.t.cpp \
 	$(NULL)
 
 endif

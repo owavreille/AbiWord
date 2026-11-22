@@ -419,7 +419,8 @@ void s_AbiWord_1_Listener::_openTag(const char * szPrefix, bool bHasContent,
 	if(strcmp(szPrefix,"math") == 0)
 	{
 		const char * szPropVal = nullptr;
-		pAP->getAttribute("dataid",szPropVal);
+		if (bHaveProp && pAP)
+			pAP->getAttribute("dataid",szPropVal);
 		if(szPropVal != nullptr)
 		{
 			m_pie->startElement("image");
@@ -450,7 +451,8 @@ void s_AbiWord_1_Listener::_openTag(const char * szPrefix, bool bHasContent,
 	else if(strcmp(szPrefix,"embed") == 0)
 	{
 		const char * szPropVal = nullptr;
-		pAP->getAttribute("dataid",szPropVal);
+		if (bHaveProp && pAP)
+			pAP->getAttribute("dataid",szPropVal);
 		if(szPropVal != nullptr)
 		{
 			m_pie->startElement("image");
@@ -1387,12 +1389,14 @@ void s_AbiWord_1_Listener::_handleDataItems(void)
 					buf.write(reinterpret_cast<const char *>(bbEncoded->getPointer(j)),jSize);
 					buf << std::endl;
 				}
+				m_pie->addStringUnchecked(nullptr, buf.str().c_str());
 			}
 		   	else
 		    {
 			   	m_pie->addString("base64", "no");
+				std::string raw(reinterpret_cast<const char*>(bbEncoded->getPointer(0)), bbEncoded->getLength());
+				m_pie->addStringUnchecked(nullptr, raw.c_str());
 			}
-			m_pie->addStringUnchecked(nullptr, reinterpret_cast<const char*>(bbEncoded->getPointer(0)));
 			m_pie->endElement();
 			m_pie->setPrettyPrint(true);
 

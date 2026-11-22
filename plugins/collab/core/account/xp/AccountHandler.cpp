@@ -408,8 +408,15 @@ void AccountHandler::_handlePacket(Packet* packet, BuddyPtr buddy)
 					pDoc->forceDirty();
 					if (jsre->m_sDocumentName.size() > 0)
 					{
-						gchar* fname = g_strdup(jsre->m_sDocumentName.utf8_str());
-						pDoc->setFilename(fname);
+						std::string safeName = jsre->m_sDocumentName.utf8_str();
+						const std::string::size_type sep = safeName.find_last_of("/\\");
+						if (sep != std::string::npos)
+							safeName.erase(0, sep + 1);
+						if (!safeName.empty() && safeName != "." && safeName != "..")
+						{
+							gchar* fname = g_strdup(safeName.c_str());
+							pDoc->setFilename(fname);
+						}
 					}
 					// The default ownership when joining is FALSE, as that seems 
 					// to make sense for the generic case. The person sharing the 

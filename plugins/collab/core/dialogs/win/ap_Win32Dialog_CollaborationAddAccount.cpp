@@ -113,6 +113,8 @@ void AP_Win32Dialog_CollaborationAddAccount::runModal(XAP_Frame * pFrame)
 	UT_return_if_fail(pFrame);
 	UT_return_if_fail(m_hInstance);
 
+	s_pThis = this;
+
 	// create the dialog
 	LPCTSTR lpTemplate = MAKEINTRESOURCE(AP_RID_DIALOG_COLLABORATIONADDACCOUNT);
 	int result = DialogBoxParam( m_hInstance, lpTemplate,
@@ -130,8 +132,11 @@ void AP_Win32Dialog_CollaborationAddAccount::runModal(XAP_Frame * pFrame)
 			break;
 	};
 
-	UnhookWindowsHookEx(m_hDetailsHook);
-	m_hDetailsHook = NULL;
+	if (m_hDetailsHook)
+	{
+		UnhookWindowsHookEx(m_hDetailsHook);
+		m_hDetailsHook = NULL;
+	}
 
 	s_pThis = NULL;
 }

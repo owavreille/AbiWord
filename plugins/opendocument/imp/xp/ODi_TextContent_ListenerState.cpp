@@ -1159,9 +1159,9 @@ void ODi_TextContent_ListenerState::endElement (const gchar* pName,
         m_bAcceptingText = true;
     } else if (!strcmp(pName, "text:note-body")) {
         UT_DebugOnly<bool> ok = false;
-        const gchar* pNoteClass;
-        
-        pNoteClass = m_rElementStack.getStartTag(1)->getAttributeValue("text:note-class");
+        const gchar* pNoteClass = nullptr;
+        if (m_rElementStack.getStartTag(1))
+            pNoteClass = m_rElementStack.getStartTag(1)->getAttributeValue("text:note-class");
         UT_ASSERT_HARMLESS(pNoteClass != nullptr);
         
         if (pNoteClass && !strcmp(pNoteClass, "footnote")) {

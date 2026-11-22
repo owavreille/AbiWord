@@ -177,20 +177,30 @@ public:
 	{
 		unsigned int count;
 		if (isLoading()) {
+			Val.clear();
 			*this << count;
-			if (failed() || count > (1u << 20)) {
+			if (failed() || count > (1u << 20) || !canSerialize(count)) {
 				fail();
 				return *this;
 			}
-			Val.resize( count );
+			Val.reserve(count < 4096u ? count : 4096u);
+			for (unsigned int i = 0; i < count; ++i) {
+				_K elem;
+				*this << elem;
+				if (failed()) {
+					Val.clear();
+					return *this;
+				}
+				Val.push_back(elem);
+			}
 		} else {
 			count = static_cast<unsigned int>(Val.size());
 			*this << count;
-		}
-		for (unsigned int i=0; i<count; ++i) {
-			*this << Val[i];
-			if (failed())
-				return *this;
+			for (unsigned int i=0; i<count; ++i) {
+				*this << Val[i];
+				if (failed())
+					return *this;
+			}
 		}
 		return *this;
 	}
@@ -203,7 +213,7 @@ public:
 		{
 			Val.clear();
 			*this << count;
-			if (failed() || count > (1u << 20))
+			if (failed() || count > (1u << 20) || !canSerialize(count))
 			{
 				fail();
 				return *this;
@@ -213,6 +223,11 @@ public:
 				_K k;
 				_V v;
 				*this << k << v;
+				if (failed())
+				{
+					Val.clear();
+					return *this;
+				}
 				Val.insert( typename std::map<_K,_V>::value_type( k, v ) );
 			}
 		}

@@ -774,37 +774,15 @@ bool XAP_Win32FrameImpl::_RegisterClass(XAP_Win32App * app)
  */
 void XAP_Win32FrameImpl::_rebuildMenus(void)
 {
-	
-	// FIXME - This should do as advertized!  RP
-	/*
-	// destroy old menu
-	
-	m_pWin32Menu->destroy();
-	DELETEP(m_pWin32Menu);
-	
-	// build new one.
-	m_pWin32Menu = new EV_Win32MenuBar(static_cast<XAP_Win32App*>(XAP_App::getApp()), getFrame(),
-					 m_szMenuLayoutName,
-					 m_szMenuLabelSetName);
-	UT_ASSERT(m_pUnixMenu);
-	bool bResult = m_pUnixMenu->rebuildMenuBar();
-	UT_ASSERT(bResult);
-	*/
+	if (!m_pWin32Menu || !m_hwndFrame)
+		return;
 
-	return;
-	/* Unix version:
-	// destroy old menu
-	m_pUnixMenu->destroy();
-	DELETEP(m_pUnixMenu);
-	
-	// build new one.
-	m_pUnixMenu = new EV_UnixMenuBar(static_cast<XAP_UnixApp*>(XAP_App::getApp()), getFrame(),
-					 m_szMenuLayoutName,
-					 m_szMenuLabelSetName);
-	UT_ASSERT(m_pUnixMenu);
-	bool bResult = m_pUnixMenu->rebuildMenuBar();
+	SetMenu(m_hwndFrame, nullptr);
+	m_pWin32Menu->destroy();
+	UT_DebugOnly<bool> bResult = m_pWin32Menu->synthesizeMenuBar(getFrame());
 	UT_ASSERT(bResult);
-	*/
+	SetMenu(m_hwndFrame, m_pWin32Menu->getMenuHandle());
+	DrawMenuBar(m_hwndFrame);
 }
 
 /*****************************************************************/
@@ -883,7 +861,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 			if (fimpl->m_pWin32Popup->onCommand(pView,hwnd,wParam))
 				return 0;
 		}
-		else if (fimpl->m_pWin32Menu->onCommand(pView,hwnd,wParam))
+		else if (fimpl->m_pWin32Menu && fimpl->m_pWin32Menu->onCommand(pView,hwnd,wParam))
 		{
 			return 0;
 		}
@@ -908,7 +886,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 			if (fimpl->m_pWin32Popup->onInitMenu(f,pView,hwnd,(HMENU)wParam))
 				return 0;
 		}
-		else if (fimpl->m_pWin32Menu->onInitMenu(f,pView,hwnd,(HMENU)wParam))
+		else if (fimpl->m_pWin32Menu && fimpl->m_pWin32Menu->onInitMenu(f,pView,hwnd,(HMENU)wParam))
 			return 0;
 		return UT_DefWindowProc(hwnd,iMsg,wParam,lParam);
 		
@@ -917,7 +895,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 
 		if (fimpl->m_pWin32Popup)
 			(fimpl->m_pWin32Popup->onMeasureItem(hwnd, wParam,lParam));
-		else 
+		else if (fimpl->m_pWin32Menu)
 			fimpl->m_pWin32Menu->onMeasureItem(hwnd, wParam,lParam);					
 
 		return 0;		
@@ -927,9 +905,9 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 	{	
 		if (fimpl->m_pWin32Popup)
 			return (fimpl->m_pWin32Popup->onMenuChar(hwnd, wParam,lParam));
-		else 
+		else if (fimpl->m_pWin32Menu)
 			return fimpl->m_pWin32Menu->onMenuChar(hwnd, wParam,lParam);					
-		
+		return 0;
 	} 
 
  	case WM_DRAWITEM: 
@@ -939,7 +917,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		{
 			fimpl->m_pWin32Popup->onDrawItem(hwnd,wParam,lParam);
 		}
-		else 
+		else if (fimpl->m_pWin32Menu)
 			fimpl->m_pWin32Menu->onDrawItem(hwnd,wParam,lParam);
 
 		return 0;					
@@ -951,7 +929,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		{
 			fimpl->m_pWin32Popup->onMenuSelect(f,pView,hwnd,(HMENU)lParam,wParam);
 		}
-		else 
+		else if (fimpl->m_pWin32Menu)
 			fimpl->m_pWin32Menu->onMenuSelect(f,pView,hwnd,(HMENU)lParam,wParam);
 
 		return 0;					
@@ -966,7 +944,8 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		{
 			HWND hWnd = ((LPNMHDR) lParam)->hwndFrom;
 			EV_Win32Toolbar * t = (EV_Win32Toolbar *)GetWindowLongPtrW(hWnd, GWLP_USERDATA);						
-			t->onDropArrow(((LPNMTOOLBARW) lParam)->iItem);
+			if (t)
+				t->onDropArrow(((LPNMTOOLBARW) lParam)->iItem);
 			return TBDDRET_DEFAULT;			/* Windows restores the pushed button*/
 		}
 
@@ -1214,7 +1193,9 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 	case WM_MOUSEWHEEL:
 	case WM_MOUSEHWHEEL:
 	{
-		return SendMessageW(fimpl->m_hwndContainer, iMsg, wParam, lParam);
+		if (fimpl->m_hwndContainer)
+			return SendMessageW(fimpl->m_hwndContainer, iMsg, wParam, lParam);
+		break;
 	}
 
 	case WM_VSCROLL:
@@ -1261,7 +1242,8 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 				if (!pApp)
 				{
 					FREEP(szFileName);
-					DragFinish(hDrop);
+					if (!oleOwned)
+						DragFinish(hDrop);
 					return 0;
 				}
 				FV_View* pCurrentView = (FV_View *) f->getCurrentView();
