@@ -7,6 +7,7 @@
  * of the License, or (at your option) any later version.
  */
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
@@ -134,6 +135,20 @@ static PD_Document * sample_document()
 	return doc;
 }
 
+static bool is_ole_compound(const std::string & path)
+{
+	FILE * in = std::fopen(path.c_str(), "rb");
+	if (!in)
+		return false;
+	unsigned char sig[8];
+	const size_t got = std::fread(sig, 1, sizeof(sig), in);
+	std::fclose(in);
+	static const unsigned char ole[8] = {
+		0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1
+	};
+	return got == sizeof(sig) && std::memcmp(sig, ole, sizeof(sig)) == 0;
+}
+
 static bool text_has_markers(const std::string & text)
 {
 	return text.find(MARKER) != std::string::npos &&
@@ -161,6 +176,11 @@ static bool round_trip(const char * suffix, const char * plugin)
 	UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
 	doc->unref();
 	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return false;
+	}
+	if (std::strcmp(suffix, ".doc") == 0 && !TFPASS(is_ole_compound(path)))
 	{
 		std::remove(path.c_str());
 		return false;

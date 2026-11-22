@@ -32,6 +32,7 @@
 #include "pt_Types.h"
 #include "ie_impexp_RTF.h"
 #include "ie_exp_RTF.h"
+#include "ie_exp_MsWord_97.h"
 #include "pd_Document.h"
 #include "pd_DocumentRDF.h"
 #include "pd_RDFSupport.h"
@@ -187,7 +188,7 @@ bool IE_Exp_MsWord_Hack_Sniffer::recognizeSuffix(const char * szSuffix)
 UT_Error IE_Exp_MsWord_Hack_Sniffer::constructExporter(PD_Document * pDocument,
 											   IE_Exp ** ppie)
 {
-	IE_Exp_RTF * p = new IE_Exp_RTF(pDocument);
+	IE_Exp_MsWord_97 * p = new IE_Exp_MsWord_97(pDocument);
 	*ppie = p;
 	return UT_OK;
 }

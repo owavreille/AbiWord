@@ -42,8 +42,8 @@ Le résultat doit être exactement le SHA-256 ci-dessus.
 Ce binaire contient le programme, l'export PDF par Cairo, les greffons
 OpenDocument, OpenXML, StarOffice (`.sdw`) et collaboration TCP, la
 correction Enchant/Hunspell et les dictionnaires embarqués. L'enregistrement
-`.doc` écrit du RTF sous ce nom de fichier. L'import `.doc` lit les
-documents Word 97 par wv 1.2.9. Le plancher d'API reste celui de Windows
+`.doc` écrit un document Word 97 (flux OLE `WordDocument` et `1Table`).
+L'import `.doc` lit ces documents par wv 1.2.9. Le plancher d'API reste celui de Windows
 2000 : le programme n'exige pas une API réservée à Windows 11. L'installateur
 demande les droits d'administrateur parce qu'il copie les fichiers dans
 `Program Files`.
@@ -57,7 +57,7 @@ de la publication. Ils ne l'étaient pas pour le binaire ci-dessus.
 Ce portage a quatre buts.
 
 1. **Livrer un AbiWord 3.1 installable sur Windows 64 bits**, y compris Windows 11, sans dépendre des anciens paquets 32 bits du projet.
-2. **Ouvrir et enregistrer les documents courants** : ABW, RTF, DOC, DOCX et ODT, et produire un PDF. La lecture et l'écriture se rapprochent des documents Word et LibreOffice. L'export `.doc` reste le RTF déjà produit par AbiWord.
+2. **Ouvrir et enregistrer les documents courants** : ABW, RTF, DOC, DOCX et ODT, et produire un PDF. La lecture et l'écriture se rapprochent des documents Word et LibreOffice. L'export `.doc` produit un fichier Word 97, le format binaire lu par l'import.
 3. **Garder le programme utilisable en français et en anglais**, avec les dictionnaires, les icônes et une collaboration directe entre deux AbiWord, en TCP seulement.
 4. **Empêcher les régressions de format.** Chaque changement lancé sur l'intégration compile la suite native et l'installateur. La suite `core.wp.impexp.formats` vérifie les fichiers de référence ABW, RTF et DOC, puis un aller-retour de texte en ABW, RTF, DOC, DOCX et ODT.
 
