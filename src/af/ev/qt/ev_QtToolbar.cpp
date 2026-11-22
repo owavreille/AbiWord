@@ -24,6 +24,8 @@
 #include <QString>
 #include <QComboBox>
 #include <QFontComboBox>
+#include <QAbstractItemView>
+#include <QTimer>
 #include <QMainWindow>
 #include <QPixmap>
 
@@ -72,6 +74,12 @@ public:
 	{
 		refill();
 		QFontComboBox::showPopup();
+		// The popup scrolls to the current face, which hides the document
+		// faces inserted above it. Put those rows back on screen.
+		QTimer::singleShot(0, this, [this]() {
+			if (QAbstractItemView * list = view())
+				list->scrollToTop();
+		});
 	}
 
 	void refill()

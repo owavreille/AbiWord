@@ -47,11 +47,22 @@ EV_Menu_Action::EV_Menu_Action(XAP_Menu_Id id,
 	  m_bRadio(bRadio),
 	  m_pfnGetState(pfnGetState),
 	  m_pfnGetLabel(pfnGetLabel),
-	  m_stScriptName(stScriptName)
+	  m_stScriptName(stScriptName),
+	  m_szIconName(nullptr)
 {
 	UT_ASSERT((bHoldsSubMenu + bRaisesDialog + bCheckable) < 2); // a 3-way exclusive OR
 	UT_ASSERT((!bCheckable) || pfnGetState);
 	m_szMethodName = g_strdup(szMethodName);
+}
+
+void EV_Menu_Action::setIconName(const char * szIconName)
+{
+	m_szIconName = szIconName;
+}
+
+const char * EV_Menu_Action::getIconName() const
+{
+	return m_szIconName;
 }
 
 EV_Menu_Action::~EV_Menu_Action()

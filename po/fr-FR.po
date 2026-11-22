@@ -9713,6 +9713,76 @@ msgctxt "STYLE_NONE"
 msgid "None"
 msgstr "Aucun"
 
+#. MENU_LABEL_COLLAB
+#: po/tmp/ap_String_Id.h
+msgid "&Collaborate"
+msgstr "&Collaborer"
+
+#. MENU_LABEL_COLLAB_TIP
+#: po/tmp/ap_String_Id.h
+msgid "Collaborate over the internet or local network"
+msgstr "Collaborer par Internet ou sur le réseau local"
+
+#. MENU_LABEL_COLLAB_SHARE
+#: po/tmp/ap_String_Id.h
+msgid "Share Document"
+msgstr "&Partager le document"
+
+#. MENU_LABEL_COLLAB_SHARE_TIP
+#: po/tmp/ap_String_Id.h
+msgid "Offer the current document for collaboration"
+msgstr "Proposer le document actuel pour une collaboration"
+
+#. MENU_LABEL_COLLAB_OPEN
+#: po/tmp/ap_String_Id.h
+msgid "Open Shared Document"
+msgstr "&Ouvrir un document partagé"
+
+#. MENU_LABEL_COLLAB_OPEN_TIP
+#: po/tmp/ap_String_Id.h
+msgid "Open a shared document"
+msgstr "Ouvrir un document partagé"
+
+#. MENU_LABEL_COLLAB_ACCOUNTS
+#: po/tmp/ap_String_Id.h
+msgid "Accounts"
+msgstr "&Comptes"
+
+#. MENU_LABEL_COLLAB_ACCOUNTS_TIP
+#: po/tmp/ap_String_Id.h
+msgid "Manage collaboration accounts"
+msgstr "Gérer les comptes de collaboration"
+
+#. MENU_LABEL_COLLAB_AUTHORS
+#: po/tmp/ap_String_Id.h
+msgid "Show Authors"
+msgstr "Afficher les &auteurs"
+
+#. MENU_LABEL_COLLAB_AUTHORS_TIP
+#: po/tmp/ap_String_Id.h
+msgid "Show who wrote each piece of text by with different colors"
+msgstr "Montrer l'auteur de chaque passage avec une couleur différente"
+
+#. MENU_LABEL_COLLAB_RECORD
+#: po/tmp/ap_String_Id.h
+msgid "Record this Session"
+msgstr "Enre&gistrer cette session"
+
+#. MENU_LABEL_COLLAB_RECORD_TIP
+#: po/tmp/ap_String_Id.h
+msgid "Record a session to disk, for debugging purposes"
+msgstr "Enregistrer une session sur le disque, pour le débogage"
+
+#. MENU_LABEL_COLLAB_VIEWRECORD
+#: po/tmp/ap_String_Id.h
+msgid "View Session"
+msgstr "&Voir la session"
+
+#. MENU_LABEL_COLLAB_VIEWRECORD_TIP
+#: po/tmp/ap_String_Id.h
+msgid "Load a recorded session from disk and show the packets"
+msgstr "Charger une session enregistrée et afficher les paquets"
+
 #~ msgid "About G&NOME Office"
 #~ msgstr "A propos de G&NOME Office"
 

@@ -170,27 +170,32 @@ static bool xap_FitIcon32(BYTE *& pixels, XAP_Win32BitmapInfo & info, LONG dstW,
 			unsigned sumB = 0;
 			unsigned sumG = 0;
 			unsigned sumR = 0;
-			unsigned count = 0;
+			unsigned cover = 0;
+			unsigned area = 0;
 			for (int sy = y0; sy < y1; ++sy)
 			{
 				int sourceY = topDown ? srcH - 1 - sy : sy;
 				for (int sx = x0; sx < x1; ++sx)
 				{
 					const BYTE * in = pixels + static_cast<DWORD>(sourceY) * srcStride + static_cast<DWORD>(sx) * 4;
-					if (xap_IsKeyPixel(in) || in[3] == 0)
+					++area;
+					if (xap_IsKeyPixel(in))
 						continue;
 					sumB += in[0];
 					sumG += in[1];
 					sumR += in[2];
-					++count;
+					++cover;
 				}
 			}
-			if (count == 0)
+			if (cover == 0 || area == 0)
 				continue;
-			out[0] = static_cast<BYTE>(sumB / count);
-			out[1] = static_cast<BYTE>(sumG / count);
-			out[2] = static_cast<BYTE>(sumR / count);
-			out[3] = 255;
+			unsigned alpha = cover * 255 / area;
+			if (alpha == 0)
+				continue;
+			out[0] = static_cast<BYTE>(sumB / cover);
+			out[1] = static_cast<BYTE>(sumG / cover);
+			out[2] = static_cast<BYTE>(sumR / cover);
+			out[3] = static_cast<BYTE>(alpha);
 			if (xap_IsKeyPixel(out))
 				out[2] = 0xEF;
 		}
@@ -280,6 +285,76 @@ static struct _map_name_id s_nametoIdTable[] =
 	{"INSERT_TABLE", AP_RID_TI_INSERT_TABLE},
 	{"LISTS_BULLETS", AP_RID_TI_LISTS_BULLETS},
 	{"LISTS_NUMBERS", AP_RID_TI_LISTS_NUMBERS},	
+	{"LO_Accept", AP_RID_TI_LO_Accept},
+	{"LO_Annotation", AP_RID_TI_LO_Annotation},
+	{"LO_Author", AP_RID_TI_LO_Author},
+	{"LO_Autofit", AP_RID_TI_LO_Autofit},
+	{"LO_Background", AP_RID_TI_LO_Background},
+	{"LO_Border", AP_RID_TI_LO_Border},
+	{"LO_Break", AP_RID_TI_LO_Break},
+	{"LO_Bullets", AP_RID_TI_LO_Bullets},
+	{"LO_Case", AP_RID_TI_LO_Case},
+	{"LO_Columns", AP_RID_TI_LO_Columns},
+	{"LO_Compare", AP_RID_TI_LO_Compare},
+	{"LO_Contact", AP_RID_TI_LO_Contact},
+	{"LO_Date", AP_RID_TI_LO_Date},
+	{"LO_Direction", AP_RID_TI_LO_Direction},
+	{"LO_Endnote", AP_RID_TI_LO_Endnote},
+	{"LO_Field", AP_RID_TI_LO_Field},
+	{"LO_File", AP_RID_TI_LO_File},
+	{"LO_Footer", AP_RID_TI_LO_Footer},
+	{"LO_Footnote", AP_RID_TI_LO_Footnote},
+	{"LO_Footnotes", AP_RID_TI_LO_Footnotes},
+	{"LO_Frame", AP_RID_TI_LO_Frame},
+	{"LO_Fullscreen", AP_RID_TI_LO_Fullscreen},
+	{"LO_Header", AP_RID_TI_LO_Header},
+	{"LO_Highlight", AP_RID_TI_LO_Highlight},
+	{"LO_History", AP_RID_TI_LO_History},
+	{"LO_Image", AP_RID_TI_LO_Image},
+	{"LO_Lock", AP_RID_TI_LO_Lock},
+	{"LO_Mail", AP_RID_TI_LO_Mail},
+	{"LO_Next", AP_RID_TI_LO_Next},
+	{"LO_Normal", AP_RID_TI_LO_Normal},
+	{"LO_Page", AP_RID_TI_LO_Page},
+	{"LO_Pageno", AP_RID_TI_LO_Pageno},
+	{"LO_Paragraph", AP_RID_TI_LO_Paragraph},
+	{"LO_Plugin", AP_RID_TI_LO_Plugin},
+	{"LO_Prev", AP_RID_TI_LO_Prev},
+	{"LO_Printlayout", AP_RID_TI_LO_Printlayout},
+	{"LO_Recent", AP_RID_TI_LO_Recent},
+	{"LO_Reject", AP_RID_TI_LO_Reject},
+	{"LO_Removefooter", AP_RID_TI_LO_Removefooter},
+	{"LO_Removeheader", AP_RID_TI_LO_Removeheader},
+	{"LO_Revisions", AP_RID_TI_LO_Revisions},
+	{"LO_Ruler", AP_RID_TI_LO_Ruler},
+	{"LO_Selectall", AP_RID_TI_LO_Selectall},
+	{"LO_Selectcell", AP_RID_TI_LO_Selectcell},
+	{"LO_Selectcolumn", AP_RID_TI_LO_Selectcolumn},
+	{"LO_Selectrow", AP_RID_TI_LO_Selectrow},
+	{"LO_Selecttable", AP_RID_TI_LO_Selecttable},
+	{"LO_Share", AP_RID_TI_LO_Share},
+	{"LO_Shownotes", AP_RID_TI_LO_Shownotes},
+	{"LO_Showpara", AP_RID_TI_LO_Showpara},
+	{"LO_Sort", AP_RID_TI_LO_Sort},
+	{"LO_Status", AP_RID_TI_LO_Status},
+	{"LO_Style", AP_RID_TI_LO_Style},
+	{"LO_Sum", AP_RID_TI_LO_Sum},
+	{"LO_Tabletotext", AP_RID_TI_LO_Tabletotext},
+	{"LO_Tabs", AP_RID_TI_LO_Tabs},
+	{"LO_Template", AP_RID_TI_LO_Template},
+	{"LO_Textbox", AP_RID_TI_LO_Textbox},
+	{"LO_Texttotable", AP_RID_TI_LO_Texttotable},
+	{"LO_Toc", AP_RID_TI_LO_Toc},
+	{"LO_Toolbar", AP_RID_TI_LO_Toolbar},
+	{"LO_User", AP_RID_TI_LO_User},
+	{"LO_Web", AP_RID_TI_LO_Web},
+	{"LO_Window", AP_RID_TI_LO_Window},
+	{"LO_Wordcount", AP_RID_TI_LO_Wordcount},
+	{"LO_Xml", AP_RID_TI_LO_Xml},
+	{"LO_Zoom", AP_RID_TI_LO_Zoom},
+	{"LO_Zoom100", AP_RID_TI_LO_Zoom100},
+	{"LO_Zoompage", AP_RID_TI_LO_Zoompage},
+	{"LO_Zoomwidth", AP_RID_TI_LO_Zoomwidth},
 	{"Menu_AbiWord_About", AP_RID_TI_Menu_AbiWord_About},
 	{"Menu_AbiWord_Add_Column", AP_RID_TI_Menu_AbiWord_Add_Column},
 	{"Menu_AbiWord_Add_Row", AP_RID_TI_Menu_AbiWord_Add_Row},
@@ -747,10 +822,14 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 			}
 
 			// hbmpItem is blended only when each channel is already multiplied by alpha.
+			// A resource bitmap leaves alpha at 0. Coverage from the fit writes
+			// a real alpha, and 0 here still means an opaque source pixel.
 			BYTE b = buff[pixel];
 			BYTE g = buff[pixel + 1];
 			BYTE r = buff[pixel + 2];
-			BYTE a = 255;
+			BYTE a = buff[pixel + 3];
+			if (a == 0)
+				a = 255;
 			buff[pixel] = static_cast<BYTE>((b * a) / 255);
 			buff[pixel + 1] = static_cast<BYTE>((g * a) / 255);
 			buff[pixel + 2] = static_cast<BYTE>((r * a) / 255);

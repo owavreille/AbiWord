@@ -2881,8 +2881,35 @@ fp_Page::buildHdrFtrContainer(fl_HdrFtrSectionLayout* pHFSL,
 	UT_return_val_if_fail(*ppHF, nullptr);
 
 	(*ppHF)->setPage(this);
+	copyHdrFtrGeometry(hfType);
 	xxx_UT_DEBUGMSG(("SEVIOR: Page for shadow %x is %x \n",*ppHF,this));
 	return *ppHF;
+}
+
+void fp_Page::copyHdrFtrGeometry(HdrFtrType hfType)
+{
+	const bool bIsHead = (hfType < FL_HDRFTR_FOOTER);
+	fp_ShadowContainer* mine = bIsHead ? m_pHeader : m_pFooter;
+	if (!mine)
+		return;
+
+	for (fp_Page* prev = getPrev(); prev; prev = prev->getPrev())
+	{
+		if (prev->getOwningSection() != m_pOwner)
+			continue;
+		fp_ShadowContainer* model = prev->getHdrFtrP(bIsHead ? FL_HDRFTR_HEADER
+		                                                     : FL_HDRFTR_FOOTER);
+		if (!model || model->getWidth() <= 0 || model->getHeight() <= 0)
+			continue;
+		// Assign the box directly. setX/setY clear the screen and assert
+		// when the graphics target is paper.
+		mine->_setX(model->getX());
+		mine->_setY(model->getY());
+		mine->_setWidth(model->getWidth());
+		mine->_setHeight(model->getHeight());
+		mine->setMaxHeight(model->getMaxHeight());
+		return;
+	}
 }
 
 /** Return the first container for pHFSL. */

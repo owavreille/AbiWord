@@ -44,6 +44,7 @@
 #include "ie_exp_MsWord_97.h"
 #include "pd_Document.h"
 #include "pt_PieceTable.h"
+#include "pf_Frag_Object.h"
 #include "pf_Frag_Strux.h"
 #include "pf_Frag_Text.h"
 #include "pp_AttrProp.h"
@@ -61,6 +62,15 @@ struct Run
 {
 	std::u16string text;
 	std::string grpprl;
+	int picture = -1;
+};
+
+struct Picture
+{
+	std::string bytes;
+	unsigned twips_w;
+	unsigned twips_h;
+	unsigned fc;
 };
 
 struct Paragraph
@@ -106,9 +116,8 @@ static void append_sprm(std::string & grpprl, unsigned opcode, unsigned operand,
 {
 	grpprl.push_back(static_cast<char>(opcode & 0xff));
 	grpprl.push_back(static_cast<char>((opcode >> 8) & 0xff));
-	grpprl.push_back(static_cast<char>(operand & 0xff));
-	if (width == 2)
-		grpprl.push_back(static_cast<char>((operand >> 8) & 0xff));
+	for (unsigned i = 0; i < width && i < 4; ++i)
+		grpprl.push_back(static_cast<char>((operand >> (8 * i)) & 0xff));
 }
 
 static bool property_is(const PP_AttrProp * ap, const char * name, const char * wanted)
@@ -182,12 +191,15 @@ static bool skipped_section(PTStruxType type)
 	}
 }
 
-static std::vector<Paragraph> collect_paragraphs(PD_Document * doc)
+static bool append_image(PD_Document * doc, Paragraph & current, const PP_AttrProp * ap, std::vector<Picture> & pics);
+
+static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics)
 {
 	std::vector<Paragraph> paragraphs;
 	Paragraph current;
 	bool accept = true;
 	bool in_paragraph = false;
+	int frame_depth = 0;
 	pt_PieceTable * table = doc->getPieceTable();
 	if (!table)
 		return paragraphs;
@@ -197,6 +209,14 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc)
 		if (frag->getType() == pf_Frag::PFT_Strux)
 		{
 			const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
+			if (frame_depth)
+			{
+				if (kind == PTX_SectionFrame)
+					++frame_depth;
+				else if (kind == PTX_EndFrame)
+					--frame_depth;
+				continue;
+			}
 			if (kind == PTX_Block)
 			{
 				if (accept)
@@ -220,13 +240,48 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc)
 				current = Paragraph();
 				in_paragraph = false;
 			}
+			if (kind == PTX_SectionFrame)
+			{
+				// A positioned image is a frame, not a PFT_Object. Closing
+				// the section here used to drop every fragment after it.
+				if (accept)
+				{
+					Paragraph image;
+					const PP_AttrProp * ap = nullptr;
+					doc->getAttrProp(frag->getIndexAP(), &ap);
+					if (append_image(doc, image, ap, pics))
+					{
+						current = image;
+						in_paragraph = true;
+					}
+				}
+				frame_depth = 1;
+				continue;
+			}
 			if (kind == PTX_Section)
 				accept = true;
 			else if (skipped_section(kind))
 				accept = false;
 			continue;
 		}
-		if (!accept || frag->getType() != pf_Frag::PFT_Text)
+		if (frame_depth || !accept)
+			continue;
+		if (frag->getType() == pf_Frag::PFT_Object)
+		{
+			const pf_Frag_Object * object = static_cast<const pf_Frag_Object *>(frag);
+			if (object->getObjectType() != PTO_Image)
+				continue;
+			if (!in_paragraph)
+			{
+				current = Paragraph();
+				in_paragraph = true;
+			}
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(object->getIndexAP(), &ap);
+			append_image(doc, current, ap, pics);
+			continue;
+		}
+		if (frag->getType() != pf_Frag::PFT_Text)
 			continue;
 		if (!in_paragraph)
 		{
@@ -241,7 +296,7 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc)
 		run.grpprl = character_grpprl(props);
 		for (UT_uint32 i = 0; chars && i < text->getLength(); ++i)
 			append_code_unit(run.text, chars[i]);
-		if (!current.runs.empty() && current.runs.back().grpprl == run.grpprl)
+		if (!current.runs.empty() && current.runs.back().picture < 0 && current.runs.back().grpprl == run.grpprl)
 			current.runs.back().text += run.text;
 		else
 			current.runs.push_back(run);
@@ -288,9 +343,13 @@ static const char * frag_attribute(PD_Document * doc, pf_Frag * frag, const char
 	const gchar * value = nullptr;
 	if (!doc->getAttrProp(frag->getIndexAP(), &ap) || !ap)
 		return nullptr;
-	if (!ap->getAttribute(name, value) || !value || !*value)
-		return nullptr;
-	return value;
+	if (ap->getAttribute(name, value) && value && *value)
+		return value;
+	// A section can store the header id as a property (pp_Property lists
+	// "header" at section level) as well as an attribute.
+	if (ap->getProperty(name, value) && value && *value)
+		return value;
+	return nullptr;
 }
 
 static int slot_for_type(const char * type)
@@ -315,13 +374,79 @@ static void append_run(Paragraph & current, const PP_AttrProp * props, const UT_
 	run.grpprl = character_grpprl(props);
 	for (UT_uint32 i = 0; chars && i < length; ++i)
 		append_code_unit(run.text, chars[i]);
-	if (!current.runs.empty() && current.runs.back().grpprl == run.grpprl)
+	if (!current.runs.empty() && current.runs.back().picture < 0 && current.runs.back().grpprl == run.grpprl)
 		current.runs.back().text += run.text;
 	else
 		current.runs.push_back(run);
 }
 
-static Headers collect_headers(PD_Document * doc)
+static const char * image_id_of(const PP_AttrProp * ap)
+{
+	const gchar * value = nullptr;
+	if (!ap)
+		return nullptr;
+	if (ap->getAttribute("dataid", value) && value && *value)
+		return value;
+	if (ap->getAttribute("strux-image-dataid", value) && value && *value)
+		return value;
+	return nullptr;
+}
+
+static unsigned twips_property(const PP_AttrProp * ap, const char * name, unsigned fallback)
+{
+	const gchar * value = nullptr;
+	if (!ap || !ap->getProperty(name, value) || !value || !*value)
+		return fallback;
+	const double inches = UT_convertToInches(value);
+	if (inches <= 0.0 || inches > 50.0)
+		return fallback;
+	return static_cast<unsigned>(inches * 1440.0 + 0.5);
+}
+
+static bool image_bytes(PD_Document * doc, const char * id, std::string & bytes)
+{
+	if (!id || !*id)
+		return false;
+	UT_ConstByteBufPtr buf;
+	std::string mime;
+	if (!doc->getDataItemDataByName(id, buf, &mime, nullptr) || !buf || !buf->getLength())
+		return false;
+	const unsigned char * raw = buf->getPointer(0);
+	const bool png = buf->getLength() >= 8 && raw[0] == 137 && raw[1] == 'P' && raw[2] == 'N' && raw[3] == 'G';
+	const bool jpeg = buf->getLength() >= 2 && raw[0] == 0xFF && raw[1] == 0xD8;
+	// The Data stream labels the blip as PNG or JPEG. Another mime would be
+	// stored under the wrong type and Word would drop the picture.
+	if (!png && !jpeg)
+		return false;
+	if (!mime.empty() && mime.compare(0, 6, "image/") != 0)
+		return false;
+	bytes.assign(reinterpret_cast<const char *>(raw), buf->getLength());
+	return true;
+}
+
+static bool append_image(PD_Document * doc, Paragraph & current, const PP_AttrProp * ap, std::vector<Picture> & pics)
+{
+	std::string bytes;
+	if (!image_bytes(doc, image_id_of(ap), bytes))
+		return false;
+	Picture pic;
+	pic.bytes = bytes;
+	pic.twips_w = twips_property(ap, "width", 0);
+	if (!pic.twips_w)
+		pic.twips_w = twips_property(ap, "frame-width", 1440);
+	pic.twips_h = twips_property(ap, "height", 0);
+	if (!pic.twips_h)
+		pic.twips_h = twips_property(ap, "frame-height", 1440);
+	pic.fc = 0;
+	pics.push_back(pic);
+	Run run;
+	run.picture = static_cast<int>(pics.size() - 1);
+	run.text.push_back(0x0001);
+	current.runs.push_back(run);
+	return true;
+}
+
+static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 {
 	Headers out;
 	pt_PieceTable * table = doc->getPieceTable();
@@ -385,6 +510,23 @@ static Headers collect_headers(PD_Document * doc)
 					in_story = false;
 				continue;
 			}
+			if (kind == PTX_SectionFrame)
+			{
+				if (in_story && skip_depth == 0)
+				{
+					Paragraph image;
+					const PP_AttrProp * ap = nullptr;
+					doc->getAttrProp(frag->getIndexAP(), &ap);
+					if (append_image(doc, image, ap, pics))
+					{
+						current = image;
+						in_paragraph = true;
+					}
+				}
+				if (in_story)
+					++skip_depth;
+				continue;
+			}
 			if (skipped_section(kind))
 			{
 				if (in_story)
@@ -397,7 +539,24 @@ static Headers collect_headers(PD_Document * doc)
 				--skip_depth;
 			continue;
 		}
-		if (!in_story || skip_depth || frag->getType() != pf_Frag::PFT_Text)
+		if (!in_story || skip_depth)
+			continue;
+		if (frag->getType() == pf_Frag::PFT_Object)
+		{
+			const pf_Frag_Object * object = static_cast<const pf_Frag_Object *>(frag);
+			if (object->getObjectType() != PTO_Image)
+				continue;
+			if (!in_paragraph)
+			{
+				current = Paragraph();
+				in_paragraph = true;
+			}
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(object->getIndexAP(), &ap);
+			append_image(doc, current, ap, pics);
+			continue;
+		}
+		if (frag->getType() != pf_Frag::PFT_Text)
 			continue;
 		if (!in_paragraph)
 		{
@@ -715,7 +874,172 @@ static Buf font_table()
 	return out;
 }
 
-static Buf section_properties()
+static unsigned clamp_u16(unsigned value)
+{
+	return value > 65535 ? 65535 : value;
+}
+
+static unsigned hundredths_mm(unsigned twips)
+{
+	unsigned value = (twips * 5 + 36) / 72;
+	if (!value)
+		value = 1;
+	return clamp_u16(value);
+}
+
+static bool is_jpeg(const std::string & bytes)
+{
+	return bytes.size() >= 2 &&
+		static_cast<unsigned char>(bytes[0]) == 0xFF &&
+		static_cast<unsigned char>(bytes[1]) == 0xD8;
+}
+
+// Inline picture as LibreOffice writes it in the Data stream and as
+// SvxMSDffManager::ImportGraphic reads it: PICF mm 0x64, one SpContainer,
+// then an FBSE whose blip follows the 36-byte fixed payload.
+static Buf picture_record(const Picture & pic, unsigned index)
+{
+	const bool jpeg = is_jpeg(pic.bytes);
+	const unsigned bt = jpeg ? 5 : 6;
+	const unsigned blip_type = 0xF018 + bt;
+	const unsigned blip_instance = jpeg ? 0x46A : 0x6E0;
+	const unsigned image_size = static_cast<unsigned>(pic.bytes.size());
+	const unsigned blip_payload = 17 + image_size;
+	const unsigned blip_total = 8 + blip_payload;
+
+	Buf shape;
+	append_u16(shape, 0x000F);
+	append_u16(shape, 0xF004);
+	append_u32(shape, 0);
+	append_u16(shape, (75u << 4) | 2);
+	append_u16(shape, 0xF00A);
+	append_u32(shape, 8);
+	append_u32(shape, 0x401);
+	append_u32(shape, 0x0A00);
+	append_u16(shape, (4u << 4) | 3);
+	append_u16(shape, 0xF00B);
+	append_u32(shape, 24);
+	append_u16(shape, 0x4104);
+	append_u32(shape, 1);
+	append_u16(shape, 262);
+	append_u32(shape, 0);
+	append_u16(shape, 319);
+	append_u32(shape, 0);
+	append_u16(shape, 511);
+	append_u32(shape, 0x80000);
+	append_u16(shape, 0);
+	append_u16(shape, 0xF010);
+	append_u32(shape, 4);
+	append_u32(shape, 0x80000000);
+	poke_u32(shape, 4, static_cast<unsigned>(shape.size() - 8));
+
+	const unsigned uid[4] = {
+		0xA11B0001u ^ (index * 0x01000193u),
+		image_size,
+		pic.twips_w,
+		pic.twips_h
+	};
+	Buf record;
+	append_u16(record, (bt << 4) | 2);
+	append_u16(record, 0xF007);
+	append_u32(record, 36 + blip_total);
+	record.push_back(static_cast<unsigned char>(bt));
+	record.push_back(static_cast<unsigned char>(bt));
+	for (int i = 0; i < 4; ++i)
+		append_u32(record, uid[i]);
+	append_u16(record, 0);
+	append_u32(record, blip_total);
+	append_u32(record, 1);
+	append_u32(record, 0);
+	append_u32(record, 0);
+	append_u16(record, blip_instance << 4);
+	append_u16(record, blip_type);
+	append_u32(record, blip_payload);
+	for (int i = 0; i < 4; ++i)
+		append_u32(record, uid[i]);
+	record.push_back(0xFF);
+	record.insert(record.end(), pic.bytes.begin(), pic.bytes.end());
+
+	const unsigned tw = pic.twips_w ? pic.twips_w : 1440;
+	const unsigned th = pic.twips_h ? pic.twips_h : 1440;
+	Buf out(0x44, 0);
+	poke_u32(out, 0, 0x44 + static_cast<unsigned>(shape.size() + record.size()));
+	poke_u16(out, 4, 0x44);
+	poke_u16(out, 6, 0x64);
+	poke_u16(out, 8, hundredths_mm(tw));
+	poke_u16(out, 10, hundredths_mm(th));
+	poke_u16(out, 0x1C, clamp_u16(tw));
+	poke_u16(out, 0x1E, clamp_u16(th));
+	poke_u16(out, 0x20, 1000);
+	poke_u16(out, 0x22, 1000);
+	out.insert(out.end(), shape.begin(), shape.end());
+	out.insert(out.end(), record.begin(), record.end());
+	return out;
+}
+
+static Buf layout_pictures(std::vector<Picture> & pics)
+{
+	Buf data;
+	for (size_t i = 0; i < pics.size(); ++i)
+	{
+		while (data.size() & 3)
+			data.push_back(0);
+		pics[i].fc = static_cast<unsigned>(data.size());
+		const Buf record = picture_record(pics[i], static_cast<unsigned>(i));
+		data.insert(data.end(), record.begin(), record.end());
+	}
+	return data;
+}
+
+static std::string picture_grpprl(unsigned fc)
+{
+	std::string grpprl;
+	append_sprm(grpprl, 0x0855, 1, 1);
+	append_sprm(grpprl, 0x6A03, fc, 4);
+	return grpprl;
+}
+
+static void seal_pictures(std::vector<Paragraph> & paragraphs, const std::vector<Picture> & pics)
+{
+	for (size_t p = 0; p < paragraphs.size(); ++p)
+	{
+		for (size_t r = 0; r < paragraphs[p].runs.size(); ++r)
+		{
+			const int index = paragraphs[p].runs[r].picture;
+			if (index < 0 || static_cast<size_t>(index) >= pics.size())
+				continue;
+			paragraphs[p].runs[r].grpprl = picture_grpprl(pics[index].fc);
+		}
+	}
+}
+
+static unsigned story_characters(const std::vector<Paragraph> & paragraphs)
+{
+	unsigned count = 0;
+	for (size_t p = 0; p < paragraphs.size(); ++p)
+	{
+		for (size_t r = 0; r < paragraphs[p].runs.size(); ++r)
+			count += static_cast<unsigned>(paragraphs[p].runs[r].text.size());
+		++count;
+	}
+	if (!paragraphs.empty())
+		++count;
+	return count;
+}
+
+static unsigned header_flags(const std::vector<Paragraph> slot_text[6])
+{
+	const unsigned bit[6] = { 0x01, 0x02, 0x04, 0x08, 0x10, 0x20 };
+	unsigned flags = 0;
+	for (int slot = 0; slot < 6; ++slot)
+	{
+		if (story_characters(slot_text[slot]) >= 2)
+			flags |= bit[slot];
+	}
+	return flags;
+}
+
+static Buf section_properties(unsigned hf_flags)
 {
 	// Sepx. Every section must state its page size and its four margins.
 	const unsigned sprm[][2] = {
@@ -734,6 +1058,18 @@ static Buf section_properties()
 	{
 		append_u16(grp, sprm[i][0]);
 		append_u16(grp, sprm[i][1]);
+	}
+	// sprmSGprfIhdt. Word and LibreOffice skip the header subdocument when
+	// this section flag is zero, even if PlcfHdd and ccpHdd are present.
+	if (hf_flags)
+	{
+		append_u16(grp, 0x3014);
+		grp.push_back(static_cast<unsigned char>(hf_flags));
+		if (hf_flags & 0x30)
+		{
+			append_u16(grp, 0x300A);
+			grp.push_back(1);
+		}
 	}
 	Buf out;
 	append_u16(out, static_cast<unsigned>(grp.size()));
@@ -759,7 +1095,7 @@ static void place(Buf & fib, unsigned index, unsigned offset, unsigned length)
 	poke_u32(fib, at + 4, length);
 }
 
-static bool write_ole(GsfOutput * destination, const Buf & word, const Buf & table)
+static bool write_ole(GsfOutput * destination, const Buf & word, const Buf & table, const Buf & data)
 {
 	GsfOutput * memory = gsf_output_memory_new();
 	if (!memory)
@@ -774,12 +1110,17 @@ static bool write_ole(GsfOutput * destination, const Buf & word, const Buf & tab
 	bool ok = true;
 	GsfOutput * word_stream = gsf_outfile_new_child(ole, "WordDocument", FALSE);
 	GsfOutput * table_stream = gsf_outfile_new_child(ole, "1Table", FALSE);
-	if (!word_stream || !table_stream)
+	GsfOutput * data_stream = nullptr;
+	if (!data.empty())
+		data_stream = gsf_outfile_new_child(ole, "Data", FALSE);
+	if (!word_stream || !table_stream || (!data.empty() && !data_stream))
 		ok = false;
 	if (ok && !word.empty())
 		ok = gsf_output_write(word_stream, word.size(), &word[0]) && ok;
 	if (ok && !table.empty())
 		ok = gsf_output_write(table_stream, table.size(), &table[0]) && ok;
+	if (ok && data_stream && !data.empty())
+		ok = gsf_output_write(data_stream, data.size(), &data[0]) && ok;
 	if (word_stream)
 	{
 		ok = gsf_output_close(word_stream) && ok;
@@ -789,6 +1130,11 @@ static bool write_ole(GsfOutput * destination, const Buf & word, const Buf & tab
 	{
 		ok = gsf_output_close(table_stream) && ok;
 		g_object_unref(table_stream);
+	}
+	if (data_stream)
+	{
+		ok = gsf_output_close(data_stream) && ok;
+		g_object_unref(data_stream);
 	}
 	ok = gsf_output_close(GSF_OUTPUT(ole)) && ok;
 	g_object_unref(ole);
@@ -816,7 +1162,14 @@ IE_Exp_MsWord_97::~IE_Exp_MsWord_97()
 
 UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 {
-	const std::vector<Paragraph> paragraphs = collect_paragraphs(getDoc());
+	std::vector<Picture> pictures;
+	std::vector<Paragraph> paragraphs = collect_paragraphs(getDoc(), pictures);
+	Headers headers = collect_headers(getDoc(), pictures);
+	const Buf data = layout_pictures(pictures);
+	seal_pictures(paragraphs, pictures);
+	for (std::map<std::string, Story>::iterator it = headers.stories.begin(); it != headers.stories.end(); ++it)
+		seal_pictures(it->second.paragraphs, pictures);
+
 	std::vector<uint16_t> units;
 	std::vector<ChRun> runs;
 	std::vector<unsigned> bounds;
@@ -826,7 +1179,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 
 	// LibreOffice leaves ccpHdd at 0 when the document has no header. A
 	// document that has one gets the six MS-DOC stories after the main text.
-	const Headers headers = collect_headers(getDoc());
+	unsigned hf_flags = 0;
 	std::vector<unsigned> hdd_cp;
 	unsigned ccp_hdd = 0;
 	if (needs_header_text(headers))
@@ -852,6 +1205,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 					story->second.paragraphs.begin(), story->second.paragraphs.end());
 			}
 		}
+		hf_flags = header_flags(slot_text);
 		for (int separator = 0; separator < 6; ++separator)
 			hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
 		for (int slot = 0; slot < 6; ++slot)
@@ -910,7 +1264,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned stsh_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), stsh.begin(), stsh.end());
 
-	const Buf sepx = section_properties();
+	const Buf sepx = section_properties(hf_flags);
 	const unsigned sepx_at = static_cast<unsigned>(word.size());
 	word.insert(word.end(), sepx.begin(), sepx.end());
 
@@ -989,7 +1343,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	place(fib, 33, clx_at, clx_len);
 	memcpy(&word[0], &fib[0], FIB_BYTES);
 
-	if (!getFp() || !write_ole(getFp(), word, table))
+	if (!getFp() || !write_ole(getFp(), word, table, data))
 		return UT_IE_COULDNOTWRITE;
 	return UT_OK;
 }

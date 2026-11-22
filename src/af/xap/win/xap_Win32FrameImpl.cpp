@@ -354,6 +354,7 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 									0, 0, 0, 0,
 									m_hwndFrame, nullptr, pWin32App->getInstance(), nullptr);
 	UT_ASSERT(m_hwndRebar);
+	UT_Win32ApplyWindowTheme(m_hwndRebar);
 	
 	/* override the window procedure*/
 	s_oldRedBar = (WHICHPROC)GetWindowLongPtrW(m_hwndRebar, GWLP_WNDPROC);
@@ -424,8 +425,9 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 	
 	// Register drag and drop data and files
 	m_dropTarget.setFrame(getFrame());
-	RegisterDragDrop(m_hwndFrame, &m_dropTarget);	
-		
+	RegisterDragDrop(m_hwndFrame, &m_dropTarget);
+	_refreshChrome();
+
 	return;
 }
 
@@ -494,16 +496,6 @@ EV_Toolbar * XAP_Win32FrameImpl::_newToolbar(XAP_Frame *frame, const char *szLay
 	EV_Win32Toolbar *result = new EV_Win32Toolbar(static_cast<XAP_Win32App *>(XAP_App::getApp()), 
 												  frame, 
 												  szLayout, szLanguage);
-	// for now, position each one manually
-	// TODO: put 'em all in a rebar instead
-	HWND hwndBar = result->getWindow();
-	if (!hwndBar) 
-		return result;
-
-	RECT rcClient = {};
-	if (GetClientRect(hwndBar, &rcClient) && rcClient.bottom > rcClient.top)
-		m_iBarHeight += static_cast<UT_uint32>(rcClient.bottom - rcClient.top);
-
 	return result;
 }
 
@@ -566,6 +558,32 @@ void XAP_Win32FrameImpl::_layoutRebar(int frameWidth, int frameHeight)
 	m_iSizeHeight = (UT_uint32)docHeight;
 
 	s_LayingOutBars = false;
+}
+
+void XAP_Win32FrameImpl::_refreshChrome(void)
+{
+	UT_Win32ApplyCaptionTheme(m_hwndFrame);
+	if (m_hwndRebar)
+		UT_Win32ApplyWindowTheme(m_hwndRebar);
+	if (m_hwndStatusBar)
+		UT_Win32RefreshStatusFont(m_hwndStatusBar);
+
+	UT_uint32 bars = m_vecToolbars.getItemCount();
+	for (UT_uint32 i = 0; i < bars; ++i)
+	{
+		EV_Win32Toolbar * bar = static_cast<EV_Win32Toolbar *>(m_vecToolbars.getNthItem(i));
+		if (!bar)
+			continue;
+		bar->rebuildIcons();
+		bar->applyChrome();
+	}
+	RECT rc;
+	memset(&rc, 0, sizeof(rc));
+	if (m_hwndFrame && GetClientRect(m_hwndFrame, &rc) && rc.right > 0 && rc.bottom > 0)
+		_layoutRebar(rc.right - rc.left, rc.bottom - rc.top);
+	if (m_hwndFrame)
+		RedrawWindow(m_hwndFrame, nullptr, nullptr,
+			RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_ERASE);
 }
 
 
@@ -1082,8 +1100,14 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 				suggested->bottom - suggested->top,
 				SWP_NOZORDER | SWP_NOACTIVATE);
 		}
+		fimpl->_refreshChrome();
 		return 0;
 	}
+
+	case WM_SETTINGCHANGE:
+		UT_Win32NoteThemeChanged();
+		fimpl->_refreshChrome();
+		break;
 
 	case WM_SIZE:
 	{
@@ -1202,22 +1226,8 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 	case WM_SYSCOLORCHANGE:
 	{
 		if (fimpl->m_hwndRebar)
-		{
 			SendMessageW(fimpl->m_hwndRebar,WM_SYSCOLORCHANGE,0,0);
-
-			REBARBANDINFOW rbbi;
-			memset(&rbbi, 0, sizeof(rbbi));
-
-			rbbi.cbSize = sizeof(rbbi);
-			rbbi.fMask = RBBIM_COLORS;
-			rbbi.clrFore = GetSysColor(COLOR_BTNTEXT);
-			rbbi.clrBack = GetSysColor(COLOR_BTNFACE);
-
-			UT_uint32 nrToolbars = fimpl->m_vecToolbars.getItemCount();
-			for (UT_uint32 k=0; k < nrToolbars; k++)
-				SendMessageW(fimpl->m_hwndRebar, RB_SETBANDINFO,k,(LPARAM)&rbbi);
-		}
-
+		fimpl->_refreshChrome();
 		if (fimpl->m_hwndContainer)
 			SendMessageW(fimpl->m_hwndContainer,WM_SYSCOLORCHANGE,0,0);
 		if (fimpl->m_hwndStatusBar)

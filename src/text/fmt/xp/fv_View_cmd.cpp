@@ -5352,13 +5352,15 @@ UT_Error FV_View::cmdInsertPositionedGraphic(const FG_ConstGraphicPtr& pFG, UT_s
 	sVal = "wrapped-both";
 	UT_std_string_setProperty(sFrameProps, sProp, sVal);
 	UT_sint32 iWidth = static_cast<UT_sint32>(dw * UT_LAYOUT_RESOLUTION);
+	// iposx is the distance from the column origin. The column's page
+	// coordinate is added again when the frame is placed, so mixing the
+	// two here pinned the image to the left of the column.
 	UT_sint32 iposx = mouseX - ixoff - iWidth/2;
-	UT_sint32 iColW = static_cast<UT_sint32>(maxW*2.*UT_LAYOUT_RESOLUTION);
-	if((iposx + iWidth) > (pCol->getX() + iColW))
+	if(iposx + iWidth > pCol->getWidth())
 	{
-	  iposx = iColW - iWidth - pCol->getX();
+	  iposx = pCol->getWidth() - iWidth;
 	}
-	if(iposx < pCol->getX())
+	if(iposx < 0)
 	{
 	      iposx = 0;
 	}

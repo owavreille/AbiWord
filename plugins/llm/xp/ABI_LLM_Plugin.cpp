@@ -16,15 +16,18 @@
 #include "xap_Prefs.h"
 #include "xap_Dlg_MessageBox.h"
 #include "fv_View.h"
-#include "fl_BlockLayout.h"
 #include "pd_Document.h"
+#include "pt_PieceTable.h"
+#include "pf_Frag.h"
+#include "pf_Frag_Text.h"
+#include "pf_Frag_Strux.h"
 #include "ev_EditMethod.h"
 #include "ev_Menu_Actions.h"
 #include "ev_Menu_Layouts.h"
 #include "ev_Menu_Labels.h"
 #include "xap_Menu_Layouts.h"
-#include "ut_growbuf.h"
-#include "ut_string.h"
+#include "ap_Toolbar_Id.h"
+#include "xap_Toolbar_Layouts.h"
 #include "ut_string_class.h"
 #include "ut_timer.h"
 #include "ut_types.h"
@@ -52,8 +55,10 @@ ABI_PLUGIN_DECLARE("LLM")
 namespace {
 
 const char * MENU_LABEL = "Assistant &LLM";
-const char * MENU_TOOLTIP = "Reformule la selection avec un modele de langage";
-const char * METHOD_NAME = "llmGenerateAction";
+const char * MENU_TOOLTIP = "Configurer le fournisseur, le modele et la cle";
+const char * CONFIG_METHOD = "llmConfigureAction";
+const char * ASK_METHOD = "llmAskAction";
+const char * STANDARD_TOOLBAR = "FileEditOps";
 const char * SCHEME_NAME = "AbiLLM";
 const char * KEY_PROVIDER = "provider";
 const char * KEY_ENDPOINT = "endpoint";
@@ -125,44 +130,32 @@ void save_settings(const ABI_LLM_Settings & settings)
 	root->savePrefsFile();
 }
 
-std::string ucs_to_utf8(const UT_UCS4Char * text, UT_uint32 length)
+std::string document_text(FV_View * view)
 {
-	if (!text || !length)
+	PD_Document * doc = view ? view->getDocument() : nullptr;
+	pt_PieceTable * table = doc ? doc->getPieceTable() : nullptr;
+	if (!table)
 		return std::string();
-	UT_UCS4String ucs(text, length);
-	const char * utf8 = ucs.utf8_str();
-	return utf8 ? std::string(utf8) : std::string();
-}
-
-std::string selection_text(FV_View * view, PT_DocPosition & start, PT_DocPosition & end, bool & replace)
-{
-	replace = false;
-	start = view->getPoint();
-	end = start;
-	if (!view->isSelectionEmpty())
+	std::string text;
+	bool started = false;
+	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
 	{
-		UT_UCS4Char * text = nullptr;
-		view->getSelectionText(text);
-		PT_DocPosition anchor = view->getSelectionAnchor();
-		PT_DocPosition point = view->getPoint();
-		start = anchor < point ? anchor : point;
-		end = anchor < point ? point : anchor;
-		replace = start != end && text;
-		std::string utf8 = ucs_to_utf8(text, text ? UT_UCS4_strlen(text) : 0);
-		FREEP(text);
-		return utf8;
+		if (frag->getType() == pf_Frag::PFT_Strux)
+		{
+			const PTStruxType kind = static_cast<const pf_Frag_Strux *>(frag)->getStruxType();
+			const bool boundary = kind == PTX_Block || kind == PTX_Section
+				|| kind == PTX_SectionHdrFtr || kind == PTX_SectionFootnote
+				|| kind == PTX_SectionEndnote || kind == PTX_SectionAnnotation;
+			if (started && boundary)
+				text.push_back('\n');
+		}
+		else if (frag->getType() == pf_Frag::PFT_Text)
+		{
+			text += static_cast<const pf_Frag_Text *>(frag)->toString();
+			started = true;
+		}
 	}
-
-	fl_BlockLayout * block = view->getCurrentBlock();
-	if (!block)
-		return std::string();
-	UT_GrowBuf buffer;
-	if (!block->getBlockBuf(&buffer) || buffer.getLength() == 0)
-		return std::string();
-	start = block->getPosition(false);
-	end = start + buffer.getLength();
-	replace = true;
-	return ucs_to_utf8(reinterpret_cast<const UT_UCS4Char *>(buffer.getPointer(0)), buffer.getLength());
+	return text;
 }
 
 void tell(XAP_Frame * frame, const std::string & message)
@@ -170,6 +163,23 @@ void tell(XAP_Frame * frame, const std::string & message)
 	if (!frame)
 		return;
 	frame->showMessageBox(message.c_str(), XAP_Dialog_MessageBox::b_O, XAP_Dialog_MessageBox::a_OK);
+}
+
+bool review_proposal(XAP_Frame * frame, const std::string & proposal);
+
+void insert_proposal_page(FV_View * view, const std::string & proposal)
+{
+	view->cmdUnselectSelection();
+	PT_DocPosition docEnd = 0;
+	view->getDocument()->getBounds(true, docEnd);
+	view->moveInsPtTo(docEnd);
+	if (!document_text(view).empty())
+	{
+		const UT_UCS4Char page = UCS_FF;
+		view->cmdCharInsert(&page, 1);
+	}
+	UT_UCS4String ucs(proposal);
+	view->cmdCharInsert(ucs.ucs4_str(), static_cast<UT_uint32>(ucs.size()));
 }
 
 FV_View * live_view(FV_View * candidate)
@@ -191,16 +201,18 @@ void apply_pending(PendingInsert * pending)
 {
 	FV_View * view = live_view(pending->view);
 	XAP_Frame * frame = XAP_App::getApp() ? XAP_App::getApp()->getLastFocussedFrame() : nullptr;
+	if (frame)
+		frame->setStatusMessage("");
 	if (view && pending->error.empty())
 	{
-		PT_DocPosition docEnd = 0;
-		view->getDocument()->getBounds(true, docEnd);
-		if (pending->replace && pending->end <= docEnd && pending->start <= pending->end)
-			view->cmdSelect(pending->start, pending->end);
-		UT_UCS4String ucs(pending->text);
-		view->cmdCharInsert(ucs.ucs4_str(), static_cast<UT_uint32>(ucs.size()));
-		if (frame)
-			frame->setStatusMessage("");
+		if (review_proposal(frame, pending->text))
+		{
+			insert_proposal_page(view, pending->text);
+			if (frame)
+				frame->setStatusMessage("Proposition ajoutee sur une nouvelle page.");
+		}
+		else if (frame)
+			frame->setStatusMessage("Proposition refusee.");
 	}
 	else if (frame)
 	{
@@ -252,7 +264,7 @@ bool ask_settings(XAP_Frame * /*frame*/, ABI_LLM_Settings & settings)
 		nullptr,
 		static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL),
 		"Annuler", GTK_RESPONSE_CANCEL,
-		"Envoyer", GTK_RESPONSE_ACCEPT,
+		"Enregistrer", GTK_RESPONSE_ACCEPT,
 		nullptr);
 	GtkWidget * content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
 	GtkWidget * grid = gtk_grid_new();
@@ -300,6 +312,82 @@ bool ask_settings(XAP_Frame * /*frame*/, ABI_LLM_Settings & settings)
 		settings.prompt = prompt ? prompt : "";
 		g_free(prompt);
 	}
+	gtk_widget_destroy(dialog);
+	return accepted;
+}
+
+bool ask_request(XAP_Frame * /*frame*/, std::string & question)
+{
+	GtkWidget * dialog = gtk_dialog_new_with_buttons(
+		"Demande a l'assistant",
+		nullptr,
+		static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL),
+		"Annuler", GTK_RESPONSE_CANCEL,
+		"Envoyer", GTK_RESPONSE_ACCEPT,
+		nullptr);
+	GtkWidget * content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+	GtkWidget * box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 6);
+	gtk_widget_set_margin_start(box, 8);
+	gtk_widget_set_margin_end(box, 8);
+	gtk_widget_set_margin_top(box, 8);
+	gtk_widget_set_margin_bottom(box, 8);
+	gtk_container_add(GTK_CONTAINER(content), box);
+	gtk_box_pack_start(GTK_BOX(box), gtk_label_new("Demande"), FALSE, FALSE, 0);
+	GtkWidget * promptView = gtk_text_view_new();
+	GtkTextBuffer * buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(promptView));
+	gtk_text_buffer_set_text(buffer, question.c_str(), -1);
+	gtk_widget_set_size_request(promptView, 420, 120);
+	gtk_box_pack_start(GTK_BOX(box), promptView, TRUE, TRUE, 0);
+	gtk_widget_show_all(dialog);
+
+	const gint response = gtk_dialog_run(GTK_DIALOG(dialog));
+	const bool accepted = response == GTK_RESPONSE_ACCEPT;
+	if (accepted)
+	{
+		GtkTextIter begin;
+		GtkTextIter end;
+		gtk_text_buffer_get_bounds(buffer, &begin, &end);
+		gchar * prompt = gtk_text_buffer_get_text(buffer, &begin, &end, FALSE);
+		question = prompt ? prompt : "";
+		g_free(prompt);
+	}
+	gtk_widget_destroy(dialog);
+	return accepted;
+}
+
+bool review_proposal(XAP_Frame * /*frame*/, const std::string & proposal)
+{
+	GtkWidget * dialog = gtk_dialog_new_with_buttons(
+		"Proposition de l'assistant",
+		nullptr,
+		static_cast<GtkDialogFlags>(GTK_DIALOG_MODAL),
+		"Refuser", GTK_RESPONSE_CANCEL,
+		"Accepter", GTK_RESPONSE_ACCEPT,
+		nullptr);
+	gtk_window_set_default_size(GTK_WINDOW(dialog), 680, 860);
+	GtkWidget * content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
+	GtkWidget * scroll = gtk_scrolled_window_new(nullptr, nullptr);
+	gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroll), GTK_POLICY_AUTOMATIC, GTK_POLICY_AUTOMATIC);
+	gtk_widget_set_margin_start(scroll, 12);
+	gtk_widget_set_margin_end(scroll, 12);
+	gtk_widget_set_margin_top(scroll, 12);
+	gtk_widget_set_margin_bottom(scroll, 12);
+	gtk_widget_set_vexpand(scroll, TRUE);
+	gtk_container_add(GTK_CONTAINER(content), scroll);
+	GtkWidget * page = gtk_text_view_new();
+	gtk_text_view_set_editable(GTK_TEXT_VIEW(page), FALSE);
+	gtk_text_view_set_cursor_visible(GTK_TEXT_VIEW(page), FALSE);
+	gtk_text_view_set_wrap_mode(GTK_TEXT_VIEW(page), GTK_WRAP_WORD_CHAR);
+	gtk_text_view_set_left_margin(GTK_TEXT_VIEW(page), 28);
+	gtk_text_view_set_right_margin(GTK_TEXT_VIEW(page), 28);
+	gtk_text_view_set_pixels_above_lines(GTK_TEXT_VIEW(page), 4);
+	GtkTextBuffer * buffer = gtk_text_view_get_buffer(GTK_TEXT_VIEW(page));
+	gtk_text_buffer_set_text(buffer, proposal.c_str(), -1);
+	gtk_container_add(GTK_CONTAINER(scroll), page);
+	gtk_widget_show_all(dialog);
+
+	const gint response = gtk_dialog_run(GTK_DIALOG(dialog));
+	const bool accepted = response == GTK_RESPONSE_ACCEPT;
 	gtk_widget_destroy(dialog);
 	return accepted;
 }
@@ -444,7 +532,7 @@ bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings & settings)
 	dialog.item(editStyle | ES_PASSWORD, 72, 60, 196, 14, 104, 0x0081, L"");
 	dialog.item(labelStyle, 8, 80, 60, 12, static_cast<WORD>(-1), 0x0082, L"Consigne");
 	dialog.item(editStyle | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL, 72, 78, 196, 52, 105, 0x0081, L"");
-	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 112, 142, 70, 16, IDOK, 0x0080, L"Envoyer");
+	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 112, 142, 70, 16, IDOK, 0x0080, L"Enregistrer");
 	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP, 190, 142, 70, 16, IDCANCEL, 0x0080, L"Annuler");
 
 	dialog.align();
@@ -459,6 +547,133 @@ bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings & settings)
 	return answer == IDOK;
 }
 
+INT_PTR CALLBACK request_dialog(HWND dialog, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	std::string * question = reinterpret_cast<std::string *>(GetWindowLongPtrW(dialog, DWLP_USER));
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		SetWindowLongPtrW(dialog, DWLP_USER, lparam);
+		question = reinterpret_cast<std::string *>(lparam);
+		if (question)
+			SetDlgItemTextW(dialog, 201, widen(*question).c_str());
+		return TRUE;
+	case WM_COMMAND:
+		if (LOWORD(wparam) == IDOK && question)
+		{
+			*question = control_text(dialog, 201);
+			EndDialog(dialog, IDOK);
+			return TRUE;
+		}
+		if (LOWORD(wparam) == IDCANCEL)
+		{
+			EndDialog(dialog, IDCANCEL);
+			return TRUE;
+		}
+		break;
+	default:
+		break;
+	}
+	return FALSE;
+}
+
+bool ask_request(XAP_Frame * frame, std::string & question)
+{
+	DialogTemplate dialog;
+	dialog.dword(WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME);
+	dialog.dword(0);
+	dialog.word(4);
+	dialog.word(10);
+	dialog.word(10);
+	dialog.word(280);
+	dialog.word(128);
+	dialog.word(0);
+	dialog.word(0);
+	dialog.wide(L"Demande a l'assistant");
+
+	const DWORD labelStyle = WS_CHILD | WS_VISIBLE;
+	const DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL
+		| ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN;
+	dialog.item(labelStyle, 8, 8, 80, 12, static_cast<WORD>(-1), 0x0082, L"Demande");
+	dialog.item(editStyle, 8, 22, 260, 68, 201, 0x0081, L"");
+	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 112, 100, 70, 16, IDOK, 0x0080, L"Envoyer");
+	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP, 190, 100, 70, 16, IDCANCEL, 0x0080, L"Annuler");
+
+	dialog.align();
+	const INT_PTR answer = DialogBoxIndirectParamW(
+		GetModuleHandleW(nullptr),
+		reinterpret_cast<LPCDLGTEMPLATEW>(dialog.bytes.data()),
+		nullptr,
+		request_dialog,
+		reinterpret_cast<LPARAM>(&question));
+	if (answer == -1)
+		tell(frame, "Le dialogue Windows n'a pas pu s'ouvrir.");
+	return answer == IDOK;
+}
+
+INT_PTR CALLBACK proposal_dialog(HWND dialog, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	const std::string * proposal = reinterpret_cast<const std::string *>(GetWindowLongPtrW(dialog, DWLP_USER));
+	switch (message)
+	{
+	case WM_INITDIALOG:
+		SetWindowLongPtrW(dialog, DWLP_USER, lparam);
+		proposal = reinterpret_cast<const std::string *>(lparam);
+		if (proposal)
+		{
+			SetDlgItemTextW(dialog, 301, widen(*proposal).c_str());
+		}
+		return TRUE;
+	case WM_COMMAND:
+		if (LOWORD(wparam) == IDOK)
+		{
+			EndDialog(dialog, IDOK);
+			return TRUE;
+		}
+		if (LOWORD(wparam) == IDCANCEL)
+		{
+			EndDialog(dialog, IDCANCEL);
+			return TRUE;
+		}
+		break;
+	default:
+		break;
+	}
+	return FALSE;
+}
+
+bool review_proposal(XAP_Frame * frame, const std::string & proposal)
+{
+	DialogTemplate dialog;
+	dialog.dword(WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | DS_MODALFRAME);
+	dialog.dword(0);
+	dialog.word(3);
+	dialog.word(20);
+	dialog.word(16);
+	dialog.word(320);
+	dialog.word(420);
+	dialog.word(0);
+	dialog.word(0);
+	dialog.wide(L"Proposition de l'assistant");
+
+	const DWORD pageStyle = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_VSCROLL | WS_TABSTOP
+		| ES_MULTILINE | ES_AUTOVSCROLL | ES_READONLY | ES_WANTRETURN;
+	dialog.item(pageStyle, 8, 8, 304, 380, 301, 0x0081, L"");
+	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 168, 396, 70, 16, IDOK, 0x0080, L"Accepter");
+	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP, 244, 396, 70, 16, IDCANCEL, 0x0080, L"Refuser");
+
+	dialog.align();
+	const INT_PTR answer = DialogBoxIndirectParamW(
+		GetModuleHandleW(nullptr),
+		reinterpret_cast<LPCDLGTEMPLATEW>(dialog.bytes.data()),
+		nullptr,
+		proposal_dialog,
+		reinterpret_cast<LPARAM>(&proposal));
+	if (answer == -1)
+		tell(frame, "Le dialogue Windows n'a pas pu s'ouvrir.");
+	return answer == IDOK;
+}
+
 #else
 
 bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings &)
@@ -467,22 +682,25 @@ bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings &)
 	return false;
 }
 
+bool ask_request(XAP_Frame * frame, std::string &)
+{
+	tell(frame, "Le dialogue de l'assistant existe pour GTK et Windows.");
+	return false;
+}
+
+bool review_proposal(XAP_Frame * frame, const std::string &)
+{
+	tell(frame, "Le dialogue de l'assistant existe pour GTK et Windows.");
+	return false;
+}
+
 #endif
 
-bool llm_generate(AV_View * view, EV_EditMethodCallData *)
+bool llm_configure(AV_View *, EV_EditMethodCallData *)
 {
 	XAP_Frame * frame = XAP_App::getApp()->getLastFocussedFrame();
-	FV_View * document = static_cast<FV_View *>(view ? view : (frame ? frame->getCurrentView() : nullptr));
-	if (!document || !frame)
+	if (!frame)
 		return false;
-	if (g_busy.load())
-	{
-		tell(frame, "Une requete est deja en cours.");
-		return true;
-	}
-	if (g_worker.joinable())
-		g_worker.join();
-
 	ABI_LLM_Settings settings = load_settings();
 	const ABI_LLM_Settings previous = settings;
 	if (!ask_settings(frame, settings))
@@ -496,22 +714,24 @@ bool llm_generate(AV_View * view, EV_EditMethodCallData *)
 	}
 	abi_llm_apply_defaults(settings);
 	save_settings(settings);
+	return true;
+}
 
-	PT_DocPosition start = 0;
-	PT_DocPosition end = 0;
-	bool replace = false;
-	const std::string source = selection_text(document, start, end, replace);
-	if (source.empty() && settings.prompt.empty())
+bool start_request(FV_View * document, XAP_Frame * frame, const ABI_LLM_Settings & settings, const std::string & payload)
+{
+	if (g_busy.load())
 	{
-		tell(frame, "Selectionnez un passage ou ecrivez une consigne.");
+		tell(frame, "Une requete est deja en cours.");
 		return true;
 	}
+	if (g_worker.joinable())
+		g_worker.join();
 
 	PendingInsert * pending = new PendingInsert();
 	pending->view = document;
-	pending->start = start;
-	pending->end = end;
-	pending->replace = replace;
+	pending->start = document->getPoint();
+	pending->end = pending->start;
+	pending->replace = false;
 	if (!g_timer)
 		g_timer = UT_Timer::static_constructor(on_timer, nullptr);
 	if (!g_timer || g_timer->set(200) != 0)
@@ -525,7 +745,7 @@ bool llm_generate(AV_View * view, EV_EditMethodCallData *)
 	frame->setStatusMessage("Assistant LLM : envoi...");
 	try
 	{
-		g_worker = std::thread(request_thread, settings, source, pending);
+		g_worker = std::thread(request_thread, settings, payload, pending);
 	}
 	catch (const std::system_error &)
 	{
@@ -539,40 +759,78 @@ bool llm_generate(AV_View * view, EV_EditMethodCallData *)
 	return true;
 }
 
+bool llm_ask(AV_View * view, EV_EditMethodCallData *)
+{
+	XAP_Frame * frame = XAP_App::getApp()->getLastFocussedFrame();
+	FV_View * document = static_cast<FV_View *>(view ? view : (frame ? frame->getCurrentView() : nullptr));
+	if (!document || !frame)
+		return false;
+	std::string question;
+	if (!ask_request(frame, question))
+		return true;
+	if (question.empty())
+	{
+		tell(frame, "Ecrivez la demande a envoyer.");
+		return true;
+	}
+	ABI_LLM_Settings settings = load_settings();
+	std::string payload = "Demande:\n";
+	payload += question;
+	payload += "\n\nDocument:\n";
+	payload += document_text(document);
+	return start_request(document, frame, settings, payload);
+}
+
+void remove_method(const char * name)
+{
+	EV_EditMethodContainer * methods = XAP_App::getApp()->getEditMethodContainer();
+	EV_EditMethod * method = ev_EditMethod_lookup(name);
+	if (!method)
+		return;
+	methods->removeEditMethod(method);
+	DELETEP(method);
+}
+
 void add_to_menus()
 {
 	XAP_App * app = XAP_App::getApp();
 	EV_EditMethodContainer * methods = app->getEditMethodContainer();
-	methods->addEditMethod(new EV_EditMethod(METHOD_NAME, llm_generate, 0, ""));
+	methods->addEditMethod(new EV_EditMethod(CONFIG_METHOD, llm_configure, 0, ""));
+	methods->addEditMethod(new EV_EditMethod(ASK_METHOD, llm_ask, 0, ""));
 
 	XAP_Menu_Factory * factory = app->getMenuFactory();
 	XAP_Menu_Id identifier = factory->addNewMenuAfter("Main", nullptr, "&Word Count", EV_MLF_Normal);
 	factory->addNewLabel(nullptr, identifier, MENU_LABEL, MENU_TOOLTIP);
-	factory->addNewMenuAfter("contextText", nullptr, "Bullets and &Numbering", EV_MLF_Normal, identifier);
-	app->getMenuActionSet()->addAction(new EV_Menu_Action(
-		identifier, 0, 1, 0, 0, METHOD_NAME, nullptr, nullptr));
+	EV_Menu_Action * configure = new EV_Menu_Action(
+		identifier, 0, 1, 0, 0, CONFIG_METHOD, nullptr, nullptr);
+	configure->setIconName("Menu_AbiWord_Help");
+	app->getMenuActionSet()->addAction(configure);
+	app->getToolbarFactory()->addIconAfter(STANDARD_TOOLBAR, AP_TOOLBAR_ID_LLM, AP_TOOLBAR_ID_ZOOM);
 
 	const int frames = app->getFrameCount();
 	for (int i = 0; i < frames; ++i)
-		app->getFrame(i)->rebuildMenus();
+	{
+		XAP_Frame * frame = app->getFrame(i);
+		frame->rebuildMenus();
+		frame->rebuildAllToolbars();
+	}
 }
 
 void remove_from_menus()
 {
+	remove_method(CONFIG_METHOD);
+	remove_method(ASK_METHOD);
 	XAP_App * app = XAP_App::getApp();
-	EV_EditMethodContainer * methods = app->getEditMethodContainer();
-	EV_EditMethod * method = ev_EditMethod_lookup(METHOD_NAME);
-	if (method)
-	{
-		methods->removeEditMethod(method);
-		DELETEP(method);
-	}
 	XAP_Menu_Factory * factory = app->getMenuFactory();
 	factory->removeMenuItem("Main", nullptr, MENU_LABEL);
-	factory->removeMenuItem("contextText", nullptr, MENU_LABEL);
+	app->getToolbarFactory()->removeIcon(STANDARD_TOOLBAR, AP_TOOLBAR_ID_LLM);
 	const int frames = app->getFrameCount();
 	for (int i = 0; i < frames; ++i)
-		app->getFrame(i)->rebuildMenus();
+	{
+		XAP_Frame * frame = app->getFrame(i);
+		frame->rebuildMenus();
+		frame->rebuildAllToolbars();
+	}
 }
 
 } // namespace
@@ -584,7 +842,7 @@ int abi_plugin_register(XAP_ModuleInfo * info)
 	info->desc = "Assistant de redaction branche sur Ollama, OpenAI, Anthropic ou Gemini.";
 	info->version = ABI_VERSION_STRING;
 	info->author = "AbiWord";
-	info->usage = "Outils > Assistant LLM";
+	info->usage = "Outils > Assistant LLM pour la configuration, bouton de la barre standard pour envoyer une demande.";
 	curl_global_init(CURL_GLOBAL_DEFAULT);
 	add_to_menus();
 	return 1;

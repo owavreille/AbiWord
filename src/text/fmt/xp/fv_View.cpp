@@ -51,6 +51,7 @@
 #endif
 #include "fl_SectionLayout.h"
 #include "fl_FootnoteLayout.h"
+#include "fp_FootnoteContainer.h"
 #include "fl_AutoNum.h"
 #include "fp_Page.h"
 #include "fp_PageSize.h"
@@ -8144,12 +8145,74 @@ void FV_View::insertSymbol(UT_UCS4Char c, const gchar * symfont)
 }
 
 
+static fp_AnnotationContainer * annotation_box_at(fp_Page * page, UT_sint32 xClick, UT_sint32 yClick, bool closeOnly)
+{
+	if (!page)
+		return nullptr;
+	for (UT_sint32 i = 0; i < page->countAnnotationContainers(); ++i)
+	{
+		fp_AnnotationContainer * box = page->getNthAnnotationContainer(i);
+		if (!box)
+			continue;
+		if (closeOnly ? box->hitClose(xClick, yClick) : box->containsPoint(xClick, yClick))
+			return box;
+	}
+	return nullptr;
+}
+
+static bool point_at_annotation(FV_View * view, fp_AnnotationContainer * box)
+{
+	fl_AnnotationLayout * layout = static_cast<fl_AnnotationLayout *>(box->getSectionLayout());
+	fp_AnnotationRun * run = layout ? layout->getAnnotationRun() : nullptr;
+	if (!run || !run->getBlock())
+		return false;
+	const PT_DocPosition base = run->getBlock()->getPosition(false);
+	PT_DocPosition pos = base + run->getBlockOffset();
+	if (run->getBlockOffset() < 2)
+	{
+		fp_Run * next = run->getNextRun();
+		if (next)
+			pos = base + next->getBlockOffset();
+		if (pos < base + 2)
+			pos = base + 2;
+	}
+	view->setPoint(pos);
+	return true;
+}
+
+bool FV_View::tryDeleteAnnotationClose(UT_sint32 xPos, UT_sint32 yPos)
+{
+	if (!getLayout() || !getLayout()->displayAnnotations())
+		return false;
+	UT_sint32 xClick = 0;
+	UT_sint32 yClick = 0;
+	fp_AnnotationContainer * box = annotation_box_at(_getPageForXY(xPos, yPos, xClick, yClick), xClick, yClick, true);
+	if (!box || !point_at_annotation(this, box))
+		return false;
+	if (isAnnotationPreviewActive())
+		killAnnotationPreview();
+	cmdDeleteHyperlink();
+	return true;
+}
+
+bool FV_View::selectAnnotationAt(UT_sint32 xPos, UT_sint32 yPos)
+{
+	if (!getLayout() || !getLayout()->displayAnnotations())
+		return false;
+	UT_sint32 xClick = 0;
+	UT_sint32 yClick = 0;
+	fp_AnnotationContainer * box = annotation_box_at(_getPageForXY(xPos, yPos, xClick, yClick), xClick, yClick, false);
+	return box && point_at_annotation(this, box);
+}
+
 void FV_View::warpInsPtToXY(UT_sint32 xPos, UT_sint32 yPos, bool bClick = false)
 {
 	/*
 	  Figure out which page we clicked on.
 	  Pass the click down to that page.
 	*/
+	if (bClick && tryDeleteAnnotationClose(xPos, yPos))
+		return;
 
 	UT_sint32 xClick, yClick;
 	fp_Page* pPage = _getPageForXY(xPos, yPos, xClick, yClick);

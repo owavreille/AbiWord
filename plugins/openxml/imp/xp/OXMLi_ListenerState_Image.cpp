@@ -36,6 +36,7 @@
 #include "fg_GraphicRaster.h"
 
 // External includes
+#include <cstring>
 #include <map>
 #include <string>
 
@@ -45,6 +46,39 @@ static std::string abi_xml_local_name(const std::string& name)
 	if (colon == std::string::npos)
 		return name;
 	return name.substr(colon + 1);
+}
+
+static bool image_from_is_page(const std::string& from)
+{
+	return from == "page";
+}
+
+static bool image_from_is_column(const std::string& from)
+{
+	return from == "column" || from == "margin" || from == "leftMargin" ||
+		from == "rightMargin" || from == "insideMargin" || from == "outsideMargin" ||
+		from == "topMargin" || from == "bottomMargin";
+}
+
+static const char* image_offset_property(const std::string& from, bool horizontal)
+{
+	if (image_from_is_page(from))
+		return horizontal ? "frame-page-xpos" : "frame-page-ypos";
+	if (image_from_is_column(from))
+		return horizontal ? "frame-col-xpos" : "frame-col-ypos";
+	return horizontal ? "xpos" : "ypos";
+}
+
+static void image_copy_offset(OXML_SharedElement img, const char* dest, const char* first, const char* second)
+{
+	const gchar* value = nullptr;
+	if (!img || (img->getProperty(dest, value) == UT_OK && value && *value))
+		return;
+	value = nullptr;
+	if (img->getProperty(first, value) == UT_OK && value && *value)
+		img->setProperty(dest, value);
+	else if (img->getProperty(second, value) == UT_OK && value && *value)
+		img->setProperty(dest, value);
 }
 
 static void abi_append_drawing_note(OXMLi_ElementStack* stck, const std::string& note)
@@ -141,6 +175,8 @@ void OXMLi_ListenerState_Image::startElement (OXMLi_StartElementRequest * rqst)
 		int anchor = contextMatches(contextTag, NS_WP_KEY, "anchor");
 		if(anchor)
 		{
+			const gchar* from = rqst->ppAtts ? attrMatches(NS_WP_KEY, "relativeFrom", rqst->ppAtts) : nullptr;
+			m_hFrom = from ? from : "";
 			rqst->handled = true;
 		}
 	}
@@ -160,6 +196,8 @@ void OXMLi_ListenerState_Image::startElement (OXMLi_StartElementRequest * rqst)
 		int anchor = contextMatches(contextTag, NS_WP_KEY, "anchor");
 		if(anchor)
 		{
+			const gchar* from = rqst->ppAtts ? attrMatches(NS_WP_KEY, "relativeFrom", rqst->ppAtts) : nullptr;
+			m_vFrom = from ? from : "";
 			rqst->handled = true;
 		}
 	}
@@ -423,9 +461,19 @@ void OXMLi_ListenerState_Image::endElement (OXMLi_EndElementRequest * rqst)
 	{
 		rqst->handled = true;
 	}
-	else if(nameMatches(rqst->pName, NS_WP_KEY, "anchor") ||
-			nameMatches(rqst->pName, NS_WP_KEY, "inline"))
+	else if(nameMatches(rqst->pName, NS_WP_KEY, "anchor"))
 	{
+		if(rqst->stck && !rqst->stck->empty())
+			placeAnchoredImage(rqst->stck->top());
+		m_hFrom.clear();
+		m_vFrom.clear();
+		m_isInlineImage = false;
+		rqst->handled = true;
+	}
+	else if(nameMatches(rqst->pName, NS_WP_KEY, "inline"))
+	{
+		m_hFrom.clear();
+		m_vFrom.clear();
 		m_isInlineImage = false;
 		rqst->handled = true;
 	}
@@ -468,24 +516,51 @@ void OXMLi_ListenerState_Image::charData (OXMLi_CharDataRequest * rqst)
 		if(rqst->buffer == nullptr)
 		{
 			UT_DEBUGMSG(("SERHAT: Unexpected situation, request with a null buffer\n"));
+			rqst->stck->push(imgElem);
 			return;
 		}
+		const char* prop = nullptr;
 		if(positionH)
-		{
-			std::string position(_EmusToInches(rqst->buffer));
-			position += "in";
-			imgElem->setProperty("xpos", position);
-		}
+			prop = image_offset_property(m_hFrom, true);
 		else if(positionV)
+			prop = image_offset_property(m_vFrom, false);
+		if(prop)
 		{
 			std::string position(_EmusToInches(rqst->buffer));
 			position += "in";
-			imgElem->setProperty("ypos", position);
+			imgElem->setProperty(prop, position);
 		}
 		rqst->stck->push(imgElem);
 	}
 }
 
+
+void OXMLi_ListenerState_Image::placeAnchoredImage(OXML_SharedElement img)
+{
+	if(!img)
+		return;
+	const char* mode = "block-above-text";
+	if(image_from_is_page(m_hFrom) && image_from_is_page(m_vFrom))
+		mode = "page-above-text";
+	else if(image_from_is_column(m_hFrom) && image_from_is_column(m_vFrom))
+		mode = "column-above-text";
+	if(!strcmp(mode, "page-above-text"))
+	{
+		image_copy_offset(img, "frame-page-xpos", "frame-col-xpos", "xpos");
+		image_copy_offset(img, "frame-page-ypos", "frame-col-ypos", "ypos");
+	}
+	else if(!strcmp(mode, "column-above-text"))
+	{
+		image_copy_offset(img, "frame-col-xpos", "frame-page-xpos", "xpos");
+		image_copy_offset(img, "frame-col-ypos", "frame-page-ypos", "ypos");
+	}
+	else
+	{
+		image_copy_offset(img, "xpos", "frame-col-xpos", "frame-page-xpos");
+		image_copy_offset(img, "ypos", "frame-col-ypos", "frame-page-ypos");
+	}
+	img->setProperty("position-to", mode);
+}
 
 //helper functions
 bool OXMLi_ListenerState_Image::addImage(const std::string & id)

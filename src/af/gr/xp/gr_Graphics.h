@@ -656,6 +656,8 @@ class ABI_EXPORT GR_Graphics
 
 	virtual void      setColor3D(GR_Color3D c) = 0;
 	virtual bool      getColor3D(GR_Color3D /*name*/, UT_RGBColor & /*color*/) = 0;
+	// Screen page surround. False keeps the toolkit on the margin preference.
+	virtual bool      getScreenCanvas(UT_RGBColor &) { return false; }
 
 	const GR_Transform & getTransform() const {return m_Transform;}
 

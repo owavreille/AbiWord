@@ -29,6 +29,8 @@
 #include "ut_string.h"
 #include "pd_Document.h"
 
+#include <cstring>
+
 OXML_Element_Image::OXML_Element_Image(const std::string & id) : 
 	OXML_Element(id, IMG_TAG, IMAGE)
 {
@@ -76,13 +78,41 @@ UT_Error OXML_Element_Image::serialize(IE_Exp_OpenXML* exporter)
 
 	if(bPositionedImage)
 	{
-		// positioned image
+		// The layout reads a different pair for each anchor. A column
+		// image has no xpos/ypos until it is dragged, so writing those
+		// defaults put it at the origin.
+		const gchar* positionTo = nullptr;
+		const char* relativeH = "paragraph";
+		const char* relativeV = "paragraph";
+		const char* xName = "xpos";
+		const char* yName = "ypos";
+		getProperty("position-to", positionTo);
+		if(positionTo && !strcmp(positionTo, "column-above-text"))
+		{
+			relativeH = "column";
+			relativeV = "margin";
+			xName = "frame-col-xpos";
+			yName = "frame-col-ypos";
+		}
+		else if(positionTo && !strcmp(positionTo, "page-above-text"))
+		{
+			relativeH = "page";
+			relativeV = "page";
+			xName = "frame-page-xpos";
+			yName = "frame-page-ypos";
+		}
+		xpos = "0.0in";
+		ypos = "0.0in";
+		const gchar* storedX = nullptr;
+		const gchar* storedY = nullptr;
+		if(getProperty(xName, storedX) == UT_OK && storedX && *storedX)
+			xpos = storedX;
+		if(getProperty(yName, storedY) == UT_OK && storedY && *storedY)
+			ypos = storedY;
 		getProperty("wrap-mode", wrapMode);
 		getProperty("frame-height", height);
 		getProperty("frame-width", width);
-		getProperty("xpos", xpos);
-		getProperty("ypos", ypos);
-		err = exporter->setPositionedImage(getId().c_str(), relId.c_str(), filename.c_str(), width, height, xpos, ypos, wrapMode, TARGET);
+		err = exporter->setPositionedImage(getId().c_str(), relId.c_str(), filename.c_str(), width, height, xpos, ypos, wrapMode, relativeH, relativeV, TARGET);
 		if(err != UT_OK)
 			return err;
 	}

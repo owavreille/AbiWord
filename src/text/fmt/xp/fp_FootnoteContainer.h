@@ -79,6 +79,8 @@ public:
 	void                setPage(fp_Page * pPage);
 	fl_DocSectionLayout * getDocSectionLayout(void);
 	UT_uint32           getPID(void);
+	bool                containsPoint(UT_sint32 x, UT_sint32 y) const;
+	bool                hitClose(UT_sint32 x, UT_sint32 y) const;
 private:
 	fp_Page * m_pPage;
 	UT_sint32 m_iLabelWidth;

@@ -274,7 +274,7 @@ void abi_llm_apply_defaults(ABI_LLM_Settings & settings)
 	if (settings.endpoint.empty())
 		settings.endpoint = default_endpoint(settings);
 	if (settings.prompt.empty())
-		settings.prompt = "Reformule le passage en gardant sa langue.";
+		settings.prompt = "Reponds a la demande en tenant compte du document.";
 }
 
 std::string abi_llm_request_url(const ABI_LLM_Settings & incoming)

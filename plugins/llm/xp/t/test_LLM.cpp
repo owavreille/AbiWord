@@ -44,7 +44,7 @@ int main()
 	expect_eq(empty.provider, "ollama", "le fournisseur vide devient Ollama");
 	expect_eq(empty.model, "llama3.2", "le modele local par defaut");
 	expect_eq(empty.endpoint, "http://127.0.0.1:11434/v1/chat/completions", "l'adresse locale par defaut");
-	expect_eq(empty.prompt, "Reformule le passage en gardant sa langue.", "la consigne par defaut");
+	expect_eq(empty.prompt, "Reponds a la demande en tenant compte du document.", "la consigne par defaut");
 
 	ABI_LLM_Settings openai;
 	openai.provider = "OpenAI";

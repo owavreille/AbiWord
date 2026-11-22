@@ -60,4 +60,15 @@ LRESULT UT_DispatchMessage(const MSG *lpmsg);
 void UT_Win32Trace(const char * step);
 void UT_Win32TraceF(const char * fmt, ...);
 void UT_Win32TraceHeap(const char * step);
+
+// AppsUseLightTheme, read through advapi32 so the link line stays unchanged.
+bool UT_Win32AppsUseDarkTheme(void);
+// Drop the cached theme after WM_SETTINGCHANGE.
+void UT_Win32NoteThemeChanged(void);
+// DWMWA_USE_IMMERSIVE_DARK_MODE on the frame caption. Menus stay system menus.
+void UT_Win32ApplyCaptionTheme(HWND hwnd);
+// DarkMode_Explorer, or an empty theme in light mode so the rebar drops its edge.
+void UT_Win32ApplyWindowTheme(HWND hwnd);
+// Recreate the status font from the current NONCLIENTMETRICS and DPI.
+void UT_Win32RefreshStatusFont(HWND bar);
 #endif /* UT_Win32OS_H */

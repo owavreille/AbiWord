@@ -42,7 +42,10 @@ public:
 
 private:
 	bool addImage(const std::string & id);
+	void placeAnchoredImage(OXML_SharedElement img);
 	std::string m_style;
+	std::string m_hFrom;
+	std::string m_vFrom;
 	bool m_isInlineImage;
 };
 
