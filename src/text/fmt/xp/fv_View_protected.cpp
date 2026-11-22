@@ -4672,7 +4672,9 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 
 	if( !bDirtyRunsOnly && (getViewMode() != VIEW_PREVIEW) ) {
 		UT_RGBColor clrMargin;
-		if (m_pG->getColor3D(GR_Graphics::CLR3D_BevelDown, clrMargin)) {
+		if (m_pG->getScreenCanvas(clrMargin))
+			painter.fillRect(clrMargin, 0, 0, getWindowWidth(), getWindowHeight());
+		else if (m_pG->getColor3D(GR_Graphics::CLR3D_BevelDown, clrMargin)) {
 			painter.fillRect(GR_Graphics::CLR3D_BevelDown, 0, 0,
 							 getWindowWidth(), getWindowHeight());
 		} else {
@@ -4784,7 +4786,15 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		pPage->draw(&da);
 
 		// draw page decorations
-		UT_RGBColor clr(0,0,0); 	// black
+		UT_RGBColor clr(0,0,0);
+		UT_RGBColor canvas;
+		if (m_pG->getScreenCanvas(canvas))
+		{
+			if ((int)canvas.m_red + (int)canvas.m_grn + (int)canvas.m_blu < 200)
+				clr = UT_RGBColor(96, 96, 96);
+			else
+				clr = UT_RGBColor(180, 180, 180);
+		}
 		m_pG->setColor(clr);
 
 		// one pixel border a

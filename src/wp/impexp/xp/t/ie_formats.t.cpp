@@ -1809,3 +1809,254 @@ TFTEST_MAIN("DOC export keeps the header text in WordDocument")
 	package_close(input, ole);
 	std::remove(path.c_str());
 }
+
+TFTEST_MAIN("DOCX export keeps a body image in word/media")
+{
+	ensure_plugin(".docx", "openxml");
+	if (!TFPASS(exporter_known(".docx")))
+		return;
+
+	PD_Document * doc = sample_document();
+	if (!TFPASS(doc != nullptr))
+		return;
+	const PP_PropertyVector imageAtts = {"dataid", "1"};
+	const PP_PropertyVector imageProps = {"width", "1in", "height", "1in"};
+	if (!TFPASS(doc->createDataItem("1", false, tiny_png(), "image/png", nullptr)) ||
+		!TFPASS(doc->insertObject(first_block_content(doc), PTO_Image, imageAtts, imageProps)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmtimg", ".docx");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * zip = package_open(path, input, gsf_infile_zip_new);
+	if (!TFPASS(zip != nullptr))
+	{
+		package_close(input, zip);
+		std::remove(path.c_str());
+		return;
+	}
+
+	const std::string document = zip_read(zip, "word/document.xml");
+	const std::string rels = zip_read(zip, "word/_rels/document.xml.rels");
+	const std::string target = docx_relation_target(rels, "/image");
+	TFPASS(document.find("a:blip") != std::string::npos);
+	TFPASS(document.find("r:embed=") != std::string::npos);
+	TFPASS(document.find("<a:stretch><a:fillRect/></a:stretch>") != std::string::npos);
+	TFPASS(target.compare(0, 6, "media/") == 0);
+	TFPASS(zip_has(zip, std::string("word/") + target));
+	const std::string media = zip_read(zip, std::string("word/") + target);
+	TFPASS(media.size() >= 8 && static_cast<unsigned char>(media[0]) == 137 && media.compare(1, 3, "PNG") == 0);
+
+	package_close(input, zip);
+	std::remove(path.c_str());
+}
+
+TFTEST_MAIN("DOCX export keeps the position of a body image")
+{
+	ensure_plugin(".docx", "openxml");
+	if (!TFPASS(exporter_known(".docx")))
+		return;
+
+	PD_Document * doc = sample_document();
+	if (!TFPASS(doc != nullptr))
+		return;
+	if (!TFPASS(doc->createDataItem("1", false, tiny_png(), "image/png", nullptr)))
+	{
+		doc->unref();
+		return;
+	}
+
+	pf_Frag_Strux * columnFrame = nullptr;
+	const PP_PropertyVector columnAtts = {"strux-image-dataid", "1"};
+	const PP_PropertyVector columnProps = {
+		"frame-type", "image",
+		"frame-width", "1in",
+		"frame-height", "1in",
+		"position-to", "column-above-text",
+		"frame-col-xpos", "1.5in",
+		"frame-col-ypos", "2in",
+		"wrap-mode", "wrapped-both"
+	};
+	pf_Frag_Strux * blockFrame = nullptr;
+	const PP_PropertyVector blockProps = {
+		"frame-type", "image",
+		"frame-width", "1in",
+		"frame-height", "1in",
+		"position-to", "block-above-text",
+		"xpos", "0.5in",
+		"ypos", "-0.25in",
+		"wrap-mode", "wrapped-both"
+	};
+	if (!TFPASS(doc->insertStrux(first_strux(doc, PTX_Block), PTX_SectionFrame, columnAtts, columnProps, &columnFrame)) ||
+		!TFPASS(columnFrame != nullptr) ||
+		!TFPASS(doc->insertStrux(columnFrame->getPos() + columnFrame->getLength(), PTX_EndFrame)) ||
+		!TFPASS(doc->insertStrux(first_strux(doc, PTX_Block), PTX_SectionFrame, columnAtts, blockProps, &blockFrame)) ||
+		!TFPASS(blockFrame != nullptr) ||
+		!TFPASS(doc->insertStrux(blockFrame->getPos() + blockFrame->getLength(), PTX_EndFrame)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmtpos", ".docx");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * zip = package_open(path, input, gsf_infile_zip_new);
+	if (!TFPASS(zip != nullptr))
+	{
+		package_close(input, zip);
+		std::remove(path.c_str());
+		return;
+	}
+
+	const std::string document = zip_read(zip, "word/document.xml");
+	// 1.5in and 2in from the column, and 0.5in / -0.25in from the paragraph.
+	TFPASS(document.find("relativeFrom=\"column\"") != std::string::npos);
+	TFPASS(document.find("relativeFrom=\"margin\"") != std::string::npos);
+	TFPASS(document.find("relativeFrom=\"paragraph\"") != std::string::npos);
+	TFPASS(document.find(">1371600<") != std::string::npos);
+	TFPASS(document.find(">1828800<") != std::string::npos);
+	TFPASS(document.find(">457200<") != std::string::npos);
+	TFPASS(document.find(">-228600<") != std::string::npos);
+
+	package_close(input, zip);
+	std::remove(path.c_str());
+}
+
+TFTEST_MAIN("DOC export keeps the header text and an inline image")
+{
+	if (!exporter_known(".doc"))
+		return;
+
+	PD_Document * doc = header_footer_document("CorpsImage", "EnteteImage", "PiedImage");
+	if (!TFPASS(doc != nullptr))
+		return;
+	if (!TFPASS(doc->createDataItem("imgbody", false, tiny_png(), "image/png", nullptr)) ||
+		!TFPASS(doc->createDataItem("imghdr", false, tiny_png(), "image/png", nullptr)))
+	{
+		doc->unref();
+		return;
+	}
+
+	PT_DocPosition header_at = 0;
+	pt_PieceTable * table = doc->getPieceTable();
+	bool seen_header = false;
+	for (pf_Frag * frag = table ? table->getFragments().getFirst() : nullptr; frag; frag = frag->getNext())
+	{
+		if (frag->getType() != pf_Frag::PFT_Strux)
+			continue;
+		pf_Frag_Strux * strux = static_cast<pf_Frag_Strux *>(frag);
+		if (strux->getStruxType() == PTX_SectionHdrFtr)
+			seen_header = true;
+		else if (seen_header && strux->getStruxType() == PTX_Block)
+		{
+			header_at = strux->getPos() + strux->getLength();
+			break;
+		}
+	}
+	const PP_PropertyVector bodyAtts = {"dataid", "imgbody"};
+	const PP_PropertyVector headerAtts = {"dataid", "imghdr"};
+	const PP_PropertyVector imageProps = {"width", "1in", "height", "1in"};
+	if (!TFPASS(header_at != 0) ||
+		!TFPASS(doc->insertObject(header_at, PTO_Image, headerAtts, imageProps)) ||
+		!TFPASS(doc->insertObject(first_block_content(doc), PTO_Image, bodyAtts, imageProps)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmtimg", ".doc");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * ole = package_open(path, input, gsf_infile_msole_new);
+	if (!TFPASS(ole != nullptr))
+	{
+		package_close(input, ole);
+		std::remove(path.c_str());
+		return;
+	}
+
+	const std::string word = ole_read(ole, "WordDocument");
+	const std::string table = ole_read(ole, "1Table");
+	const std::string data = ole_read(ole, "Data");
+	TFPASS(word.find(utf16_ascii("EnteteImage")) != std::string::npos);
+	TFPASS(word.size() >= FMT_CCP_HDD + 4 && le32(word, FMT_CCP_HDD) > 0);
+	TFPASS(word.size() >= 0x0C && (le16(word, 0x0A) & 0x0004u) == 0);
+
+	const unsigned ccp_text = le32(word, FMT_CCP_TEXT);
+	const unsigned ccp_hdd = le32(word, FMT_CCP_HDD);
+	unsigned image_chars = 0;
+	if (word.size() >= 0x800 + (ccp_text + ccp_hdd) * 2)
+	{
+		for (unsigned i = 0; i < ccp_text + ccp_hdd; ++i)
+		{
+			if (le16(word, 0x800 + i * 2) == 0x0001)
+				++image_chars;
+		}
+	}
+	TFPASS(image_chars >= 2);
+
+	const unsigned sed_at = le32(word, 0x9A + 6 * 8);
+	const unsigned fc_sepx = le32(table, sed_at + 10);
+	const unsigned sepx_len = le16(word, fc_sepx);
+	bool header_flag = false;
+	if (fc_sepx + 2 + sepx_len <= word.size())
+	{
+		for (unsigned i = 0; i + 3 <= sepx_len; ++i)
+		{
+			if (le16(word, fc_sepx + 2 + i) != 0x3014)
+				continue;
+			const unsigned flags = static_cast<unsigned char>(word[fc_sepx + 4 + i]);
+			header_flag = (flags & 0x0A) == 0x0A;
+			break;
+		}
+	}
+	TFPASS(header_flag);
+
+	TFPASS(data.size() >= 0x44 && le16(data, 4) == 0x44 && le16(data, 6) == 0x64);
+	const std::string::size_type first_png = data.find("\x89PNG");
+	const std::string::size_type second_png = first_png == std::string::npos ? std::string::npos : data.find("\x89PNG", first_png + 4);
+	TFPASS(second_png != std::string::npos);
+
+	package_close(input, ole);
+	std::remove(path.c_str());
+}

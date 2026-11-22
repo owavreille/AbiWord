@@ -59,45 +59,111 @@
 /*
 	This table assigns an icon to every menu entry
 */
-static const EV_Menu_Bitmap s_bitmaps[] = 
-{	  
-
-	
-    // File
-	{AP_MENU_ID_FILE_CLOSE,  "Menu_AbiWord_Close"},
-	{AP_MENU_ID_FILE_EXIT,		"Menu_AbiWord_Exit"},	
+static const EV_Menu_Bitmap s_bitmaps[] =
+{
+	{AP_MENU_ID_FILE_NEW, "Menu_AbiWord_New"},
+	{AP_MENU_ID_FILE_NEW_USING_TEMPLATE, "LO_Template"},
+	{AP_MENU_ID_FILE_OPEN, "Menu_AbiWord_Open"},
+	{AP_MENU_ID_FILE_IMPORTSTYLES, "Menu_AbiWord_Import"},
+	{AP_MENU_ID_FILE_SAVE, "Menu_AbiWord_Save"},
+	{AP_MENU_ID_FILE_SAVEAS, "Menu_AbiWord_SaveAs"},
 	{AP_MENU_ID_FILE_EXPORT, "Menu_AbiWord_Export"},
-	{AP_MENU_ID_FILE_IMPORT, "Menu_AbiWord_Import"},
-	{AP_MENU_ID_FILE_NEW,	 "Menu_AbiWord_New"},
-	{AP_MENU_ID_FILE_OPEN,	 "Menu_AbiWord_Open"},
-	{AP_MENU_ID_FILE_PRINT,		"Menu_AbiWord_Print"},
-	{AP_MENU_ID_FILE_PRINT_PREVIEW, "Menu_AbiWord_Print_Preview"},
-	{AP_MENU_ID_FILE_SAVE,		"Menu_AbiWord_Save"}, 
-	{AP_MENU_ID_FILE_SAVEAS,	"Menu_AbiWord_SaveAs"}, 
 	{AP_MENU_ID_FILE_REVERT, "Menu_AbiWord_Revert"},
-	{AP_MENU_ID_FILE_PROPERTIES, "Menu_AbiWord_Properties"},
 	{AP_MENU_ID_FILE_PAGESETUP, "Menu_AbiWord_Print_Setup"},
-    
-	// Edit
-	{AP_MENU_ID_EDIT_PASTE, "Menu_AbiWord_Paste"},				
-	{AP_MENU_ID_EDIT_CUT, "Menu_AbiWord_Cut"},				
-	{AP_MENU_ID_EDIT_COPY, "Menu_AbiWord_Copy"},				
-	{AP_MENU_ID_EDIT_UNDO, "Menu_AbiWord_Undo"},				
-	{AP_MENU_ID_EDIT_REDO, "Menu_AbiWord_Redo"},				
+	{AP_MENU_ID_FILE_PRINT_PREVIEW, "Menu_AbiWord_Print_Preview"},
+	{AP_MENU_ID_FILE_PRINT, "Menu_AbiWord_Print"},
+	{AP_MENU_ID_FILE_PROPERTIES, "Menu_AbiWord_Properties"},
+	{AP_MENU_ID_FILE_RECENT, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_1, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_2, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_3, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_4, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_5, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_6, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_7, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_8, "LO_Recent"},
+	{AP_MENU_ID_FILE_RECENT_9, "LO_Recent"},
+	{AP_MENU_ID_FILE_CLOSE, "Menu_AbiWord_Close"},
+	{AP_MENU_ID_FILE_EXIT, "Menu_AbiWord_Exit"},
+
+	{AP_MENU_ID_EDIT_UNDO, "Menu_AbiWord_Undo"},
+	{AP_MENU_ID_EDIT_REDO, "Menu_AbiWord_Redo"},
+	{AP_MENU_ID_EDIT_CUT, "Menu_AbiWord_Cut"},
+	{AP_MENU_ID_EDIT_COPY, "Menu_AbiWord_Copy"},
+	{AP_MENU_ID_EDIT_PASTE, "Menu_AbiWord_Paste"},
 	{AP_MENU_ID_EDIT_PASTE_SPECIAL, "Menu_AbiWord_Paste"},
 	{AP_MENU_ID_EDIT_CLEAR, "Menu_AbiWord_Clear"},
+	{AP_MENU_ID_EDIT_SELECTALL, "LO_Selectall"},
+	{AP_MENU_ID_EDIT_REMOVEHEADER, "LO_Removeheader"},
+	{AP_MENU_ID_EDIT_REMOVEFOOTER, "LO_Removefooter"},
 	{AP_MENU_ID_EDIT_FIND, "Menu_AbiWord_Search"},
 	{AP_MENU_ID_EDIT_REPLACE, "Menu_AbiWord_Replace"},
 	{AP_MENU_ID_EDIT_GOTO, "Menu_AbiWord_Goto"},
 
-	// Insert
-	{AP_MENU_ID_INSERT_SYMBOL,	"Menu_AbiWord_Insert_Symbol"},
-	{AP_MENU_ID_INSERT_GRAPHIC, "Menu_AbiWord_Img"},
-	{AP_MENU_ID_INSERT_HYPERLINK,	"Menu_AbiWord_Hyperlink"},
-	{AP_MENU_ID_INSERT_BOOKMARK, "Menu_AbiWord_Bookmark"},
+	{AP_MENU_ID_VIEW_NORMAL, "LO_Normal"},
+	{AP_MENU_ID_VIEW_WEB, "LO_Web"},
+	{AP_MENU_ID_VIEW_PRINT, "LO_Printlayout"},
+	{AP_MENU_ID_WEB_WEBPREVIEW, "Menu_AbiWord_Print_Preview"},
+	{AP_MENU_ID_VIEW_TOOLBARS, "LO_Toolbar"},
+	{AP_MENU_ID_VIEW_TB_1, "LO_Toolbar"},
+	{AP_MENU_ID_VIEW_TB_2, "LO_Toolbar"},
+	{AP_MENU_ID_VIEW_TB_3, "LO_Toolbar"},
+	{AP_MENU_ID_VIEW_TB_4, "LO_Toolbar"},
+	{AP_MENU_ID_VIEW_RULER, "LO_Ruler"},
+	{AP_MENU_ID_VIEW_STATUSBAR, "LO_Status"},
+	{AP_MENU_ID_VIEW_LOCKSTYLES, "LO_Lock"},
+	{AP_MENU_ID_VIEW_SHOWPARA, "LO_Showpara"},
+	{AP_MENU_ID_VIEW_FULLSCREEN, "LO_Fullscreen"},
+	{AP_MENU_ID_VIEW_ZOOM_MENU, "LO_Zoom"},
+	{AP_MENU_ID_VIEW_ZOOM, "LO_Zoom"},
+	{AP_MENU_ID_VIEW_ZOOM_WIDTH, "LO_Zoomwidth"},
+	{AP_MENU_ID_VIEW_ZOOM_WHOLE, "LO_Zoompage"},
+	{AP_MENU_ID_VIEW_ZOOM_200, "LO_Zoom"},
+	{AP_MENU_ID_VIEW_ZOOM_100, "LO_Zoom100"},
+	{AP_MENU_ID_VIEW_ZOOM_75, "LO_Zoom"},
+	{AP_MENU_ID_VIEW_ZOOM_50, "LO_Zoom"},
 
-	// Format
+	{AP_MENU_ID_INSERT_BREAK, "LO_Break"},
+	{AP_MENU_ID_INSERT_HEADER, "LO_Header"},
+	{AP_MENU_ID_INSERT_FOOTER, "LO_Footer"},
+	{AP_MENU_ID_INSERT_TEXTBOX, "LO_Textbox"},
+	{AP_MENU_ID_INSERT_TABLEOFCONTENTS, "LO_Toc"},
+	{AP_MENU_ID_INSERT_FOOTNOTE, "LO_Footnote"},
+	{AP_MENU_ID_INSERT_ENDNOTE, "LO_Endnote"},
+	{AP_MENU_ID_INSERT_SYMBOL, "Menu_AbiWord_Insert_Symbol"},
+	{AP_MENU_ID_INSERT_PAGENO, "LO_Pageno"},
+	{AP_MENU_ID_INSERT_DATETIME, "LO_Date"},
+	{AP_MENU_ID_INSERT_FIELD, "LO_Field"},
+	{AP_MENU_ID_INSERT_BOOKMARK, "Menu_AbiWord_Bookmark"},
+	{AP_MENU_ID_INSERT_XMLID, "LO_Xml"},
+	{AP_MENU_ID_INSERT_HYPERLINK, "Menu_AbiWord_Hyperlink"},
+	{AP_MENU_ID_INSERT_MAILMERGE, "LO_Mail"},
+	{AP_MENU_ID_INSERT_FILE, "LO_File"},
+	{AP_MENU_ID_INSERT_CLIPART, "Menu_AbiWord_Img"},
+	{AP_MENU_ID_INSERT_GRAPHIC, "Menu_AbiWord_Img"},
+	{AP_MENU_ID_INSERT_DIRECTIONMARKER, "LO_Direction"},
+	{AP_MENU_ID_INSERT_DIRECTIONMARKER_LRM, "LO_Direction"},
+	{AP_MENU_ID_INSERT_DIRECTIONMARKER_RLM, "LO_Direction"},
+
 	{AP_MENU_ID_FMT_FONT, "Menu_AbiWord_Font"},
+	{AP_MENU_ID_FMT_PARAGRAPH, "LO_Paragraph"},
+	{AP_MENU_ID_FMT_BULLETS, "LO_Bullets"},
+	{AP_MENU_ID_FMT_TABLE, "Menu_AbiWord_Insert_Table"},
+	{AP_MENU_ID_FMT_FRAME, "LO_Frame"},
+	{AP_MENU_ID_FMT_IMAGE, "LO_Image"},
+	{AP_MENU_ID_FMT_BORDERS, "LO_Border"},
+	{AP_MENU_ID_FMT_COLUMNS, "LO_Columns"},
+	{AP_MENU_ID_FMT_TABS, "LO_Tabs"},
+	{AP_MENU_ID_FMT_HDRFTR, "LO_Header"},
+	{AP_MENU_ID_FMT_FOOTNOTES, "LO_Footnotes"},
+	{AP_MENU_ID_FMT_TABLEOFCONTENTS, "LO_Toc"},
+	{AP_MENU_ID_FMT_TOGGLECASE, "LO_Case"},
+	{AP_MENU_ID_ALIGN, "Menu_AbiWord_Align_Left"},
+	{AP_MENU_ID_ALIGN_LEFT, "Menu_AbiWord_Align_Left"},
+	{AP_MENU_ID_ALIGN_CENTER, "Menu_AbiWord_Align_Center"},
+	{AP_MENU_ID_ALIGN_RIGHT, "Menu_AbiWord_Align_Right"},
+	{AP_MENU_ID_ALIGN_JUSTIFY, "Menu_AbiWord_Align_Justify"},
+	{AP_MENU_ID_FMT, "Menu_AbiWord_Bold"},
 	{AP_MENU_ID_FMT_BOLD, "Menu_AbiWord_Bold"},
 	{AP_MENU_ID_FMT_ITALIC, "Menu_AbiWord_Italic"},
 	{AP_MENU_ID_FMT_UNDERLINE, "Menu_AbiWord_Underline"},
@@ -105,42 +171,146 @@ static const EV_Menu_Bitmap s_bitmaps[] =
 	{AP_MENU_ID_FMT_STRIKE, "Menu_AbiWord_Strike"},
 	{AP_MENU_ID_FMT_SUPERSCRIPT, "Menu_AbiWord_Superscript"},
 	{AP_MENU_ID_FMT_SUBSCRIPT, "Menu_AbiWord_Subscript"},
-	{AP_MENU_ID_ALIGN_LEFT, "Menu_AbiWord_Align_Left"},
-	{AP_MENU_ID_ALIGN_CENTER, "Menu_AbiWord_Align_Center"},
-	{AP_MENU_ID_ALIGN_RIGHT, "Menu_AbiWord_Align_Right"},
-	{AP_MENU_ID_ALIGN_JUSTIFY, "Menu_AbiWord_Align_Justify"},
-	{AP_MENU_ID_TABLE_INSERT_TABLE, "Menu_AbiWord_Insert_Table"},
-	{AP_MENU_ID_TOOLS_SPELL, "Menu_AbiWord_Spellcheck"},			
-	{AP_MENU_ID_TOOLS_OPTIONS, "Menu_AbiWord_Preferences"},
-	{AP_MENU_ID_TOOLS_SCRIPTS, "Menu_AbiWord_Execute"},
-	{AP_MENU_ID_TOOLS_LANGUAGE, "Menu_AbiWord_Book"},
+	{AP_MENU_ID_FMT_BACKGROUND, "LO_Background"},
+	{AP_MENU_ID_FMT_BACKGROUND_PAGE_IMAGE, "LO_Image"},
+	{AP_MENU_ID_FMT_BACKGROUND_PAGE_COLOR, "LO_Background"},
+	{AP_MENU_ID_FMT_DIRECTION, "LO_Direction"},
+	{AP_MENU_ID_FMT_DIRECTION_DOCD_RTL, "LO_Direction"},
+	{AP_MENU_ID_FMT_DIRECTION_SD_RTL, "LO_Direction"},
+	{AP_MENU_ID_FMT_DIRECTION_DD_RTL, "LO_Direction"},
+	{AP_MENU_ID_FMT_DIRECTION_DO_LTR, "LO_Direction"},
+	{AP_MENU_ID_FMT_DIRECTION_DO_RTL, "LO_Direction"},
+	{AP_MENU_ID_FMT_STYLE_DEFINE, "LO_Style"},
 	{AP_MENU_ID_FMT_LANGUAGE, "Menu_AbiWord_Book"},
+	{AP_MENU_ID_FMT_STYLIST, "LO_Style"},
 
+	{AP_MENU_ID_TOOLS_SPELL, "Menu_AbiWord_Spellcheck"},
+	{AP_MENU_ID_TOOLS_WORDCOUNT, "LO_Wordcount"},
+	{AP_MENU_ID_TOOLS_HISTORY, "LO_History"},
+	{AP_MENU_ID_TOOLS_HISTORY_SHOW, "LO_History"},
+	{AP_MENU_ID_TOOLS_REVISIONS_COMPARE_DOCUMENTS, "LO_Compare"},
+	{AP_MENU_ID_TOOLS_REVISIONS_AUTO, "LO_Revisions"},
+	{AP_MENU_ID_TOOLS_REVISIONS, "LO_Revisions"},
+	{AP_MENU_ID_TOOLS_REVISIONS_MARK, "LO_Revisions"},
+	{AP_MENU_ID_TOOLS_REVISIONS_NEW_REVISION, "LO_Revisions"},
+	{AP_MENU_ID_TOOLS_REVISIONS_SHOW, "LO_Shownotes"},
+	{AP_MENU_ID_TOOLS_REVISIONS_SHOW_AFTER, "LO_Next"},
+	{AP_MENU_ID_TOOLS_REVISIONS_SHOW_AFTERPREV, "LO_Prev"},
+	{AP_MENU_ID_TOOLS_REVISIONS_SHOW_BEFORE, "LO_Prev"},
+	{AP_MENU_ID_TOOLS_REVISIONS_SET_VIEW_LEVEL, "LO_Revisions"},
+	{AP_MENU_ID_TOOLS_REVISIONS_FIND_NEXT, "LO_Next"},
+	{AP_MENU_ID_TOOLS_REVISIONS_FIND_PREV, "LO_Prev"},
+	{AP_MENU_ID_TOOLS_REVISIONS_ACCEPT_REVISION, "LO_Accept"},
+	{AP_MENU_ID_TOOLS_REVISIONS_REJECT_REVISION, "LO_Reject"},
+	{AP_MENU_ID_TOOLS_REVISIONS_PURGE, "Menu_AbiWord_Clear"},
+	{AP_MENU_ID_TOOLS_ANNOTATIONS, "LO_Annotation"},
+	{AP_MENU_ID_TOOLS_ANNOTATIONS_INSERT, "LO_Annotation"},
+	{AP_MENU_ID_TOOLS_ANNOTATIONS_INSERT_FROMSEL, "LO_Annotation"},
+	{AP_MENU_ID_TOOLS_ANNOTATIONS_TOGGLE_DISPLAY, "LO_Shownotes"},
+	{AP_MENU_ID_TOOLS_PLUGINS, "LO_Plugin"},
+	{AP_MENU_ID_TOOLS_SCRIPTS, "Menu_AbiWord_Execute"},
+	{AP_MENU_ID_TOOLS_MAILMERGE, "LO_Mail"},
+	{AP_MENU_ID_TOOLS_OPTIONS, "Menu_AbiWord_Preferences"},
+	{AP_MENU_ID_TOOLS_LANGUAGE, "Menu_AbiWord_Book"},
 
-	// Table
+	{AP_MENU_ID_TABLE_INSERT, "Menu_AbiWord_Insert_Table"},
 	{AP_MENU_ID_TABLE_INSERT_TABLE, "Menu_AbiWord_Insert_Table"},
+	{AP_MENU_ID_TABLE_INSERT_COLUMNS_BEFORE, "Menu_AbiWord_Add_Column"},
+	{AP_MENU_ID_TABLE_INSERT_COLUMNS_AFTER, "Menu_AbiWord_Add_Column"},
+	{AP_MENU_ID_TABLE_INSERT_ROWS_BEFORE, "Menu_AbiWord_Add_Row"},
+	{AP_MENU_ID_TABLE_INSERT_ROWS_AFTER, "Menu_AbiWord_Add_Row"},
+	{AP_MENU_ID_TABLE_INSERT_SUMCOLS, "LO_Sum"},
+	{AP_MENU_ID_TABLE_INSERT_SUMROWS, "LO_Sum"},
+	{AP_MENU_ID_TABLE_DELETE, "Menu_AbiWord_Delete_Table"},
 	{AP_MENU_ID_TABLE_DELETE_TABLE, "Menu_AbiWord_Delete_Table"},
-	{AP_MENU_ID_TABLE_INSERTTABLE, "Menu_AbiWord_Insert_Table"},
-	{AP_MENU_ID_TABLE_DELETETABLE, "Menu_AbiWord_Delete_Table"},
-	{AP_MENU_ID_TABLE_MERGE_CELLS, "Menu_AbiWord_Merge_Cells"},
-	{AP_MENU_ID_TABLE_SPLIT_CELLS, "Menu_AbiWord_Split_Cells"},
-	{AP_MENU_ID_TABLE_INSERTCOLUMN, "Menu_AbiWord_Add_Column"},
-	{AP_MENU_ID_TABLE_INSERTROW, "Menu_AbiWord_Add_Row"},
-	{AP_MENU_ID_TABLE_DELETECOLUMN, "Menu_AbiWord_Delete_Column"},
-	{AP_MENU_ID_TABLE_DELETEROW, "Menu_AbiWord_Delete_Row"},
 	{AP_MENU_ID_TABLE_DELETE_COLUMNS, "Menu_AbiWord_Delete_Column"},
 	{AP_MENU_ID_TABLE_DELETE_ROWS, "Menu_AbiWord_Delete_Row"},
-	
+	{AP_MENU_ID_TABLE_FORMAT, "LO_Border"},
+	{AP_MENU_ID_TABLE_SELECT, "LO_Selecttable"},
+	{AP_MENU_ID_TABLE_SELECT_TABLE, "LO_Selecttable"},
+	{AP_MENU_ID_TABLE_SELECT_COLUMN, "LO_Selectcolumn"},
+	{AP_MENU_ID_TABLE_SELECT_ROW, "LO_Selectrow"},
+	{AP_MENU_ID_TABLE_SELECT_CELL, "LO_Selectcell"},
+	{AP_MENU_ID_TABLE_MERGE_CELLS, "Menu_AbiWord_Merge_Cells"},
+	{AP_MENU_ID_TABLE_SPLIT_CELLS, "Menu_AbiWord_Split_Cells"},
+	{AP_MENU_ID_TABLE_TEXTTOTABLE, "LO_Texttotable"},
+	{AP_MENU_ID_TABLE_TEXTTOTABLE_TABS, "LO_Texttotable"},
+	{AP_MENU_ID_TABLE_TEXTTOTABLE_COMMAS, "LO_Texttotable"},
+	{AP_MENU_ID_TABLE_TEXTTOTABLE_SPACES, "LO_Texttotable"},
+	{AP_MENU_ID_TABLE_TEXTTOTABLE_ALL, "LO_Texttotable"},
+	{AP_MENU_ID_TABLE_SORT, "LO_Sort"},
+	{AP_MENU_ID_TABLE_SORTROWSASCEND, "LO_Sort"},
+	{AP_MENU_ID_TABLE_SORTROWSDESCEND, "LO_Sort"},
+	{AP_MENU_ID_TABLE_SORTCOLSASCEND, "LO_Sort"},
+	{AP_MENU_ID_TABLE_SORTCOLSDESCEND, "LO_Sort"},
+	{AP_MENU_ID_TABLE_TABLETOTEXT, "LO_Tabletotext"},
+	{AP_MENU_ID_TABLE_TABLETOTEXTCOMMAS, "LO_Tabletotext"},
+	{AP_MENU_ID_TABLE_TABLETOTEXTTABS, "LO_Tabletotext"},
+	{AP_MENU_ID_TABLE_TABLETOTEXTCOMMASTABS, "LO_Tabletotext"},
+	{AP_MENU_ID_TABLE_AUTOFIT, "LO_Autofit"},
+	{AP_MENU_ID_TABLE_HEADING_ROWS_REPEAT, "LO_Header"},
+	{AP_MENU_ID_TABLE_HEADING_ROWS_REPEAT_THIS, "LO_Header"},
+	{AP_MENU_ID_TABLE_HEADING_ROWS_REPEAT_REMOVE, "LO_Removeheader"},
 
-	// Help
+	{AP_MENU_ID_RDF, "LO_Xml"},
+	{AP_MENU_ID_RDF_HIGHLIGHT, "LO_Highlight"},
+	{AP_MENU_ID_RDF_QUERY, "Menu_AbiWord_Search"},
+	{AP_MENU_ID_RDF_EDITOR, "LO_Xml"},
+	{AP_MENU_ID_RDF_QUERY_XMLIDS, "LO_Xml"},
+	{AP_MENU_ID_RDF_SEMITEM, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_CREATEREF, "Menu_AbiWord_Hyperlink"},
+	{AP_MENU_ID_RDF_SEMITEM_NEW, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_NEW_CONTACT, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_NEW_CONTACT_FROM_FILE, "LO_File"},
+	{AP_MENU_ID_RDF_SEMITEM_RELATION, "LO_Share"},
+	{AP_MENU_ID_RDF_SEMITEM_SET_AS_SOURCE, "LO_Author"},
+	{AP_MENU_ID_RDF_SEMITEM_RELATED_TO_SOURCE, "LO_Share"},
+	{AP_MENU_ID_RDF_SEMITEM_RELATED_TO_SOURCE_FOAFKNOWS, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_FIND_RELATED, "Menu_AbiWord_Search"},
+	{AP_MENU_ID_RDF_SEMITEM_FIND_RELATED_FOAFKNOWS, "Menu_AbiWord_Search"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET, "LO_Style"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_APPLY, "LO_Style"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_DISASSOCIATE, "Menu_AbiWord_Clear"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_CONTACT, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_CONTACT_NAME, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_CONTACT_NICK, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_CONTACT_NAME_PHONE, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_CONTACT_NICK_PHONE, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_CONTACT_NAME_HOMEPAGE_PHONE, "LO_Contact"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_EVENT, "LO_Date"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_EVENT_NAME, "LO_Date"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_EVENT_SUMMARY, "LO_Date"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_EVENT_SUMMARY_LOCATION, "LO_Date"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_EVENT_SUMMARY_LOCATION_TIMES, "LO_Date"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_EVENT_SUMMARY_TIMES, "LO_Date"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_LOCATION, "LO_Page"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_LOCATION_NAME, "LO_Page"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_LOCATION_NAME_LATLONG, "LO_Page"},
+	{AP_MENU_ID_RDF_SEMITEM_STYLESHEET_SETTINGS, "Menu_AbiWord_Preferences"},
+	{AP_MENU_ID_RDF_ADV, "LO_Plugin"},
+	{AP_MENU_ID_RDF_ADV_DUMP_FOR_POINT, "LO_Xml"},
+	{AP_MENU_ID_RDF_ADV_DUMP_OBJECTS, "LO_Xml"},
+	{AP_MENU_ID_RDF_ADV_TEST, "LO_Plugin"},
+	{AP_MENU_ID_RDF_ADV_PLAY, "Menu_AbiWord_Execute"},
+
+	{AP_MENU_ID_WINDOW_NEW, "LO_Window"},
+	{AP_MENU_ID_WINDOW_1, "LO_Window"},
+	{AP_MENU_ID_WINDOW_2, "LO_Window"},
+	{AP_MENU_ID_WINDOW_3, "LO_Window"},
+	{AP_MENU_ID_WINDOW_4, "LO_Window"},
+	{AP_MENU_ID_WINDOW_5, "LO_Window"},
+	{AP_MENU_ID_WINDOW_6, "LO_Window"},
+	{AP_MENU_ID_WINDOW_7, "LO_Window"},
+	{AP_MENU_ID_WINDOW_8, "LO_Window"},
+	{AP_MENU_ID_WINDOW_9, "LO_Window"},
+	{AP_MENU_ID_WINDOW_MORE, "LO_Window"},
+
+	{AP_MENU_ID_HELP_ABOUT, "Menu_AbiWord_About"},
 	{AP_MENU_ID_HELP_CONTENTS, "Menu_AbiWord_Help"},
 	{AP_MENU_ID_HELP_SEARCH, "Menu_AbiWord_Search"},
-	{AP_MENU_ID_HELP_ABOUT, "Menu_AbiWord_About"},
 	{AP_MENU_ID_HELP_CREDITS, "Menu_AbiWord_Credits"},
-	
-	{(XAP_Menu_Id)0, ""}
 
-		
+	{(XAP_Menu_Id)0, ""}
 };
 
 
@@ -707,21 +877,33 @@ HBITMAP EV_Win32Menu::_loadBitmap(XAP_Menu_Id id, int width, int height, const U
 {
 	
 	HBITMAP hBitmap = nullptr;
-	EV_Menu_Bitmap* pBitmaps = (EV_Menu_Bitmap*)&s_bitmaps;		
-							 
-	for (; pBitmaps->id;pBitmaps++)
-	{							
-		if (pBitmaps->id==id)
-			break;	
+	const char * iconName = nullptr;
+	const EV_Menu_Bitmap * pBitmaps = s_bitmaps;
+
+	for (; pBitmaps->id; pBitmaps++)
+	{
+		if (pBitmaps->id == id)
+		{
+			iconName = pBitmaps->szName;
+			break;
+		}
 	}
 
-	if (!pBitmaps->id)
+	if (!iconName)
+	{
+		const EV_Menu_ActionSet * actions = m_pWin32App ? m_pWin32App->getMenuActionSet() : nullptr;
+		const EV_Menu_Action * action = actions ? actions->getAction(id) : nullptr;
+		if (action)
+			iconName = action->getIconName();
+	}
+
+	if (!iconName || !*iconName)
 		return hBitmap;
 
 	if (!color.isTransparent())
-		XAP_Win32Toolbar_Icons::getBitmapForIcon(GetDesktopWindow(), width, height, &color, pBitmaps->szName, &hBitmap);
+		XAP_Win32Toolbar_Icons::getBitmapForIcon(GetDesktopWindow(), width, height, &color, iconName, &hBitmap);
 	else
-		XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(GetDesktopWindow(), width, height, pBitmaps->szName, &hBitmap);
+		XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(GetDesktopWindow(), width, height, iconName, &hBitmap);
 	
 	return hBitmap; 
 }

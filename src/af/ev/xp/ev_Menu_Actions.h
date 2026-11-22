@@ -105,6 +105,8 @@ public:
 	bool							hasDynamicLabel() const;
 	const char*						getDynamicLabel(const EV_Menu_Label * pLabel) const;
 	const char*						getMethodName() const;
+	void							setIconName(const char * szIconName);
+	const char*						getIconName() const;
 	const UT_String&				getScriptName() const { return m_stScriptName; }
 	bool							hasGetStateFunction() const;
 	EV_Menu_ItemState				getMenuItemState(AV_View * pView) const;
@@ -119,6 +121,7 @@ private:
 	bool							m_bCheckable;		/* is it checkable */
 	bool							m_bRadio;		    /* is it radio */
 	char *							m_szMethodName;		/* name of method to invoke */
+	const char *					m_szIconName;		/* optional icon resource, not owned */
 	EV_GetMenuItemState_pFn			m_pfnGetState;		/* to get state on an activate */
 	EV_GetMenuItemComputedLabel_pFn m_pfnGetLabel;		/* to get computed label (for things like window-list) */
 	UT_String						m_stScriptName;		/* extra data that the method may need */

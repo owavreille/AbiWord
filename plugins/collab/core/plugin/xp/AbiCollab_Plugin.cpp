@@ -32,6 +32,7 @@
 #include "xap_Frame.h"
 // needed for menu's
 #include "ap_Menu_Id.h"
+#include "ap_Strings.h"
 #include "ev_Menu_Actions.h"
 #include "ev_Menu.h"
 #include "ev_Menu_Layouts.h"
@@ -151,7 +152,13 @@ int abi_plugin_supports_version (UT_uint32 /*major*/, UT_uint32 /*minor*/, UT_ui
 //
 // -----------------------------------------------------------------------
 
-// FIXME: make these translatable strings
+static const char * collab_text(XAP_String_Id id, const char * fallback)
+{
+	const XAP_StringSet * strings = XAP_App::getApp() ? XAP_App::getApp()->getStringSet() : nullptr;
+	const char * value = strings ? strings->getValue(id) : nullptr;
+	return (value && *value) ? value : fallback;
+}
+
 static const char * szCollaboration = "&Collaborate";
 static const char * szCollaborationTip = "Collaborate over the internet or local network";
 
@@ -339,9 +346,25 @@ void s_abicollab_add_menus()
     XAP_Menu_Factory * pFact = pApp->getMenuFactory();    
     EV_Menu_ActionSet* pActionSet = pApp->getMenuActionSet();
 	
-	// TODO: make this a translatable set of strings
-	// const XAP_StringSet * pSS = pApp->getStringSet();
-    
+	szCollaboration = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB, szCollaboration);
+	szCollaborationTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_TIP, szCollaborationTip);
+	szCollaborationOffer = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_SHARE, szCollaborationOffer);
+	szCollaborationOfferTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_SHARE_TIP, szCollaborationOfferTip);
+	szCollaborationJoin = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_OPEN, szCollaborationJoin);
+	szCollaborationJoinTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_OPEN_TIP, szCollaborationJoinTip);
+	szCollaborationAccounts = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_ACCOUNTS, szCollaborationAccounts);
+	szCollaborationAccountsTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_ACCOUNTS_TIP, szCollaborationAccountsTip);
+	szCollaborationShowAuthors = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_AUTHORS, szCollaborationShowAuthors);
+	szCollaborationShowAuthorsTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_AUTHORS_TIP, szCollaborationShowAuthorsTip);
+#if defined(DEBUG)
+#if !defined(ABICOLLAB_RECORD_ALWAYS)
+	szCollaborationRecord = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_RECORD, szCollaborationRecord);
+	szCollaborationRecordTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_RECORD_TIP, szCollaborationRecordTip);
+#endif
+	szCollaborationViewRecord = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_VIEWRECORD, szCollaborationViewRecord);
+	szCollaborationViewRecordTip = collab_text(AP_STRING_ID_MENU_LABEL_COLLAB_VIEWRECORD_TIP, szCollaborationViewRecordTip);
+#endif
+
 	// The Collaboration menu item
 	XAP_Menu_Id collabId = pFact->addNewMenuBefore("Main", NULL, (XAP_Menu_Id)AP_MENU_ID_WINDOW, EV_MLF_BeginSubMenu);
     pFact->addNewLabel(NULL, collabId, szCollaboration, szCollaborationTip);
@@ -355,6 +378,7 @@ void s_abicollab_add_menus()
 		NULL,                   // Function for whether not label is enabled/disabled checked/unchecked
 		NULL                    // Function to compute Menu Label "Dynamic Label"
 	);
+	myCollaborationAction->setIconName("LO_Share");
 	pActionSet->addAction(myCollaborationAction);
 
 	// The Start Collaboration connect item
@@ -370,6 +394,7 @@ void s_abicollab_add_menus()
 		collab_GetState_CanShare,  // Function for whether not label is enabled/disabled checked/unchecked
 		NULL                    // Function to compute Menu Label "Dynamic Label"
 	);
+	myActionOffer->setIconName("LO_Share");
 	pActionSet->addAction(myActionOffer);
 	EV_EditMethod *myEditMethodOffer = new EV_EditMethod (
 		"s_abicollab_offer",    // name of callback function
@@ -392,6 +417,7 @@ void s_abicollab_add_menus()
 		collab_GetState_AnyActive,  // Function for whether not label is enabled/disabled checked/unchecked
 		NULL                    // Function to compute Menu Label "Dynamic Label"
 	);
+	myActionJoin->setIconName("Menu_AbiWord_Open");
 	pActionSet->addAction(myActionJoin);
 	EV_EditMethod *myEditMethodJoin = new EV_EditMethod (
 		"s_abicollab_join",     // name of callback function
@@ -414,6 +440,7 @@ void s_abicollab_add_menus()
 		NULL,                   // Function for whether not label is enabled/disabled checked/unchecked
 		NULL                    // Function to compute Menu Label "Dynamic Label"
 	);
+	myActionAccounts->setIconName("LO_User");
 	pActionSet->addAction(myActionAccounts);
 	EV_EditMethod *myEditMethodAccounts = new EV_EditMethod (
 		"s_abicollab_accounts",     // name of callback function
@@ -439,6 +466,7 @@ void s_abicollab_add_menus()
 		collab_GetState_ShowAuthors, // Function for whether not label is enabled/disabled checked/unchecked
 		NULL                    // Function to compute Menu Label "Dynamic Label"
 	);
+	myActionShowAuthors->setIconName("LO_Author");
 	pActionSet->addAction(myActionShowAuthors);
 	EV_EditMethod *myEditMethodShowAuthors = new EV_EditMethod (
 		"s_abicollab_authors",    // name of callback function
@@ -464,6 +492,7 @@ void s_abicollab_add_menus()
 		collab_GetState_Recording, // Function for whether not label is enabled/disabled checked/unchecked
 		NULL                    // Function to compute Menu Label "Dynamic Label"
 	);
+	myActionRecord->setIconName("LO_History");
 	pActionSet->addAction(myActionRecord);
 	EV_EditMethod *myEditMethodRecord = new EV_EditMethod (
 		"s_abicollab_record",     // name of callback function
@@ -490,6 +519,7 @@ void s_abicollab_add_menus()
 		NULL,					// Function for whether not label is enabled/disabled checked/unchecked
 		NULL                    // Function to compute Menu Label "Dynamic Label"
 	);
+	myActionViewRecord->setIconName("LO_File");
 	pActionSet->addAction(myActionViewRecord);
 	EV_EditMethod *myEditMethodViewRecord = new EV_EditMethod (
 		"s_abicollab_viewrecord",     // name of callback function

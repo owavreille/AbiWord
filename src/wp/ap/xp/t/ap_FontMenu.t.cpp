@@ -66,15 +66,34 @@ TFTEST_MAIN("Font menu keeps document faces above the installed list")
 	TFPASS(doc->changeSpanFmt(PTC_AddFmt, at, at + static_cast<PT_DocPosition>(words.size()),
 		PP_NOPROPS, props));
 
+	const std::string more = "X";
+	const PT_DocPosition at2 = at + static_cast<PT_DocPosition>(words.size());
+	if (!TFPASS(doc->insertSpan(at2, more)))
+	{
+		doc->unref();
+		return;
+	}
+	const PP_PropertyVector quoted = {"font-family", "'Arial', sans-serif"};
+	TFPASS(doc->changeSpanFmt(PTC_AddFmt, at2, at2 + static_cast<PT_DocPosition>(more.size()),
+		PP_NOPROPS, quoted));
+
 	std::vector<std::string> used;
 	AP_collectUsedFonts(doc, used);
 	bool sawCourier = false;
+	bool sawArial = false;
+	bool sawGeneric = false;
 	for (const std::string & name : used)
 	{
 		if (name == "Courier New")
 			sawCourier = true;
+		if (name == "Arial")
+			sawArial = true;
+		if (name == "sans-serif" || name == "'Arial', sans-serif")
+			sawGeneric = true;
 	}
 	TFPASS(sawCourier);
+	TFPASS(sawArial);
+	TFPASS(!sawGeneric);
 
 	std::vector<std::string> menu;
 	AP_buildFontMenu(doc, installed, menu);
@@ -82,6 +101,8 @@ TFTEST_MAIN("Font menu keeps document faces above the installed list")
 		std::find(menu.begin(), menu.end(), AP_FONT_MENU_SEPARATOR);
 	TFPASS(separator != menu.end());
 	TFPASS(std::find(menu.begin(), separator, std::string("Courier New")) != separator);
+	TFPASS(std::find(menu.begin(), separator, std::string("Arial")) != separator);
+	TFPASS(std::find(menu.begin(), separator, std::string("sans-serif")) == separator);
 
 	const std::vector<std::string> tail(separator + 1, menu.end());
 	TFPASS(tail.size() == 3);

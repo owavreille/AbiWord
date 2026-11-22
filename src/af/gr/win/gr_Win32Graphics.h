@@ -268,6 +268,7 @@ public:
 	virtual void			setColor3D(GR_Color3D c) override;
 	virtual bool			getColor3D(GR_Color3D, UT_RGBColor &) override
 	{ return false; }
+	virtual bool			getScreenCanvas(UT_RGBColor & color) override;
 	void					init3dColors(void);
 	virtual void			fillRect(GR_Color3D c,
                                                  UT_sint32 x, UT_sint32 y,

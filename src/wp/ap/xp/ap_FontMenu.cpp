@@ -16,7 +16,9 @@
 #include "pd_Document.h"
 #include "pf_Frag_Strux.h"
 #include "pp_Property.h"
+#include "pp_Revision.h"
 #include "pt_PieceTable.h"
+#include "pt_Types.h"
 #include "xap_Frame.h"
 #include "xad_Document.h"
 
@@ -46,6 +48,94 @@ static void rememberFont(const char * name, std::set<std::string> & seen, std::v
 		return;
 	if (seen.insert(name).second)
 		fonts.push_back(name);
+}
+
+static bool genericFontFamily(const char * name)
+{
+	return name && (!g_ascii_strcasecmp(name, "serif") ||
+			!g_ascii_strcasecmp(name, "sans-serif") ||
+			!g_ascii_strcasecmp(name, "cursive") ||
+			!g_ascii_strcasecmp(name, "fantasy") ||
+			!g_ascii_strcasecmp(name, "monospace") ||
+			!g_ascii_strcasecmp(name, "inherit"));
+}
+
+// CSS font-family may be quoted and may list fallbacks: 'Calibri', sans-serif.
+// The face the document asked for is the first family that is not generic.
+static void rememberFontList(const char * raw, std::set<std::string> & seen, std::vector<std::string> & fonts)
+{
+	if (!raw || !*raw || AP_fontMenuIsSeparator(raw))
+		return;
+
+	const char * p = raw;
+	while (*p)
+	{
+		while (g_ascii_isspace(*p))
+			++p;
+		if (!*p)
+			break;
+
+		const char * start = p;
+		const char * end = p;
+		if (*p == '\'' || *p == '"')
+		{
+			const char quote = *p++;
+			start = p;
+			while (*p && *p != quote)
+				++p;
+			end = p;
+			if (*p == quote)
+				++p;
+		}
+		else
+		{
+			while (*p && *p != ',')
+				++p;
+			end = p;
+		}
+		while (start < end && g_ascii_isspace(*start))
+			++start;
+		while (end > start && g_ascii_isspace(*(end - 1)))
+			--end;
+
+		if (end > start)
+		{
+			const std::string name(start, end);
+			if (!genericFontFamily(name.c_str()))
+			{
+				rememberFont(name.c_str(), seen, fonts);
+				return;
+			}
+		}
+		if (*p == ',')
+			++p;
+	}
+}
+
+static void rememberRevisionFont(const PP_AttrProp * ap, std::set<std::string> & seen, std::vector<std::string> & fonts)
+{
+	const gchar * rev = nullptr;
+	if (!ap || !ap->getAttribute(PT_REVISION_ATTRIBUTE_NAME, rev) || !rev || !*rev)
+		return;
+
+	PP_RevisionAttr revisions(rev);
+	const PP_Revision * last = revisions.getLastRevision();
+	const gchar * value = nullptr;
+	if (last && last->getProperty("font-family", value))
+		rememberFontList(value, seen, fonts);
+}
+
+static void rememberResolvedFont(const PP_AttrProp * span,
+				  const PP_AttrProp * block,
+				  const PP_AttrProp * section,
+				  PD_Document * doc,
+				  std::set<std::string> & seen,
+				  std::vector<std::string> & fonts)
+{
+	rememberFontList(PP_evalProperty("font-family", span, block, section, doc, true), seen, fonts);
+	rememberRevisionFont(span, seen, fonts);
+	if (block != span)
+		rememberRevisionFont(block, seen, fonts);
 }
 
 void AP_collectUsedFonts(PD_Document * doc, std::vector<std::string> & fonts)
@@ -87,8 +177,7 @@ void AP_collectUsedFonts(PD_Document * doc, std::vector<std::string> & fonts)
 			{
 			case PTX_Block:
 				blockAP = ap;
-				rememberFont(PP_evalProperty("font-family", nullptr, blockAP, sectionAP, doc, true),
-					     seen, fonts);
+				rememberResolvedFont(nullptr, blockAP, sectionAP, doc, seen, fonts);
 				break;
 			case PTX_Section:
 			case PTX_SectionHdrFtr:
@@ -111,8 +200,7 @@ void AP_collectUsedFonts(PD_Document * doc, std::vector<std::string> & fonts)
 		    frag->getType() == pf_Frag::PFT_FmtMark ||
 		    frag->getType() == pf_Frag::PFT_Object)
 		{
-			rememberFont(PP_evalProperty("font-family", ap, blockAP, sectionAP, doc, true),
-				     seen, fonts);
+			rememberResolvedFont(ap, blockAP, sectionAP, doc, seen, fonts);
 		}
 	}
 

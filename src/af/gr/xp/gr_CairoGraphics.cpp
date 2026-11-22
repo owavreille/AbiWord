@@ -2586,6 +2586,15 @@ void GR_CairoGraphics::drawImage(GR_Image* pImg,
 		cairo_set_antialias(m_cr,CAIRO_ANTIALIAS_NONE);
 	cairo_translate(m_cr, idx, idy);
 
+	// cairo_clip is frozen in device space. Clip to the image rectangle
+	// before cairoSetSource scales the pattern, otherwise cairo_paint fills
+	// the page and the PDF image is stretched to that clip.
+	if (pImg->getDisplayWidth() > 0 && pImg->getDisplayHeight() > 0)
+	{
+		cairo_rectangle(m_cr, 0, 0, pImg->getDisplayWidth(), pImg->getDisplayHeight());
+		cairo_clip(m_cr);
+	}
+
 	if (pImg->getType() == GR_Image::GRT_Raster) {
 		static_cast<GR_CairoRasterImage*>(pImg)->cairoSetSource(m_cr);
 
@@ -2715,6 +2724,11 @@ void GR_CairoGraphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 	cairo_save(m_cr);
 	_resetClip();
 	cairo_translate(m_cr, _tdudX(xDest), _tdudY(yDest));
+	if (pImg->getDisplayWidth() > 0 && pImg->getDisplayHeight() > 0)
+	{
+		cairo_rectangle(m_cr, 0, 0, pImg->getDisplayWidth(), pImg->getDisplayHeight());
+		cairo_clip(m_cr);
+	}
 	cairo_scale(m_cr, (double)pImg->getDisplayWidth() / (double)cropW,
 		(double)pImg->getDisplayHeight() / (double)cropH);
 	cairo_set_source_surface(m_cr, tuned, 0, 0);

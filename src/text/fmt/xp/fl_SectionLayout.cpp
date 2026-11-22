@@ -3677,6 +3677,13 @@ void fl_HdrFtrSectionLayout::addPage(fp_Page* pPage)
 	delete docRange;
 	delete pShadowListener;
 	markAllRunsDirty();
+	// Pages created after the section was formatted never laid out this
+	// shadow. Format only the new page. Do not call updateLayout: a second
+	// paper pass rebreaks the body and duplicates the header and footer.
+	pPair->getShadow()->format();
+	if (fp_ShadowContainer* pBox = pPage->getHdrFtrP(m_iHFType))
+		pBox->layout(true);
+	pPage->copyHdrFtrGeometry(m_iHFType);
 }
 
 bool fl_HdrFtrSectionLayout::isPointInHere(PT_DocPosition pos)

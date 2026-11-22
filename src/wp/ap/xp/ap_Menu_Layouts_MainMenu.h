@@ -490,15 +490,6 @@ BeginLayout(Main,0)
 		MenuItem(AP_MENU_ID_WINDOW_MORE)
 	EndSubMenu()
 	BeginSubMenu(AP_MENU_ID_HELP)
-		MenuItem(AP_MENU_ID_HELP_CONTENTS)
-		MenuItem(AP_MENU_ID_HELP_INTRO)
-		MenuItem(AP_MENU_ID_HELP_SEARCH)
-		MenuItem(AP_MENU_ID_HELP_CHECKVER)
-		MenuItem(AP_MENU_ID_HELP_REPORT_BUG)
-		Separator()
-#ifndef TOOLKIT_GTK_ALL
-		MenuItem(AP_MENU_ID_HELP_CREDITS)
-#endif
 		MenuItem(AP_MENU_ID_HELP_ABOUT)
 	EndSubMenu()
 #endif

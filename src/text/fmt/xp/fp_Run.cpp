@@ -3598,11 +3598,14 @@ void fp_ImageRun::_lookupProperties(const PP_AttrProp * pSpanAP,
 		maxH = pG->tlu(3);
 	}
 	UT_DEBUGMSG(("Image szWidth %s Image szHeight %s \n",szWidth,szHeight));
-	if((pG->queryProperties(GR_Graphics::DGP_PAPER) != m_bImageForPrinter) ||
+	const bool bPaper = pG->queryProperties(GR_Graphics::DGP_PAPER);
+	// On paper the footer must not shrink the image to the leftover column.
+	// The explicit width and height, or the image's own size, stay as stored.
+	if((bPaper != m_bImageForPrinter) ||
 		(strcmp(m_sCachedWidthProp.c_str(),szWidth) != 0) ||
 	   (strcmp(m_sCachedHeightProp.c_str(),szHeight) != 0) ||
-		UT_convertToLogicalUnits(szHeight) > maxH ||
-		UT_convertToLogicalUnits(szWidth) > maxW)
+		(!bPaper && (UT_convertToLogicalUnits(szHeight) > maxH ||
+		             UT_convertToLogicalUnits(szWidth) > maxW)))
 	{
 		m_sCachedWidthProp = szWidth;
 		m_sCachedHeightProp = szHeight;
@@ -3619,8 +3622,15 @@ void fp_ImageRun::_lookupProperties(const PP_AttrProp * pSpanAP,
 			maxH = iH;
 			UT_DEBUGMSG(("Change Image Height to %d \n",maxH));
 		}
-		m_pImage = m_pFGraphic->generateImage(pG, pSpanAP, maxW, maxH);
-		if(m_pImage)
+		UT_sint32 genMaxW = maxW;
+		UT_sint32 genMaxH = maxH;
+		if (bPaper)
+		{
+			genMaxW = 0;
+			genMaxH = 0;
+		}
+		m_pImage = m_pFGraphic->generateImage(pG, pSpanAP, genMaxW, genMaxH);
+		if(m_pImage && !bPaper)
 		{
 			iW = pG->tlu(m_pImage->getDisplayWidth());
 			iH = pG->tlu(m_pImage->getDisplayHeight());
@@ -3629,8 +3639,11 @@ void fp_ImageRun::_lookupProperties(const PP_AttrProp * pSpanAP,
 			if(iH < maxH)
 				maxH = iH;
 		}
-		m_sCachedWidthProp = UT_formatDimensionString(DIM_IN,static_cast<double>(maxW)/UT_LAYOUT_RESOLUTION);
-		m_sCachedHeightProp = UT_formatDimensionString(DIM_IN,static_cast<double>(maxH)/UT_LAYOUT_RESOLUTION);
+		if (!bPaper)
+		{
+			m_sCachedWidthProp = UT_formatDimensionString(DIM_IN,static_cast<double>(maxW)/UT_LAYOUT_RESOLUTION);
+			m_sCachedHeightProp = UT_formatDimensionString(DIM_IN,static_cast<double>(maxH)/UT_LAYOUT_RESOLUTION);
+		}
 		PP_PropertyVector props = {
 			"width", m_sCachedWidthProp.c_str(),
 			"height", m_sCachedHeightProp.c_str()
@@ -3816,7 +3829,17 @@ static GR_ImageTune s_imageTune(fp_Run* run)
 void fp_ImageRun::_draw(dg_DrawArgs* pDA)
 {
 	GR_Graphics *pG = pDA->pG;
-	if(getBlock()->getDocLayout()->getGraphicTick() != m_iGraphicTick)
+	if (pG->queryProperties(GR_Graphics::DGP_PAPER))
+	{
+		// regenerateImage clamps to the column stored at the last lookup.
+		// That column is smaller once a footer is on the page, so page 2
+		// was painted at the wrong size. Keep the size already on the run.
+		if (!m_pImage)
+			m_pImage = m_pFGraphic->generateImage(pG, m_pSpanAP, 0, 0);
+		if (m_pImage && getWidth() > 0 && getHeight() > 0)
+			m_pImage->setDisplaySize(pG->tdu(getWidth()), pG->tdu(getHeight()));
+	}
+	else if(getBlock()->getDocLayout()->getGraphicTick() != m_iGraphicTick)
 	{
 		regenerateImage(pG);
 	}

@@ -246,6 +246,17 @@ HDC GR_Win32Graphics::swapDC(HDC hdc)
 	return previous;
 }
 
+bool GR_Win32Graphics::getScreenCanvas(UT_RGBColor & color)
+{
+	if (m_bPrint)
+		return false;
+	if (UT_Win32AppsUseDarkTheme())
+		color = UT_RGBColor(32, 32, 32);
+	else
+		color = UT_RGBColor(243, 243, 243);
+	return true;
+}
+
 void GR_Win32Graphics::refreshDeviceScale()
 {
 	if (!m_hdc || m_bPrint)

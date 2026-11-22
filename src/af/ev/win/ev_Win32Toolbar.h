@@ -20,6 +20,9 @@
 #ifndef EV_WIN32TOOLBAR_H
 #define EV_WIN32TOOLBAR_H
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 
 #include "ut_types.h"
@@ -65,6 +68,9 @@ public:
 
 	HWND getWindow(void) const;
 
+	void applyChrome(void);
+	void rebuildIcons(void);
+
 	XAP_Frame * getFrame(void);
 
 	void	onDropArrow(UINT cmd);
@@ -86,6 +92,7 @@ protected:
 	HWND							_getControlWindow(XAP_Toolbar_Id id);
 
 	void							refillFontCombo(HWND hwndCombo);
+	void							prepareFontDropdown(HWND hwndCombo);
 	bool							_refreshID(XAP_Toolbar_Id id);
 	bool							_refreshItem(AV_View * pView,
 												 const EV_Toolbar_Action * pAction,
@@ -94,6 +101,7 @@ protected:
 private:
 	int								_getBandForHwnd(HWND hToolbar) const;
 	void							_addToRebar();
+	void							_placeControls(void);
 	static LRESULT CALLBACK			_ComboWndProc(HWND, UINT, WPARAM, LPARAM);
 	static LRESULT CALLBACK			_ComboEditWndProc(HWND, UINT, WPARAM, LPARAM);
 	static LRESULT CALLBACK			_ToolBarWndProc (HWND hWnd, UINT uMessage, WPARAM wParam, LPARAM lParam);
@@ -104,9 +112,14 @@ private:
 	AV_ListenerId					m_lid;	/* view listener id */
 
 	HWND							m_hwnd;
+	void *							m_imageList;
+	int								m_iconPx;
+	UT_GenericVector<char *>		m_iconNames;
 	UT_Vector						m_vecToolbarWidgets;
 	AP_Win32Toolbar_FontCombo*		m_pFontCtrl;
 	bool							m_fontRefilling;
+	bool							m_fontDropdownReady;
+	bool							m_fontPinTop;
 	bool							m_bVisible;
 	UT_GenericVector<UT_UTF8String *> 	m_vecOrgStylesNames;
 

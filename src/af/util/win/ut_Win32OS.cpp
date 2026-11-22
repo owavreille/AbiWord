@@ -405,6 +405,137 @@ LRESULT UT_DispatchMessage(const MSG *lpmsg)
 	return DispatchMessageW(lpmsg);
 }
 
+static int s_themeGeneration = 0;
+
+bool UT_Win32AppsUseDarkTheme(void)
+{
+	static int cachedGeneration = -1;
+	static bool cachedDark = false;
+	if (cachedGeneration == s_themeGeneration)
+		return cachedDark;
+
+	bool dark = false;
+	HMODULE adv = LoadLibraryW(L"advapi32.dll");
+	if (adv)
+	{
+		typedef LSTATUS (WINAPI *OpenFn)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY);
+		typedef LSTATUS (WINAPI *QueryFn)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
+		typedef LSTATUS (WINAPI *CloseFn)(HKEY);
+		OpenFn openKey = reinterpret_cast<OpenFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegOpenKeyExW")));
+		QueryFn queryValue = reinterpret_cast<QueryFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegQueryValueExW")));
+		CloseFn closeKey = reinterpret_cast<CloseFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegCloseKey")));
+		HKEY key = nullptr;
+		if (openKey && queryValue && closeKey &&
+			openKey(HKEY_CURRENT_USER,
+				L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+				0, KEY_READ, &key) == ERROR_SUCCESS)
+		{
+			DWORD value = 1;
+			DWORD size = sizeof(value);
+			DWORD type = 0;
+			if (queryValue(key, L"AppsUseLightTheme", nullptr, &type,
+					reinterpret_cast<LPBYTE>(&value), &size) == ERROR_SUCCESS &&
+				type == REG_DWORD)
+				dark = (value == 0);
+			closeKey(key);
+		}
+		FreeLibrary(adv);
+	}
+	cachedDark = dark;
+	cachedGeneration = s_themeGeneration;
+	return dark;
+}
+
+void UT_Win32NoteThemeChanged(void)
+{
+	++s_themeGeneration;
+}
+
+void UT_Win32ApplyCaptionTheme(HWND hwnd)
+{
+	if (!hwnd)
+		return;
+	HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
+	if (!dwm)
+		return;
+	typedef HRESULT (WINAPI *SetAttrFn)(HWND, DWORD, LPCVOID, DWORD);
+	SetAttrFn setAttr = reinterpret_cast<SetAttrFn>(
+		reinterpret_cast<void *>(GetProcAddress(dwm, "DwmSetWindowAttribute")));
+	if (setAttr)
+	{
+		BOOL dark = UT_Win32AppsUseDarkTheme() ? TRUE : FALSE;
+		// 20 is DWMWA_USE_IMMERSIVE_DARK_MODE. 19 is the same attribute
+		// on builds that predate the renumbering.
+		setAttr(hwnd, 20, &dark, sizeof(dark));
+		setAttr(hwnd, 19, &dark, sizeof(dark));
+	}
+	FreeLibrary(dwm);
+}
+
+void UT_Win32ApplyWindowTheme(HWND hwnd)
+{
+	if (!hwnd)
+		return;
+	HMODULE ux = LoadLibraryW(L"uxtheme.dll");
+	if (!ux)
+		return;
+	typedef HRESULT (WINAPI *ThemeFn)(HWND, LPCWSTR, LPCWSTR);
+	ThemeFn setTheme = reinterpret_cast<ThemeFn>(
+		reinterpret_cast<void *>(GetProcAddress(ux, "SetWindowTheme")));
+	if (setTheme)
+	{
+		if (UT_Win32AppsUseDarkTheme())
+			setTheme(hwnd, L"DarkMode_Explorer", nullptr);
+		else
+			setTheme(hwnd, L"", nullptr);
+	}
+	FreeLibrary(ux);
+}
+
+void UT_Win32RefreshStatusFont(HWND bar)
+{
+	if (!bar)
+		return;
+
+	static HFONT font = nullptr;
+	static int dpi = -1;
+	HDC dc = GetDC(bar);
+	int now = 96;
+	if (dc)
+	{
+		now = GetDeviceCaps(dc, LOGPIXELSX);
+		ReleaseDC(bar, dc);
+	}
+	if (now < 96)
+		now = 96;
+	if (!font || dpi != now)
+	{
+		NONCLIENTMETRICSW metrics;
+		memset(&metrics, 0, sizeof(metrics));
+		metrics.cbSize = sizeof(metrics);
+		HFONT created = nullptr;
+		if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
+			created = CreateFontIndirectW(&metrics.lfStatusFont);
+		if (!created)
+		{
+			int height = -((12 * now + 48) / 96);
+			created = CreateFontW(height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
+				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
+				CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
+		}
+		if (created)
+		{
+			// The previous font stays alive. Another status bar may still
+			// have it selected until its own refresh runs.
+			font = created;
+			dpi = now;
+		}
+	}
+	if (font)
+		SendMessageW(bar, WM_SETFONT, (WPARAM)font, TRUE);
+	UT_Win32ApplyWindowTheme(bar);
+}
+
 HWND UT_CreateWindowEx(DWORD dwExStyle, const wchar_t * pszClassName, const wchar_t * pszWindowName, DWORD dwStyle,
  					   int x, int y, int nWidth, int nHeight,
 					   HWND hWndParent, HMENU hMenu, HINSTANCE hInstance, LPVOID lpParam)

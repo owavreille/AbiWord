@@ -194,6 +194,7 @@ EV_Toolbar_ActionSet * AP_CreateToolbarActionSet(void)
 	_s(AP_TOOLBAR_ID_SEMITEM_PREV,         EV_TBIT_PushButton,		"rdfAnchorSelectPrevReferenceToSemanticItem",  AV_CHG_ALL, ap_ToolbarGetState_CursorInSemItem );
 	_s(AP_TOOLBAR_ID_SEMITEM_EDIT,         EV_TBIT_PushButton,		"rdfAnchorEditSemanticItem",  AV_CHG_ALL, ap_ToolbarGetState_CursorInSemItem );
 	_s(AP_TOOLBAR_ID_SEMITEM_STYLESHEET_APPLY, EV_TBIT_PushButton, "rdfApplyCurrentStyleSheet",  AV_CHG_ALL, ap_ToolbarGetState_CursorInSemItem );
+	_s(AP_TOOLBAR_ID_LLM, EV_TBIT_PushButton, "llmAskAction", AV_CHG_NONE, nullptr);
 
 #ifdef ENABLE_MENUBUTTON
 	_s(AP_TOOLBAR_ID_MENU, EV_TBIT_MenuButton, nullptr, AV_CHG_NONE, nullptr);

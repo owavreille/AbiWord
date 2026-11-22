@@ -115,6 +115,8 @@ public:
 	fp_ShadowContainer*	getHdrFtrContainer(fl_HdrFtrSectionLayout*);
 	fp_ShadowContainer*	buildHdrFtrContainer(fl_HdrFtrSectionLayout*,
 						     HdrFtrType hfType);
+	// Reuse the header or footer box of the previous page of this section.
+	void				copyHdrFtrGeometry(HdrFtrType hfType);
 
 	// Footnote functions.
 	void 				footnoteHeightChanged(void);

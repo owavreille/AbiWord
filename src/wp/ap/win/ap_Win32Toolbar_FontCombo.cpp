@@ -17,6 +17,9 @@
  * 02110-1301 USA.
  */
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <stdlib.h>
 
@@ -49,6 +52,7 @@ AP_Win32Toolbar_FontCombo::AP_Win32Toolbar_FontCombo(EV_Toolbar * pToolbar,
 
 	m_nPixels = 160;		// TODO: do a better calculation
 	m_nLimit = LF_FACESIZE;
+	m_usedCount = 0;
 	// The menu keeps the document faces above the full list, so the
 	// control itself must not alphabetize the rows.
 	m_bSort = false;
@@ -65,6 +69,7 @@ static std::set<std::string> seenFonts;
 
 bool AP_Win32Toolbar_FontCombo::populate(void)
 {
+	m_usedCount = 0;
 	if (m_installed.empty())
 	{
 		m_vecFontCharSet.clear();
@@ -88,7 +93,11 @@ bool AP_Win32Toolbar_FontCombo::populate(void)
 
 	m_vecContents.clear();
 	for (const std::string & name : m_menuOrder)
+	{
+		if (m_usedCount == 0 && AP_fontMenuIsSeparator(name.c_str()))
+			m_usedCount = m_vecContents.getItemCount();
 		m_vecContents.addItem(name.c_str());
+	}
 
 	return true;
 }

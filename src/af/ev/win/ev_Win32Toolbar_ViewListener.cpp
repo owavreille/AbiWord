@@ -17,6 +17,9 @@
  * 02110-1301 USA.
  */
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include "ut_types.h"
 #include "ut_debugmsg.h"

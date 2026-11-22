@@ -20,6 +20,9 @@
  */
 
 #define WIN32_LEAN_AND_MEAN
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -27,8 +30,10 @@
 
 #include <windows.h>
 #include <commctrl.h>   // includes the common control header
+#include <cstring>
 #include <map>
 #include <string>
+#include <vector>
 
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
@@ -80,54 +85,32 @@
 #define TBSTYLE_AUTOSIZE  0x10
 #endif
 
-/*****************************************************************/
+#ifndef CB_GETTOPINDEX
+#define CB_GETTOPINDEX 0x015b
+#endif
+#ifndef CB_SETTOPINDEX
+#define CB_SETTOPINDEX 0x015c
+#endif
 
-//
-// Janitor class to cleanup bitmap handles at program termination.
-// This one should really be in the anonymous namespace in this translation
-// unit, but since we don't use namespaces...
-//
-class ABI_EXPORT foo_Bitmap_container
+// Timer id. Windows scrolls the open list onto the current face after
+// CBN_DROPDOWN returns, which hides the document faces above that row.
+enum { ABI_FONT_SHOW_TOP = 0x51 };
+
+static int s_fontPinTries = 0;
+
+static void pinFontListToTop(HWND combo)
 {
-public:	// d'tor needs to be public due to buggy MSVC compilers
-	~foo_Bitmap_container();
-
-	static foo_Bitmap_container& instance();	// singleton
-	void addBitmap(HBITMAP hBm)
-	{
-		UT_ASSERT(hBm);
-		m_bitmaps_vector.addItem(reinterpret_cast<void*>(hBm));
-	}
-
-private:
-	foo_Bitmap_container() : m_bitmaps_vector(50) {}
-	foo_Bitmap_container(const foo_Bitmap_container&);	// no impl
-	void operator=(const foo_Bitmap_container&);		// no impl
-	UT_Vector m_bitmaps_vector;
-};
-
-foo_Bitmap_container& foo_Bitmap_container::instance()
-{
-	static foo_Bitmap_container container;
-	return container;
+	if (!combo)
+		return;
+	SendMessageW(combo, CB_SETTOPINDEX, 0, 0);
+	COMBOBOXINFO info;
+	memset(&info, 0, sizeof(info));
+	info.cbSize = sizeof(info);
+	if (GetComboBoxInfo(combo, &info) && info.hwndList)
+		SendMessageW(info.hwndList, LB_SETTOPINDEX, 0, 0);
 }
 
-foo_Bitmap_container::~foo_Bitmap_container()
-{
-	const UT_uint32 nItems = m_bitmaps_vector.getItemCount();
-	for (UT_uint32 iItem = nItems; iItem; --iItem)
-	{
-		void* p = (void*)m_bitmaps_vector.getNthItem(iItem - 1);
-		// This is really, *REALLY* bad! The same entity that created this
-		// bitmap should also be responsible to destroy it. Time permitting,
-		// refactor all this code to make it correct.
-		::DeleteObject((HGDIOBJ)p);
-	}
-}
-
-
 /*****************************************************************/
-
 
 EV_Win32Toolbar::EV_Win32Toolbar(XAP_Win32App * pWin32App, XAP_Frame * pFrame,
 								 const char * szToolbarLayoutName,
@@ -140,14 +123,23 @@ EV_Win32Toolbar::EV_Win32Toolbar(XAP_Win32App * pWin32App, XAP_Frame * pFrame,
 	m_pViewListener(nullptr),
 	m_lid(0),				// view listener id
 	m_hwnd(nullptr),
+	m_imageList(nullptr),
+	m_iconPx(0),
 	m_pFontCtrl(nullptr),
-	m_fontRefilling(false)
+	m_fontRefilling(false),
+	m_fontDropdownReady(false),
+	m_fontPinTop(false)
 {
 }
 
 EV_Win32Toolbar::~EV_Win32Toolbar(void)
 {
 	_releaseListener();
+
+	if (m_imageList)
+		ImageList_Destroy(static_cast<HIMAGELIST>(m_imageList));
+	for (UT_sint32 i = 0; i < m_iconNames.getItemCount(); ++i)
+		free(m_iconNames.getNthItem(i));
 
 	if (m_pFontCtrl)
 		delete m_pFontCtrl;
@@ -274,20 +266,70 @@ WHICHPROC s_lpfnDefToolBar;
 
 // DEFAULT_GUI_FONT is the old bitmap MS Sans Serif. On Windows 11 it sits
 // on the wrong baseline next to the font sample.
+static int toolbarIconDpi(HWND hwnd)
+{
+	int iconDpi = 96;
+	HMODULE user32 = GetModuleHandleW(L"user32.dll");
+	if (user32 && hwnd)
+	{
+		typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
+		GetDpiForWindowFn getDpi = reinterpret_cast<GetDpiForWindowFn>(
+			reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForWindow")));
+		if (getDpi)
+		{
+			UINT got = getDpi(hwnd);
+			if (got >= 96)
+				iconDpi = (int)got;
+		}
+	}
+	if (iconDpi == 96)
+	{
+		HDC screen = GetDC(hwnd);
+		if (screen)
+		{
+			int caps = GetDeviceCaps(screen, LOGPIXELSX);
+			if (caps >= 96)
+				iconDpi = caps;
+			ReleaseDC(hwnd, screen);
+		}
+	}
+	if (iconDpi < 96)
+		iconDpi = 96;
+	return iconDpi;
+}
+
+static int toolbarIconPx(HWND hwnd)
+{
+	int iconPx = (24 * toolbarIconDpi(hwnd) + 48) / 96;
+	if (iconPx < 24)
+		iconPx = 24;
+	if (iconPx > 64)
+		iconPx = 64;
+	return iconPx;
+}
+
 static HFONT toolbarUIFont()
 {
 	static HFONT font = nullptr;
-	if (font)
+	static int dpi = -1;
+	int now = toolbarIconDpi(nullptr);
+	if (font && dpi == now)
 		return font;
 
 	NONCLIENTMETRICSW metrics;
 	memset(&metrics, 0, sizeof(metrics));
 	metrics.cbSize = sizeof(metrics);
+	HFONT created = nullptr;
 	if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
-		font = CreateFontIndirectW(&metrics.lfMessageFont);
-	if (!font)
-		font = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
-	return font;
+		created = CreateFontIndirectW(&metrics.lfMessageFont);
+	if (!created)
+		created = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+	if (created)
+	{
+		font = created;
+		dpi = now;
+	}
+	return font ? font : (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 }
 
 static int centeredTextY(HDC hdc, const RECT & rc)
@@ -303,6 +345,29 @@ static int centeredTextY(HDC hdc, const RECT & rc)
 
 LRESULT CALLBACK EV_Win32Toolbar::_ToolBarWndProc (HWND hWnd, UINT uMessage, WPARAM wParam, LPARAM lParam)
 {
+	// CBN_DROPDOWN is sent to the combo's parent. The combo procedure only
+	// sees the list box, and LBN_SELCHANGE has the same code as CBN_SELCHANGE,
+	// so the old handler never rebuilt the font list when it opened.
+	if (uMessage == WM_COMMAND && lParam)
+	{
+		const UINT code = HIWORD(wParam);
+		if (code == CBN_DROPDOWN || code == CBN_CLOSEUP)
+		{
+			EV_Win32Toolbar * bar = reinterpret_cast<EV_Win32Toolbar *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
+			if (bar && bar->ItemIdFromWmCommand(LOWORD(wParam)) == AP_TOOLBAR_ID_FMT_FONT)
+			{
+				if (code == CBN_DROPDOWN)
+					bar->prepareFontDropdown(reinterpret_cast<HWND>(lParam));
+				else
+				{
+					KillTimer(reinterpret_cast<HWND>(lParam), ABI_FONT_SHOW_TOP);
+					bar->m_fontDropdownReady = false;
+					bar->m_fontPinTop = false;
+				}
+			}
+		}
+	}
+
 	// Windows delivers TTN_NEEDTEXT to the toolbar, the tooltip's parent.
 	// Linux stores the tip on the widget. Leaving lpszText null crashes
 	// comctl32 on Windows 11 a moment after the window appears.
@@ -491,6 +556,8 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				// WM_DRAWITEM exhausts the GDI handle table while the
 				// dropdown is open.
 				hFont = s_fontSample(str.c_str());
+				const bool documentFace = t->m_pFontCtrl &&
+					t->m_pFontCtrl->isDocumentFontRow(static_cast<UT_sint32>(dis->itemData));
 
 				if(dis->itemState & ODS_SELECTED) /* HighLight the selected text*/
 				{
@@ -504,6 +571,12 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 					SetBkColor(dis->hDC, GetSysColor(COLOR_WINDOW));
 					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_WINDOW) );
 				}
+				if (documentFace && !(dis->itemState & ODS_SELECTED))
+				{
+					RECT bar = dis->rcItem;
+					bar.right = bar.left + 3;
+					FillRect(dis->hDC, &bar, GetSysColorBrush(COLOR_HIGHLIGHT));
+				}
 
 				/* The name stays in the interface font. The sample follows it
 				   and must not repaint the whole row, or the name disappears. */
@@ -516,7 +589,7 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				}
 
 				RECT nameRect = dis->rcItem;
-				nameRect.left += 2;
+				nameRect.left += documentFace ? 8 : 2;
 				nameRect.right = nameRect.left + size.cx + 8;
 				if (nameRect.right > dis->rcItem.right)
 					nameRect.right = dis->rcItem.right;
@@ -565,6 +638,41 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 			break;
 		}
 
+		case WM_TIMER:
+		{
+			if (wParam != ABI_FONT_SHOW_TOP)
+				break;
+			EV_Win32Toolbar * t = (EV_Win32Toolbar *) GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+			if (!t || !t->m_fontPinTop)
+			{
+				KillTimer(hWnd, ABI_FONT_SHOW_TOP);
+				return 0;
+			}
+			if (!SendMessageW(hWnd, CB_GETDROPPEDSTATE, 0, 0))
+			{
+				// Rebuilding the list during CBN_DROPDOWN can cancel the
+				// popup. Open it once with the new rows, then give up.
+				if (s_fontPinTries == 0)
+				{
+					s_fontPinTries = 1;
+					SendMessageW(hWnd, CB_SHOWDROPDOWN, TRUE, 0);
+				}
+				else if (++s_fontPinTries > 10)
+				{
+					s_fontPinTries = 0;
+					KillTimer(hWnd, ABI_FONT_SHOW_TOP);
+					t->m_fontPinTop = false;
+					t->m_fontDropdownReady = false;
+				}
+				return 0;
+			}
+			s_fontPinTries = 0;
+			KillTimer(hWnd, ABI_FONT_SHOW_TOP);
+			t->m_fontPinTop = false;
+			pinFontListToTop(hWnd);
+			return 0;
+		}
+
 		case WM_COMMAND:
 		{
 			switch (HIWORD(wParam))
@@ -576,7 +684,19 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 					{
 						UINT u = GetDlgCtrlID(hWnd);
 						if (t->ItemIdFromWmCommand(u) == AP_TOOLBAR_ID_FMT_FONT)
-							t->refillFontCombo(hWnd);
+							t->prepareFontDropdown(hWnd);
+					}
+					break;
+				}
+
+				case CBN_CLOSEUP:
+				{
+					KillTimer(hWnd, ABI_FONT_SHOW_TOP);
+					EV_Win32Toolbar * t = (EV_Win32Toolbar *) GetWindowLongPtrW(hWnd, GWLP_USERDATA);
+					if (t)
+					{
+						t->m_fontDropdownReady = false;
+						t->m_fontPinTop = false;
 					}
 					break;
 				}
@@ -795,42 +915,30 @@ bool EV_Win32Toolbar::synthesize(void)
 	//
 	// Now bitmaps are cut down to requested size if too large - HB
 	
-	int iconDpi = 96;
-	HMODULE user32 = GetModuleHandleW(L"user32.dll");
-	if (user32 && hwndParent)
+	const int iconPx = toolbarIconPx(hwndParent);
+	m_iconPx = bIcons ? iconPx : 0;
+	for (UT_sint32 i = m_iconNames.getItemCount() - 1; i >= 0; --i)
 	{
-		typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
-		GetDpiForWindowFn getDpi = reinterpret_cast<GetDpiForWindowFn>(
-			reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForWindow")));
-		if (getDpi)
-		{
-			UINT got = getDpi(hwndParent);
-			if (got >= 96)
-				iconDpi = (int)got;
-		}
+		free(m_iconNames.getNthItem(i));
+		m_iconNames.deleteNthItem(i);
 	}
-	if (iconDpi == 96 && hwndParent)
+	if (m_imageList)
 	{
-		HDC screen = GetDC(hwndParent);
-		if (screen)
-		{
-			int caps = GetDeviceCaps(screen, LOGPIXELSX);
-			if (caps >= 96)
-				iconDpi = caps;
-			ReleaseDC(hwndParent, screen);
-		}
+		ImageList_Destroy(static_cast<HIMAGELIST>(m_imageList));
+		m_imageList = nullptr;
 	}
-	int iconPx = (24 * iconDpi + 48) / 96;
-	if (iconPx < 24)
-		iconPx = 24;
-	if (iconPx > 64)
-		iconPx = 64;
-	const WORD MY_MAXIMUM_BITMAP_X = (WORD)iconPx;
-	const WORD MY_MAXIMUM_BITMAP_Y = (WORD)iconPx;
 
 	if( bIcons )
+	{
 		SendMessageW(m_hwnd, TB_SETBITMAPSIZE, 0,
-					(LPARAM) MAKELONG(MY_MAXIMUM_BITMAP_X,MY_MAXIMUM_BITMAP_Y));
+					(LPARAM) MAKELONG(iconPx, iconPx));
+		HIMAGELIST images = ImageList_Create(iconPx, iconPx, ILC_COLOR32, 32, 8);
+		if (images)
+		{
+			m_imageList = images;
+			SendMessageW(m_hwnd, TB_SETIMAGELIST, 0, (LPARAM)images);
+		}
+	}
 	else
 		SendMessageW(m_hwnd, TB_SETBITMAPSIZE, 0, (LPARAM) MAKELONG(0,0));
 
@@ -839,15 +947,6 @@ bool EV_Win32Toolbar::synthesize(void)
 	DWORD exStyle = (DWORD)SendMessageW(m_hwnd, TB_GETEXTENDEDSTYLE, 0, 0);
 	exStyle |= TBSTYLE_EX_DOUBLEBUFFER | TBSTYLE_EX_HIDECLIPPEDBUTTONS;
 	SendMessageW(m_hwnd, TB_SETEXTENDEDSTYLE, 0, exStyle);
-	COLORSCHEME scheme;
-	memset(&scheme, 0, sizeof(scheme));
-	scheme.dwSize = sizeof(scheme);
-	scheme.clrBtnHighlight = RGB(0, 103, 192);
-	scheme.clrBtnShadow = RGB(229, 229, 229);
-	SendMessageW(m_hwnd, TB_SETCOLORSCHEME, 0, (LPARAM)&scheme);
-
-	DWORD dwColor = GetSysColor(COLOR_BTNFACE);
-	UT_RGBColor backgroundColor(GetRValue(dwColor),GetGValue(dwColor),GetBValue(dwColor));
 
 	// TODO: is there any advantage to building up all the TBBUTTONs at once
 	//		 and then adding them en masse, instead of one at a time? 
@@ -1048,59 +1147,48 @@ bool EV_Win32Toolbar::synthesize(void)
 
 				if (bButton)
 				{
-					// TODO figure out who destroys hBitmap...
-					//
-					// TMN: 20 Nov 2000 - Tests display that we must hang on to the
-					// bitmap handle for this to work.
-					// Had we been allowed to use C++ I'd say
-					//		std::map<std::string, HBITMAP> icons;
-					// but currently I don't know how to handle this in a clean way.
-					// Would UT_Array help?
-
-					// TODO add code to create these once per application
-					// TODO and reference them in each toolbar instance
-					// TODO rather than create them once for each window....
-
 					if (bIcons)
 					{
-						// TB_ADDBITMAP copies the bits. One bitmap per icon is enough
-						// for every window; the container deletes that copy at exit.
-						static std::map<std::string, HBITMAP> sharedIcons;
 						const char * iconName = pLabel->getIconName();
-						const std::string iconKey = std::string(iconName ? iconName : "")
-							+ "@" + std::to_string(static_cast<int>(MY_MAXIMUM_BITMAP_X));
-						std::map<std::string, HBITMAP>::iterator found = sharedIcons.find(iconKey);
-						HBITMAP hBitmap = nullptr;
-						if (found != sharedIcons.end())
-							hBitmap = found->second;
-						else
+						const char * storedName = iconName ? iconName : "";
+						char * copy = static_cast<char *>(malloc(strlen(storedName) + 1));
+						if (copy)
 						{
-							UT_DebugOnly<bool> bFoundIcon =
-								XAP_Win32Toolbar_Icons::getBitmapForIcon(m_hwnd,
-																		MY_MAXIMUM_BITMAP_X,
-																		MY_MAXIMUM_BITMAP_Y,
-																		&backgroundColor,
-																		iconName,
-																		&hBitmap);
-							UT_ASSERT(bFoundIcon);
-							if (hBitmap)
+							memcpy(copy, storedName, strlen(storedName) + 1);
+							m_iconNames.addItem(copy);
+						}
+						HBITMAP hBitmap = nullptr;
+						bool foundIcon = iconName && m_imageList &&
+							XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(m_hwnd,
+								static_cast<UT_uint32>(iconPx),
+								static_cast<UT_uint32>(iconPx),
+								iconName,
+								&hBitmap);
+						int index = -1;
+						if (foundIcon && hBitmap)
+							index = ImageList_Add(static_cast<HIMAGELIST>(m_imageList), hBitmap, nullptr);
+						if (hBitmap)
+							DeleteObject(hBitmap);
+						if (index < 0 && m_imageList)
+						{
+							BITMAPINFO blankInfo;
+							memset(&blankInfo, 0, sizeof(blankInfo));
+							blankInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+							blankInfo.bmiHeader.biWidth = iconPx;
+							blankInfo.bmiHeader.biHeight = iconPx;
+							blankInfo.bmiHeader.biPlanes = 1;
+							blankInfo.bmiHeader.biBitCount = 32;
+							void * bits = nullptr;
+							HBITMAP blank = CreateDIBSection(nullptr, &blankInfo, DIB_RGB_COLORS, &bits, nullptr, 0);
+							if (blank && bits)
+								memset(bits, 0, static_cast<size_t>(iconPx) * static_cast<size_t>(iconPx) * 4);
+							if (blank)
 							{
-								sharedIcons.insert(std::make_pair(iconKey, hBitmap));
-								foo_Bitmap_container::instance().addBitmap(hBitmap);
+								index = ImageList_Add(static_cast<HIMAGELIST>(m_imageList), blank, nullptr);
+								DeleteObject(blank);
 							}
 						}
-
-						if (hBitmap)
-						{
-							TBADDBITMAP ab;
-							ab.hInst = nullptr;
-							ab.nID = (LPARAM)hBitmap;
-
-							LRESULT iAddedAt = SendMessageW(m_hwnd,TB_ADDBITMAP,1,(LPARAM)&ab);
-							UT_ASSERT(iAddedAt != -1);
-
-							tbb.iBitmap = iAddedAt;
-						}
+						tbb.iBitmap = (index >= 0) ? index : 0;
 					}
 					
 					if (bText)
@@ -1154,56 +1242,12 @@ bool EV_Win32Toolbar::synthesize(void)
 	SendMessageW(m_hwnd, TB_AUTOSIZE, 0, 0); 
 	
 	if (bControls)
-	{
-		// move each control on top of its associated separator
-		for (UT_uint32 k=0; (k < nrLabelItemsInLayout); k++)
-		{
-			EV_Toolbar_LayoutItem * pLayoutItem = m_pToolbarLayout->getLayoutItem(k);
-			UT_continue_if_fail(pLayoutItem);
-
-			XAP_Toolbar_Id id = pLayoutItem->getToolbarId();
-			EV_Toolbar_Action * pAction = pToolbarActionSet->getAction(id);
-			UT_continue_if_fail(pAction);
-
-			RECT r;
-			HWND hwndCtrl;
-			int nHeight, nSep;
-
-			switch (pAction->getItemType())
-			{
-				case EV_TBIT_ComboBox:
-					hwndCtrl = _getControlWindow(id);
-					memset(&r, 0, sizeof(r));
-					if (!hwndCtrl || !GetWindowRect(hwndCtrl, &r))
-						break;
-					nHeight = r.bottom - r.top;
-
-					if (!SendMessageW(m_hwnd, TB_GETITEMRECT, (WPARAM) k, (LPARAM)(LPRECT) &r))
-						break;
-
-					nSep = (r.bottom - r.top - nHeight)/2;
-					if (nSep < 0)
-						nSep = 0;
-
-					MoveWindow(hwndCtrl, r.left, r.top + nSep, r.right - r.left, nHeight, TRUE);
-
-					break;
-
-				case EV_TBIT_EditText:
-				case EV_TBIT_DropDown:
-				case EV_TBIT_StaticLabel:
-					// TODO do these...
-					break;
-					
-				default:
-					break;
-			}
-		}
-	}
+		_placeControls();
 
 	UT_ASSERT(last_id > 0);
 
 	_addToRebar();	// add this bar to the rebar
+	applyChrome();
 
 	// I think that this is true due to the WS_VISIBLE flag
 	// sent to CreateWindowEx
@@ -1215,6 +1259,164 @@ bool EV_Win32Toolbar::synthesize(void)
 HWND EV_Win32Toolbar::getWindow(void) const
 {
 	return m_hwnd;
+}
+
+void EV_Win32Toolbar::_placeControls(void)
+{
+	if (!m_hwnd || !m_pToolbarLayout || !m_pWin32App)
+		return;
+	const EV_Toolbar_ActionSet * pToolbarActionSet = m_pWin32App->getToolbarActionSet();
+	if (!pToolbarActionSet)
+		return;
+	const UT_uint32 count = m_pToolbarLayout->getLayoutItemCount();
+	for (UT_uint32 k = 0; k < count; ++k)
+	{
+		EV_Toolbar_LayoutItem * pLayoutItem = m_pToolbarLayout->getLayoutItem(k);
+		if (!pLayoutItem)
+			continue;
+		XAP_Toolbar_Id id = pLayoutItem->getToolbarId();
+		EV_Toolbar_Action * pAction = pToolbarActionSet->getAction(id);
+		if (!pAction || pAction->getItemType() != EV_TBIT_ComboBox)
+			continue;
+
+		HWND hwndCtrl = _getControlWindow(id);
+		RECT r;
+		memset(&r, 0, sizeof(r));
+		if (!hwndCtrl || !GetWindowRect(hwndCtrl, &r))
+			continue;
+		int nHeight = r.bottom - r.top;
+		if (!SendMessageW(m_hwnd, TB_GETITEMRECT, (WPARAM)k, (LPARAM)&r))
+			continue;
+		int nSep = (r.bottom - r.top - nHeight) / 2;
+		if (nSep < 0)
+			nSep = 0;
+		MoveWindow(hwndCtrl, r.left, r.top + nSep, r.right - r.left, nHeight, TRUE);
+		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(), TRUE);
+		if (id == AP_TOOLBAR_ID_FMT_FONT)
+		{
+			int item = (22 * toolbarIconDpi(m_hwnd) + 48) / 96;
+			if (item < 22)
+				item = 22;
+			SendMessageW(hwndCtrl, CB_SETITEMHEIGHT, 0, item);
+		}
+	}
+}
+
+void EV_Win32Toolbar::applyChrome(void)
+{
+	if (!m_hwnd)
+		return;
+	const bool dark = UT_Win32AppsUseDarkTheme();
+	COLORSCHEME scheme;
+	memset(&scheme, 0, sizeof(scheme));
+	scheme.dwSize = sizeof(scheme);
+	scheme.clrBtnHighlight = GetSysColor(COLOR_HIGHLIGHT);
+	scheme.clrBtnShadow = dark ? RGB(45, 45, 45) : GetSysColor(COLOR_BTNFACE);
+	SendMessageW(m_hwnd, TB_SETCOLORSCHEME, 0, (LPARAM)&scheme);
+	UT_Win32ApplyWindowTheme(m_hwnd);
+
+	const int band = _getBandForHwnd(m_hwnd);
+	HWND rebar = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl())->getToolbarWindow();
+	if (!rebar || band < 0)
+		return;
+	REBARBANDINFOW rbbi;
+	memset(&rbbi, 0, sizeof(rbbi));
+	rbbi.cbSize = sizeof(rbbi);
+	rbbi.fMask = RBBIM_COLORS;
+	rbbi.clrFore = dark ? RGB(255, 255, 255) : GetSysColor(COLOR_BTNTEXT);
+	rbbi.clrBack = dark ? RGB(32, 32, 32) : GetSysColor(COLOR_BTNFACE);
+	SendMessageW(rebar, RB_SETBANDINFO, (WPARAM)band, (LPARAM)&rbbi);
+}
+
+void EV_Win32Toolbar::rebuildIcons(void)
+{
+	if (!m_hwnd || m_iconNames.getItemCount() <= 0)
+		return;
+	HWND parent = GetParent(m_hwnd);
+	const int iconPx = toolbarIconPx(parent ? parent : m_hwnd);
+	if (iconPx == m_iconPx && m_imageList)
+		return;
+
+	HIMAGELIST neu = ImageList_Create(iconPx, iconPx, ILC_COLOR32,
+		m_iconNames.getItemCount(), 4);
+	if (!neu)
+		return;
+	for (UT_sint32 n = 0; n < m_iconNames.getItemCount(); ++n)
+	{
+		const char * name = m_iconNames.getNthItem(n);
+		HBITMAP bmp = nullptr;
+		bool ok = name && name[0] &&
+			XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(m_hwnd,
+				static_cast<UT_uint32>(iconPx),
+				static_cast<UT_uint32>(iconPx),
+				name,
+				&bmp);
+		int index = -1;
+		if (ok && bmp)
+			index = ImageList_Add(neu, bmp, nullptr);
+		if (bmp)
+			DeleteObject(bmp);
+		if (index < 0)
+		{
+			BITMAPINFO blankInfo;
+			memset(&blankInfo, 0, sizeof(blankInfo));
+			blankInfo.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+			blankInfo.bmiHeader.biWidth = iconPx;
+			blankInfo.bmiHeader.biHeight = iconPx;
+			blankInfo.bmiHeader.biPlanes = 1;
+			blankInfo.bmiHeader.biBitCount = 32;
+			void * bits = nullptr;
+			HBITMAP blank = CreateDIBSection(nullptr, &blankInfo, DIB_RGB_COLORS, &bits, nullptr, 0);
+			if (blank && bits)
+				memset(bits, 0, static_cast<size_t>(iconPx) * static_cast<size_t>(iconPx) * 4);
+			if (blank)
+			{
+				ImageList_Add(neu, blank, nullptr);
+				DeleteObject(blank);
+			}
+		}
+	}
+
+	const int count = static_cast<int>(SendMessageW(m_hwnd, TB_BUTTONCOUNT, 0, 0));
+	std::vector<TBBUTTON> saved;
+	saved.resize(static_cast<size_t>(count > 0 ? count : 0));
+	for (int i = 0; i < count; ++i)
+	{
+		memset(&saved[static_cast<size_t>(i)], 0, sizeof(TBBUTTON));
+		SendMessageW(m_hwnd, TB_GETBUTTON, (WPARAM)i, (LPARAM)&saved[static_cast<size_t>(i)]);
+	}
+	for (int i = count - 1; i >= 0; --i)
+		SendMessageW(m_hwnd, TB_DELETEBUTTON, (WPARAM)i, 0);
+
+	SendMessageW(m_hwnd, TB_SETBITMAPSIZE, 0, (LPARAM)MAKELONG(iconPx, iconPx));
+	SendMessageW(m_hwnd, TB_SETIMAGELIST, 0, (LPARAM)neu);
+	if (m_imageList)
+		ImageList_Destroy(static_cast<HIMAGELIST>(m_imageList));
+	m_imageList = neu;
+	m_iconPx = iconPx;
+
+	if (count > 0)
+		SendMessageW(m_hwnd, TB_ADDBUTTONS, (WPARAM)count, (LPARAM)saved.data());
+	SendMessageW(m_hwnd, TB_AUTOSIZE, 0, 0);
+	_placeControls();
+
+	SIZE size;
+	memset(&size, 0, sizeof(size));
+	SendMessageW(m_hwnd, TB_GETMAXSIZE, 0, (LPARAM)&size);
+	const int band = _getBandForHwnd(m_hwnd);
+	HWND rebar = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl())->getToolbarWindow();
+	if (rebar && band >= 0 && size.cy > 0)
+	{
+		REBARBANDINFOW info;
+		memset(&info, 0, sizeof(info));
+		info.cbSize = sizeof(info);
+		info.fMask = RBBIM_CHILDSIZE;
+		info.cyMinChild = static_cast<UINT>(size.cy);
+		info.cyChild = info.cyMinChild;
+		info.cxMinChild = static_cast<UINT>(size.cx > 0 ? size.cx : iconPx);
+		SendMessageW(rebar, RB_SETBANDINFO, (WPARAM)band, (LPARAM)&info);
+	}
+	applyChrome();
 }
 
 HWND EV_Win32Toolbar::_getControlWindow(XAP_Toolbar_Id id)
@@ -1611,7 +1813,7 @@ void EV_Win32Toolbar::_addToRebar()
 	UINT iWidth = LOWORD(dwBtnSize);
 	if (GetWindowRect(m_hwnd, &rc) && rc.right > rc.left)
 		iWidth = static_cast<UINT>(rc.right - rc.left);
-	iWidth += 13;
+	iWidth += 2;
 
 	// add this bar to the rebar
 	REBARBANDINFOW rbbi;
@@ -1624,16 +1826,22 @@ void EV_Win32Toolbar::_addToRebar()
 					RBBIM_SIZE		|	// cx is valid
 					RBBIM_IDEALSIZE	|	// cxIdeal is valid
 					RBBIM_STYLE;		// fStyle is valid
-	rbbi.clrFore = GetSysColor(COLOR_BTNTEXT);
-	rbbi.clrBack = GetSysColor(COLOR_BTNFACE);
-	// NOT using RBBS_CHILDEDGE for fStyle gives us a slimmer look,
-	// better with the flat button style.
-	// HIDECLIPPEDBUTTONS drops buttons that do not fit. The chevron is
-	// the documented way to reach them once the band is narrower than
-	// cxIdeal. The frame handles RBN_CHEVRONPUSHED.
-	rbbi.fStyle =	RBBS_NOVERT			|	// do not display in vertical orientation
+	const bool dark = UT_Win32AppsUseDarkTheme();
+	rbbi.clrFore = dark ? RGB(255, 255, 255) : GetSysColor(COLOR_BTNTEXT);
+	rbbi.clrBack = dark ? RGB(32, 32, 32) : GetSysColor(COLOR_BTNFACE);
+	// One row per toolbar. No gripper and no child edge: those were the
+	// empty strip between the bar and the rulers.
+#ifndef RBBS_NOGRIPPER
+#define RBBS_NOGRIPPER 0x00000100
+#endif
+#ifndef RBBS_HIDETITLE
+#define RBBS_HIDETITLE 0x00000400
+#endif
+	rbbi.fStyle =	RBBS_NOVERT			|
 					RBBS_BREAK			|
-					RBBS_USECHEVRON;
+					RBBS_USECHEVRON		|
+					RBBS_NOGRIPPER		|
+					RBBS_HIDETITLE;
 	rbbi.hwndChild = m_hwnd;
 	rbbi.cxMinChild = LOWORD(dwBtnSize);
 	rbbi.cyMinChild = HIWORD(dwBtnSize);
@@ -1649,6 +1857,17 @@ void EV_Win32Toolbar::_addToRebar()
 XAP_Frame * EV_Win32Toolbar::getFrame(void)
 {
 	return m_pWin32Frame;
+}
+
+void EV_Win32Toolbar::prepareFontDropdown(HWND hwndCombo)
+{
+	if (!hwndCombo || m_fontRefilling || m_fontDropdownReady)
+		return;
+	m_fontDropdownReady = true;
+	m_fontPinTop = true;
+	s_fontPinTries = 0;
+	refillFontCombo(hwndCombo);
+	SetTimer(hwndCombo, ABI_FONT_SHOW_TOP, 30, nullptr);
 }
 
 void EV_Win32Toolbar::refillFontCombo(HWND hwndCombo)
@@ -1684,7 +1903,14 @@ void EV_Win32Toolbar::refillFontCombo(HWND hwndCombo)
 	}
 
 	if (kept[0])
-		SetWindowTextW(hwndCombo, kept);
+	{
+		// The first exact match is the copy in the document section.
+		const LRESULT idx = SendMessageW(hwndCombo, CB_FINDSTRINGEXACT, static_cast<WPARAM>(-1), (LPARAM)kept);
+		if (idx != CB_ERR)
+			SendMessageW(hwndCombo, CB_SETCURSEL, static_cast<WPARAM>(idx), 0);
+		else
+			SetWindowTextW(hwndCombo, kept);
+	}
 
 	SendMessageW(hwndCombo, WM_SETREDRAW, TRUE, 0);
 	m_fontRefilling = false;
@@ -1793,19 +2019,19 @@ bool EV_Win32Toolbar::repopulateStyles(void)
 	return true;
 }
 
-/* Office-style 8 by 5 swatches. The last row is the light set. */
+/* Eight columns, five rows. Each column is one hue, dark at the top. */
 static const COLORREF s_swatches[40] =
 {
-	RGB(0x00,0x00,0x00), RGB(0x99,0x33,0x00), RGB(0x33,0x33,0x00), RGB(0x00,0x33,0x00),
-	RGB(0x00,0x33,0x66), RGB(0x00,0x00,0x80), RGB(0x33,0x33,0x99), RGB(0x33,0x33,0x33),
-	RGB(0x80,0x00,0x00), RGB(0xFF,0x66,0x00), RGB(0x80,0x80,0x00), RGB(0x00,0x80,0x00),
-	RGB(0x00,0x80,0x80), RGB(0x00,0x00,0xFF), RGB(0x66,0x66,0x99), RGB(0x80,0x80,0x80),
-	RGB(0xFF,0x00,0x00), RGB(0xFF,0x99,0x00), RGB(0x99,0xCC,0x00), RGB(0x33,0x99,0x66),
-	RGB(0x33,0xCC,0xCC), RGB(0x33,0x66,0xFF), RGB(0x80,0x00,0x80), RGB(0x99,0x99,0x99),
-	RGB(0xFF,0x00,0xFF), RGB(0xFF,0xCC,0x00), RGB(0xFF,0xFF,0x00), RGB(0x00,0xFF,0x00),
-	RGB(0x00,0xFF,0xFF), RGB(0x00,0xCC,0xFF), RGB(0x99,0x33,0x66), RGB(0xC0,0xC0,0xC0),
-	RGB(0xFF,0x99,0xCC), RGB(0xFF,0xCC,0x99), RGB(0xFF,0xFF,0x99), RGB(0xCC,0xFF,0xCC),
-	RGB(0xCC,0xFF,0xFF), RGB(0x99,0xCC,0xFF), RGB(0xCC,0x99,0xFF), RGB(0xFF,0xFF,0xFF)
+	RGB(0x00,0x00,0x00), RGB(0x1F,0x4E,0x79), RGB(0x83,0x3C,0x0C), RGB(0x37,0x56,0x23),
+	RGB(0x1D,0x4E,0x4E), RGB(0x20,0x38,0x64), RGB(0x5B,0x2C,0x6F), RGB(0x7B,0x24,0x1C),
+	RGB(0x59,0x59,0x59), RGB(0x2E,0x75,0xB6), RGB(0xC6,0x59,0x11), RGB(0x54,0x82,0x35),
+	RGB(0x2E,0x8A,0x8A), RGB(0x2F,0x54,0x96), RGB(0x70,0x30,0xA0), RGB(0xC0,0x00,0x00),
+	RGB(0x80,0x80,0x80), RGB(0x5B,0x9B,0xD5), RGB(0xED,0x7D,0x31), RGB(0x70,0xAD,0x47),
+	RGB(0x4E,0xCD,0xC4), RGB(0x5B,0x7C,0x99), RGB(0x9B,0x59,0xB6), RGB(0xFF,0x50,0x50),
+	RGB(0xBF,0xBF,0xBF), RGB(0x9D,0xC3,0xE6), RGB(0xF4,0xB1,0x83), RGB(0xA9,0xD0,0x8E),
+	RGB(0x9F,0xE2,0xE0), RGB(0x8F,0xAA,0xDC), RGB(0xC3,0x9B,0xD3), RGB(0xFF,0x99,0x99),
+	RGB(0xFF,0xFF,0xFF), RGB(0xDE,0xEB,0xF7), RGB(0xFC,0xE4,0xD6), RGB(0xE2,0xEF,0xDA),
+	RGB(0xE8,0xF6,0xF5), RGB(0xD6,0xDC,0xE4), RGB(0xE8,0xDA,0xEF), RGB(0xF8,0xCB,0xAD)
 };
 
 enum
@@ -1813,12 +2039,35 @@ enum
 	COLOR_COLS = 8,
 	COLOR_ROWS = 5,
 	COLOR_COUNT = 40,
-	COLOR_CELL = 18,
-	COLOR_PAD = 6,
-	COLOR_FOOTER = 24,
 	HOT_CLEAR = 40,
 	HOT_MORE = 41
 };
+
+static int s_colorScale(int px96, int minimum, int maximum)
+{
+	int dpi = toolbarIconDpi(nullptr);
+	int value = (px96 * dpi + 48) / 96;
+	if (value < minimum)
+		value = minimum;
+	if (value > maximum)
+		value = maximum;
+	return value;
+}
+
+static int s_colorCell()
+{
+	return s_colorScale(22, 18, 36);
+}
+
+static int s_colorPad()
+{
+	return s_colorScale(8, 6, 14);
+}
+
+static int s_colorFooter()
+{
+	return s_colorScale(28, 24, 44);
+}
 
 struct AbiColorPopup
 {
@@ -1833,18 +2082,18 @@ struct AbiColorPopup
 
 static int s_colorClientWidth()
 {
-	int w = COLOR_PAD * 2 + COLOR_COLS * COLOR_CELL;
+	int w = s_colorPad() * 2 + COLOR_COLS * s_colorCell();
 	return (w < 220) ? 220 : w;
 }
 
 static int s_colorClientHeight()
 {
-	return COLOR_PAD + COLOR_ROWS * COLOR_CELL + 4 + COLOR_FOOTER * 2 + COLOR_PAD;
+	return s_colorPad() + COLOR_ROWS * s_colorCell() + s_colorPad() / 2 + s_colorFooter() * 2 + s_colorPad();
 }
 
 static int s_colorGridX(int width)
 {
-	return (width - COLOR_COLS * COLOR_CELL) / 2;
+	return (width - COLOR_COLS * s_colorCell()) / 2;
 }
 
 static void s_copyWide(wchar_t * dest, size_t destChars, const wchar_t * src)
@@ -1929,20 +2178,22 @@ static int s_hitColor(HWND hwnd, int x, int y)
 	if (!hwnd || !GetClientRect(hwnd, &rc))
 		return -1;
 	int gx = s_colorGridX(rc.right - rc.left);
-	int gy = COLOR_PAD;
+	int gy = s_colorPad();
+	const int cell = s_colorCell();
+	const int footer = s_colorFooter();
 
 	if (x >= gx && y >= gy)
 	{
-		int col = (x - gx) / COLOR_CELL;
-		int row = (y - gy) / COLOR_CELL;
+		int col = (x - gx) / cell;
+		int row = (y - gy) / cell;
 		if (col >= 0 && col < COLOR_COLS && row >= 0 && row < COLOR_ROWS)
 			return row * COLOR_COLS + col;
 	}
 
-	int footerTop = COLOR_PAD + COLOR_ROWS * COLOR_CELL + 4;
-	if (y >= footerTop && y < footerTop + COLOR_FOOTER)
+	int footerTop = s_colorPad() + COLOR_ROWS * cell + s_colorPad() / 2;
+	if (y >= footerTop && y < footerTop + footer)
 		return HOT_CLEAR;
-	if (y >= footerTop + COLOR_FOOTER && y < footerTop + COLOR_FOOTER * 2)
+	if (y >= footerTop + footer && y < footerTop + footer * 2)
 		return HOT_MORE;
 	return -1;
 }
@@ -2101,30 +2352,32 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 			FillRect(hdc, &rc, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
 
 			int gx = s_colorGridX(rc.right - rc.left);
-			int gy = COLOR_PAD;
+			int gy = s_colorPad();
+			const int cellPx = s_colorCell();
+			const int footer = s_colorFooter();
 			for (int i = 0; i < COLOR_COUNT; ++i)
 			{
 				RECT cell;
-				cell.left = gx + (i % COLOR_COLS) * COLOR_CELL + 2;
-				cell.top = gy + (i / COLOR_COLS) * COLOR_CELL + 2;
-				cell.right = cell.left + COLOR_CELL - 4;
-				cell.bottom = cell.top + COLOR_CELL - 4;
+				cell.left = gx + (i % COLOR_COLS) * cellPx + 2;
+				cell.top = gy + (i / COLOR_COLS) * cellPx + 2;
+				cell.right = cell.left + cellPx - 4;
+				cell.bottom = cell.top + cellPx - 4;
 				s_fillSwatch(hdc, cell, s_swatches[i], popup && popup->hot == i);
 			}
 
-			int footerTop = COLOR_PAD + COLOR_ROWS * COLOR_CELL + 4;
+			int footerTop = s_colorPad() + COLOR_ROWS * cellPx + s_colorPad() / 2;
 			RECT clearRc;
 			clearRc.left = 4;
 			clearRc.right = rc.right - 4;
 			clearRc.top = footerTop;
-			clearRc.bottom = footerTop + COLOR_FOOTER - 2;
+			clearRc.bottom = footerTop + footer - 2;
 			RECT moreRc = clearRc;
-			moreRc.top = footerTop + COLOR_FOOTER;
-			moreRc.bottom = footerTop + COLOR_FOOTER * 2 - 2;
+			moreRc.top = footerTop + footer;
+			moreRc.bottom = footerTop + footer * 2 - 2;
 
 			if (popup)
 			{
-				HFONT font = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+				HFONT font = toolbarUIFont();
 				HFONT old = static_cast<HFONT>(SelectObject(hdc, font));
 				s_paintFooter(hdc, clearRc, popup->clearText, popup->hot == HOT_CLEAR);
 				s_paintFooter(hdc, moreRc, popup->moreText, popup->hot == HOT_MORE);

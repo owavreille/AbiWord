@@ -202,8 +202,10 @@ bool ODe_Main_Listener::_isHeaderFooterSection(const PP_AttrProp* pAP) const {
     
     ok = pAP->getAttribute("type", pValue);
     if (ok && pValue != nullptr) {
-        if (!strcmp(pValue, "header") || !strcmp(pValue, "header-even") || 
-            !strcmp(pValue, "footer") || !strcmp(pValue, "footer-even")) {
+        if (!strcmp(pValue, "header") || !strcmp(pValue, "header-even") ||
+            !strcmp(pValue, "header-first") || !strcmp(pValue, "header-last") ||
+            !strcmp(pValue, "footer") || !strcmp(pValue, "footer-even") ||
+            !strcmp(pValue, "footer-first") || !strcmp(pValue, "footer-last")) {
             return true;
         }
     }
@@ -222,7 +224,6 @@ void ODe_Main_Listener::_openHeaderFooterSection(
     const gchar* pId = nullptr;
     bool ok;
     UT_uint32 count, i;
-    const ODe_Style_MasterPage* pMPageStyle;
     GsfOutput* pTextOutput = nullptr;
     
     auto pMasterPageVector = m_rDocumentData.m_masterStyles.enumerate();
@@ -242,55 +243,28 @@ void ODe_Main_Listener::_openHeaderFooterSection(
         UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
     }
     
+    const char* pType = pValue;
     ok = false;
-    if (!strcmp("header", pValue)) {
-        
-        for (i=0; i<count && !ok; i++) {
-            pMPageStyle = (*pMasterPageVector)[i];
-            pValue = pMPageStyle->getAbiHeaderId().utf8_str();
-            if (!strcmp(pId, pValue)) {
-                ok = true; // found it. get out of this "for" loop
-                pTextOutput =  pMPageStyle->getHeaderContentTempFile();
-            }
-        }
-        
-    } else if (!strcmp("header-even", pValue)) {
-        
-        for (i=0; i<count && !ok; i++) {
-            pMPageStyle = (*pMasterPageVector)[i];
-            pValue = pMPageStyle->getAbiHeaderEvenId().utf8_str();
-            if (!strcmp(pId, pValue)) {
-                ok = true; // found it. get out of this "for" loop
-                pTextOutput =  pMPageStyle->getHeaderEvenContentTempFile();
-            }
-        }
-
-    } else if (!strcmp("footer", pValue)) {
-        
-        for (i=0; i<count && !ok; i++) {
-            pMPageStyle = (*pMasterPageVector)[i];
-            pValue = pMPageStyle->getAbiFooterId().utf8_str();
-            if (!strcmp(pId, pValue)) {
-                ok = true; // found it. get out of this "for" loop
-                pTextOutput = pMPageStyle->getFooterContentTempFile();
-            }
-        }
-
-    } else if (!strcmp("footer-even", pValue)) {
-        
-        for (i=0; i<count && !ok; i++) {
-            pMPageStyle = (*pMasterPageVector)[i];
-            pValue = pMPageStyle->getAbiFooterEvenId().utf8_str();
-            if (!strcmp(pId, pValue)) {
-                ok = true; // found it. get out of this "for" loop
-                pTextOutput = pMPageStyle->getFooterEvenContentTempFile();
-            }
-        }
+    for (i = 0; i < count && !ok; i++) {
+        ODe_Style_MasterPage* pPage = (*pMasterPageVector)[i];
+        pTextOutput = pPage->lookupHeaderFooter(pType, pId);
+        if (pTextOutput)
+            ok = true;
     }
 
     if (!ok) {
-        UT_ASSERT(UT_SHOULD_NOT_HAPPEN); // We should have found this header/footer.
-        pTextOutput = gsf_output_memory_new ();
+        // The header section can be walked before the body records its id,
+        // or the id can sit on header-first/header-last while the section
+        // type is still "header". Dropping it here left style:header empty
+        // while the footer, whose id already matched, was written.
+        ODe_Style_MasterPage* pPage = m_rDocumentData.m_masterStyles.pick("Standard");
+        if (pPage)
+            pTextOutput = pPage->adoptHeaderFooter(pType, pId);
+    }
+
+    if (!pTextOutput) {
+        UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+        pTextOutput = gsf_output_memory_new();
     }
 
     m_openedODSection = false;

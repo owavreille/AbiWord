@@ -36,6 +36,10 @@ public:
 	virtual ~AP_Win32Toolbar_FontCombo(void);
 
 	virtual bool		populate(void) override;
+	bool			isDocumentFontRow(UT_sint32 index) const
+	{
+		return m_usedCount > 0 && index >= 0 && index < m_usedCount;
+	}
 
 	static EV_Toolbar_Control *		static_constructor(EV_Toolbar *, XAP_Toolbar_Id id);
 	virtual UT_uint32   getDroppedWidth() const override;
@@ -50,6 +54,7 @@ protected:
 	UT_Vector			m_vecFontCharSet;
 	std::vector<std::string>	m_installed;
 	std::vector<std::string>	m_menuOrder;
+	int				m_usedCount;
 };
 
 #endif /* AP_WIN32TOOLBAR_FONTCOMBO_H */

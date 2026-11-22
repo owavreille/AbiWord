@@ -317,6 +317,8 @@ public:
 
 	fp_Run *        getHyperLinkRun(PT_DocPosition pos);
 	UT_Error		cmdDeleteHyperlink();
+	bool			tryDeleteAnnotationClose(UT_sint32 xPos, UT_sint32 yPos);
+	bool			selectAnnotationAt(UT_sint32 xPos, UT_sint32 yPos);
 	bool                    cmdInsertMathML(const char * szFileName,
 						PT_DocPosition pos);
 	bool	        cmdInsertEmbed(const UT_ConstByteBufPtr & pBuf,PT_DocPosition pos,const char * szMime,const char * szProps);

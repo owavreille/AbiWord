@@ -2333,6 +2333,7 @@ UT_Error IE_Exp_OpenXML::setImage(const char* id, const char* relId, const char*
 	str += "<a:blip r:embed=\"";
 	str += relId;
 	str += "\"/>";
+	str += "<a:stretch><a:fillRect/></a:stretch>";
 	str += "</pic:blipFill>";
 	str += "<pic:spPr>";
 	str += "<a:xfrm>";
@@ -2359,7 +2360,7 @@ UT_Error IE_Exp_OpenXML::setImage(const char* id, const char* relId, const char*
 /**
  * Sets the positioned image
  */
-UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, const char* filename, const char* width, const char* height, const char* xpos, const char* ypos, const char* wrapMode, int target)
+UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, const char* filename, const char* width, const char* height, const char* xpos, const char* ypos, const char* wrapMode, const char* relativeH, const char* relativeV, int target)
 {
 	std::string str("");
 	std::string h("");
@@ -2367,6 +2368,17 @@ UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, c
 	std::string x("");
 	std::string y("");
 	std::string wm("bothSides"); // default wrap mode
+
+	if(!wrapMode)
+		wrapMode = "";
+	if(!relativeH || !*relativeH)
+		relativeH = "column";
+	if(!relativeV || !*relativeV)
+		relativeV = "margin";
+	if(!xpos)
+		xpos = "0in";
+	if(!ypos)
+		ypos = "0in";
 
 	if(!strcmp(wrapMode, "wrapped-to-right"))
 	{
@@ -2379,18 +2391,22 @@ UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, c
 
 	h += convertToPositiveEmus(height);
 	w += convertToPositiveEmus(width);
-	x += convertToPositiveEmus(xpos);
-	y += convertToPositiveEmus(ypos);
+	x += convertToEmus(xpos);
+	y += convertToEmus(ypos);
 
 	str += "<w:drawing>";
 	str += "<wp:anchor distT=\"0\" distB=\"0\" distL=\"0\" distR=\"0\" simplePos=\"0\" allowOverlap=\"0\" layoutInCell=\"1\" locked=\"0\" behindDoc=\"0\" relativeHeight=\"0\">";
 	str += "<wp:simplePos x=\"0\" y=\"0\"/>";
-	str += "<wp:positionH relativeFrom=\"column\">";
+	str += "<wp:positionH relativeFrom=\"";
+	str += relativeH;
+	str += "\">";
 	str += "<wp:posOffset>";
 	str += x;
 	str += "</wp:posOffset>";
 	str += "</wp:positionH>";
-	str += "<wp:positionV relativeFrom=\"paragraph\">";
+	str += "<wp:positionV relativeFrom=\"";
+	str += relativeV;
+	str += "\">";
 	str += "<wp:posOffset>";
 	str += y;
 	str += "</wp:posOffset>";
@@ -2427,6 +2443,7 @@ UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, c
 	str += "<a:blip r:embed=\"";
 	str += relId;
 	str += "\"/>";
+	str += "<a:stretch><a:fillRect/></a:stretch>";
 	str += "</pic:blipFill>";
 	str += "<pic:spPr>";
 	str += "<a:xfrm>";
@@ -2455,6 +2472,8 @@ UT_Error IE_Exp_OpenXML::setPositionedImage(const char* id, const char* relId, c
  */
 UT_Error IE_Exp_OpenXML::setImageRelation(const char* filename, const char* id)
 {
+	ensureMedia(filename);
+
 	std::string str("<Relationship Id=\"");
 	str += id;
 	str += "\" ";
@@ -2462,6 +2481,14 @@ UT_Error IE_Exp_OpenXML::setImageRelation(const char* filename, const char* id)
 	str += "Target=\"media/";
 	str += filename;
 	str += "\"/>";
+
+	// A header or footer part resolves r:embed against its own relationships.
+	// The body keeps using document.xml.rels.
+	if (!m_imageRelPart.empty())
+	{
+		m_partRelations[m_imageRelPart] += str;
+		return UT_OK;
+	}
 
 	return writeTargetStream(TARGET_DOCUMENT_RELATION, str.c_str());
 }
@@ -2592,6 +2619,13 @@ const gchar * IE_Exp_OpenXML::convertToPositiveEmus(const gchar* str)
 	double emu = UT_convertToInches(str) * 914400;
 	if(emu < 1.0) 
 		return "0";
+	return UT_convertToDimensionlessString(emu, ".0");
+}
+
+const gchar * IE_Exp_OpenXML::convertToEmus(const gchar* str)
+{
+	// Offsets may sit above or to the left of their anchor.
+	double emu = UT_convertToInches(str) * 914400;
 	return UT_convertToDimensionlessString(emu, ".0");
 }
 
@@ -3778,6 +3812,55 @@ UT_Error IE_Exp_OpenXML::finishParagraphDefaultProperties()
 	return writeTargetStream(TARGET_STYLES, "</w:pPrDefault>");
 }
 
+void IE_Exp_OpenXML::ensureMedia(const char* filename)
+{
+	if (!filename || !*filename || !m_pDoc)
+		return;
+
+	std::map<std::string, GsfOutput*>::iterator existing = mediaStreams.find(filename);
+	if (existing != mediaStreams.end() && existing->second && gsf_output_size(existing->second) > 0)
+		return;
+
+	const char * name = nullptr;
+	std::string mime;
+	UT_ConstByteBufPtr buf;
+	for (UT_uint32 index = 0; m_pDoc->enumDataItems(index, nullptr, &name, buf, &mime); ++index)
+	{
+		if (!name || !*name || !buf || !buf->getLength())
+			continue;
+		std::string extension;
+		if (!m_pDoc->getDataItemFileExtension(name, extension) || extension.empty())
+		{
+			if (mime == "image/jpeg" || mime == "image/jpg")
+				extension = ".jpg";
+			else if (mime == "image/gif")
+				extension = ".gif";
+			else if (mime == "image/svg+xml")
+				extension = ".svg";
+			else if (mime == "image/bmp")
+				extension = ".bmp";
+			else if (mime == "image/tiff" || mime == "image/tif")
+				extension = ".tiff";
+			else if (mime == "image/png" || mime.empty())
+				extension = ".png";
+			else
+				continue;
+		}
+		const std::string plain = std::string(name) + extension;
+		const std::string escaped = UT_escapeXML(name) + extension;
+		if (plain != filename && escaped != filename)
+			continue;
+		if (existing != mediaStreams.end() && existing->second)
+		{
+			gsf_output_close(existing->second);
+			g_object_unref(existing->second);
+			mediaStreams.erase(existing);
+		}
+		writeImage(filename, buf);
+		return;
+	}
+}
+
 UT_Error IE_Exp_OpenXML::writeImage(const char* filename, const UT_ConstByteBufPtr & data)
 {
 	GsfOutput* imageStream = gsf_output_memory_new();
@@ -3828,14 +3911,20 @@ UT_Error IE_Exp_OpenXML::startHeaderStream(const char* id)
 	std::string strId("");
 	strId += id;
 	m_currentHeaderId = strId;
+	m_imageRelPart = std::string("header") + strId + ".xml.rels";
 	headerStreams[strId] = headerStream;
-	
-	return writeTargetStream(TARGET_HEADER, str.c_str());
+
+	err = writeTargetStream(TARGET_HEADER, str.c_str());
+	if (err != UT_OK)
+		m_imageRelPart.clear();
+	return err;
 }
 
 UT_Error IE_Exp_OpenXML::finishHeaderStream()
 {
-	return writeTargetStream(TARGET_HEADER, "</w:hdr>");
+	UT_Error err = writeTargetStream(TARGET_HEADER, "</w:hdr>");
+	m_imageRelPart.clear();
+	return err;
 }
 
 UT_Error IE_Exp_OpenXML::startFooterStream(const char* id)
@@ -3865,12 +3954,18 @@ UT_Error IE_Exp_OpenXML::startFooterStream(const char* id)
 	std::string strId("");
 	strId += id;
 	m_currentFooterId = strId;
+	m_imageRelPart = std::string("footer") + strId + ".xml.rels";
 	footerStreams[strId] = footerStream;
-	
-	return writeTargetStream(TARGET_FOOTER, str.c_str());
+
+	err = writeTargetStream(TARGET_FOOTER, str.c_str());
+	if (err != UT_OK)
+		m_imageRelPart.clear();
+	return err;
 }
 
 UT_Error IE_Exp_OpenXML::finishFooterStream()
 {
-	return writeTargetStream(TARGET_FOOTER, "</w:ftr>");
+	UT_Error err = writeTargetStream(TARGET_FOOTER, "</w:ftr>");
+	m_imageRelPart.clear();
+	return err;
 }

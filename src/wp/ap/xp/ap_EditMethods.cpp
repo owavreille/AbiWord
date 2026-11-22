@@ -5010,6 +5010,8 @@ Defun(contextHyperlink)
 		EX(warpInsPtToXY);
 	
 	fp_Run * pRun = pView->getHyperLinkRun(pView->getPoint());
+	if (!pRun && pView->selectAnnotationAt(pCallData->m_xPos, pCallData->m_yPos))
+		pRun = pView->getHyperLinkRun(pView->getPoint());
 	UT_return_val_if_fail(pRun, false);
 	fp_HyperlinkRun * pHRun = pRun->getHyperlink();
 	

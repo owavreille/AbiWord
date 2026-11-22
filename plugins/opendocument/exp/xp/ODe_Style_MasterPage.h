@@ -52,8 +52,21 @@ public:
 
     bool hasProperties() const {
         return !m_abiHeaderId.empty() ||
-               !m_abiFooterId.empty();
+               !m_abiHeaderEvenId.empty() ||
+               !m_abiHeaderFirstId.empty() ||
+               !m_abiHeaderLastId.empty() ||
+               !m_abiFooterId.empty() ||
+               !m_abiFooterEvenId.empty() ||
+               !m_abiFooterFirstId.empty() ||
+               !m_abiFooterLastId.empty();
     }
+
+    // Returns the temp file that already belongs to this id, or nullptr.
+    GsfOutput* lookupHeaderFooter(const char* type, const char* id) const;
+
+    // Records the id when the master page does not know it yet and returns
+    // the temp file that write() copies into style:header or style:footer.
+    GsfOutput* adoptHeaderFooter(const char* type, const char* id);
 
     // Write the <style:master-page> element.
     bool write(GsfOutput* pODT) const;
@@ -76,11 +89,17 @@ private:
     UT_UTF8String m_abiHeaderId;
     // <section header-even="3" ... >
     UT_UTF8String m_abiHeaderEvenId;
+    // <section header-first="4" ... > and header-last. Their text is written
+    // into style:header when the plain header is absent.
+    UT_UTF8String m_abiHeaderFirstId;
+    UT_UTF8String m_abiHeaderLastId;
 
     // <section footer="5" ... >
     UT_UTF8String m_abiFooterId;
     // <section footer-even="6" ... >
     UT_UTF8String m_abiFooterEvenId;
+    UT_UTF8String m_abiFooterFirstId;
+    UT_UTF8String m_abiFooterLastId;
 
     // Temporary files that will hold header and footer content.
     GsfOutput* m_pHeaderContentTemp;

@@ -22,6 +22,9 @@
 #ifndef XAP_WIN32FRAMEIMPL_H
 #define XAP_WIN32FRAMEIMPL_H
 
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 #include <winuser.h>
 #include "xap_FrameImpl.h"
@@ -113,6 +116,7 @@ protected:
 	// Size the rebar to its bands and move the document and status bar
 	// so a hidden toolbar does not leave an empty strip over the rulers.
 	void						_layoutRebar(int frameWidth, int frameHeight);
+	void						_refreshChrome(void);
 	UT_uint32					_getSizeWidth(void) { return m_iSizeWidth; }
 	UT_uint32					_getSizeHeight(void) { return m_iSizeHeight; }
 

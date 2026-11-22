@@ -385,6 +385,10 @@ UT_sint32 fp_AnnotationContainer::getValue(void)
 	return pDL->getAnnotationVal(pAL->getAnnotationPID());
 }
 
+static void annotationCallout(const fp_AnnotationContainer * box, GR_Graphics * graphics,
+	UT_sint32 & x, UT_sint32 & y, UT_sint32 & width, UT_sint32 & height,
+	UT_sint32 & closeX, UT_sint32 & closeY, UT_sint32 & close);
+
 void fp_AnnotationContainer::clearScreen(void)
 {
 	if(getPage() == nullptr)
@@ -392,6 +396,9 @@ void fp_AnnotationContainer::clearScreen(void)
 		return;
 	}
 	fp_Container * pCon = nullptr;
+	UT_sint32 xoff = 0;
+	UT_sint32 yoff = 0;
+	bool haveScreen = false;
 	if(getColumn() && (getHeight() != 0))
 	{
 		if(getPage() == nullptr)
@@ -407,11 +414,11 @@ void fp_AnnotationContainer::clearScreen(void)
 		UT_sint32 iRightMargin = pDSL->getRightMargin();
 		UT_sint32 iWidth = getPage()->getWidth();
 		iWidth = iWidth - iLeftMargin - iRightMargin;
-		UT_sint32 xoff,yoff;
 		pCon = static_cast<fp_Container *>(getNthCon(0));
 		if(pCon == nullptr)
 		  return;
 		getScreenOffsets(pCon,xoff,yoff);
+		haveScreen = true;
 		UT_sint32 srcX = getX();
 		UT_sint32 srcY = getY();
 		getFillType().Fill(getGraphics(),srcX,srcY,xoff-m_iLabelWidth,yoff,iWidth,getHeight());
@@ -422,12 +429,57 @@ void fp_AnnotationContainer::clearScreen(void)
 		pCon = static_cast<fp_Container *>(getNthCon(i));
 		pCon->clearScreen();
 	}
+	if (!haveScreen || !getGraphics() || !getNthCon(0))
+		return;
+	UT_sint32 boxX = 0, boxY = 0, boxW = 0, boxH = 0, closeX = 0, closeY = 0, close = 0;
+	annotationCallout(this, getGraphics(), boxX, boxY, boxW, boxH, closeX, closeY, close);
+	fp_Container * pFirst = static_cast<fp_Container *>(getNthCon(0));
+	const UT_sint32 left = xoff - pFirst->getX() - getX() + boxX;
+	const UT_sint32 top = yoff - pFirst->getY() - getY() + boxY;
+	UT_sint32 srcX = getX();
+	UT_sint32 srcY = getY();
+	getFillType().Fill(getGraphics(), srcX, srcY, left, top, boxW, boxH);
 }
 	
 UT_uint32 fp_AnnotationContainer::getPID(void)
 {
         fl_AnnotationLayout * pAL = static_cast<fl_AnnotationLayout *>(getSectionLayout());
 	return pAL->getAnnotationPID();
+}
+
+static void annotationCallout(const fp_AnnotationContainer * box, GR_Graphics * graphics,
+	UT_sint32 & x, UT_sint32 & y, UT_sint32 & width, UT_sint32 & height,
+	UT_sint32 & closeX, UT_sint32 & closeY, UT_sint32 & close)
+{
+	const UT_sint32 pad = graphics ? graphics->tlu(4) : 4;
+	close = graphics ? graphics->tlu(11) : 11;
+	x = box->getX() - pad;
+	y = box->getY() - pad;
+	width = box->getWidth() + pad * 2;
+	height = box->getHeight() + pad * 2;
+	closeX = x + width - close - (graphics ? graphics->tlu(3) : 3);
+	closeY = y + (graphics ? graphics->tlu(3) : 3);
+}
+
+bool fp_AnnotationContainer::containsPoint(UT_sint32 x, UT_sint32 y) const
+{
+	UT_sint32 left = 0, top = 0, width = 0, height = 0, closeX = 0, closeY = 0, close = 0;
+	annotationCallout(this, getGraphics(), left, top, width, height, closeX, closeY, close);
+	return x >= left && x < left + width && y >= top && y < top + height;
+}
+
+bool fp_AnnotationContainer::hitClose(UT_sint32 x, UT_sint32 y) const
+{
+	UT_sint32 left = 0, top = 0, width = 0, height = 0, closeX = 0, closeY = 0, close = 0;
+	annotationCallout(this, getGraphics(), left, top, width, height, closeX, closeY, close);
+	const UT_sint32 slack = getGraphics() ? getGraphics()->tlu(4) : 4;
+	return x >= closeX - slack && x < closeX + close + slack
+		&& y >= closeY - slack && y < closeY + close + slack;
+}
+
+static unsigned char annotationMix(unsigned char color)
+{
+	return static_cast<unsigned char>((static_cast<int>(color) + 255 * 3) / 4);
 }
 
 void fp_AnnotationContainer::setContainer(fp_Container * pContainer)
@@ -476,6 +528,24 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 
 	UT_DEBUGMSG(("Annotation: Drawing PDA->xoff %d, pDA->yoff  %ld \n",pDA->xoff,pDA->yoff));
 
+	GR_Graphics * pG = getGraphics();
+	UT_sint32 boxX = 0, boxY = 0, boxW = 0, boxH = 0, closeX = 0, closeY = 0, close = 0;
+	annotationCallout(this, pG, boxX, boxY, boxW, boxH, closeX, closeY, close);
+	const UT_sint32 screenX = pDA->xoff - getX();
+	const UT_sint32 screenY = pDA->yoff - getY();
+	UT_RGBColor border(196, 148, 48);
+	fp_AnnotationRun * pAnchor = pAL2->getAnnotationRun();
+	FV_View * pView = pDL->getView();
+	if (pView && getPage() && pAnchor)
+		border = pView->getColorAnnotation(getPage(), pAnchor->getPID());
+	UT_RGBColor fill(annotationMix(border.m_red), annotationMix(border.m_grn), annotationMix(border.m_blu));
+	const bool onScreen = pG && pG->queryProperties(GR_Graphics::DGP_SCREEN);
+	if (pG && getHeight() > 0)
+	{
+		GR_Painter painter(pG);
+		painter.fillRect(fill, screenX + boxX, screenY + boxY, boxW, boxH);
+	}
+
 //
 // Only draw the lines in the clipping region.
 //
@@ -506,7 +576,6 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 		da.yoff = pDA->yoff + pContainer->getY();
 		pContainer->draw(&da);
 	}
-	GR_Graphics* pG = getGraphics();
 	if (pG)
 	{
 		std::string heading;
@@ -522,7 +591,55 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 		{
 			UT_UCS4String text(heading);
 			GR_Painter painter(pG);
-			painter.drawChars(text.ucs4_str(), 0, static_cast<int>(text.size()), pDA->xoff + getX(), pDA->yoff + getY());
+			painter.drawChars(text.ucs4_str(), 0, static_cast<int>(text.size()), pDA->xoff, pDA->yoff);
+		}
+		GR_Painter painter(pG);
+		pG->setLineWidth(pG->tlu(1));
+		pG->setColor(border);
+		const UT_sint32 left = screenX + boxX;
+		const UT_sint32 top = screenY + boxY;
+		const UT_sint32 right = left + boxW;
+		const UT_sint32 bottom = top + boxH;
+		painter.drawLine(left, top, right, top);
+		painter.drawLine(left, bottom, right, bottom);
+		painter.drawLine(left, top, left, bottom);
+		painter.drawLine(right, top, right, bottom);
+		if (pAnchor && pAnchor->getLine() && pAnchor->getLine()->getPage() == getPage())
+		{
+			UT_sint32 anchorX = 0;
+			UT_sint32 anchorY = 0;
+			pAnchor->getLine()->getScreenOffsets(pAnchor, anchorX, anchorY);
+			anchorX += pAnchor->getWidth() / 2;
+			anchorY += pAnchor->getLine()->getAscent() / 2;
+			const UT_sint32 fromX = (anchorX < left + boxW / 2) ? left : right;
+			const UT_sint32 fromY = top + boxH / 2;
+			painter.drawLine(fromX, fromY, anchorX, anchorY);
+			const double dx = static_cast<double>(fromX - anchorX);
+			const double dy = static_cast<double>(fromY - anchorY);
+			const double length = sqrt(dx * dx + dy * dy);
+			if (length > 1.0)
+			{
+				const double scale = static_cast<double>(pG->tlu(7)) / length;
+				const double px = -dy * scale / 2.0;
+				const double py = dx * scale / 2.0;
+				UT_Point tip[3];
+				tip[0].x = anchorX;
+				tip[0].y = anchorY;
+				tip[1].x = anchorX + static_cast<UT_sint32>(dx * scale + px);
+				tip[1].y = anchorY + static_cast<UT_sint32>(dy * scale + py);
+				tip[2].x = anchorX + static_cast<UT_sint32>(dx * scale - px);
+				tip[2].y = anchorY + static_cast<UT_sint32>(dy * scale - py);
+				painter.polygon(border, tip, 3);
+			}
+		}
+		if (onScreen)
+		{
+			const UT_sint32 markX = screenX + closeX;
+			const UT_sint32 markY = screenY + closeY;
+			painter.fillRect(fill, markX, markY, close, close);
+			pG->setColor(border);
+			painter.drawLine(markX + pG->tlu(2), markY + pG->tlu(2), markX + close - pG->tlu(2), markY + close - pG->tlu(2));
+			painter.drawLine(markX + close - pG->tlu(2), markY + pG->tlu(2), markX + pG->tlu(2), markY + close - pG->tlu(2));
 		}
 	}
 	_drawBoundaries(pDA);
