@@ -269,7 +269,9 @@ void ODe_Frame_Listener::_openODTextbox(const PP_AttrProp& rAP,
     
     ok = rAP.getProperty("frame-height", pValue);
     if (ok && pValue != nullptr) {
-        ODe_writeAttribute(output, "fo:min-height", pValue);
+        // ODF 1.3 rejects a negative fo:min-height.
+        const char * height = (UT_convertToInches(pValue) < 0.0) ? "0in" : pValue;
+        ODe_writeAttribute(output, "fo:min-height", height);
     }
     
     output += ">\n";

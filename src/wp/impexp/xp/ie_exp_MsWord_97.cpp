@@ -24,11 +24,15 @@
  * LibreOffice's ww8 exporter: a FIB at the start of WordDocument, Unicode
  * text at fcMin, formatted-disk pages after the text, a Sepx for the single
  * section, and the piece table, stylesheet, section table and document
- * properties in the 1Table stream.
+ * properties in the 1Table stream. Headers and footers, when the document
+ * has them, follow the main text: six stories per MS-DOC PlcfHdd, and
+ * ccpHdd stays 0 when there is none, as LibreOffice writes it.
  */
 
 #include <cstdlib>
 #include <cstring>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -247,6 +251,247 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc)
 	if (paragraphs.empty())
 		paragraphs.push_back(Paragraph());
 	return paragraphs;
+}
+
+// MS-DOC 2.8.22 PlcfHdd: six stories per section, in this order. Each story
+// ends with a paragraph mark, including the empty ones. "header" and "footer"
+// are the odd-page stories Word uses when even pages are not distinct.
+static const char * const HDD_SLOT[6] = {
+	"header-even",
+	"header",
+	"footer-even",
+	"footer",
+	"header-first",
+	"footer-first"
+};
+
+struct Story
+{
+	std::string type;
+	std::vector<Paragraph> paragraphs;
+};
+
+struct DocSection
+{
+	std::string slot[6];
+};
+
+struct Headers
+{
+	std::vector<DocSection> sections;
+	std::map<std::string, Story> stories;
+};
+
+static const char * frag_attribute(PD_Document * doc, pf_Frag * frag, const char * name)
+{
+	const PP_AttrProp * ap = nullptr;
+	const gchar * value = nullptr;
+	if (!doc->getAttrProp(frag->getIndexAP(), &ap) || !ap)
+		return nullptr;
+	if (!ap->getAttribute(name, value) || !value || !*value)
+		return nullptr;
+	return value;
+}
+
+static int slot_for_type(const char * type)
+{
+	if (!type)
+		return -1;
+	for (int i = 0; i < 6; ++i)
+	{
+		if (!strcmp(type, HDD_SLOT[i]))
+			return i;
+	}
+	if (!strcmp(type, "header-last"))
+		return 1;
+	if (!strcmp(type, "footer-last"))
+		return 3;
+	return -1;
+}
+
+static void append_run(Paragraph & current, const PP_AttrProp * props, const UT_UCS4Char * chars, UT_uint32 length)
+{
+	Run run;
+	run.grpprl = character_grpprl(props);
+	for (UT_uint32 i = 0; chars && i < length; ++i)
+		append_code_unit(run.text, chars[i]);
+	if (!current.runs.empty() && current.runs.back().grpprl == run.grpprl)
+		current.runs.back().text += run.text;
+	else
+		current.runs.push_back(run);
+}
+
+static Headers collect_headers(PD_Document * doc)
+{
+	Headers out;
+	pt_PieceTable * table = doc->getPieceTable();
+	if (!table)
+		return out;
+
+	bool in_story = false;
+	int skip_depth = 0;
+	bool in_paragraph = false;
+	std::string current_id;
+	Paragraph current;
+
+	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
+	{
+		if (frag->getType() == pf_Frag::PFT_Strux)
+		{
+			const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
+			if (kind == PTX_Block)
+			{
+				if (in_story && skip_depth == 0)
+				{
+					if (in_paragraph)
+						out.stories[current_id].paragraphs.push_back(current);
+					current = Paragraph();
+					in_paragraph = true;
+				}
+				continue;
+			}
+			if (in_story && skip_depth == 0 && in_paragraph)
+			{
+				out.stories[current_id].paragraphs.push_back(current);
+				current = Paragraph();
+				in_paragraph = false;
+			}
+			if (kind == PTX_Section)
+			{
+				in_story = false;
+				skip_depth = 0;
+				DocSection section;
+				for (int slot = 0; slot < 6; ++slot)
+				{
+					const char * id = frag_attribute(doc, frag, HDD_SLOT[slot]);
+					if (id)
+						section.slot[slot] = id;
+				}
+				out.sections.push_back(section);
+				continue;
+			}
+			if (kind == PTX_SectionHdrFtr)
+			{
+				skip_depth = 0;
+				const char * id = frag_attribute(doc, frag, "id");
+				const char * type = frag_attribute(doc, frag, "type");
+				if (id)
+				{
+					in_story = true;
+					current_id = id;
+					out.stories[current_id].type = type ? type : "";
+				}
+				else
+					in_story = false;
+				continue;
+			}
+			if (skipped_section(kind))
+			{
+				if (in_story)
+					++skip_depth;
+				continue;
+			}
+			if (skip_depth && (kind == PTX_EndFootnote || kind == PTX_EndEndnote ||
+				kind == PTX_EndFrame || kind == PTX_EndTOC || kind == PTX_EndAnnotation ||
+				kind == PTX_EndMarginnote))
+				--skip_depth;
+			continue;
+		}
+		if (!in_story || skip_depth || frag->getType() != pf_Frag::PFT_Text)
+			continue;
+		if (!in_paragraph)
+		{
+			current = Paragraph();
+			in_paragraph = true;
+		}
+		const pf_Frag_Text * text = static_cast<const pf_Frag_Text *>(frag);
+		const PP_AttrProp * props = nullptr;
+		doc->getAttrProp(text->getIndexAP(), &props);
+		append_run(current, props, doc->getPointer(text->getBufIndex()), text->getLength());
+	}
+	if (in_story && skip_depth == 0 && in_paragraph)
+		out.stories[current_id].paragraphs.push_back(current);
+
+	std::set<std::string> used;
+	for (size_t s = 0; s < out.sections.size(); ++s)
+		for (int slot = 0; slot < 6; ++slot)
+			if (!out.sections[s].slot[slot].empty())
+				used.insert(out.sections[s].slot[slot]);
+
+	std::vector<std::string> extras;
+	for (std::map<std::string, Story>::const_iterator it = out.stories.begin(); it != out.stories.end(); ++it)
+	{
+		if (!used.count(it->first) && !it->second.paragraphs.empty())
+			extras.push_back(it->first);
+	}
+	if (!extras.empty() && out.sections.empty())
+		out.sections.push_back(DocSection());
+	if (!out.sections.empty())
+	{
+		DocSection & last = out.sections.back();
+		for (size_t i = 0; i < extras.size(); ++i)
+		{
+			const std::string type = out.stories[extras[i]].type;
+			const std::vector<Paragraph> extra_paragraphs = out.stories[extras[i]].paragraphs;
+			int slot = slot_for_type(type.c_str());
+			if (slot < 0)
+				slot = 1;
+			if (last.slot[slot].empty())
+				last.slot[slot] = extras[i];
+			else
+			{
+				Story & dest = out.stories[last.slot[slot]];
+				dest.paragraphs.insert(dest.paragraphs.end(), extra_paragraphs.begin(), extra_paragraphs.end());
+			}
+		}
+	}
+	return out;
+}
+
+static bool needs_header_text(const Headers & headers)
+{
+	for (size_t s = 0; s < headers.sections.size(); ++s)
+		for (int slot = 0; slot < 6; ++slot)
+			if (!headers.sections[s].slot[slot].empty())
+				return true;
+	for (std::map<std::string, Story>::const_iterator it = headers.stories.begin(); it != headers.stories.end(); ++it)
+		if (!it->second.paragraphs.empty())
+			return true;
+	return false;
+}
+
+static void append_paragraphs(const std::vector<Paragraph> & paragraphs,
+	std::vector<uint16_t> & units, std::vector<ChRun> & runs, std::vector<unsigned> & bounds)
+{
+	for (size_t p = 0; p < paragraphs.size(); ++p)
+	{
+		const std::vector<Run> & source = paragraphs[p].runs;
+		if (source.empty())
+		{
+			const unsigned fc = FC_MIN + static_cast<unsigned>(units.size() * 2);
+			if (runs.empty() || !runs.back().grpprl.empty())
+			{
+				ChRun run;
+				run.fc = fc;
+				runs.push_back(run);
+			}
+		}
+		for (size_t r = 0; r < source.size(); ++r)
+		{
+			const unsigned fc = FC_MIN + static_cast<unsigned>(units.size() * 2);
+			if (runs.empty() || runs.back().grpprl != source[r].grpprl)
+			{
+				ChRun run;
+				run.fc = fc;
+				run.grpprl = source[r].grpprl;
+				runs.push_back(run);
+			}
+			for (size_t c = 0; c < source[r].text.size(); ++c)
+				units.push_back(static_cast<uint16_t>(source[r].text[c]));
+		}
+		units.push_back(0x000D);
+		bounds.push_back(FC_MIN + static_cast<unsigned>(units.size() * 2));
+	}
 }
 
 static bool chpx_fits(const std::vector<ChRun> & runs, size_t from, size_t until)
@@ -576,35 +821,53 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	std::vector<ChRun> runs;
 	std::vector<unsigned> bounds;
 	bounds.push_back(FC_MIN);
+	append_paragraphs(paragraphs, units, runs, bounds);
+	const unsigned ccp_text = static_cast<unsigned>(units.size());
 
-	for (size_t p = 0; p < paragraphs.size(); ++p)
+	// LibreOffice leaves ccpHdd at 0 when the document has no header. A
+	// document that has one gets the six MS-DOC stories after the main text.
+	const Headers headers = collect_headers(getDoc());
+	std::vector<unsigned> hdd_cp;
+	unsigned ccp_hdd = 0;
+	if (needs_header_text(headers))
 	{
-		const std::vector<Run> & source = paragraphs[p].runs;
-		if (source.empty())
+		// MS-DOC PlcfHdd starts with six empty footnote and endnote separator
+		// stories, then the six header and footer stories. An empty story is
+		// two equal character positions. A story that has text ends with its
+		// own paragraph mark and one extra guard mark, which is what
+		// LibreOffice writes and what Word expects before it shows the header.
+		std::vector<Paragraph> slot_text[6];
+		std::set<std::string> seen[6];
+		for (size_t s = 0; s < headers.sections.size(); ++s)
 		{
-			const unsigned fc = FC_MIN + static_cast<unsigned>(units.size() * 2);
-			if (runs.empty() || !runs.back().grpprl.empty())
+			for (int slot = 0; slot < 6; ++slot)
 			{
-				ChRun run;
-				run.fc = fc;
-				runs.push_back(run);
+				const std::string & id = headers.sections[s].slot[slot];
+				if (id.empty() || !seen[slot].insert(id).second)
+					continue;
+				std::map<std::string, Story>::const_iterator story = headers.stories.find(id);
+				if (story == headers.stories.end())
+					continue;
+				slot_text[slot].insert(slot_text[slot].end(),
+					story->second.paragraphs.begin(), story->second.paragraphs.end());
 			}
 		}
-		for (size_t r = 0; r < source.size(); ++r)
+		for (int separator = 0; separator < 6; ++separator)
+			hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
+		for (int slot = 0; slot < 6; ++slot)
 		{
-			const unsigned fc = FC_MIN + static_cast<unsigned>(units.size() * 2);
-			if (runs.empty() || runs.back().grpprl != source[r].grpprl)
+			hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
+			if (slot_text[slot].empty())
 			{
-				ChRun run;
-				run.fc = fc;
-				run.grpprl = source[r].grpprl;
-				runs.push_back(run);
+				if (slot >= 4)
+					append_paragraphs(std::vector<Paragraph>(2), units, runs, bounds);
+				continue;
 			}
-			for (size_t c = 0; c < source[r].text.size(); ++c)
-				units.push_back(static_cast<uint16_t>(source[r].text[c]));
+			append_paragraphs(slot_text[slot], units, runs, bounds);
+			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds);
 		}
-		units.push_back(0x000D);
-		bounds.push_back(FC_MIN + static_cast<unsigned>(units.size() * 2));
+		hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
+		ccp_hdd = static_cast<unsigned>(units.size()) - ccp_text;
 	}
 	if (runs.empty())
 	{
@@ -614,7 +877,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	}
 
 	const unsigned fc_mac = FC_MIN + static_cast<unsigned>(units.size() * 2);
-	const unsigned ccp = static_cast<unsigned>(units.size());
+	const unsigned ccp = ccp_text;
 	if (fc_mac < FC_MIN)
 		return UT_IE_COULDNOTWRITE;
 
@@ -670,6 +933,18 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned font_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), fonts.begin(), fonts.end());
 
+	// FibRgFcLcb97 index 11 is fcPlcfHdd / lcbPlcfHdd. The CPs are relative
+	// to the header subdocument and the last one equals ccpHdd.
+	Buf hdd;
+	unsigned hdd_at = 0;
+	if (ccp_hdd)
+	{
+		for (size_t i = 0; i < hdd_cp.size(); ++i)
+			append_u32(hdd, hdd_cp[i]);
+		hdd_at = static_cast<unsigned>(table.size());
+		table.insert(table.end(), hdd.begin(), hdd.end());
+	}
+
 	const unsigned dop_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), 500, 0);
 	table[dop_at] = 0x02;
@@ -678,7 +953,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned clx_at = static_cast<unsigned>(table.size());
 	Buf plc;
 	append_u32(plc, 0);
-	append_u32(plc, ccp);
+	append_u32(plc, ccp_text + ccp_hdd);
 	plc.push_back(0);
 	plc.push_back(0);
 	append_u32(plc, FC_MIN);
@@ -701,9 +976,12 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	poke_u16(fib, 0x3E, 0x0016);
 	poke_u32(fib, 0x40, static_cast<unsigned>(word.size()));
 	poke_u32(fib, 0x4C, ccp);
+	poke_u32(fib, 0x54, ccp_hdd);
 	poke_u16(fib, 0x98, 93);
 	place(fib, 1, stsh_at, static_cast<unsigned>(stsh.size()));
 	place(fib, 6, sed_at, sed_len);
+	if (ccp_hdd)
+		place(fib, 11, hdd_at, static_cast<unsigned>(hdd.size()));
 	place(fib, 12, ch_at, static_cast<unsigned>(ch_bin.size()));
 	place(fib, 13, pap_at, static_cast<unsigned>(pap_bin.size()));
 	place(fib, 15, font_at, static_cast<unsigned>(fonts.size()));
