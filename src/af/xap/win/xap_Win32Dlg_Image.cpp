@@ -204,6 +204,7 @@ BOOL XAP_Win32Dialog_Image::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 		return 1;
 
 	case IDOK:							// also AP_RID_DIALOG_COLUMN_BTN_OK
+	{
 		// change wrapping
 		if(IsDlgButtonChecked(hWnd, XAP_RID_DIALOG_IMAGE_RADIO_INLINE))
 		{
@@ -276,6 +277,7 @@ BOOL XAP_Win32Dialog_Image::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 		setAnswer( a_OK );
 		EndDialog(hWnd,0);
 		return 1;
+	}
 
 	case XAP_RID_DIALOG_IMAGE_EBX_HEIGHT:
 		if( wNotifyCode == EN_KILLFOCUS )

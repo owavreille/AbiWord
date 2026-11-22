@@ -521,7 +521,8 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 		if (!heading.empty())
 		{
 			UT_UCS4String text(heading);
-			pG->drawChars(text.ucs4_str(), 0, text.size(), pDA->xoff + getX(), pDA->yoff + getY());
+			GR_Painter painter(pG);
+			painter.drawChars(text.ucs4_str(), 0, static_cast<int>(text.size()), pDA->xoff + getX(), pDA->yoff + getY());
 		}
 	}
 	_drawBoundaries(pDA);
