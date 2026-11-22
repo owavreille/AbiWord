@@ -22,6 +22,7 @@
 #endif
 
 #include <gtk/gtk.h>
+#include <gio/gio.h>
 
 #include "ut_string.h"
 #include "ut_assert.h"
@@ -32,6 +33,9 @@
 #include "xap_UnixApp.h"
 #include "xap_UnixFrameImpl.h"
 #include "xap_UnixDlg_About.h"
+
+extern unsigned char g_pngSidebar[];		// see ap_wp_sidebar.cpp
+extern unsigned long g_pngSidebar_sizeof;	// see ap_wp_sidebar.cpp
 
 XAP_Dialog * XAP_UnixDialog_About::static_constructor(XAP_DialogFactory * pFactory, XAP_Dialog_Id id)
 {
@@ -68,7 +72,15 @@ void XAP_UnixDialog_About::runModal(XAP_Frame * pFrame)
 	static GdkPixbuf * logo = nullptr;
 	static GtkWidget * dlg = nullptr;
 
-	// TODO Rob: use the more fancy "sidebar.png" logo, just like win32
+	// Same mark as the Windows about box: the sidebar bytes are the logo.
+	if (!logo && g_pngSidebar_sizeof > 0) {
+		GInputStream *stream = g_memory_input_stream_new_from_data(
+			g_pngSidebar, static_cast<gssize>(g_pngSidebar_sizeof), nullptr);
+		if (stream) {
+			logo = gdk_pixbuf_new_from_stream(stream, nullptr, nullptr);
+			g_object_unref(stream);
+		}
+	}
 	if (!logo) {
 		std::string str (ICONDIR);
 		str += "/hicolor/48x48/apps/com.abisource.AbiWord.png";

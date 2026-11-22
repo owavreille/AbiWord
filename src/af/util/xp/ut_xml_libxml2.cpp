@@ -204,7 +204,11 @@ UT_Error UT_XML::parse (const char * szFilename)
 			reader->closeFile ();
 			return UT_ERROR;
 		}
-		xmlCtxtUseOptions (ctxt, XML_PARSE_NONET);
+		// NONET blocks external fetches. NOENT expands &amp; to '&'.
+		// Without it, libxml2 leaves the five characters &#38; in SAX
+		// attributes. Windows then treats '&' as a mnemonic and every
+		// menu label shows the leftover "#38;".
+		xmlCtxtUseOptions (ctxt, XML_PARSE_NONET | XML_PARSE_NOENT);
 #if defined(LIBXML_VERSION) && LIBXML_VERSION >= 21200
 		xmlCtxtSetMaxAmplification (ctxt, 5);
 #endif
@@ -301,7 +305,7 @@ UT_Error UT_XML::parse (const char * buffer, UT_uint32 length)
     }
   memcpy(ctxt->sax, &hdl, sizeof(hdl));
   ctxt->userData = static_cast<void *>(this);
-  xmlCtxtUseOptions (ctxt, XML_PARSE_NONET);
+  xmlCtxtUseOptions (ctxt, XML_PARSE_NONET | XML_PARSE_NOENT);
 #if defined(LIBXML_VERSION) && LIBXML_VERSION >= 21200
   xmlCtxtSetMaxAmplification (ctxt, 5);
 #endif
