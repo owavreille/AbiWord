@@ -62,16 +62,16 @@ static std::string ode_formatIsoDateTime(const std::string& raw) {
     int year = 0, month = 0, day = 0, hour = 0, min = 0, sec = 0;
     if (sscanf(s.c_str(), "%4d-%2d-%2dT%2d:%2d:%2d",
                &year, &month, &day, &hour, &min, &sec) == 6 &&
-        year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+        year >= 1 && year <= 9999 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
         hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60) {
         return s;
     }
 
     if (sscanf(s.c_str(), "%4d-%2d-%2d %2d:%2d:%2d",
                &year, &month, &day, &hour, &min, &sec) == 6 &&
-        year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
+        year >= 1 && year <= 9999 && month >= 1 && month <= 12 && day >= 1 && day <= 31 &&
         hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60) {
-        char buf[32];
+        char buf[64];
         snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
                  year, month, day, hour, min, sec);
         return buf;
@@ -79,8 +79,8 @@ static std::string ode_formatIsoDateTime(const std::string& raw) {
 
     if (s.size() == 10 &&
         sscanf(s.c_str(), "%4d-%2d-%2d", &year, &month, &day) == 3 &&
-        year >= 1 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
-        char buf[32];
+        year >= 1 && year <= 9999 && month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+        char buf[64];
         snprintf(buf, sizeof(buf), "%04d-%02d-%02dT00:00:00", year, month, day);
         return buf;
     }
@@ -101,9 +101,9 @@ static std::string ode_formatIsoDateTime(const std::string& raw) {
                 break;
             }
         }
-        if (month >= 1 && year >= 1 && day >= 1 && day <= 31 &&
+        if (month >= 1 && year >= 1 && year <= 9999 && day >= 1 && day <= 31 &&
             hour >= 0 && hour <= 23 && min >= 0 && min <= 59 && sec >= 0 && sec <= 60) {
-            char buf[32];
+            char buf[64];
             snprintf(buf, sizeof(buf), "%04d-%02d-%02dT%02d:%02d:%02d",
                      year, month, day, hour, min, sec);
             return buf;

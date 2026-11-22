@@ -5169,7 +5169,9 @@ bool PD_Document::getDataItemFileExtension(const char *szDataID, std::string &sE
 		else if(mimeType == "image/svg+xml" || mimeType == "image/svg" || mimeType == "image/svg-xml")
 			ext = "svg";
 		else
+		{
 			UT_DEBUGMSG(("getDataItemFileExtension(): unhandled/ignored mime type: %s\n", mimeType.c_str()));
+		}
 
 		if (ext)
 		{
