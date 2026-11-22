@@ -40,6 +40,8 @@
 #include "ie_exp.h"
 #include "ie_exp_AbiWord_1.h"
 
+#include <gsf/gsf-output-memory.h>
+
 #include "fl_DocLayout.h"
 #include "pd_Document.h"
 
@@ -251,6 +253,10 @@ bool IE_Exp::_closeFile(void)
 {
 	if (m_fp && m_bOwnsFp) {
 		gboolean res = TRUE;
+		// A memory buffer is not the file on disk. The Word exporter
+		// writes that file itself, then closes the buffer. A failed
+		// buffer close must not delete the document just written.
+		const bool memory = GSF_IS_OUTPUT_MEMORY(m_fp);
 
 		if(!gsf_output_is_closed(m_fp))
 			res = gsf_output_close(m_fp);
@@ -258,10 +264,12 @@ bool IE_Exp::_closeFile(void)
 		g_object_unref(G_OBJECT(m_fp));
 		m_fp = nullptr;
 
-		if (!res) {
+		if (!res && !memory) {
 			// then remove the unwritten file
 			(void)UT_go_file_remove (m_szFileName.c_str(), nullptr);
 		}
+		if (memory)
+			res = TRUE;
 
 		return (res == TRUE);
 	}
@@ -274,10 +282,13 @@ void IE_Exp::_abortFile(void)
     UT_DEBUGMSG(("aborting file"));
 	if (m_fp)
     {
+        // The memory buffer is not the destination. Removing its name
+        // would delete a document the exporter did not replace.
+        const bool memory = GSF_IS_OUTPUT_MEMORY(m_fp);
         _closeFile();
 
-        // then remove the unwanted file
-        (void)UT_go_file_remove (m_szFileName.c_str(), nullptr);
+        if (!memory)
+            (void)UT_go_file_remove (m_szFileName.c_str(), nullptr);
     }
 }
 

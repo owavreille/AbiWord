@@ -570,45 +570,24 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 
  Static routine
  */
-UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND hDlg, UINT msg, WPARAM /*wParam*/, LPARAM lParam)
+UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookSaveAsProc(HWND /*hDlg*/, UINT msg, WPARAM /*wParam*/, LPARAM lParam)
 {
 	switch(msg)
 	{
 		case WM_NOTIFY:
 			{
 				const OFNOTIFYW * pNotify = reinterpret_cast<OFNOTIFYW *>(lParam);
+				if (!pNotify)
+					break;
 				switch (pNotify->hdr.code)
 				{
 					case CDN_TYPECHANGE:
-					{
-						// Do not write the file name, and do not call
-						// _getDefaultExtension(). That call overwrites the
-						// buffer lpstrDefExt already points at, and a
-						// SetDlgItemText on the name combo makes the common
-						// dialog validate the name before this notification
-						// returns. Choosing Microsoft Word then fails at once.
-						// CDM_SETDEFEXT only tells Windows which extension to
-						// append when the typed name has none.
-						XAP_Win32Dialog_FileOpenSaveAs * self =
-							reinterpret_cast<XAP_Win32Dialog_FileOpenSaveAs *>(pNotify->lpOFN ? pNotify->lpOFN->lCustData : 0);
-						if (!self || !self->m_szSuffixes || !pNotify->lpOFN)
-							break;
-						const DWORD index = pNotify->lpOFN->nFilterIndex;
-						const DWORD end = g_strv_length((gchar **)self->m_szSuffixes);
-						if (index == 0 || index > end)
-							break;
-						const char * raw = self->m_szSuffixes[index - 1];
-						if (!raw || strlen(raw) <= 2)
-							break;
-						wchar_t ext[DEFAULT_EXT_SIZE + 1];
-						size_t n = 0;
-						for (const char * p = raw + 2; *p && *p != ';' && n < DEFAULT_EXT_SIZE; ++p)
-							ext[n++] = static_cast<wchar_t>(static_cast<unsigned char>(*p));
-						ext[n] = 0;
-						if (n)
-							SendMessageW(GetParent(hDlg), CDM_SETDEFEXT, 0, reinterpret_cast<LPARAM>(ext));
+						// Do not touch the name, and do not send
+						// CDM_SETDEFEXT. Either one makes the common dialog
+						// validate the name before this notification returns.
+						// Choosing Microsoft Word then fails at once. The
+						// chosen suffix is applied after the dialog closes.
 						break;
-					}
 				}
 			}
 			break;

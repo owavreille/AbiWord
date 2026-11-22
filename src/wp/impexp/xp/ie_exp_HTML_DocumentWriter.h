@@ -61,7 +61,8 @@ public:
     virtual void closeBlock() override;
 
     virtual void openHeading(size_t level, const gchar* szStyleName,
-        const gchar *szId, const PP_AttrProp *pAP) override;
+        const gchar *szId, const UT_UTF8String & style,
+        const PP_AttrProp *pAP) override;
     virtual void closeHeading() override;
 
     virtual void openSection(const gchar* szStyleName) override;
@@ -163,7 +164,7 @@ public:
     virtual void openHead() override;
     virtual void openList(bool ordered, const gchar *szStyleName, const PP_AttrProp *pAP) override;
     virtual void openHeading(size_t level, const gchar* szStyleName, const gchar *szId,
-        const PP_AttrProp *pAP) override;
+        const UT_UTF8String & style, const PP_AttrProp *pAP) override;
     virtual void openBlock(const gchar* szStyleName, const UT_UTF8String& style,
         const PP_AttrProp *pAP) override;
     inline void enableXmlDeclaration(bool bEnable) { m_bEnableXmlDeclaration = bEnable; }

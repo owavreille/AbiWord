@@ -1489,15 +1489,16 @@ void FV_View::_insertSectionBreak(void)
 }
 
 
-// In normal and web layout the margins are not part of the page on
-// screen. A margin larger than the paper used to make this height
-// negative, the following division walked forever, and nothing was painted.
-static UT_sint32 s_visiblePageHeight(const fp_Page * pPage, const fl_DocSectionLayout * pDSL)
+// Web layout hides the paper margins. Normal layout keeps the full
+// page, including the band where the header and the footer are drawn.
+// A margin larger than the paper used to make this height negative,
+// the following division walked forever, and nothing was painted.
+static UT_sint32 s_visiblePageHeight(const fp_Page * pPage, const fl_DocSectionLayout * pDSL, bool bStripMargins)
 {
 	if (!pPage)
 		return 1;
 	UT_sint32 height = pPage->getHeight();
-	if (pDSL)
+	if (bStripMargins && pDSL)
 	{
 		UT_sint32 content = height - pDSL->getTopMargin() - pDSL->getBottomMargin();
 		if (content > 0)
@@ -1542,7 +1543,7 @@ void FV_View::_getPageXandYOffset(const fp_Page* pThePage, UT_sint32& xoff, UT_s
 				pDSL = pDSL->getNextDocSection();
 				continue;
 			}
-			UT_sint32 height = s_visiblePageHeight(pPage, pDSL) + getPageViewSep();
+			UT_sint32 height = s_visiblePageHeight(pPage, pDSL, getViewMode() == VIEW_WEB) + getPageViewSep();
 			if (num > pDSL->getPageCount())
 			{
 				y += pDSL->getPageCount() * height;
@@ -1896,7 +1897,7 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 				{
 					getPageYOffset(pPage, iPageOffset);
 					yPoint = pPage->getBottom();
-					if(getViewMode() != VIEW_PRINT)
+					if(getViewMode() == VIEW_WEB)
 					{
 						fl_DocSectionLayout * pDSL = pPage->getOwningSection();
 						yPoint = yPoint - pDSL->getTopMargin() -2;
@@ -1929,7 +1930,7 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 				{
 					getPageYOffset(pPage, iPageOffset);
 					yPoint = pPage->getBottom();
-					if(getViewMode() != VIEW_PRINT)
+					if(getViewMode() == VIEW_WEB)
 					{
 						fl_DocSectionLayout * pDSL = pPage->getOwningSection();
 						yPoint = yPoint - pDSL->getTopMargin() -2;
@@ -1982,7 +1983,7 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 				{
 					getPageYOffset(pPage, iPageOffset);
 					yPoint = pPage->getBottom();
-					if(getViewMode() != VIEW_PRINT)
+					if(getViewMode() == VIEW_WEB)
 					{
 						fl_DocSectionLayout * pDSL = pPage->getOwningSection();
 						yPoint = yPoint - pDSL->getTopMargin() -2;
@@ -2625,7 +2626,7 @@ fp_Page* FV_View::_getPageForXY(UT_sint32 xPos, UT_sint32 yPos, UT_sint32& xClic
 				iNumHorizPages = 1;
 			UT_sint32 iPageHeight = pPage->getHeight();
 			
-			if(getViewMode() != VIEW_PRINT)
+			if(getViewMode() == VIEW_WEB)
 			{
 				fl_DocSectionLayout * pOwn = pPage->getOwningSection();
 				if (pOwn)
@@ -4649,7 +4650,7 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 					pDSL = pDSL->getNextDocSection();
 					continue;
 				}
-				iPageHeight = s_visiblePageHeight(pOwned, pDSL);
+				iPageHeight = s_visiblePageHeight(pOwned, pDSL, getViewMode() == VIEW_WEB);
 				iPageWidth = pOwned->getWidth();
 				// The page offset uses the same stride. Dividing by the
 				// height alone walks past the page that is on screen,
@@ -4706,7 +4707,7 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		}
 		else
 		{
-			iPageHeight = s_visiblePageHeight(pPage, pDSL);
+			iPageHeight = s_visiblePageHeight(pPage, pDSL, getViewMode() == VIEW_WEB);
 		}
 		iPageWidth = pPage->getWidth();
 
@@ -4800,10 +4801,9 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 			da.bDirtyRunsOnly = false;
 		}
 
-		// Draw the page and all its subcontainers (i.e., the content).
-		// In normal and web layout the slot is the paper minus the
-		// margins. The page still paints its full paper height, which
-		// covers the next page and the separator line.
+		// Draw the page and all its subcontainers. Normal layout keeps
+		// the full page so the header stays inside the clip. Web
+		// layout is only the text band.
 		UT_Rect outerCopy;
 		bool haveOuter = false;
 		if (getViewMode() == VIEW_NORMAL || getViewMode() == VIEW_WEB)

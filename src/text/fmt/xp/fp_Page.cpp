@@ -1200,10 +1200,11 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 
  		UT_sint32 height =getHeight();
 		UT_sint32 width = getWidth();
-		// Normal and web layout show the paper without its margins.
-		// Painting the full paper height covers the following page.
+		// Web layout shows the paper without its margins. Painting
+		// the full paper height would cover the following page.
+		// Normal layout keeps the top margin so the header is visible.
 		if (pDA->pG->queryProperties(GR_Graphics::DGP_SCREEN) && m_pView &&
-		    (m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB))
+		    m_pView->getViewMode() == VIEW_WEB)
 		{
 			fl_DocSectionLayout * pDSL = getOwningSection();
 			if (pDSL)
@@ -1295,13 +1296,23 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 		}
 	}
 
-	// draw the page's headers and footers
-    if(m_pView->getViewMode() == VIEW_PRINT  || pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
+	// draw the page's headers and footers. Web layout is the text
+	// alone. Normal layout and print preview keep the header.
+    if(m_pView->getViewMode() != VIEW_WEB || pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
 	{
 		if (m_pHeader)
 		{
 			dg_DrawArgs da = *pDA;
-			da.xoff += m_pHeader->getX();
+			// Normal layout places the body at the ruler, not at the
+			// paper's left margin. The header follows that edge.
+			UT_sint32 x = m_pHeader->getX();
+			if (m_pView->getViewMode() == VIEW_NORMAL)
+			{
+				fp_Column * pCol = getNthColumnLeader(0);
+				if (pCol)
+					x = pCol->getX();
+			}
+			da.xoff += x;
 			da.yoff += m_pHeader->getY();
 			m_pHeader->draw(&da);
 		}
@@ -1309,7 +1320,14 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 		if (m_pFooter)
 		{
 			dg_DrawArgs da = *pDA;
-			da.xoff += m_pFooter->getX();
+			UT_sint32 x = m_pFooter->getX();
+			if (m_pView->getViewMode() == VIEW_NORMAL)
+			{
+				fp_Column * pCol = getNthColumnLeader(0);
+				if (pCol)
+					x = pCol->getX();
+			}
+			da.xoff += x;
 			da.yoff += m_pFooter->getY();
 			m_pFooter->draw(&da);
 		}
@@ -1321,7 +1339,7 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 	{
 		fp_FootnoteContainer* pFC = m_vecFootnotes.getNthItem(i);
 		dg_DrawArgs da = *pDA;
-		if(m_pView && (m_pView->getViewMode() != VIEW_PRINT) &&
+		if(m_pView && (m_pView->getViewMode() == VIEW_WEB) &&
 		   !pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
 		{
 			fp_Column* pFirstColumnLeader = getNthColumnLeader(0);
@@ -1341,7 +1359,7 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 			{
 					fp_AnnotationContainer* pAC = m_vecAnnotations.getNthItem(i);
 					dg_DrawArgs da = *pDA;
-					if(m_pView && (m_pView->getViewMode() != VIEW_PRINT) &&
+					if(m_pView && (m_pView->getViewMode() == VIEW_WEB) &&
 					   !pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
 					{
 							fp_Column* pFirstColumnLeader = getNthColumnLeader(0);
@@ -1889,6 +1907,37 @@ void fp_Page::_reformatColumns(void)
 	UT_sint32 iTopMargin = pFirstSectionLayout->getTopMargin();
 	UT_sint32 iBottomMargin = pFirstSectionLayout->getBottomMargin();
 	UT_sint32 iY = iTopMargin;
+
+	// The web column follows the window. Doing it here, and not only
+	// when the window is resized, keeps a later format from putting
+	// the text back into the paper width. A one-inch floor crammed
+	// every line when the window size was not ready.
+	if (m_pView && m_pView->getViewMode() == VIEW_WEB && m_pLayout &&
+	    m_pLayout->getGraphics() && m_pLayout->getDocument() &&
+	    !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
+	{
+		const UT_sint32 pad = m_pLayout->getGraphics()->tlu(8);
+		UT_sint32 windowLu = m_pView->getWindowWidth() - pad;
+		double paperIn = m_pLayout->getDocument()->m_docPageSize.Width(DIM_IN);
+		if (paperIn < 1.0)
+			paperIn = 1.0;
+		double wantIn = static_cast<double>(windowLu) / static_cast<double>(UT_LAYOUT_RESOLUTION);
+		if (wantIn < paperIn)
+			wantIn = paperIn;
+		if (wantIn > 50.0)
+			wantIn = 50.0;
+		double haveIn = m_pLayout->m_docViewPageSize.Width(DIM_IN);
+		double delta = wantIn - haveIn;
+		if (delta < 0)
+			delta = -delta;
+		if (delta >= 0.05)
+		{
+			double heightIn = m_pLayout->m_docViewPageSize.Height(DIM_IN);
+			m_pLayout->m_docViewPageSize.Set(wantIn, heightIn, DIM_IN);
+			m_pLayout->m_docViewPageSize.setPortrait();
+			m_pLayout->syncViewPageDimensions();
+		}
+	}
 
 	// we need the height of the footnotes on this page, to deduct.
 	UT_sint32 i = 0;

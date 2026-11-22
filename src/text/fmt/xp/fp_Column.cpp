@@ -182,7 +182,10 @@ UT_sint32 fp_VerticalContainer::getX(void) const
 */
 UT_sint32 fp_VerticalContainer::getY(void) const
 {
-	if(getSectionLayout()->getDocLayout()->getView()  && (getSectionLayout()->getDocLayout()->getView()->getViewMode() != VIEW_PRINT))
+	// Web layout starts the text at the top of the window. Normal
+	// layout keeps the top margin, which is where the header is.
+	if(getSectionLayout()->getDocLayout()->getView() &&
+	   (getSectionLayout()->getDocLayout()->getView()->getViewMode() == VIEW_WEB))
 	{
 		fl_SectionLayout * pSL = getSectionLayout();
 		fl_DocSectionLayout * pDSL = nullptr;
@@ -209,7 +212,9 @@ UT_sint32 fp_VerticalContainer::getY(void) const
 */
 UT_sint32 fp_VerticalContainer::getY(GR_Graphics * pG) const
 {
-	if(pG && getSectionLayout()->getDocLayout()->getView()  && (getSectionLayout()->getDocLayout()->getView()->getViewMode() != VIEW_PRINT) && pG->queryProperties(GR_Graphics::DGP_SCREEN))
+	if(pG && getSectionLayout()->getDocLayout()->getView() &&
+	   (getSectionLayout()->getDocLayout()->getView()->getViewMode() == VIEW_WEB) &&
+	   pG->queryProperties(GR_Graphics::DGP_SCREEN))
 	{
 		fl_SectionLayout * pSL = getSectionLayout();
 		fl_DocSectionLayout * pDSL = nullptr;
@@ -523,7 +528,7 @@ void fp_VerticalContainer::getOffsets(const fp_ContainerObject* pContainer, UT_s
 	}
 	if(pCon && pCon->getContainerType() == FP_CONTAINER_FOOTNOTE)
 	{
-	        if(getPage() && getView() && (getView()->getViewMode() != VIEW_PRINT))
+	        if(getPage() && getView() && (getView()->getViewMode() == VIEW_WEB))
 		{
 		       fl_DocSectionLayout * pDSL = getPage()->getOwningSection();
 		       yoff -= pDSL->getTopMargin();
@@ -532,7 +537,7 @@ void fp_VerticalContainer::getOffsets(const fp_ContainerObject* pContainer, UT_s
 	if(pCon && getPage() && (pCon->getContainerType() == FP_CONTAINER_ANNOTATION) && 
 	   getPage()->getDocLayout()->displayAnnotations())
 	{
-	        if(getPage() && getView() && (getView()->getViewMode() != VIEW_PRINT))
+	        if(getPage() && getView() && (getView()->getViewMode() == VIEW_WEB))
 		{
 		       fl_DocSectionLayout * pDSL = getPage()->getOwningSection();
 		       yoff -= pDSL->getTopMargin();
@@ -760,7 +765,7 @@ void fp_VerticalContainer::getScreenOffsets(const fp_ContainerObject* pContainer
 
 		xoff += col_x;
 		yoff += col_y;
-	        if(pFC->getPage() && getView() && (getView()->getViewMode() != VIEW_PRINT))
+	        if(pFC->getPage() && getView() && (getView()->getViewMode() == VIEW_WEB))
 		{
 		       fl_DocSectionLayout * pDSL = getPage()->getOwningSection();
 		       yoff -= pDSL->getTopMargin();
@@ -773,7 +778,7 @@ void fp_VerticalContainer::getScreenOffsets(const fp_ContainerObject* pContainer
 
 		xoff += col_x;
 		yoff += col_y;
-	        if(pAC->getPage() && getView() && (getView()->getViewMode() != VIEW_PRINT))
+	        if(pAC->getPage() && getView() && (getView()->getViewMode() == VIEW_WEB))
 		{
 		       fl_DocSectionLayout * pDSL = getPage()->getOwningSection();
 		       yoff -= pDSL->getTopMargin();

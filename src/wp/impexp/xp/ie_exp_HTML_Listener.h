@@ -56,6 +56,7 @@ public:
 
     virtual void openHeading(size_t level, const gchar * id,
 							 const gchar * szStyleName,
+							 const UT_UTF8String & style,
 							 const PP_AttrProp* pAP) = 0;
     virtual void closeHeading() = 0;
 

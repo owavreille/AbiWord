@@ -26,7 +26,37 @@
 #include "ie_exp_HTML_Listener.h"
 #include "ie_exp_HTML_util.h"
 #include "ie_exp_HTML.h"
+#include "pp_Property.h"
 #include "ut_go_file.h"
+
+// The paragraph style often holds the alignment, and the Normal rule
+// is emitted as "p, h1, h2, h3, li", so a later heading can be forced
+// back to the left. The inline style is the value actually in effect.
+static void s_appendStyle(UT_UTF8String & style, const char * name, const gchar * value)
+{
+	if (!value || !value[0] || !strcmp(value, "inherit"))
+		return;
+	if (!style.empty())
+		style += ";";
+	style += name;
+	style += ":";
+	style += value;
+}
+
+static UT_UTF8String s_blockStyle(PD_Document * pDoc, const PP_AttrProp * pAP)
+{
+	UT_UTF8String style;
+	static const char * names[] = {
+		"text-align", "margin-top", "margin-bottom",
+		"margin-left", "margin-right", "text-indent", nullptr
+	};
+	for (int i = 0; names[i]; ++i)
+	{
+		const gchar * value = PP_evalProperty(names[i], nullptr, pAP, nullptr, pDoc, true);
+		s_appendStyle(style, names[i], value);
+	}
+	return style;
+}
 
 IE_Exp_HTML_Listener::IE_Exp_HTML_Listener(PD_Document *pDocument, 
                                            IE_Exp_HTML_DataExporter* pDataExporter,
@@ -1050,66 +1080,7 @@ void IE_Exp_HTML_Listener::_openBlock(PT_AttrPropIndex api)
         styleName = tree->class_name().c_str();
     }
 
-	const gchar * szP_TextAlign = nullptr;
-	const gchar * szP_MarginBottom = nullptr;
-	const gchar * szP_MarginTop = nullptr;
-	const gchar * szP_MarginLeft = nullptr;
-	const gchar * szP_MarginRight = nullptr;
-	const gchar * szP_TextIndent = nullptr;
-
-	pAP->getProperty("text-align", szP_TextAlign);
-	pAP->getProperty("margin-bottom", szP_MarginBottom);
-	pAP->getProperty("margin-top", szP_MarginTop);
-	pAP->getProperty("margin-right", szP_MarginRight);
-
-	if (pAP->getProperty("margin-left", szP_MarginLeft))
-		if (strstr(szP_MarginLeft, "0.0000"))
-			szP_MarginLeft = nullptr;
-
-	if (pAP->getProperty("text-indent", szP_TextIndent))
-		if (strstr(szP_TextIndent, "0.0000"))
-			szP_TextIndent = nullptr;
-
-	UT_UTF8String style;
-	bool first = true;
-
-	if (szP_TextAlign) {
-		if (!first) style += ";";
-		style += "text-align:";
-		style += szP_TextAlign;
-		first = false;
-	}
-	if (szP_MarginBottom) {
-		if (!first) style += ";";
-		style += "margin-bottom:";
-		style += szP_MarginBottom;
-		first = false;
-	}
-	if (szP_MarginTop) {
-		if (!first) style += ";";
-		style += "margin-top:";
-		style += szP_MarginTop;
-		first = false;
-	}
-	if (szP_MarginRight) {
-		if (!first) style += ";";
-		style += "margin-right:";
-		style += szP_MarginRight;
-		first = false;
-	}
-	if (szP_MarginLeft) {
-		if (!first) style += ";";
-		style += "margin-left:";
-		style += szP_MarginLeft;
-		first = false;
-	}
-	if (szP_TextIndent) {
-		if (!first) style += ";";
-		style += "text-indent:";
-		style += szP_TextIndent;
-		first = false;
-	}
-	
+	UT_UTF8String style = s_blockStyle(m_pDocument, pAP);
     m_pCurrentImpl->openBlock(styleName, style, pAP);
     
     
@@ -1143,7 +1114,8 @@ void IE_Exp_HTML_Listener::_openHeading(PT_AttrPropIndex api, size_t level,
     
     m_bInHeading = true;
     UT_UTF8String id = UT_UTF8String_sprintf("AbiTOC%d", m_iHeadingCount);
-    m_pCurrentImpl->openHeading(level, szStyleName, id.utf8_str(), pAP);
+    UT_UTF8String style = s_blockStyle(m_pDocument, pAP);
+    m_pCurrentImpl->openHeading(level, szStyleName, id.utf8_str(), style, pAP);
     m_iHeadingCount++;
 }
 
