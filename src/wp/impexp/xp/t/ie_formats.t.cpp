@@ -2267,11 +2267,11 @@ TFTEST_MAIN("PDF export embeds images, textbox frames, metadata and flushes clea
 		"frame-col-xpos", "0.5in",
 		"frame-col-ypos", "2in"
 	};
-	if (!TFPASS(doc->insertStrux(first_strux(doc, PTX_Block), PTX_SectionFrame, PP_NOPROPS, tbProps, &tb)) ||
+	if (!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionFrame, PP_NOPROPS, tbProps, &tb)) ||
 		!TFPASS(tb != nullptr) ||
-		!TFPASS(doc->insertStrux(tb->getPos() + tb->getLength(), PTX_Block)) ||
-		!TFPASS(doc->insertSpan(tb->getPos() + tb->getLength() + 1, std::string("CadrePdf"))) ||
-		!TFPASS(doc->insertStrux(tb->getPos() + tb->getLength() + 9, PTX_EndFrame)))
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(document_end(doc), std::string("CadrePdf"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndFrame)))
 	{
 		doc->unref();
 		return;
