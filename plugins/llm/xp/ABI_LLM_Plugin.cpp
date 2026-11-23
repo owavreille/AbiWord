@@ -534,8 +534,23 @@ public:
 	std::vector<unsigned char> bytes;
 };
 
+bool handle_drag_nchittest(HWND dialog, UINT message, WPARAM wparam, LPARAM lparam)
+{
+	if (message != WM_NCHITTEST)
+		return false;
+	const LRESULT hit = DefWindowProcW(dialog, message, wparam, lparam);
+	if (hit == HTCLIENT)
+	{
+		SetWindowLongPtrW(dialog, DWLP_MSGRESULT, HTCAPTION);
+		return true;
+	}
+	return false;
+}
+
 INT_PTR CALLBACK settings_dialog(HWND dialog, UINT message, WPARAM wparam, LPARAM lparam)
 {
+	if (handle_drag_nchittest(dialog, message, wparam, lparam))
+		return TRUE;
 	ABI_LLM_Settings * settings = reinterpret_cast<ABI_LLM_Settings *>(GetWindowLongPtrW(dialog, DWLP_USER));
 	switch (message)
 	{
@@ -574,7 +589,7 @@ INT_PTR CALLBACK settings_dialog(HWND dialog, UINT message, WPARAM wparam, LPARA
 bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings & settings)
 {
 	DialogTemplate dialog;
-	dialog.dword(WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME);
+	dialog.dword(WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME | DS_CENTER);
 	dialog.dword(0);
 	dialog.word(12);
 	dialog.word(10);
@@ -614,6 +629,8 @@ bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings & settings)
 
 INT_PTR CALLBACK request_dialog(HWND dialog, UINT message, WPARAM wparam, LPARAM lparam)
 {
+	if (handle_drag_nchittest(dialog, message, wparam, lparam))
+		return TRUE;
 	std::string * question = reinterpret_cast<std::string *>(GetWindowLongPtrW(dialog, DWLP_USER));
 	switch (message)
 	{
@@ -645,7 +662,7 @@ INT_PTR CALLBACK request_dialog(HWND dialog, UINT message, WPARAM wparam, LPARAM
 bool ask_request(XAP_Frame * frame, std::string & question)
 {
 	DialogTemplate dialog;
-	dialog.dword(WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME);
+	dialog.dword(WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_MODALFRAME | DS_CENTER);
 	dialog.dword(0);
 	dialog.word(4);
 	dialog.word(10);
@@ -678,6 +695,8 @@ bool ask_request(XAP_Frame * frame, std::string & question)
 
 INT_PTR CALLBACK proposal_dialog(HWND dialog, UINT message, WPARAM wparam, LPARAM lparam)
 {
+	if (handle_drag_nchittest(dialog, message, wparam, lparam))
+		return TRUE;
 	const std::string * proposal = reinterpret_cast<const std::string *>(GetWindowLongPtrW(dialog, DWLP_USER));
 	switch (message)
 	{
@@ -710,7 +729,7 @@ INT_PTR CALLBACK proposal_dialog(HWND dialog, UINT message, WPARAM wparam, LPARA
 bool review_proposal(XAP_Frame * frame, const std::string & proposal)
 {
 	DialogTemplate dialog;
-	dialog.dword(WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | DS_MODALFRAME);
+	dialog.dword(WS_POPUP | WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | DS_MODALFRAME | DS_CENTER);
 	dialog.dword(0);
 	dialog.word(3);
 	dialog.word(20);
