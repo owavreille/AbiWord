@@ -1808,9 +1808,21 @@ TFTEST_MAIN("DOC export keeps the header text in WordDocument")
 		g_object_unref(table_stream);
 
 	const std::string word = ole_read(ole, "WordDocument");
+	const std::string table = ole_read(ole, "1Table");
 	TFPASS(word.find(utf16_ascii("CorpsDoc")) != std::string::npos);
 	TFPASS(word.find(utf16_ascii("EnteteDoc")) != std::string::npos);
-	TFPASS(word.size() >= FMT_CCP_HDD + 4 && le32(word, FMT_CCP_HDD) > 0);
+	const unsigned ccp_text = word.size() >= FMT_CCP_TEXT + 4 ? le32(word, FMT_CCP_TEXT) : 0;
+	const unsigned ccp_hdd = word.size() >= FMT_CCP_HDD + 4 ? le32(word, FMT_CCP_HDD) : 0;
+	TFPASS(ccp_hdd > 0);
+	// MS-DOC 2.8.22 PlcfHdd: 12 stories => 14 CPs (56 bytes), penultimate CP == ccpHdd.
+	const unsigned hdd_at = word.size() >= 0x9A + 12 * 8 ? le32(word, 0x9A + 11 * 8) : 0;
+	const unsigned hdd_len = word.size() >= 0x9A + 12 * 8 ? le32(word, 0x9A + 11 * 8 + 4) : 0;
+	TFPASS(hdd_len == 14 * 4);
+	TFPASS(hdd_at + hdd_len <= table.size() && le32(table, hdd_at + 12 * 4) == ccp_hdd);
+	// MS-DOC 2.8.35 PlcPcd: last CP == ccpText + ccpHdd + 1 when ccpHdd > 0.
+	const unsigned clx_at = word.size() >= 0x9A + 34 * 8 ? le32(word, 0x9A + 33 * 8) : 0;
+	const unsigned clx_len = word.size() >= 0x9A + 34 * 8 ? le32(word, 0x9A + 33 * 8 + 4) : 0;
+	TFPASS(clx_len >= 13 && clx_at + clx_len <= table.size() && le32(table, clx_at + 9) == ccp_text + ccp_hdd + 1);
 	// fComplex is bit 2 of the FibBase flags word at 0x0A.
 	TFPASS(word.size() >= 0x0C && (le16(word, 0x0A) & 0x0004u) == 0);
 

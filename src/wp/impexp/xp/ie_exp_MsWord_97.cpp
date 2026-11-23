@@ -509,6 +509,7 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 	bool in_paragraph = false;
 	std::string current_id;
 	Paragraph current;
+	std::vector<bool> frame_skipped;
 
 	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
 	{
@@ -536,6 +537,7 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 			{
 				in_story = false;
 				skip_depth = 0;
+				frame_skipped.clear();
 				DocSection section;
 				for (int slot = 0; slot < 6; ++slot)
 				{
@@ -543,12 +545,25 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 					if (id)
 						section.slot[slot] = id;
 				}
+				if (section.slot[1].empty())
+				{
+					const char * id = frag_attribute(doc, frag, "header-last");
+					if (id)
+						section.slot[1] = id;
+				}
+				if (section.slot[3].empty())
+				{
+					const char * id = frag_attribute(doc, frag, "footer-last");
+					if (id)
+						section.slot[3] = id;
+				}
 				out.sections.push_back(section);
 				continue;
 			}
 			if (kind == PTX_SectionHdrFtr)
 			{
 				skip_depth = 0;
+				frame_skipped.clear();
 				const char * id = frag_attribute(doc, frag, "id");
 				const char * type = frag_attribute(doc, frag, "type");
 				if (id)
@@ -563,6 +578,7 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 			}
 			if (kind == PTX_SectionFrame)
 			{
+				bool skip_frame = false;
 				if (in_story && skip_depth == 0)
 				{
 					Paragraph image;
@@ -572,10 +588,25 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 					{
 						current = image;
 						in_paragraph = true;
+						skip_frame = true;
 					}
 				}
 				if (in_story)
-					++skip_depth;
+				{
+					frame_skipped.push_back(skip_frame);
+					if (skip_frame)
+						++skip_depth;
+				}
+				continue;
+			}
+			if (kind == PTX_EndFrame)
+			{
+				if (in_story && !frame_skipped.empty())
+				{
+					if (frame_skipped.back() && skip_depth > 0)
+						--skip_depth;
+					frame_skipped.pop_back();
+				}
 				continue;
 			}
 			if (skipped_section(kind))
@@ -585,7 +616,7 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 				continue;
 			}
 			if (skip_depth && (kind == PTX_EndFootnote || kind == PTX_EndEndnote ||
-				kind == PTX_EndFrame || kind == PTX_EndTOC || kind == PTX_EndAnnotation ||
+				kind == PTX_EndTOC || kind == PTX_EndAnnotation ||
 				kind == PTX_EndMarginnote))
 				--skip_depth;
 			continue;
@@ -1522,16 +1553,26 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 		{
 			hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
 			if (slot_text[slot].empty())
-			{
-				if (slot >= 4)
-					append_paragraphs(std::vector<Paragraph>(2), units, runs, bounds);
 				continue;
-			}
 			append_paragraphs(slot_text[slot], units, runs, bounds);
 			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds);
 		}
-		hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
 		ccp_hdd = static_cast<unsigned>(units.size()) - ccp_text;
+		if (ccp_hdd)
+		{
+			// MS-DOC 2.8.22 PlcfHdd has n + 2 CPs (14 for 12 stories):
+			// the second-to-last CP equals ccpHdd and the last CP is the
+			// ignored guard position. MS-DOC 2.8.35 PlcPcd requires one
+			// extra trailing paragraph mark after non-empty subdocuments
+			// (last CP = ccpText + ccpHdd + 1).
+			hdd_cp.push_back(ccp_hdd);
+			hdd_cp.push_back(ccp_hdd + 1);
+			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds);
+		}
+		else
+		{
+			hdd_cp.clear();
+		}
 	}
 	if (runs.empty())
 	{
@@ -1619,7 +1660,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned clx_at = static_cast<unsigned>(table.size());
 	Buf plc;
 	append_u32(plc, 0);
-	append_u32(plc, ccp_text + ccp_hdd);
+	append_u32(plc, static_cast<unsigned>(units.size()));
 	plc.push_back(0);
 	plc.push_back(0);
 	append_u32(plc, FC_MIN);
