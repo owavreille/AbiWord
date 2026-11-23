@@ -1161,55 +1161,69 @@ static void place(Buf & fib, unsigned index, unsigned offset, unsigned length)
 	poke_u32(fib, at + 4, length);
 }
 
-static bool write_ole(GsfOutput * destination, const Buf & word, const Buf & table, const Buf & data)
+static bool write_ole_stream(GsfOutfile * ole, const char * name, const Buf & data, std::string & reason)
 {
+	GsfOutput * stream = gsf_outfile_new_child(ole, name, FALSE);
+	if (!stream)
+	{
+		reason = std::string("ole new_child failed: ") + name;
+		return false;
+	}
+	bool ok = true;
+	if (!data.empty())
+		ok = gsf_output_write(stream, data.size(), &data[0]) != FALSE;
+	const bool closed = gsf_output_close(stream) != FALSE;
+	g_object_unref(stream);
+	if (!ok || !closed)
+	{
+		reason = std::string("ole stream write/close failed: ") + name;
+		return false;
+	}
+	return true;
+}
+
+static bool build_ole_bytes(const Buf & word, const Buf & table, const Buf & data, Buf & out, std::string & reason)
+{
+	out.clear();
 	GsfOutput * memory = gsf_output_memory_new();
 	if (!memory)
+	{
+		reason = "gsf_output_memory_new failed";
 		return false;
+	}
 	GsfOutfile * ole = gsf_outfile_msole_new(memory);
 	if (!ole)
 	{
 		g_object_unref(memory);
+		reason = "gsf_outfile_msole_new failed";
 		return false;
 	}
 
-	bool ok = true;
-	GsfOutput * word_stream = gsf_outfile_new_child(ole, "WordDocument", FALSE);
-	GsfOutput * table_stream = gsf_outfile_new_child(ole, "1Table", FALSE);
-	GsfOutput * data_stream = nullptr;
-	if (!data.empty())
-		data_stream = gsf_outfile_new_child(ole, "Data", FALSE);
-	if (!word_stream || !table_stream || (!data.empty() && !data_stream))
-		ok = false;
-	if (ok && !word.empty())
-		ok = gsf_output_write(word_stream, word.size(), &word[0]) && ok;
-	if (ok && !table.empty())
-		ok = gsf_output_write(table_stream, table.size(), &table[0]) && ok;
-	if (ok && data_stream && !data.empty())
-		ok = gsf_output_write(data_stream, data.size(), &data[0]) && ok;
-	if (word_stream)
-	{
-		ok = gsf_output_close(word_stream) && ok;
-		g_object_unref(word_stream);
-	}
-	if (table_stream)
-	{
-		ok = gsf_output_close(table_stream) && ok;
-		g_object_unref(table_stream);
-	}
-	if (data_stream)
-	{
-		ok = gsf_output_close(data_stream) && ok;
-		g_object_unref(data_stream);
-	}
-	ok = gsf_output_close(GSF_OUTPUT(ole)) && ok;
+	bool ok = write_ole_stream(ole, "WordDocument", word, reason) &&
+	          write_ole_stream(ole, "1Table", table, reason);
+	if (ok && !data.empty())
+		ok = write_ole_stream(ole, "Data", data, reason);
+
+	const bool ole_closed = gsf_output_close(GSF_OUTPUT(ole)) != FALSE;
 	g_object_unref(ole);
+	if (ok && !ole_closed)
+	{
+		reason = "ole close failed";
+		ok = false;
+	}
 	if (ok)
 	{
 		const guint8 * bytes = gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(memory));
 		const gsf_off_t size = gsf_output_size(memory);
-		ok = bytes && size > 0 &&
-			gsf_output_write(destination, static_cast<size_t>(size), bytes);
+		if (!bytes || size <= 0)
+		{
+			reason = "ole memory buffer empty";
+			ok = false;
+		}
+		else
+		{
+			out.assign(bytes, bytes + static_cast<size_t>(size));
+		}
 	}
 	g_object_unref(memory);
 	return ok;
@@ -1304,13 +1318,17 @@ local_path_for_save(const char * name)
 // it, so the export reports a write error without creating the .doc.
 // CreateFileW is the call those wrappers are supposed to make.
 static bool
-write_word_file(const char * path, const guint8 * bytes, size_t size)
+write_word_file(const char * path, const guint8 * bytes, size_t size, std::string & reason)
 {
 	wchar_t * wide = reinterpret_cast<wchar_t *>(g_utf8_to_utf16(path, -1, nullptr, nullptr, nullptr));
 	if (!wide)
+	{
+		reason = "utf8_to_utf16 failed";
 		return false;
+	}
 
 	HANDLE file = INVALID_HANDLE_VALUE;
+	DWORD lastErr = 0;
 	for (int attempt = 0; attempt < 6 && file == INVALID_HANDLE_VALUE; ++attempt)
 	{
 		if (attempt)
@@ -1322,7 +1340,8 @@ write_word_file(const char * path, const guint8 * bytes, size_t size)
 			CREATE_ALWAYS,
 			FILE_ATTRIBUTE_NORMAL,
 			nullptr);
-		if (file == INVALID_HANDLE_VALUE && GetLastError() != ERROR_SHARING_VIOLATION)
+		lastErr = (file == INVALID_HANDLE_VALUE) ? GetLastError() : 0;
+		if (file == INVALID_HANDLE_VALUE && lastErr != ERROR_SHARING_VIOLATION)
 			break;
 	}
 	if (file == INVALID_HANDLE_VALUE &&
@@ -1340,10 +1359,15 @@ write_word_file(const char * path, const guint8 * bytes, size_t size)
 			CREATE_ALWAYS,
 			FILE_ATTRIBUTE_NORMAL,
 			nullptr);
+		if (file == INVALID_HANDLE_VALUE)
+			lastErr = GetLastError();
 		g_free(extended);
 	}
 	if (file == INVALID_HANDLE_VALUE)
 	{
+		char msg[128];
+		snprintf(msg, sizeof(msg), "CreateFileW err=%lu", static_cast<unsigned long>(lastErr));
+		reason = msg;
 		g_free(wide);
 		return false;
 	}
@@ -1357,6 +1381,9 @@ write_word_file(const char * path, const guint8 * bytes, size_t size)
 		DWORD wrote = 0;
 		if (!WriteFile(file, cursor, chunk, &wrote, nullptr) || wrote != chunk)
 		{
+			char msg[128];
+			snprintf(msg, sizeof(msg), "WriteFile err=%lu", static_cast<unsigned long>(GetLastError()));
+			reason = msg;
 			wrote_all = false;
 			break;
 		}
@@ -1371,15 +1398,20 @@ write_word_file(const char * path, const guint8 * bytes, size_t size)
 }
 #else
 static bool
-write_word_file(const char * path, const guint8 * bytes, size_t size)
+write_word_file(const char * path, const guint8 * bytes, size_t size, std::string & reason)
 {
 	FILE * file = g_fopen(path, "wb");
 	if (!file)
+	{
+		reason = "g_fopen failed";
 		return false;
+	}
 	const size_t wrote = fwrite(bytes, 1, size, file);
 	const int flushed = fflush(file);
 	const int closed = fclose(file);
 	const bool ok = wrote == size && flushed == 0 && closed == 0;
+	if (!ok)
+		reason = "fwrite/fclose failed";
 	if (wrote != size)
 		g_unlink(path);
 	return ok;
@@ -1387,17 +1419,48 @@ write_word_file(const char * path, const guint8 * bytes, size_t size)
 #endif
 
 static bool
-save_word_bytes(const char * name, const guint8 * bytes, size_t size)
+save_word_bytes(const char * name, const guint8 * bytes, size_t size, std::string & reason)
 {
-	char * path = local_path_for_save(name);
-	if (!path || !bytes || size == 0)
+	if (!name || !*name || !bytes || size == 0)
 	{
-		g_free(path);
+		reason = "invalid output arguments";
 		return false;
 	}
-	const bool ok = write_word_file(path, bytes, size);
+
+	char * path = local_path_for_save(name);
+	if (path && *path)
+	{
+		if (write_word_file(path, bytes, size, reason))
+		{
+			g_free(path);
+			return true;
+		}
+	}
+	else
+	{
+		reason = "local_path_for_save failed";
+	}
 	g_free(path);
-	return ok;
+
+	// Fallback to the standard UT_go_file_create pipeline used by other
+	// exporters (e.g. .docx, .odt, .abw) when direct file opening fails.
+	GError * err = nullptr;
+	GsfOutput * out = UT_go_file_create(name, &err);
+	if (out)
+	{
+		const gboolean wrote = gsf_output_write(out, size, bytes);
+		const gboolean closed = gsf_output_close(out);
+		g_object_unref(out);
+		if (wrote && closed)
+			return true;
+		reason += "; UT_go_file_create write/close failed";
+	}
+	else if (err)
+	{
+		reason += std::string("; UT_go_file_create: ") + (err->message ? err->message : "error");
+		g_error_free(err);
+	}
+	return false;
 }
 
 GsfOutput * IE_Exp_MsWord_97::_openFile(const char * /*szFilename*/)
@@ -1593,16 +1656,31 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	place(fib, 33, clx_at, clx_len);
 	memcpy(&word[0], &fib[0], FIB_BYTES);
 
-	if (!getFp() || !write_ole(getFp(), word, table, data))
+	std::string reason;
+	Buf ole_bytes;
+	if (!getFp())
+	{
+		IE_Exp::setLastErrorDetail("null output stream");
 		return UT_IE_COULDNOTWRITE;
+	}
+	if (!build_ole_bytes(word, table, data, ole_bytes, reason))
+	{
+		IE_Exp::setLastErrorDetail(reason);
+		return UT_IE_COULDNOTWRITE;
+	}
 	if (!GSF_IS_OUTPUT_MEMORY(getFp()))
+	{
+		if (!gsf_output_write(getFp(), ole_bytes.size(), &ole_bytes[0]))
+		{
+			IE_Exp::setLastErrorDetail("gsf_output_write failed");
+			return UT_IE_COULDNOTWRITE;
+		}
 		return UT_OK;
-	if (!gsf_output_is_closed(getFp()) && !gsf_output_close(getFp()))
+	}
+	if (!save_word_bytes(getFileName(), &ole_bytes[0], ole_bytes.size(), reason))
+	{
+		IE_Exp::setLastErrorDetail(reason);
 		return UT_IE_COULDNOTWRITE;
-	const guint8 * bytes = gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(getFp()));
-	const gsf_off_t size = gsf_output_size(getFp());
-	if (!bytes || size <= 0 ||
-	    !save_word_bytes(getFileName(), bytes, static_cast<size_t>(size)))
-		return UT_IE_COULDNOTWRITE;
+	}
 	return UT_OK;
 }

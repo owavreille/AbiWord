@@ -1880,10 +1880,17 @@ static void s_TellSaveFailed(XAP_Frame * pFrame, const char * fileName, UT_Error
         String_id = AP_STRING_ID_MSG_SaveFailed;
         break;
     }
+	std::string displayTarget = fileName ? fileName : "";
+	if (errorCode == UT_SAVE_WRITEERROR && !IE_Exp::getLastErrorDetail().empty())
+	{
+		displayTarget += " [";
+		displayTarget += IE_Exp::getLastErrorDetail();
+		displayTarget += "]";
+	}
 	pFrame->showMessageBox(String_id,
 			       XAP_Dialog_MessageBox::b_O,
 			       XAP_Dialog_MessageBox::a_OK,
-			       fileName);
+			       displayTarget.c_str());
 }
 
 #ifdef ENABLE_SPELL

@@ -305,11 +305,24 @@ PD_DocumentRange * IE_Exp::getDocRange() const
   return m_pDocRange;
 }
 
+static std::string s_lastWriteErrorDetail;
+
+void IE_Exp::setLastErrorDetail(const std::string & detail)
+{
+	s_lastWriteErrorDetail = detail;
+}
+
+const std::string & IE_Exp::getLastErrorDetail(void)
+{
+	return s_lastWriteErrorDetail;
+}
+
 UT_Error IE_Exp::writeFile(GsfOutput * fp)
 {
 	UT_return_val_if_fail(m_pDocument, UT_IE_COULDNOTWRITE);
 	UT_return_val_if_fail(fp, UT_IE_COULDNOTWRITE);
 
+	s_lastWriteErrorDetail.clear();
 	m_fp = fp;
 
 	m_szFileName = gsf_output_name(fp);
@@ -321,6 +334,7 @@ UT_Error IE_Exp::writeFile(const char * szFilename)
 	UT_return_val_if_fail(m_pDocument, UT_IE_COULDNOTWRITE);
 	UT_return_val_if_fail(szFilename && *szFilename, UT_IE_COULDNOTWRITE);
 
+	s_lastWriteErrorDetail.clear();
 	m_bCancelled = false;
 
 	if (!(m_fp = openFile(szFilename)))
