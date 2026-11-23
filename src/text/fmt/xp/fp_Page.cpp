@@ -1200,20 +1200,6 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 
  		UT_sint32 height =getHeight();
 		UT_sint32 width = getWidth();
-		// Web layout shows the paper without its margins. Painting
-		// the full paper height would cover the following page.
-		// Normal layout keeps the top margin so the header is visible.
-		if (pDA->pG->queryProperties(GR_Graphics::DGP_SCREEN) && m_pView &&
-		    m_pView->getViewMode() == VIEW_WEB)
-		{
-			fl_DocSectionLayout * pDSL = getOwningSection();
-			if (pDSL)
-			{
-				UT_sint32 content = height - pDSL->getTopMargin() - pDSL->getBottomMargin();
-				if (content > 0)
-					height = content;
-			}
-		}
 		UT_sint32 srcX = 0;
 		UT_sint32 srcY = 0;
 		getFillType().Fill(pDA->pG,srcX,srcY,xmin,ymin,width,height);
@@ -1296,41 +1282,38 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 		}
 	}
 
-	// draw the page's headers and footers. Web layout is the text
-	// alone. Normal layout and print preview keep the header.
-    if(m_pView->getViewMode() != VIEW_WEB || pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
+	// draw the page's headers and footers across all view modes so the
+	// document content stays consistent in Normal, Web, and Print views.
+	if (m_pHeader)
 	{
-		if (m_pHeader)
+		dg_DrawArgs da = *pDA;
+		UT_sint32 x = m_pHeader->getX();
+		if (m_pView && (m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB) &&
+		    !pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
 		{
-			dg_DrawArgs da = *pDA;
-			// Normal layout places the body at the ruler, not at the
-			// paper's left margin. The header follows that edge.
-			UT_sint32 x = m_pHeader->getX();
-			if (m_pView->getViewMode() == VIEW_NORMAL)
-			{
-				fp_Column * pCol = getNthColumnLeader(0);
-				if (pCol)
-					x = pCol->getX();
-			}
-			da.xoff += x;
-			da.yoff += m_pHeader->getY();
-			m_pHeader->draw(&da);
+			fp_Column * pCol = getNthColumnLeader(0);
+			if (pCol)
+				x = pCol->getX();
 		}
+		da.xoff += x;
+		da.yoff += m_pHeader->getY();
+		m_pHeader->draw(&da);
+	}
 
-		if (m_pFooter)
+	if (m_pFooter)
+	{
+		dg_DrawArgs da = *pDA;
+		UT_sint32 x = m_pFooter->getX();
+		if (m_pView && (m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB) &&
+		    !pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
 		{
-			dg_DrawArgs da = *pDA;
-			UT_sint32 x = m_pFooter->getX();
-			if (m_pView->getViewMode() == VIEW_NORMAL)
-			{
-				fp_Column * pCol = getNthColumnLeader(0);
-				if (pCol)
-					x = pCol->getX();
-			}
-			da.xoff += x;
-			da.yoff += m_pFooter->getY();
-			m_pFooter->draw(&da);
+			fp_Column * pCol = getNthColumnLeader(0);
+			if (pCol)
+				x = pCol->getX();
 		}
+		da.xoff += x;
+		da.yoff += m_pFooter->getY();
+		m_pFooter->draw(&da);
 	}
 
 	// draw footnotes
@@ -1339,13 +1322,6 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 	{
 		fp_FootnoteContainer* pFC = m_vecFootnotes.getNthItem(i);
 		dg_DrawArgs da = *pDA;
-		if(m_pView && (m_pView->getViewMode() == VIEW_WEB) &&
-		   !pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
-		{
-			fp_Column* pFirstColumnLeader = getNthColumnLeader(0);
-			fl_DocSectionLayout* pFirstSectionLayout = (pFirstColumnLeader->getDocSectionLayout());
-			da.yoff -= pFirstSectionLayout->getTopMargin();
-		}
 		da.xoff += pFC->getX();
 		da.yoff += pFC->getY();
 		pFC->draw(&da);
@@ -1359,13 +1335,6 @@ void fp_Page::draw(dg_DrawArgs* pDA, bool /*bAlwaysUseWhiteBackground*/)
 			{
 					fp_AnnotationContainer* pAC = m_vecAnnotations.getNthItem(i);
 					dg_DrawArgs da = *pDA;
-					if(m_pView && (m_pView->getViewMode() == VIEW_WEB) &&
-					   !pDA->pG->queryProperties(GR_Graphics::DGP_PAPER))
-					{
-							fp_Column* pFirstColumnLeader = getNthColumnLeader(0);
-							fl_DocSectionLayout* pFirstSectionLayout = (pFirstColumnLeader->getDocSectionLayout());
-							da.yoff -= pFirstSectionLayout->getTopMargin();
-					}
 					da.xoff += pAC->getX();
 					da.yoff += pAC->getY();
 					pAC->draw(&da);
@@ -2737,7 +2706,7 @@ void fp_Page::mapXYToPosition(bool bNotFrames,UT_sint32 x, UT_sint32 y, PT_DocPo
 	{
 		if (pShadow)
 			*pShadow = nullptr;
-		if(m_pView && m_pView->getViewMode() == VIEW_PRINT)
+		if(m_pView)
 		{
 			fp_ShadowContainer * hf[2] = { m_pHeader, m_pFooter };
 			for (UT_uint32 j = 0; j < G_N_ELEMENTS(hf); j++)

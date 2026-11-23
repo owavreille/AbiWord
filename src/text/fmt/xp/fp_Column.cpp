@@ -182,27 +182,6 @@ UT_sint32 fp_VerticalContainer::getX(void) const
 */
 UT_sint32 fp_VerticalContainer::getY(void) const
 {
-	// Web layout starts the text at the top of the window. Normal
-	// layout keeps the top margin, which is where the header is.
-	if(getSectionLayout()->getDocLayout()->getView() &&
-	   (getSectionLayout()->getDocLayout()->getView()->getViewMode() == VIEW_WEB))
-	{
-		fl_SectionLayout * pSL = getSectionLayout();
-		fl_DocSectionLayout * pDSL = nullptr;
-		if(static_cast<fl_ContainerLayout *>(pSL)->getContainerType() == FL_CONTAINER_DOCSECTION)
-		{
-			pDSL = static_cast<fl_DocSectionLayout *>(pSL);
-		}
-		else
-		{
-			pDSL =  static_cast<fl_DocSectionLayout *>(pSL->getDocSectionLayout());
-		}
-		if(pSL->getContainerType() == FL_CONTAINER_DOCSECTION)
-		{
-			return m_iY - pDSL->getTopMargin();
-		}
-		return m_iY;
-	}
 	return m_iY;
 }
 /*!
@@ -210,26 +189,8 @@ UT_sint32 fp_VerticalContainer::getY(void) const
  mode and if we're printing.
   \return Y position
 */
-UT_sint32 fp_VerticalContainer::getY(GR_Graphics * pG) const
+UT_sint32 fp_VerticalContainer::getY(GR_Graphics * /*pG*/) const
 {
-	if(pG && getSectionLayout()->getDocLayout()->getView() &&
-	   (getSectionLayout()->getDocLayout()->getView()->getViewMode() == VIEW_WEB) &&
-	   pG->queryProperties(GR_Graphics::DGP_SCREEN))
-	{
-		fl_SectionLayout * pSL = getSectionLayout();
-		fl_DocSectionLayout * pDSL = nullptr;
-		if(static_cast<fl_ContainerLayout *>(pSL)->getContainerType() == FL_CONTAINER_DOCSECTION)
-		{
-			pDSL = static_cast<fl_DocSectionLayout *>(pSL);
-		}
-		else
-		{
-			pDSL = static_cast<fl_DocSectionLayout *>(pSL->getDocSectionLayout());
-		}
-		if(pDSL && pSL->getContainerType() == FL_CONTAINER_DOCSECTION)
-			return m_iY - pDSL->getTopMargin();
-		return m_iY;
-	}
 	return m_iY;
 }
 
@@ -526,23 +487,6 @@ void fp_VerticalContainer::getOffsets(const fp_ContainerObject* pContainer, UT_s
 		xoff = 0;
 		yoff = 0;
 	}
-	if(pCon && pCon->getContainerType() == FP_CONTAINER_FOOTNOTE)
-	{
-	        if(getPage() && getView() && (getView()->getViewMode() == VIEW_WEB))
-		{
-		       fl_DocSectionLayout * pDSL = getPage()->getOwningSection();
-		       yoff -= pDSL->getTopMargin();
-		}
-	}
-	if(pCon && getPage() && (pCon->getContainerType() == FP_CONTAINER_ANNOTATION) && 
-	   getPage()->getDocLayout()->displayAnnotations())
-	{
-	        if(getPage() && getView() && (getView()->getViewMode() == VIEW_WEB))
-		{
-		       fl_DocSectionLayout * pDSL = getPage()->getOwningSection();
-		       yoff -= pDSL->getTopMargin();
-		}
-	}
 }
 
 
@@ -765,11 +709,6 @@ void fp_VerticalContainer::getScreenOffsets(const fp_ContainerObject* pContainer
 
 		xoff += col_x;
 		yoff += col_y;
-	        if(pFC->getPage() && getView() && (getView()->getViewMode() == VIEW_WEB))
-		{
-		       fl_DocSectionLayout * pDSL = getPage()->getOwningSection();
-		       yoff -= pDSL->getTopMargin();
-		}
 	}
 	else if(pCon->getContainerType() == FP_CONTAINER_ANNOTATION)
 	{
@@ -778,11 +717,6 @@ void fp_VerticalContainer::getScreenOffsets(const fp_ContainerObject* pContainer
 
 		xoff += col_x;
 		yoff += col_y;
-	        if(pAC->getPage() && getView() && (getView()->getViewMode() == VIEW_WEB))
-		{
-		       fl_DocSectionLayout * pDSL = getPage()->getOwningSection();
-		       yoff -= pDSL->getTopMargin();
-		}
 	}
 	else if(pCon->getContainerType() == FP_CONTAINER_FRAME)
 	{
@@ -2213,20 +2147,11 @@ void fp_ShadowContainer::layout(void)
 	layout(false);
 }
 
-void fp_ShadowContainer::layout(bool bForceLayout)
+void fp_ShadowContainer::layout(bool /*bForceLayout*/)
 {
 	UT_sint32 iY = 5;
 	UT_uint32 iCountContainers = countCons();
-	FV_View * pView = getPage()->getDocLayout()->getView();
 	bool doLayout = true;
-	if(pView)
-	{
-	    doLayout =	pView->getViewMode() == VIEW_PRINT;
-	}
-	if(bForceLayout)
-	{
-		doLayout = true;
-	}
 	for (UT_uint32 i=0; i < iCountContainers; i++)
 	{
 		fp_Container* pContainer = static_cast<fp_Container*>(getNthCon(i));
@@ -2327,12 +2252,6 @@ fl_HdrFtrSectionLayout* fp_ShadowContainer::getHdrFtrSectionLayout(void) const
 */
 void fp_ShadowContainer::clearScreen(void)
 {
-	FV_View * pView = getPage()->getDocLayout()->getView();
-	if(pView->getViewMode() !=  VIEW_PRINT)
-	{
-		UT_DEBUGMSG(("SEVIOR: Attempting to clear Header/Footer in Normal Mode \n"));
-		return;
-	}
 	int count = countCons();
 	for (int i = 0; i<count; i++)
 	{
@@ -2353,15 +2272,6 @@ void fp_ShadowContainer::clearScreen(void)
 void fp_ShadowContainer::draw(dg_DrawArgs* pDA)
 {
 	FV_View * pView = getPage()->getDocLayout()->getView();
-	if((pView->getViewMode() !=  VIEW_PRINT) && pDA->pG->queryProperties(GR_Graphics::DGP_SCREEN) )
-	{
-		UT_DEBUGMSG(("SEVIOR: Attempting to draw Header/Footer in Normal Mode \n"));
-		return;
-	}
-	if((pView->getViewMode() !=  VIEW_PRINT) && pDA->pG->queryProperties(GR_Graphics::DGP_PAPER) )
-	{
-		layout(true);
-	}
 
 	UT_sint32 count = countCons();
 	UT_sint32 iY= 0;
@@ -2393,10 +2303,6 @@ void fp_ShadowContainer::draw(dg_DrawArgs* pDA)
         clearHdrFtrBoundaries();
 		_drawBoundaries(pDA);
 	}
-	if((pView->getViewMode() !=  VIEW_PRINT) && pDA->pG->queryProperties(GR_Graphics::DGP_PAPER) )
-	{
-		layout(false);
-	}
 }
 
 /*!
@@ -2406,12 +2312,6 @@ void fp_ShadowContainer::_drawHdrFtrBoundaries(dg_DrawArgs * pDA)
 {
 	if(!pDA->pG->queryProperties(GR_Graphics::DGP_SCREEN))
 	{
-		return;
-	}
-	FV_View * pView = getPage()->getDocLayout()->getView();
-	if(pView->getViewMode() !=  VIEW_PRINT)
-	{
-		UT_DEBUGMSG(("SEVIOR: Attempting to draw Header/Footer in Normal Mode \n"));
 		return;
 	}
 //

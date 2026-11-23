@@ -1493,17 +1493,11 @@ void FV_View::_insertSectionBreak(void)
 // page, including the band where the header and the footer are drawn.
 // A margin larger than the paper used to make this height negative,
 // the following division walked forever, and nothing was painted.
-static UT_sint32 s_visiblePageHeight(const fp_Page * pPage, const fl_DocSectionLayout * pDSL, bool bStripMargins)
+static UT_sint32 s_visiblePageHeight(const fp_Page * pPage, const fl_DocSectionLayout * /*pDSL*/, bool /*bStripMargins*/)
 {
 	if (!pPage)
 		return 1;
 	UT_sint32 height = pPage->getHeight();
-	if (bStripMargins && pDSL)
-	{
-		UT_sint32 content = height - pDSL->getTopMargin() - pDSL->getBottomMargin();
-		if (content > 0)
-			height = content;
-	}
 	if (height < 1)
 		height = 1;
 	return height;
@@ -1897,11 +1891,6 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 				{
 					getPageYOffset(pPage, iPageOffset);
 					yPoint = pPage->getBottom();
-					if(getViewMode() == VIEW_WEB)
-					{
-						fl_DocSectionLayout * pDSL = pPage->getOwningSection();
-						yPoint = yPoint - pDSL->getTopMargin() -2;
-					}
 					if(iHoriz > 1)
 					{
 						xOldpage = static_cast<UT_sint32>(getWidthPrevPagesInRow(m_pLayout->findPage(pOldPage)));
@@ -1930,11 +1919,6 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 				{
 					getPageYOffset(pPage, iPageOffset);
 					yPoint = pPage->getBottom();
-					if(getViewMode() == VIEW_WEB)
-					{
-						fl_DocSectionLayout * pDSL = pPage->getOwningSection();
-						yPoint = yPoint - pDSL->getTopMargin() -2;
-					}
 					if(iHoriz > 1)
 					{
 						xOldpage = static_cast<UT_sint32>(getWidthPrevPagesInRow(m_pLayout->findPage(pOldPage)));
@@ -1983,11 +1967,6 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 				{
 					getPageYOffset(pPage, iPageOffset);
 					yPoint = pPage->getBottom();
-					if(getViewMode() == VIEW_WEB)
-					{
-						fl_DocSectionLayout * pDSL = pPage->getOwningSection();
-						yPoint = yPoint - pDSL->getTopMargin() -2;
-					}
 					if(iHoriz > 1)
 					{
 						xOldpage = static_cast<UT_sint32>(getWidthPrevPagesInRow(m_pLayout->findPage(pOldPage)));
@@ -2625,13 +2604,6 @@ fp_Page* FV_View::_getPageForXY(UT_sint32 xPos, UT_sint32 yPos, UT_sint32& xClic
 			if (iNumHorizPages < 1)
 				iNumHorizPages = 1;
 			UT_sint32 iPageHeight = pPage->getHeight();
-			
-			if(getViewMode() == VIEW_WEB)
-			{
-				fl_DocSectionLayout * pOwn = pPage->getOwningSection();
-				if (pOwn)
-					iPageHeight = iPageHeight - pOwn->getTopMargin() - pOwn->getBottomMargin();
-			}
 			
 			if (yClick < iPageHeight)
 			{

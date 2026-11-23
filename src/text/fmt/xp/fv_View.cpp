@@ -14143,11 +14143,6 @@ void FV_View::getVisibleDocumentPagesAndRectangles(std::vector<UT_Rect> &vRect,
 		UT_sint32 iPageWidth		= pPage->getWidth();
 		UT_sint32 iPageHeight		= pPage->getHeight();
 		UT_sint32 adjustedTop		= curY - m_yScrollOffset;
-		fl_DocSectionLayout * pDSL = pPage->getOwningSection();
-		if(getViewMode() == VIEW_WEB)
-		{
-			iPageHeight = iPageHeight - pDSL->getTopMargin() - pDSL->getBottomMargin();
-		}
 
 		UT_sint32 adjustedBottom = adjustedTop + iPageHeight + getPageViewSep();
 

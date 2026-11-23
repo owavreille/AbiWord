@@ -565,19 +565,7 @@ void fl_BlockLayout::_lookupMarginProperties(const PP_AttrProp* pBlockAP)
 			UT_convertDimensionless(pszSpacing);
 	}
 
-	if((pView->getViewMode() == VIEW_NORMAL) || ((pView->getViewMode() == VIEW_WEB) && !pG->queryProperties(GR_Graphics::DGP_PAPER)))
-	{
-		// flatten the text; we will indicate more than single spacing by using 1.2, which
-		// is enough for the text to be noticeably spaced, but not enough for it to take
-		// too much space
-		m_eSpacingPolicy = spacing_MULTIPLE;
-
-		double dSpacing1 = UT_convertDimensionless("1.2");
-		if(m_dLineSpacing > dSpacing1) 
-			m_dLineSpacing = UT_convertDimensionless("1.2");
-	}
-
-
+	UT_UNUSED(pG);
 	UT_sint32 i = 0;
 	for(i=0; i< getNumFrames();i++)
 	{
@@ -942,17 +930,6 @@ void fl_BlockLayout::_lookupProperties(const PP_AttrProp* pBlockAP)
 			UT_convertDimensionless(pszSpacing);
 	}
 
-	if((pView->getViewMode() == VIEW_NORMAL) || ((pView->getViewMode() == VIEW_WEB) && !pG->queryProperties(GR_Graphics::DGP_PAPER)))
-	{
-		// flatten the text; we will indicate more than single spacing by using 1.2, which
-		// is enough for the text to be noticeably spaced, but not enough for it to take
-		// too much space
-		m_eSpacingPolicy = spacing_MULTIPLE;
-
-		double dSpacing1 = UT_convertDimensionless("1.2");
-		if(m_dLineSpacing > dSpacing1) 
-			m_dLineSpacing = UT_convertDimensionless("1.2");
-	}
 	//
 	// Shading now
 	//

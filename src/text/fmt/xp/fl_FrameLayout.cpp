@@ -1161,19 +1161,6 @@ void fl_FrameLayout::_lookupMarginProperties(const PP_AttrProp* pSectionAP)
 	UT_sint32 iYPage = m_iYPage;
 
 	
-	if(pView->getViewMode() == VIEW_NORMAL && !pG->queryProperties(GR_Graphics::DGP_PAPER))
-	{
-		m_iFramePositionTo = FL_FRAME_POSITIONED_TO_BLOCK;
-		m_iFrameWrapMode = FL_FRAME_WRAPPED_TO_RIGHT;
-		m_bIsTightWrap = false;
-		m_iXpos = 0;
-		m_iYpos = 0;
-		m_iXColumn = 0;
-		m_iYColumn = 0;
-		m_iXPage = 0;
-		m_iYPage = 0;
-	}
-	else
 	{
 		const gchar *pszPositionTo = nullptr;
 		const gchar *pszWrapMode = nullptr;

@@ -520,16 +520,7 @@ void  fp_FrameContainer::drawBoundaries(dg_DrawArgs * pDA)
 		// Only fill to the bottom of the viewed page.
 		//
 		UT_sint32 iFullHeight = getFullHeight();
-		fl_DocSectionLayout * pDSL = getDocSectionLayout();
-		UT_sint32 iMaxHeight = 0;
-		if(!pG->queryProperties(GR_Graphics::DGP_PAPER) && (getView()->getViewMode() != VIEW_PRINT))
-		{
-		        iMaxHeight = pDSL->getActualColumnHeight();
-		}
-		else
-		{
-		        iMaxHeight = getPage()->getHeight();
-		}
+		UT_sint32 iMaxHeight = getPage()->getHeight();
 		UT_sint32 iBot = getFullY()+iFullHeight;
 		if(iBot > iMaxHeight)
 		{
@@ -566,17 +557,9 @@ void  fp_FrameContainer::drawHandles(dg_DrawArgs * pDA)
 	// Only fill to the bottom of the viewed page.
 	//
 	GR_Graphics * pG = pDA->pG;
+	UT_UNUSED(pG);
 	UT_sint32 iFullHeight = getFullHeight();
-	fl_DocSectionLayout * pDSL = getDocSectionLayout();
-	UT_sint32 iMaxHeight = 0;
-	if(!pG->queryProperties(GR_Graphics::DGP_PAPER) && (getView()->getViewMode() != VIEW_PRINT))
-	{
-	    iMaxHeight = pDSL->getActualColumnHeight();
-	}
-	else
-	{
-	    iMaxHeight = getPage()->getHeight();
-	}
+	UT_sint32 iMaxHeight = getPage()->getHeight();
 	UT_sint32 iBot = getFullY()+iFullHeight;
 	if(iBot > iMaxHeight)
 	{
@@ -658,16 +641,7 @@ void fp_FrameContainer::draw(dg_DrawArgs* pDA)
 		// Only fill to the bottom of the viewed page.
 		//
 		UT_sint32 iFullHeight = getFullHeight();
-		fl_DocSectionLayout * pDSL = getDocSectionLayout();
-		UT_sint32 iMaxHeight = 0;
-		if(!pG->queryProperties(GR_Graphics::DGP_PAPER) && (pView->getViewMode() != VIEW_PRINT))
-		{
-		        iMaxHeight = pDSL->getActualColumnHeight();
-		}
-		else
-		{
-		        iMaxHeight = getPage()->getHeight();
-		}
+		UT_sint32 iMaxHeight = getPage()->getHeight();
 		UT_sint32 iBot = getFullY()+iFullHeight;
 		if(iBot > iMaxHeight)
 		{

@@ -278,11 +278,6 @@ void fp_Line::drawBorders(GR_Graphics * pG)
        iBot = iBot - ydiff;
        iLeft = iLeft - xdiff;
        iRight = iRight - xdiff;
-       if(pPage->getDocLayout()->getView()->getViewMode() == VIEW_WEB)
-       {
-	    iTop += static_cast<fl_DocSectionLayout *>(getSectionLayout()->getDocSectionLayout())->getTopMargin();
-	    iBot += static_cast<fl_DocSectionLayout *>(getSectionLayout()->getDocSectionLayout())->getTopMargin();
-       }
   }
 
   //

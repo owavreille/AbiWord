@@ -517,14 +517,6 @@ void fp_CellContainer::_getBrokenRect(fp_TableContainer * pBroke, fp_Page * &pPa
 	{
 		UT_sint32 xdiff,ydiff;
 		pPage->getDocLayout()->getView()->getPageScreenOffsets(pPage, xdiff, ydiff);
-		pPage = getPage();
-		if(pPage)
-		{
-			if(pPage->getDocLayout()->getView()->getViewMode() == VIEW_WEB)
-			{
-				ydiff -= static_cast<fl_DocSectionLayout *>(getSectionLayout()->getDocSectionLayout())->getTopMargin();
-			}
-		}
 		iLeft -= xdiff;
 		iRight -= xdiff;
 		iTop -= ydiff;
@@ -1072,10 +1064,6 @@ void fp_CellContainer::getScreenPositions(fp_TableContainer * pBroke,GR_Graphics
 		pPage->getDocLayout()->getView()->getPageScreenOffsets(pPage, xdiff, ydiff);
 		col_y = col_y - ydiff;
 		col_x = col_x - xdiff;
-		if(pPage->getDocLayout()->getView()->getViewMode() == VIEW_WEB)
-		{
-			col_y += static_cast<fl_DocSectionLayout *>(getSectionLayout()->getDocSectionLayout())->getTopMargin();
-		}
 	}
 	if(pBroke->getMasterTable())
 	{
