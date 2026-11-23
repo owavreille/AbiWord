@@ -62,6 +62,7 @@
 
 #include "ie_exp_MsWord_97.h"
 #include "pd_Document.h"
+#include "pd_Style.h"
 #include "pt_PieceTable.h"
 #include "pf_Frag_Object.h"
 #include "pf_Frag_Strux.h"
@@ -95,6 +96,7 @@ struct Picture
 struct Paragraph
 {
 	std::vector<Run> runs;
+	std::string pap_grpprl;
 };
 
 struct ChRun
@@ -169,6 +171,156 @@ static std::string character_grpprl(const PP_AttrProp * ap)
 		const double points = UT_convertToPoints(size);
 		if (points > 0.0 && points < 1000.0)
 			append_sprm(grpprl, 0x4A43, static_cast<unsigned>(points * 2.0 + 0.5), 2);
+	}
+	return grpprl;
+}
+
+static const gchar * block_property(PD_Document * doc, const PP_AttrProp * ap, const char * name)
+{
+	const gchar * value = nullptr;
+	if (ap && ap->getProperty(name, value) && value && *value)
+		return value;
+	if (doc && ap)
+	{
+		const gchar * styleName = nullptr;
+		if (ap->getAttribute("style", styleName) && styleName && *styleName)
+		{
+			PD_Style * style = nullptr;
+			if (doc->getStyle(styleName, &style) && style && style->getProperty(name, value) && value && *value)
+				return value;
+		}
+	}
+	return nullptr;
+}
+
+static bool parse_signed_twips(const gchar * text, int & out)
+{
+	if (!text || !*text)
+		return false;
+	const double inches = UT_convertToInches(text);
+	const double twips = inches * 1440.0;
+	if (twips < -31680.0 || twips > 31680.0)
+		return false;
+	out = static_cast<int>(twips >= 0.0 ? twips + 0.5 : twips - 0.5);
+	return true;
+}
+
+static std::string paragraph_grpprl(PD_Document * doc, const PP_AttrProp * ap)
+{
+	std::string grpprl;
+	unsigned jc = 0;
+	if (const gchar * align = block_property(doc, ap, "text-align"))
+	{
+		if (!strcmp(align, "center"))
+			jc = 1;
+		else if (!strcmp(align, "right"))
+			jc = 2;
+		else if (!strcmp(align, "justify"))
+			jc = 3;
+	}
+	// sprmPJc80 (0x2403) and sprmPJc (0x2461) for Word 97 and modern Word/LibreOffice.
+	append_sprm(grpprl, 0x2403, jc, 1);
+	if (jc)
+		append_sprm(grpprl, 0x2461, jc, 1);
+
+	int twips = 0;
+	if (parse_signed_twips(block_property(doc, ap, "margin-left"), twips) && twips != 0)
+	{
+		const unsigned u = static_cast<unsigned>(twips) & 0xFFFFu;
+		append_sprm(grpprl, 0x840F, u, 2); // sprmPDxaLeft80
+		append_sprm(grpprl, 0x845E, u, 2); // sprmPDxaLeft
+	}
+	if (parse_signed_twips(block_property(doc, ap, "margin-right"), twips) && twips != 0)
+	{
+		const unsigned u = static_cast<unsigned>(twips) & 0xFFFFu;
+		append_sprm(grpprl, 0x840E, u, 2); // sprmPDxaRight80
+		append_sprm(grpprl, 0x845D, u, 2); // sprmPDxaRight
+	}
+	if (parse_signed_twips(block_property(doc, ap, "text-indent"), twips) && twips != 0)
+	{
+		const unsigned u = static_cast<unsigned>(twips) & 0xFFFFu;
+		append_sprm(grpprl, 0x8411, u, 2); // sprmPDxaLeft180
+		append_sprm(grpprl, 0x8460, u, 2); // sprmPDxaLeft1
+	}
+	if (parse_signed_twips(block_property(doc, ap, "margin-top"), twips) && twips > 0)
+		append_sprm(grpprl, 0xA413, static_cast<unsigned>(twips) & 0xFFFFu, 2); // sprmPDyaBefore
+	if (parse_signed_twips(block_property(doc, ap, "margin-bottom"), twips) && twips > 0)
+		append_sprm(grpprl, 0xA414, static_cast<unsigned>(twips) & 0xFFFFu, 2); // sprmPDyaAfter
+
+	if (const gchar * tabstops = block_property(doc, ap, "tabstops"))
+	{
+		struct TabStop { int pos; unsigned char tbd; };
+		std::vector<TabStop> tabs;
+		const char * p = tabstops;
+		while (*p && tabs.size() < 64)
+		{
+			while (*p == ',' || *p == ' ' || *p == '\t')
+				++p;
+			if (!*p)
+				break;
+			const char * end = p;
+			while (*end && *end != ',')
+				++end;
+			std::string entry(p, static_cast<size_t>(end - p));
+			p = end;
+			const size_t slash = entry.find('/');
+			if (slash == std::string::npos || slash == 0)
+				continue;
+			const std::string posStr = entry.substr(0, slash);
+			int posTwips = 0;
+			if (!parse_signed_twips(posStr.c_str(), posTwips) || posTwips <= 0)
+				continue;
+			unsigned jcTab = 0;
+			unsigned leader = 0;
+			if (slash + 1 < entry.size())
+			{
+				switch (entry[slash + 1])
+				{
+				case 'C': case 'c': jcTab = 1; break;
+				case 'R': case 'r': jcTab = 2; break;
+				case 'D': case 'd': jcTab = 3; break;
+				case 'B': case 'b': jcTab = 4; break;
+				default: jcTab = 0; break;
+				}
+			}
+			if (slash + 2 < entry.size() && entry[slash + 2] >= '0' && entry[slash + 2] <= '4')
+				leader = static_cast<unsigned>(entry[slash + 2] - '0');
+			TabStop ts = { posTwips, static_cast<unsigned char>((jcTab & 0x07u) | ((leader & 0x07u) << 3)) };
+			tabs.push_back(ts);
+		}
+		if (!tabs.empty())
+		{
+			for (size_t i = 1; i < tabs.size(); ++i)
+			{
+				TabStop key = tabs[i];
+				size_t j = i;
+				while (j > 0 && tabs[j - 1].pos > key.pos)
+				{
+					tabs[j] = tabs[j - 1];
+					--j;
+				}
+				tabs[j] = key;
+			}
+			const unsigned n = static_cast<unsigned>(tabs.size());
+			const unsigned cb = 2 + n * 3;
+			if (cb <= 255)
+			{
+				// sprmPChgTabsPapx (0xC60D)
+				grpprl.push_back(static_cast<char>(0x0D));
+				grpprl.push_back(static_cast<char>(0xC6));
+				grpprl.push_back(static_cast<char>(cb));
+				grpprl.push_back(0); // itbdDelMax = 0
+				grpprl.push_back(static_cast<char>(n));
+				for (size_t i = 0; i < tabs.size(); ++i)
+				{
+					const unsigned u = static_cast<unsigned>(tabs[i].pos) & 0xFFFFu;
+					grpprl.push_back(static_cast<char>(u & 0xff));
+					grpprl.push_back(static_cast<char>((u >> 8) & 0xff));
+				}
+				for (size_t i = 0; i < tabs.size(); ++i)
+					grpprl.push_back(static_cast<char>(tabs[i].tbd));
+			}
+		}
 	}
 	return grpprl;
 }
@@ -262,6 +414,9 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 					if (in_paragraph)
 						paragraphs.push_back(current);
 					current = Paragraph();
+					const PP_AttrProp * blockAP = nullptr;
+					doc->getAttrProp(frag->getIndexAP(), &blockAP);
+					current.pap_grpprl = paragraph_grpprl(doc, blockAP);
 					in_paragraph = true;
 				}
 				else if (in_paragraph)
@@ -523,6 +678,9 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 					if (in_paragraph)
 						out.stories[current_id].paragraphs.push_back(current);
 					current = Paragraph();
+					const PP_AttrProp * blockAP = nullptr;
+					doc->getAttrProp(frag->getIndexAP(), &blockAP);
+					current.pap_grpprl = paragraph_grpprl(doc, blockAP);
 					in_paragraph = true;
 				}
 				continue;
@@ -702,7 +860,8 @@ static bool needs_header_text(const Headers & headers)
 }
 
 static void append_paragraphs(const std::vector<Paragraph> & paragraphs,
-	std::vector<uint16_t> & units, std::vector<ChRun> & runs, std::vector<unsigned> & bounds)
+	std::vector<uint16_t> & units, std::vector<ChRun> & runs,
+	std::vector<unsigned> & bounds, std::vector<std::string> & pap_grpprls)
 {
 	for (size_t p = 0; p < paragraphs.size(); ++p)
 	{
@@ -732,6 +891,7 @@ static void append_paragraphs(const std::vector<Paragraph> & paragraphs,
 		}
 		units.push_back(0x000D);
 		bounds.push_back(FC_MIN + static_cast<unsigned>(units.size() * 2));
+		pap_grpprls.push_back(paragraphs[p].pap_grpprl);
 	}
 }
 
@@ -822,22 +982,46 @@ static std::vector<FkpPage> pack_chpx(const std::vector<ChRun> & runs, unsigned 
 	return pages;
 }
 
-static const unsigned PAPX_BYTES = 6;
 static const unsigned PAPX_MAX = 0x1D;
 
-static bool papx_fits(unsigned count)
+static std::string effective_pap_grpprl(const std::string & grp)
 {
+	if (!grp.empty())
+		return grp;
+	std::string def;
+	append_sprm(def, 0x2403, 0, 1);
+	return def;
+}
+
+static unsigned papx_record_size(const std::string & grp)
+{
+	const unsigned total = 2 + static_cast<unsigned>(grp.size());
+	return (total & 1) ? (1 + total) : (2 + total);
+}
+
+static bool papx_fits(const std::vector<std::string> & pap_grpprls, size_t from, size_t until)
+{
+	const unsigned count = static_cast<unsigned>(until - from);
 	if (count == 0 || count > PAPX_MAX)
 		return false;
 	unsigned at = (count + 1) * 4 + count * 13;
 	if (at & 1)
 		++at;
-	return at + PAPX_BYTES < PAGE;
+	std::set<std::string> unique;
+	unsigned data_bytes = 0;
+	for (size_t i = from; i < until; ++i)
+	{
+		const std::string grp = effective_pap_grpprl(pap_grpprls[i]);
+		if (unique.insert(grp).second)
+			data_bytes += papx_record_size(grp);
+	}
+	return at + data_bytes <= 510;
 }
 
-// PapxInFkp: cb = 3, so the following GrpPrlAndIstd is 2*cb-1 = 5 bytes.
-// Those bytes are the paragraph style (istd 0, Normal) and sprmPJc80 = left.
-static Buf make_papx(const std::vector<unsigned> & bounds, size_t from, size_t until)
+// MS-DOC 2.9.174 PapxInFkp: each unique GrpPrlAndIstd is stored from the
+// end of the 512-byte FKP page at an even offset; BX[0] holds offset / 2.
+static Buf make_papx(const std::vector<unsigned> & bounds,
+	const std::vector<std::string> & pap_grpprls, size_t from, size_t until)
 {
 	Buf page(PAGE, 0);
 	const unsigned count = static_cast<unsigned>(until - from);
@@ -847,23 +1031,48 @@ static Buf make_papx(const std::vector<unsigned> & bounds, size_t from, size_t u
 		poke_u32(page, pos, bounds[i]);
 		pos += 4;
 	}
-	unsigned papx = pos + count * 13;
-	if (papx & 1)
-		++papx;
-	page[papx] = 3;
-	page[papx + 1] = 0;
-	page[papx + 2] = 0;
-	page[papx + 3] = 0x03;
-	page[papx + 4] = 0x24;
-	page[papx + 5] = 0x00;
-	const unsigned word = papx / 2;
-	for (unsigned i = 0; i < count; ++i)
-		page[pos + i * 13] = static_cast<unsigned char>(word);
+	unsigned end = 510;
+	std::map<std::string, unsigned char> placed;
+	for (size_t i = from; i < until; ++i)
+	{
+		const std::string grp = effective_pap_grpprl(pap_grpprls[i]);
+		std::map<std::string, unsigned char>::const_iterator it = placed.find(grp);
+		unsigned char word = 0;
+		if (it != placed.end())
+		{
+			word = it->second;
+		}
+		else
+		{
+			const unsigned size = papx_record_size(grp);
+			end -= size;
+			const unsigned total = 2 + static_cast<unsigned>(grp.size());
+			if (total & 1)
+			{
+				page[end] = static_cast<unsigned char>((total + 1) / 2);
+				page[end + 1] = 0;
+				page[end + 2] = 0;
+				memcpy(&page[end + 3], grp.data(), grp.size());
+			}
+			else
+			{
+				page[end] = 0;
+				page[end + 1] = static_cast<unsigned char>(total / 2);
+				page[end + 2] = 0;
+				page[end + 3] = 0;
+				memcpy(&page[end + 4], grp.data(), grp.size());
+			}
+			word = static_cast<unsigned char>(end / 2);
+			placed[grp] = word;
+		}
+		page[pos + (i - from) * 13] = word;
+	}
 	page[511] = static_cast<unsigned char>(count);
 	return page;
 }
 
-static std::vector<FkpPage> pack_papx(const std::vector<unsigned> & bounds)
+static std::vector<FkpPage> pack_papx(const std::vector<unsigned> & bounds,
+	const std::vector<std::string> & pap_grpprls)
 {
 	std::vector<FkpPage> pages;
 	if (bounds.size() < 2)
@@ -875,7 +1084,7 @@ static std::vector<FkpPage> pack_papx(const std::vector<unsigned> & bounds)
 		size_t best = i + 1;
 		for (size_t j = i + 1; j <= last; ++j)
 		{
-			if (papx_fits(static_cast<unsigned>(j - i)))
+			if (papx_fits(pap_grpprls, i, j))
 				best = j;
 			else
 				break;
@@ -883,7 +1092,7 @@ static std::vector<FkpPage> pack_papx(const std::vector<unsigned> & bounds)
 		FkpPage page;
 		page.start = bounds[i];
 		page.limit = bounds[best];
-		page.page = make_papx(bounds, i, best);
+		page.page = make_papx(bounds, pap_grpprls, i, best);
 		pages.push_back(page);
 		i = best;
 	}
@@ -1127,6 +1336,12 @@ static Buf section_properties(PD_Document * doc, unsigned hf_flags)
 {
 	unsigned page_w = 12240;
 	unsigned page_h = 15840;
+	unsigned margin_left = 1440;
+	unsigned margin_right = 1440;
+	unsigned margin_top = 1440;
+	unsigned margin_bottom = 1440;
+	unsigned margin_header = 720;
+	unsigned margin_footer = 720;
 	if (doc)
 	{
 		const double w_in = doc->m_docPageSize.Width(DIM_IN);
@@ -1135,18 +1350,37 @@ static Buf section_properties(PD_Document * doc, unsigned hf_flags)
 			page_w = static_cast<unsigned>(w_in * 1440.0 + 0.5);
 		if (h_in > 0.0)
 			page_h = static_cast<unsigned>(h_in * 1440.0 + 0.5);
+		pt_PieceTable * table = doc->getPieceTable();
+		for (pf_Frag * frag = table ? table->getFragments().getFirst() : nullptr; frag; frag = frag->getNext())
+		{
+			if (frag->getType() == pf_Frag::PFT_Strux &&
+			    static_cast<pf_Frag_Strux *>(frag)->getStruxType() == PTX_Section)
+			{
+				const PP_AttrProp * ap = nullptr;
+				if (doc->getAttrProp(frag->getIndexAP(), &ap) && ap)
+				{
+					margin_left = twips_property(ap, "page-margin-left", margin_left);
+					margin_right = twips_property(ap, "page-margin-right", margin_right);
+					margin_top = twips_property(ap, "page-margin-top", margin_top);
+					margin_bottom = twips_property(ap, "page-margin-bottom", margin_bottom);
+					margin_header = twips_property(ap, "page-margin-header", margin_header);
+					margin_footer = twips_property(ap, "page-margin-footer", margin_footer);
+				}
+				break;
+			}
+		}
 	}
 	// Sepx. Every section must state its page size and its four margins.
 	const unsigned sprm[][2] = {
 		{ 0xB01F, page_w },
 		{ 0xB020, page_h },
-		{ 0xB021, 1440 },
-		{ 0xB022, 1440 },
-		{ 0x9023, 1440 },
-		{ 0x9024, 1440 },
+		{ 0xB021, margin_left },
+		{ 0xB022, margin_right },
+		{ 0x9023, margin_top },
+		{ 0x9024, margin_bottom },
 		{ 0xB025, 0 },
-		{ 0xB017, 720 },
-		{ 0xB018, 720 }
+		{ 0xB017, margin_header },
+		{ 0xB018, margin_footer }
 	};
 	Buf grp;
 	for (unsigned i = 0; i < sizeof(sprm) / sizeof(sprm[0]); ++i)
@@ -1514,8 +1748,9 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	std::vector<uint16_t> units;
 	std::vector<ChRun> runs;
 	std::vector<unsigned> bounds;
+	std::vector<std::string> pap_grpprls;
 	bounds.push_back(FC_MIN);
-	append_paragraphs(paragraphs, units, runs, bounds);
+	append_paragraphs(paragraphs, units, runs, bounds, pap_grpprls);
 	const unsigned ccp_text = static_cast<unsigned>(units.size());
 
 	// LibreOffice leaves ccpHdd at 0 when the document has no header. A
@@ -1554,8 +1789,8 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 			hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
 			if (slot_text[slot].empty())
 				continue;
-			append_paragraphs(slot_text[slot], units, runs, bounds);
-			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds);
+			append_paragraphs(slot_text[slot], units, runs, bounds, pap_grpprls);
+			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds, pap_grpprls);
 		}
 		ccp_hdd = static_cast<unsigned>(units.size()) - ccp_text;
 		if (ccp_hdd)
@@ -1567,7 +1802,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 			// (last CP = ccpText + ccpHdd + 1).
 			hdd_cp.push_back(ccp_hdd);
 			hdd_cp.push_back(ccp_hdd + 1);
-			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds);
+			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds, pap_grpprls);
 		}
 		else
 		{
@@ -1587,7 +1822,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 		return UT_IE_COULDNOTWRITE;
 
 	const std::vector<FkpPage> ch_pages = pack_chpx(runs, fc_mac);
-	const std::vector<FkpPage> pap_pages = pack_papx(bounds);
+	const std::vector<FkpPage> pap_pages = pack_papx(bounds, pap_grpprls);
 	unsigned fkp_at = (fc_mac + PAGE - 1) & ~(PAGE - 1);
 	Buf word(fkp_at, 0);
 	for (size_t i = 0; i < units.size(); ++i)
