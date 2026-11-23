@@ -388,8 +388,8 @@ UT_sint32 fp_AnnotationContainer::getValue(void)
 void fp_AnnotationContainer::placeInRightMargin(GR_Graphics * pG, UT_sint32 pageWidth,
 	UT_sint32 rightMargin, UT_sint32 & x, UT_sint32 & width)
 {
-	const UT_sint32 pad = pG ? pG->tlu(4) : 4;
-	const UT_sint32 edge = pG ? pG->tlu(2) : 2;
+	const UT_sint32 pad = pG ? pG->tlu(6) : 6;
+	const UT_sint32 edge = pG ? pG->tlu(4) : 4;
 	if (pageWidth < 1)
 		pageWidth = 1;
 	if (rightMargin < 0)
@@ -495,14 +495,18 @@ static void annotationCallout(const fp_AnnotationContainer * box, GR_Graphics * 
 	UT_sint32 & x, UT_sint32 & y, UT_sint32 & width, UT_sint32 & height,
 	UT_sint32 & closeX, UT_sint32 & closeY, UT_sint32 & close)
 {
-	const UT_sint32 pad = graphics ? graphics->tlu(4) : 4;
-	close = graphics ? graphics->tlu(11) : 11;
+	const UT_sint32 pad = graphics ? graphics->tlu(6) : 6;
+	const UT_sint32 inset = graphics ? graphics->tlu(4) : 4;
+	close = graphics ? graphics->tlu(16) : 16;
 	x = box->getX() - pad;
 	y = box->getY() - pad;
 	width = box->getWidth() + pad * 2;
 	height = box->getHeight() + pad * 2;
-	closeX = x + width - close - (graphics ? graphics->tlu(3) : 3);
-	closeY = y + (graphics ? graphics->tlu(3) : 3);
+	const UT_sint32 minHeight = close + inset * 2;
+	if (height < minHeight)
+		height = minHeight;
+	closeX = x + width - close - inset;
+	closeY = y + inset;
 }
 
 bool fp_AnnotationContainer::containsPoint(UT_sint32 x, UT_sint32 y) const
@@ -600,28 +604,18 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 	{
 		fp_ContainerObject* pContainer = static_cast<fp_ContainerObject*>(getNthCon(i));
 		da.xoff = pDA->xoff + pContainer->getX();
-		if(i == 0)
-		{
-		        fl_AnnotationLayout * pAL = static_cast<fl_AnnotationLayout *>(getSectionLayout());
-			fp_AnnotationRun * pAR = pAL->getAnnotationRun();
-			if(pAR)
-			{		
-			    m_iLabelWidth = pAR->getWidth();
-      			    da.xoff = pDA->xoff + pContainer->getX() - m_iLabelWidth;
-			    fp_Line * pLine = static_cast<fp_Line *>(pContainer);
-			    da.yoff = pDA->yoff + pContainer->getY() + pLine->getAscent();
-			    da.bDirtyRunsOnly = false;
-			    m_iXLabel = da.xoff;
-			    m_iYLabel = da.yoff;
-			    pAR->draw(&da);
-			    da.xoff = pDA->xoff + pContainer->getX();
-			}
-		}
 		da.yoff = pDA->yoff + pContainer->getY();
 		pContainer->draw(&da);
 	}
 	if (pG)
 	{
+		const UT_sint32 left = screenX + boxX;
+		const UT_sint32 top = screenY + boxY;
+		const UT_sint32 right = left + boxW;
+		const UT_sint32 bottom = top + boxH;
+		const UT_sint32 pad = pG->tlu(6);
+		const UT_sint32 headerH = pG->tlu(22);
+
 		std::string heading;
 		if (pAL2->getAuthor())
 			heading = pAL2->getAuthor();
@@ -640,21 +634,45 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 			if (pFont)
 				pDrawG->setFont(pFont);
 			pDrawG->setColor(UT_RGBColor(40, 40, 40));
+			const UT_sint32 headingX = left + pad;
+			const UT_sint32 headingMaxW = (screenX + closeX) - headingX - pDrawG->tlu(4);
 			UT_UCS4String text(heading);
-			GR_Painter painter(pDrawG);
-			painter.drawChars(text.ucs4_str(), 0, static_cast<int>(text.size()), pDA->xoff, pDA->yoff);
+			UT_sint32 drawLen = static_cast<UT_sint32>(text.size());
+			if (headingMaxW > 0)
+			{
+				UT_sint32 measured = 0;
+				drawLen = 0;
+				const UT_UCS4Char * chars = text.ucs4_str();
+				for (UT_sint32 idx = 0; idx < static_cast<UT_sint32>(text.size()); ++idx)
+				{
+					UT_sint32 cw = pDrawG->measureUnRemappedChar(chars[idx]);
+					if (cw < 0)
+						cw = 0;
+					if (measured + cw > headingMaxW)
+						break;
+					measured += cw;
+					++drawLen;
+				}
+			}
+			else
+			{
+				drawLen = 0;
+			}
+			if (drawLen > 0)
+			{
+				GR_Painter painter(pDrawG);
+				painter.drawChars(text.ucs4_str(), 0, drawLen, headingX, top + pDrawG->tlu(4));
+			}
 		}
 		GR_Painter painter(pG);
 		pG->setLineWidth(pG->tlu(1));
 		pG->setColor(border);
-		const UT_sint32 left = screenX + boxX;
-		const UT_sint32 top = screenY + boxY;
-		const UT_sint32 right = left + boxW;
-		const UT_sint32 bottom = top + boxH;
 		painter.drawLine(left, top, right, top);
 		painter.drawLine(left, bottom, right, bottom);
 		painter.drawLine(left, top, left, bottom);
 		painter.drawLine(right, top, right, bottom);
+		if (boxH > headerH + pad)
+			painter.drawLine(left + pad / 2, top + headerH, right - pad / 2, top + headerH);
 		if (pAnchor && pAnchor->getLine() && pAnchor->getLine()->getPage() == getPage())
 		{
 			UT_sint32 anchorX = 0;
@@ -663,7 +681,11 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 			anchorX += pAnchor->getWidth() / 2;
 			anchorY += pAnchor->getLine()->getAscent() / 2;
 			const UT_sint32 fromX = (anchorX < left + boxW / 2) ? left : right;
-			const UT_sint32 fromY = top + boxH / 2;
+			UT_sint32 fromY = anchorY;
+			if (fromY < top + pad)
+				fromY = top + pad;
+			else if (fromY > bottom - pad)
+				fromY = bottom - pad;
 			painter.drawLine(fromX, fromY, anchorX, anchorY);
 			const double dx = static_cast<double>(fromX - anchorX);
 			const double dy = static_cast<double>(fromY - anchorY);
@@ -687,10 +709,21 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 		{
 			const UT_sint32 markX = screenX + closeX;
 			const UT_sint32 markY = screenY + closeY;
-			painter.fillRect(fill, markX, markY, close, close);
+			const UT_sint32 crossInset = pG->tlu(4);
+			painter.fillRect(UT_RGBColor(255, 255, 255), markX, markY, close, close);
+			pG->setLineWidth(pG->tlu(1));
 			pG->setColor(border);
-			painter.drawLine(markX + pG->tlu(2), markY + pG->tlu(2), markX + close - pG->tlu(2), markY + close - pG->tlu(2));
-			painter.drawLine(markX + close - pG->tlu(2), markY + pG->tlu(2), markX + pG->tlu(2), markY + close - pG->tlu(2));
+			painter.drawLine(markX, markY, markX + close, markY);
+			painter.drawLine(markX, markY + close, markX + close, markY + close);
+			painter.drawLine(markX, markY, markX, markY + close);
+			painter.drawLine(markX + close, markY, markX + close, markY + close);
+			pG->setLineWidth(pG->tlu(2));
+			pG->setColor(UT_RGBColor(90, 60, 20));
+			painter.drawLine(markX + crossInset, markY + crossInset,
+				markX + close - crossInset, markY + close - crossInset);
+			painter.drawLine(markX + close - crossInset, markY + crossInset,
+				markX + crossInset, markY + close - crossInset);
+			pG->setLineWidth(pG->tlu(1));
 		}
 	}
 	_drawBoundaries(pDA);
@@ -738,7 +771,7 @@ void fp_AnnotationContainer::layout(void)
 {
 	_setMaxContainerHeight(0);
 	UT_sint32 iY = 0, iPrevY = 0;
-	iY = getGraphics() ? getGraphics()->tlu(16) : 16;
+	iY = getGraphics() ? getGraphics()->tlu(24) : 24;
 	fl_DocSectionLayout * pDSL = getDocSectionLayout();
 	UT_sint32 iMaxFootHeight = 0;
 	iMaxFootHeight = pDSL->getActualColumnHeight();

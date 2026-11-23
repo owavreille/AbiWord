@@ -10279,6 +10279,12 @@ EV_EditMouseContext FV_View::_getMouseContext(UT_sint32 xPos, UT_sint32 yPos)
 		m_prevMouseContext = EV_EMC_UNKNOWN;
 		return EV_EMC_UNKNOWN;
 	}
+	if (getLayout() && getLayout()->displayAnnotations() &&
+		annotation_box_at(pPage, xClick, yClick, true))
+	{
+		m_prevMouseContext = EV_EMC_HYPERLINK;
+		return EV_EMC_HYPERLINK;
+	}
 	if(m_FrameEdit.isActive())
 	{
 		fl_FrameLayout * pFL = m_FrameEdit.getFrameLayout();

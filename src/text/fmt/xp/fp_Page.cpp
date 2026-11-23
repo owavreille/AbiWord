@@ -21,6 +21,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <vector>
 
 #include "ut_types.h"
 #include "ut_misc.h"
@@ -2207,8 +2208,18 @@ void fp_Page::_reformatAnnotations(void)
 	UT_sint32 width = 0;
 	UT_sint32 x = 0;
 	fp_AnnotationContainer::placeInRightMargin(pG, getWidth(), margin, x, width);
-	UT_sint32 nextY = pFirstSectionLayout->getTopMargin();
-	UT_sint32 gap = pG ? pG->tlu(6) : 6;
+	const UT_sint32 pad = pG ? pG->tlu(6) : 6;
+	const UT_sint32 gap = pG ? pG->tlu(8) : 8;
+	const UT_sint32 topLimit = pFirstSectionLayout->getTopMargin() + pad;
+	const UT_sint32 bottomLimit = getHeight() - pFirstSectionLayout->getBottomMargin() - pad;
+
+	struct PlacedAnnotation
+	{
+		fp_AnnotationContainer * container;
+		UT_sint32 anchorY;
+		UT_sint32 y;
+	};
+	std::vector<PlacedAnnotation> placed;
 	for (UT_sint32 i = 0; i < countAnnotationContainers(); i++)
 	{
 		fp_AnnotationContainer * pAC = getNthAnnotationContainer(i);
@@ -2222,12 +2233,13 @@ void fp_Page::_reformatAnnotations(void)
 			fl_AnnotationLayout* pWrap = static_cast<fl_AnnotationLayout*>(pAC->getSectionLayout());
 			for (fl_ContainerLayout * pBL = pWrap ? pWrap->getFirstLayout() : nullptr; pBL; pBL = pBL->getNext())
 				pBL->format();
-			UT_sint32 iY = pG ? pG->tlu(16) : 16;
+			UT_sint32 iY = pG ? pG->tlu(24) : 24;
 			for (UT_uint32 c = 0; c < pAC->countCons(); c++)
 			{
 				fp_Container * pInner = static_cast<fp_Container *>(pAC->getNthCon(c));
 				if (!pInner)
 					continue;
+				pInner->setY(iY);
 				iY += pInner->getHeight();
 				iY += pInner->getMarginAfter();
 			}
@@ -2235,19 +2247,68 @@ void fp_Page::_reformatAnnotations(void)
 				iY = 1;
 			pAC->setHeight(iY);
 		}
-		UT_sint32 y = nextY;
+		UT_sint32 anchorY = topLimit;
 		fl_AnnotationLayout* pAL = static_cast<fl_AnnotationLayout*>(pAC->getSectionLayout());
 		fp_AnnotationRun* pRun = pAL ? pAL->getAnnotationRun() : nullptr;
 		if (pRun && pRun->getLine() && pRun->getLine()->getColumn())
 		{
 			fp_Line* pLine = pRun->getLine();
-			y = pLine->getColumn()->getY() + pLine->getY();
+			anchorY = pLine->getColumn()->getY() + pLine->getY();
 		}
+		PlacedAnnotation entry = { pAC, anchorY, anchorY };
+		placed.push_back(entry);
+	}
+
+	// Keep callout boxes ordered by their anchor line so connectors do not cross.
+	for (size_t i = 1; i < placed.size(); ++i)
+	{
+		PlacedAnnotation key = placed[i];
+		size_t j = i;
+		while (j > 0 && placed[j - 1].anchorY > key.anchorY)
+		{
+			placed[j] = placed[j - 1];
+			--j;
+		}
+		placed[j] = key;
+	}
+
+	// Forward pass: place each box at its anchor Y without overlapping the previous box's outer frame.
+	UT_sint32 nextY = topLimit;
+	for (size_t i = 0; i < placed.size(); ++i)
+	{
+		UT_sint32 y = placed[i].anchorY;
 		if (y < nextY)
 			y = nextY;
-		pAC->setX(x);
-		pAC->setY(y);
-		nextY = y + pAC->getHeight() + gap;
+		placed[i].y = y;
+		nextY = y + placed[i].container->getHeight() + pad * 2 + gap;
+	}
+
+	// Backward pass: keep boxes within the bottom page margin when space is available above.
+	if (!placed.empty() && bottomLimit > topLimit)
+	{
+		UT_sint32 overflow = placed.back().y + placed.back().container->getHeight() - bottomLimit;
+		if (overflow > 0)
+		{
+			placed.back().y -= overflow;
+			for (size_t i = placed.size() - 1; i > 0; --i)
+			{
+				const UT_sint32 maxPrevY = placed[i].y - pad * 2 - gap - placed[i - 1].container->getHeight();
+				if (placed[i - 1].y > maxPrevY)
+					placed[i - 1].y = maxPrevY;
+			}
+			if (placed.front().y < topLimit)
+			{
+				const UT_sint32 shift = topLimit - placed.front().y;
+				for (size_t i = 0; i < placed.size(); ++i)
+					placed[i].y += shift;
+			}
+		}
+	}
+
+	for (size_t i = 0; i < placed.size(); ++i)
+	{
+		placed[i].container->setX(x);
+		placed[i].container->setY(placed[i].y);
 	}
 }
 
