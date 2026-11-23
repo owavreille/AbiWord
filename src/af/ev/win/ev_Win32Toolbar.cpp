@@ -409,6 +409,18 @@ LRESULT CALLBACK EV_Win32Toolbar::_ToolBarWndProc (HWND hWnd, UINT uMessage, WPA
 		}
 		return (LRESULT) GetSysColorBrush (COLOR_WINDOW);
 	}
+
+	if (uMessage == 0x031A) // WM_THEMECHANGED
+	{
+		LRESULT res = CallWindowProcW(s_lpfnDefToolBar, hWnd, uMessage, wParam, lParam);
+		EV_Win32Toolbar * t = reinterpret_cast<EV_Win32Toolbar *>(GetWindowLongPtrW(hWnd, GWLP_USERDATA));
+		if (t)
+		{
+			SendMessageW(hWnd, TB_AUTOSIZE, 0, 0);
+			t->_placeControls();
+		}
+		return res;
+	}
 	
 	return (CallWindowProcW(s_lpfnDefToolBar, hWnd, uMessage, wParam, lParam));
 }
@@ -1238,6 +1250,12 @@ bool EV_Win32Toolbar::synthesize(void)
 		SendMessageW(m_hwnd, TB_ADDBUTTONS, (WPARAM) 1, (LPARAM) (LPTBBUTTON) &tbb);
 	}
 
+	// Apply the window theme before measuring button rectangles and rebar
+	// dimensions; SetWindowTheme changes ToolbarWindow32 button metrics,
+	// which would otherwise leave child combo boxes shifted right of their
+	// TBSTYLE_SEP placeholders.
+	UT_Win32ApplyWindowTheme(m_hwnd);
+
 	// figure out bar dimensions now that buttons are all there
 	SendMessageW(m_hwnd, TB_AUTOSIZE, 0, 0); 
 	
@@ -1280,17 +1298,8 @@ void EV_Win32Toolbar::_placeControls(void)
 			continue;
 
 		HWND hwndCtrl = _getControlWindow(id);
-		RECT r;
-		memset(&r, 0, sizeof(r));
-		if (!hwndCtrl || !GetWindowRect(hwndCtrl, &r))
+		if (!hwndCtrl)
 			continue;
-		int nHeight = r.bottom - r.top;
-		if (!SendMessageW(m_hwnd, TB_GETITEMRECT, (WPARAM)k, (LPARAM)&r))
-			continue;
-		int nSep = (r.bottom - r.top - nHeight) / 2;
-		if (nSep < 0)
-			nSep = 0;
-		MoveWindow(hwndCtrl, r.left, r.top + nSep, r.right - r.left, nHeight, TRUE);
 		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(), TRUE);
 		if (id == AP_TOOLBAR_ID_FMT_FONT)
 		{
@@ -1299,6 +1308,20 @@ void EV_Win32Toolbar::_placeControls(void)
 				item = 22;
 			SendMessageW(hwndCtrl, CB_SETITEMHEIGHT, 0, item);
 		}
+		RECT r;
+		memset(&r, 0, sizeof(r));
+		if (!GetWindowRect(hwndCtrl, &r))
+			continue;
+		int nHeight = r.bottom - r.top;
+		LRESULT btnIndex = SendMessageW(m_hwnd, TB_COMMANDTOINDEX, (WPARAM)WmCommandFromItemId(id), 0);
+		if (btnIndex < 0)
+			btnIndex = static_cast<LRESULT>(k);
+		if (!SendMessageW(m_hwnd, TB_GETITEMRECT, (WPARAM)btnIndex, (LPARAM)&r))
+			continue;
+		int nSep = (r.bottom - r.top - nHeight) / 2;
+		if (nSep < 0)
+			nSep = 0;
+		MoveWindow(hwndCtrl, r.left, r.top + nSep, r.right - r.left, nHeight, TRUE);
 	}
 }
 
@@ -1314,6 +1337,8 @@ void EV_Win32Toolbar::applyChrome(void)
 	scheme.clrBtnShadow = dark ? RGB(45, 45, 45) : GetSysColor(COLOR_BTNFACE);
 	SendMessageW(m_hwnd, TB_SETCOLORSCHEME, 0, (LPARAM)&scheme);
 	UT_Win32ApplyWindowTheme(m_hwnd);
+	SendMessageW(m_hwnd, TB_AUTOSIZE, 0, 0);
+	_placeControls();
 
 	const int band = _getBandForHwnd(m_hwnd);
 	HWND rebar = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl())->getToolbarWindow();
