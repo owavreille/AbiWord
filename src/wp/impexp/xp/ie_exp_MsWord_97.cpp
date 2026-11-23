@@ -1282,6 +1282,11 @@ local_path_for_save(const char * name)
 				path = slash;
 			}
 			local = g_uri_unescape_string(path, nullptr);
+			if (!local || !*local)
+			{
+				g_free(local);
+				local = g_strdup(path);
+			}
 		}
 	}
 	if (!local || !*local)
@@ -1592,6 +1597,8 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 		return UT_IE_COULDNOTWRITE;
 	if (!GSF_IS_OUTPUT_MEMORY(getFp()))
 		return UT_OK;
+	if (!gsf_output_is_closed(getFp()) && !gsf_output_close(getFp()))
+		return UT_IE_COULDNOTWRITE;
 	const guint8 * bytes = gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(getFp()));
 	const gsf_off_t size = gsf_output_size(getFp());
 	if (!bytes || size <= 0 ||

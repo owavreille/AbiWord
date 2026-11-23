@@ -1838,7 +1838,18 @@ void fp_Page::updateColumnX()
 			iRightMargin = pSL->getRightMargin();
 		}
 		
-		UT_uint32 iSpace = getWidth() - iLeftMargin - iRightMargin;
+		UT_sint32 iSpaceLeft = pSL->getLeftMargin();
+		UT_sint32 iSpaceRight = pSL->getRightMargin();
+		if ((m_pView->getViewMode() == VIEW_WEB) &&
+		    !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
+		{
+			iSpaceLeft = iLeftMargin;
+			iSpaceRight = iRightMargin;
+		}
+		UT_sint32 iSpaceSigned = getWidth() - iSpaceLeft - iSpaceRight;
+		if (iSpaceSigned < 1)
+			iSpaceSigned = 1;
+		UT_uint32 iSpace = static_cast<UT_uint32>(iSpaceSigned);
 		pSL->checkAndAdjustColumnGap(iSpace);
 
 		UT_uint32 iNumColumns = pSL->getNumColumns();
@@ -1919,13 +1930,17 @@ void fp_Page::_reformatColumns(void)
 		const UT_sint32 pad = m_pLayout->getGraphics()->tlu(8);
 		UT_sint32 windowLu = m_pView->getWindowWidth() - pad;
 		double paperIn = m_pView->getPageSize().Width(DIM_IN);
-		if (paperIn < 1.0)
-			paperIn = 1.0;
-		double wantIn = static_cast<double>(windowLu) / static_cast<double>(UT_LAYOUT_RESOLUTION);
-		if (wantIn < paperIn)
-			wantIn = paperIn;
-		if (wantIn > 50.0)
-			wantIn = 50.0;
+		if (paperIn < 3.0)
+			paperIn = 3.0;
+		double wantIn = paperIn;
+		if (m_pView->getWindowWidth() >= m_pLayout->getGraphics()->tlu(200))
+		{
+			wantIn = static_cast<double>(windowLu) / static_cast<double>(UT_LAYOUT_RESOLUTION);
+			if (wantIn < 3.0)
+				wantIn = 3.0;
+			if (wantIn > 50.0)
+				wantIn = 50.0;
+		}
 		double haveIn = m_pLayout->m_docViewPageSize.Width(DIM_IN);
 		double delta = wantIn - haveIn;
 		if (delta < 0)
@@ -1934,6 +1949,7 @@ void fp_Page::_reformatColumns(void)
 		{
 			double heightIn = m_pLayout->m_docViewPageSize.Height(DIM_IN);
 			m_pLayout->m_docViewPageSize.Set(wantIn, heightIn, DIM_IN);
+			m_pLayout->m_docViewPageSize.Set(fp_PageSize::psCustom, DIM_IN);
 			m_pLayout->m_docViewPageSize.setPortrait();
 			m_pLayout->syncViewPageDimensions();
 		}

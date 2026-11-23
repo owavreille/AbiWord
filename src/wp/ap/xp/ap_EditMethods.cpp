@@ -10131,9 +10131,11 @@ UT_return_val_if_fail(pFrameData, false);
 
 	FV_View * pView = static_cast<FV_View *>(pAV_View);
 	pView->setViewMode (VIEW_WEB);
-	// Whole-page zoom scales the sheet down to the window height.
-	// In web layout that shrinks the text into a narrow column.
-	if (pFrame->getZoomType() == XAP_Frame::z_WHOLEPAGE)
+	// Paper-based zoom modes (Whole Page / Page Width) scale against the
+	// paper sheet instead of letting web layout reflow at 100% across the
+	// window width.
+	if (pFrame->getZoomType() == XAP_Frame::z_WHOLEPAGE ||
+	    pFrame->getZoomType() == XAP_Frame::z_PAGEWIDTH)
 	{
 		pFrame->setZoomType(XAP_Frame::z_100);
 		pFrame->quickZoom(100);
@@ -10154,9 +10156,6 @@ UT_return_val_if_fail(pScheme, false);
 
 	pView->updateScreen(false);
 	//pView->notifyListeners(AV_CHG_ALL);
-
-	if (pFrame->getZoomType() == pFrame->z_PAGEWIDTH || pFrame->getZoomType() == pFrame->z_WHOLEPAGE)
-		pFrame->updateZoom();
 
 	return true;
 }

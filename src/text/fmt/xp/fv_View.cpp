@@ -9346,13 +9346,17 @@ void FV_View::reflowWebPageToWindow(void)
 		const UT_sint32 pad = m_pG->tlu(8);
 		UT_sint32 windowLu = getWindowWidth() - pad;
 		double paperIn = m_pDoc->m_docPageSize.Width(DIM_IN);
-		if (paperIn < 1.0)
-			paperIn = 1.0;
-		double new_width = static_cast<double>(windowLu) / static_cast<double>(UT_LAYOUT_RESOLUTION);
-		if (new_width < paperIn)
-			new_width = paperIn;
-		if (new_width > 50.0)
-			new_width = 50.0;
+		if (paperIn < 3.0)
+			paperIn = 3.0;
+		double new_width = paperIn;
+		if (getWindowWidth() >= m_pG->tlu(200))
+		{
+			new_width = static_cast<double>(windowLu) / static_cast<double>(UT_LAYOUT_RESOLUTION);
+			if (new_width < 3.0)
+				new_width = 3.0;
+			if (new_width > 50.0)
+				new_width = 50.0;
+		}
 
 		double orig_height = m_pDoc->m_docPageSize.Height(DIM_IN);
 		double current = m_pLayout->m_docViewPageSize.Width(DIM_IN);
@@ -13760,28 +13764,32 @@ UT_uint32 FV_View::calculateZoomPercentForPageWidth() const
 		}
 		return getGraphics()->getZoomPercentage();
 	}
-	if ( ( iWindowWidth - (2 * getPageViewLeftMargin()) ) <= 0 )
-		return getGraphics()->getZoomPercentage();
+	// Web layout reflows the page width to the window width, so page-width
+	// zoom should stay at 100% rather than zooming against paper width.
+	if (getViewMode() == VIEW_WEB)
+		return 100;
 
-	double scale = (getWindowWidth() - (2 * getPageViewLeftMargin())) /
-		(pageWidth * (static_cast<double>(getGraphics()->getResolution())/
-					  								   static_cast<double>(getGraphics()->getZoomPercentage()) * 100.0));
-	//				  (100.0 * 100.0)));
-	//
-	// Fill the whole width for non-Print view
-	//
-	if(getViewMode() != VIEW_PRINT) 
+	const UT_uint32 curZoom = getGraphics()->getZoomPercentage() ? getGraphics()->getZoomPercentage() : 100;
+	const double res = static_cast<double>(getGraphics()->getResolution());
+	const double windowAt100 = static_cast<double>(iWindowWidth) * static_cast<double>(curZoom) / 100.0;
+
+	double targetWidth = pageWidth * res + 2.0 * static_cast<double>(getPageViewLeftMargin());
+	if (getViewMode() != VIEW_PRINT && getViewMode() != VIEW_PREVIEW)
 	{
-		fl_DocSectionLayout *pDSL = m_pLayout->getFirstSection();
-		UT_sint32 iLeft = pDSL->getLeftMargin();
-		UT_sint32 iRight = pDSL->getRightMargin();
-		UT_sint32 iNormalOffset = getNormalModeXOffset();
-		UT_sint32 iExtra = 72; // extra 0.5 inches for rounding errors
-		xxx_UT_DEBUGMSG(("Doing extra calculation Left %d Right %d \n",iLeft,iRight));
-		scale = (getWindowWidth() - 2 * getPageViewLeftMargin() + iLeft +iRight - iExtra - iNormalOffset) /
-			(pageWidth * (static_cast<double>(getGraphics()->getResolution()) / 
-						  static_cast<double>(getGraphics()->getZoomPercentage()) * 100.0));
+		fl_DocSectionLayout *pDSL = m_pLayout ? m_pLayout->getFirstSection() : nullptr;
+		const double iLeft = pDSL ? static_cast<double>(pDSL->getLeftMargin()) : 0.0;
+		const double iRight = pDSL ? static_cast<double>(pDSL->getRightMargin()) : 0.0;
+		const double iNormalOffset = static_cast<double>(getNormalModeXOffset());
+		const double iExtra = 72.0;
+		double textWidth = pageWidth * res - iLeft - iRight;
+		if (textWidth < res)
+			textWidth = pageWidth * res;
+		targetWidth = textWidth + iNormalOffset + iExtra;
 	}
+	if (targetWidth <= 0.0)
+		return curZoom;
+
+	double scale = windowAt100 / targetWidth;
 	return static_cast<UT_uint32>(scale * 100.0);
 }
 
@@ -13809,14 +13817,17 @@ UT_uint32 FV_View::calculateZoomPercentForPageHeight() const
 		}
 		return getGraphics()->getZoomPercentage();
 	}
-	// Verify scale as a positive non-zero number else return old zoom
-	if ( ( iWindowHeight - (2 * getPageViewTopMargin())) <= 0 )
-		return getGraphics()->getZoomPercentage();
+	if (getViewMode() == VIEW_WEB)
+		return 100;
 
-	double scale = (getWindowHeight() - (2 * getPageViewTopMargin())) /
-		(pageHeight * (static_cast<double>(getGraphics()->getResolution()) /
-		                         static_cast<double>(getGraphics()->getZoomPercentage()) * 100.0));
+	const UT_uint32 curZoom = getGraphics()->getZoomPercentage() ? getGraphics()->getZoomPercentage() : 100;
+	const double res = static_cast<double>(getGraphics()->getResolution());
+	const double windowHAt100 = static_cast<double>(iWindowHeight) * static_cast<double>(curZoom) / 100.0;
+	const double targetHeight = pageHeight * res + 2.0 * static_cast<double>(getPageViewTopMargin());
+	if (targetHeight <= 0.0)
+		return curZoom;
 
+	double scale = windowHAt100 / targetHeight;
 	return static_cast<UT_uint32>(scale * 100.0);
 }
 

@@ -432,11 +432,7 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 	case XAP_DIALOG_ID_FILE_SAVE_IMAGE:
 		title.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_FOSA_SaveAsTitle));
 		ofn.lpstrTitle = title.c_str();
-		ofn.lpfnHook	   = s_hookSaveAsProc;
 		ofn.Flags |= OFN_OVERWRITEPROMPT;
-		ofn.Flags |= OFN_EXPLORER;
-		ofn.Flags |= OFN_ENABLEHOOK;
-				
 		bDialogResult = GetSaveFileName_Hooked(&ofn, TRUE);
 		break;
 
@@ -472,10 +468,7 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 	case XAP_DIALOG_ID_FILE_EXPORT:
 		title.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_FOSA_ExportTitle));
 		ofn.lpstrTitle = title.c_str();
-		ofn.lpfnHook	   = s_hookSaveAsProc;
 		ofn.Flags |= OFN_OVERWRITEPROMPT;
-		ofn.Flags |= OFN_EXPLORER;
-		ofn.Flags |= OFN_ENABLEHOOK;
 		bDialogResult = GetSaveFileName_Hooked(&ofn, TRUE);
 		break;
 
