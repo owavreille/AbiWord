@@ -24,10 +24,10 @@ condensat, la signature et le commit sont alors réécrits dans ce tableau.
 | | |
 | --- | --- |
 | Fichier | `AbiWord-3.1-windows-x64-setup.exe` |
-| Taille | 31 376 120 octets |
-| SHA-256 | `9929aefe8fb5815fa5cf1d4ea4cfe5d63f7c1f9bfd34bf8b58678131cba54abd` |
+| Taille | 31 372 045 octets |
+| SHA-256 | `aeafd2cf75f46334e6b5d794c147ef55ffbf5fc381b31e8622c4da92a090bc57` |
 | Signature | non signée |
-| Code source de ce binaire | `62c0377916fa86e6399ef04d592742a9b663c4b0` |
+| Code source de ce binaire | `28179f17f41f0af2695560658c888a7eb1152334` |
 
 Le même condensat est joint à la release dans `AbiWord-3.1-windows-x64-setup.exe.sha256`.
 
