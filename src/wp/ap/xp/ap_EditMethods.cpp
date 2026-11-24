@@ -8766,7 +8766,8 @@ bool s_actuallyPrint(PD_Document *doc,  GR_Graphics *pGraphics,
 		}
 		if(pFrame)
 		  pFrame->setStatusMessage (""); // reset/0 out status bar
-		printed = keepPrinting && pGraphics->endPrint();
+		const bool ended = pGraphics->endPrint();
+		printed = keepPrinting && ended;
 	}
 	s_pLoadingDoc = nullptr;
 
@@ -8843,14 +8844,26 @@ UT_return_val_if_fail(pDialog, false);
 
 		if (!pGraphics)
 		{
+			pDialog->releasePrinterGraphicsContext(nullptr);
+			pFrame->setStatusMessage("");
+			pView->clearCursorWait();
 			pFrame->showMessageBox(AP_STRING_ID_PRINT_CANNOTSTARTPRINTJOB,
 				   XAP_Dialog_MessageBox::b_O,
 				   XAP_Dialog_MessageBox::a_OK);
+			pDialogFactory->releaseDialog(pDialog);
 
 		   return false;
 		}
 
-		UT_return_val_if_fail (pGraphics->queryProperties(GR_Graphics::DGP_PAPER), false);
+		if (!pGraphics->queryProperties(GR_Graphics::DGP_PAPER))
+		{
+			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+			pDialog->releasePrinterGraphicsContext(pGraphics);
+			pFrame->setStatusMessage("");
+			pView->clearCursorWait();
+			pDialogFactory->releaseDialog(pDialog);
+			return false;
+		}
 
 		/*
 		We need to re-layout the document for now, so the UnixPSGraphics class will
@@ -8885,8 +8898,9 @@ UT_return_val_if_fail(pDialog, false);
 		static_cast<void>(pDialog->getDoPrintRange(&nFromPage,&nToPage));
 
 		// must use the layout of the print view here !!!
-		if (nToPage > pPrintView->getLayout()->countPages())
-		  nToPage = pPrintView->getLayout()->countPages();
+		const UT_sint32 nPrintPages = pPrintView->getLayout()->countPages();
+		if (nToPage > nPrintPages)
+		  nToPage = nPrintPages;
 
 		// TODO add code to handle getDoPrintSelection()
 
@@ -8897,8 +8911,9 @@ UT_return_val_if_fail(pDialog, false);
 		// BUGBUG assumes all pages are same size and orientation
 		// Must use the layout create with printer graphics here, because the screen
 		// layout adds screen margins to the width and height
+		const UT_sint32 nLayoutPages = pDocLayout->countPages();
 		UT_sint32 iWidth = pDocLayout->getWidth();
-		UT_sint32 iHeight = pDocLayout->getHeight() / pDocLayout->countPages();
+		UT_sint32 iHeight = (nLayoutPages > 0) ? (pDocLayout->getHeight() / nLayoutPages) : pDocLayout->getHeight();
 
 		const char *pDocName = ((!doc->getFilename().empty()) ? doc->getFilename().c_str() : pFrame->getNonDecoratedTitle());
 		s_actuallyPrint(doc, pGraphics, pPrintView, pDocName, nCopies, bCollate,
@@ -8917,6 +8932,7 @@ UT_return_val_if_fail(pDialog, false);
 			pDocLayout->setQuickPrint(nullptr);
 		}
 		pDialog->releasePrinterGraphicsContext(pGraphics);
+		pFrame->setStatusMessage("");
 
 //
 // Turn off wait cursor
@@ -9013,8 +9029,9 @@ static bool s_doPrintPreview(FV_View * pView)
 
 	// TODO these are here temporarily to make printing work.  We'll fix the hack later.
 	// BUGBUG assumes all pages are same size and orientation
+	const UT_sint32 nLayoutPages = pDocLayout->countPages();
 	UT_sint32 iWidth = pDocLayout->getWidth();
-	UT_sint32 iHeight = pDocLayout->getHeight() / pDocLayout->countPages();
+	UT_sint32 iHeight = (nLayoutPages > 0) ? (pDocLayout->getHeight() / nLayoutPages) : pDocLayout->getHeight();
 
 	const char *pDocName = ((!doc->getFilename().empty()) ? doc->getFilename().c_str() : pFrame->getNonDecoratedTitle());
 

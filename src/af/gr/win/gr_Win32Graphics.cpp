@@ -26,7 +26,9 @@
 
 #include <windows.h>
 #include <winspool.h>
+#include <cstdlib>
 #include <cstring>
+#include <cwchar>
 #include <map>
 #include <string>
 
@@ -48,6 +50,7 @@
 #include "ut_string.h"
 #include "ut_std_string.h"
 #include "ut_Win32OS.h"
+#include "ut_Win32Timer.h"
 #include "ut_Win32LocaleString.h"
 
 #ifdef __MINGW32__
@@ -133,6 +136,8 @@ void GR_Win32Graphics::_constructorCommonCode(HDC hdc)
 	m_bStartPrint = false;
 	m_bStartPage = false;
 	m_bPrintCancelled = false;
+	m_bPrintTimersPaused = false;
+	m_bPrevTimersPaused = false;
 	m_hwndPrintOwner = nullptr;
 	m_hwndPrintDisabled = nullptr;
 	m_pFont = nullptr;
@@ -311,7 +316,15 @@ void GR_Win32Graphics::layoutToClient(UT_sint32 x, UT_sint32 y, int & cx, int & 
 GR_Win32Graphics::~GR_Win32Graphics()
 {
 	if (m_bPrint)
+	{
+		if (!m_bIsPreview && m_bStartPrint && m_hdc)
+		{
+			AbortDoc(m_hdc);
+			m_bStartPage = false;
+			m_bStartPrint = false;
+		}
 		closePrintAbort();
+	}
 	// Deselect the buffer before the fonts it may still hold are destroyed.
 	_releasePersistentBuffer();
 	_destroyFonts ();
@@ -1149,10 +1162,12 @@ HWND s_printAbortWnd = nullptr;
 
 LRESULT CALLBACK s_printAbortWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	if (msg == WM_COMMAND && LOWORD(wParam) == 1)
+	if (msg == WM_COMMAND && (LOWORD(wParam) == IDCANCEL || LOWORD(wParam) == IDOK))
 	{
 		s_printAbort = true;
-		EnableWindow(GetDlgItem(hwnd, 1), FALSE);
+		HWND btn = GetDlgItem(hwnd, IDCANCEL);
+		if (btn)
+			EnableWindow(btn, FALSE);
 		return 0;
 	}
 	if (msg == WM_CLOSE)
@@ -1160,47 +1175,113 @@ LRESULT CALLBACK s_printAbortWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM 
 		s_printAbort = true;
 		return 0;
 	}
+	if (msg == WM_NCDESTROY && hwnd == s_printAbortWnd)
+	{
+		s_printAbortWnd = nullptr;
+	}
 	return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
 
 BOOL CALLBACK s_printAbortProc(HDC, int)
 {
+	// Bound the pump per callback so a busy message queue cannot starve
+	// the spooler or hang printing.
+	constexpr int kMaxMessagesPerCall = 64;
 	MSG msg;
-	while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
+	int processed = 0;
+	while (!s_printAbort && processed < kMaxMessagesPerCall &&
+	       PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE))
 	{
+		++processed;
 		if (msg.message == WM_QUIT)
 		{
 			PostQuitMessage(static_cast<int>(msg.wParam));
 			s_printAbort = true;
 			return FALSE;
 		}
-		TranslateMessage(&msg);
-		DispatchMessageW(&msg);
+		if (!s_printAbortWnd || !IsDialogMessageW(s_printAbortWnd, &msg))
+		{
+			TranslateMessage(&msg);
+			DispatchMessageW(&msg);
+		}
 	}
 	return s_printAbort ? FALSE : TRUE;
+}
+
+short s_matchStandardPaperSize(short widthTenthsMm, short lengthTenthsMm)
+{
+	struct PaperSpec
+	{
+		short id;
+		short width;
+		short length;
+	};
+	static const PaperSpec kStandardPapers[] = {
+		{ DMPAPER_A4,        2100, 2970 },
+		{ DMPAPER_LETTER,    2159, 2794 },
+		{ DMPAPER_LEGAL,     2159, 3556 },
+		{ DMPAPER_A3,        2970, 4200 },
+		{ DMPAPER_A5,        1480, 2100 },
+		{ DMPAPER_EXECUTIVE, 1842, 2667 },
+		{ DMPAPER_TABLOID,   2794, 4318 },
+		{ DMPAPER_STATEMENT, 1397, 2159 },
+		{ DMPAPER_B4,        2570, 3640 },
+		{ DMPAPER_B5,        1820, 2570 },
+		{ DMPAPER_ENV_DL,    1100, 2200 },
+		{ DMPAPER_ENV_C5,    1620, 2290 },
+		{ DMPAPER_ENV_10,    1048, 2413 },
+	};
+	constexpr int kToleranceTenthsMm = 15; // 1.5 mm
+	for (const PaperSpec & spec : kStandardPapers)
+	{
+		if (std::abs(static_cast<int>(widthTenthsMm) - spec.width) <= kToleranceTenthsMm &&
+		    std::abs(static_cast<int>(lengthTenthsMm) - spec.length) <= kToleranceTenthsMm)
+		{
+			return spec.id;
+		}
+	}
+	return 0;
 }
 
 } // namespace
 
 void GR_Win32Graphics::closePrintAbort(void)
 {
+	// Win32 modality rule: re-enable the owner before destroying the owned
+	// popup so Windows returns activation to the owner instead of another app.
+	HWND hwndToRestore = m_hwndPrintDisabled;
+	m_hwndPrintDisabled = nullptr;
+	if (hwndToRestore && IsWindow(hwndToRestore))
+		EnableWindow(hwndToRestore, TRUE);
+
 	if (s_printAbortWnd)
 	{
-		DestroyWindow(s_printAbortWnd);
+		if (IsWindow(s_printAbortWnd))
+			DestroyWindow(s_printAbortWnd);
 		s_printAbortWnd = nullptr;
 	}
-	if (m_hwndPrintDisabled)
+
+	if (hwndToRestore && IsWindow(hwndToRestore))
+		SetForegroundWindow(hwndToRestore);
+
+	if (m_bPrintTimersPaused)
 	{
-		EnableWindow(m_hwndPrintDisabled, TRUE);
-		SetForegroundWindow(m_hwndPrintDisabled);
-		m_hwndPrintDisabled = nullptr;
+		UT_Win32Timer::pauseAllTimers(m_bPrevTimersPaused);
+		m_bPrintTimersPaused = false;
 	}
 }
 
-static void s_showPrintAbort(GR_Win32Graphics * graphics, HWND owner)
+void GR_Win32Graphics::_showPrintAbort(void)
 {
 	s_printAbort = false;
-	graphics->closePrintAbort();
+	if (s_printAbortWnd)
+	{
+		if (IsWindow(s_printAbortWnd))
+			DestroyWindow(s_printAbortWnd);
+		s_printAbortWnd = nullptr;
+	}
+
+	HWND owner = (m_hwndPrintOwner && IsWindow(m_hwndPrintOwner)) ? m_hwndPrintOwner : nullptr;
 
 	static bool registered = false;
 	if (!registered)
@@ -1250,12 +1331,15 @@ static void s_showPrintAbort(GR_Win32Graphics * graphics, HWND owner)
 
 	CreateWindowExW(0, L"BUTTON", button.c_str(),
 		WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-		90, 36, 100, 26, s_printAbortWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(1)),
+		90, 36, 100, 26, s_printAbortWnd, reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDCANCEL)),
 		GetModuleHandleW(nullptr), nullptr);
 	ShowWindow(s_printAbortWnd, SW_SHOW);
 	UpdateWindow(s_printAbortWnd);
-	if (owner)
+	if (owner && IsWindowEnabled(owner))
+	{
 		EnableWindow(owner, FALSE);
+		m_hwndPrintDisabled = owner;
+	}
 }
 
 bool GR_Win32Graphics::startPrint(void)
@@ -1266,14 +1350,28 @@ bool GR_Win32Graphics::startPrint(void)
 	if (!m_bIsPreview)
 	  {
 	    m_bPrintCancelled = false;
-	    s_showPrintAbort(this, m_hwndPrintOwner);
-	    if (m_hwndPrintOwner && s_printAbortWnd)
-		    m_hwndPrintDisabled = m_hwndPrintOwner;
+	    s_printAbort = false;
+	    if (!m_bPrintTimersPaused)
+	      {
+	        m_bPrevTimersPaused = UT_Win32Timer::timersPaused();
+	        UT_Win32Timer::pauseAllTimers(true);
+	        m_bPrintTimersPaused = true;
+	      }
 	    // SetAbortProc must run before StartDoc. Returning FALSE cancels the job.
 	    SetAbortProc(m_hdc, s_printAbortProc);
-	    m_bStartPrint = ( StartDocW(m_hdc,m_pDocInfo) > 0 );
-	    if (!m_bStartPrint)
-		    closePrintAbort();
+	    // StartDocW may display a driver-owned modal dialog (e.g. Microsoft Print to PDF
+	    // "Save Print Output As" on PORTPROMPT:). Defer the abort popup and disabling
+	    // the owner window until after StartDocW returns so the two modal flows do not
+	    // conflict on Windows 11.
+	    m_bStartPrint = ( StartDocW(m_hdc, m_pDocInfo) > 0 );
+	    if (m_bStartPrint)
+	      {
+	        _showPrintAbort();
+	      }
+	    else
+	      {
+	        closePrintAbort();
+	      }
 	  }
 	else
 	  {
@@ -1313,35 +1411,137 @@ bool GR_Win32Graphics::startPage(const char * /*szPageLabel*/, UT_uint32 /*pageN
 		m_bStartPage = false;
 	}
 
-	// Correct for Portrait vs Lanscape mode
+	// Correct for Portrait vs Landscape mode and paper size, only when needed.
 	if (m_hDevMode)
 	{
-		DEVMODEW *pDevMode = (DEVMODEW*) GlobalLock(m_hDevMode);
-		UT_return_val_if_fail(pDevMode, false); //GlobalLock can return nullptr
-		pDevMode->dmFields = DM_ORIENTATION | DM_PAPERLENGTH | DM_PAPERWIDTH;
-		pDevMode->dmOrientation = (bPortrait) ? DMORIENT_PORTRAIT : DMORIENT_LANDSCAPE;
-		pDevMode->dmPaperSize = 0;
-		pDevMode->dmPaperLength = (bPortrait) ? iHeight : iWidth;
-		pDevMode->dmPaperWidth = (bPortrait) ? iWidth : iHeight;
-		
-		GlobalUnlock(m_hDevMode);
+		const short desiredOrientation = bPortrait ? DMORIENT_PORTRAIT : DMORIENT_LANDSCAPE;
+		const short paperWidth = static_cast<short>(bPortrait ? iWidth : iHeight);
+		const short paperLength = static_cast<short>(bPortrait ? iHeight : iWidth);
+		const bool haveValidSize = (paperWidth > 0 && paperLength > 0);
+		const short matchedPaperSize = haveValidSize ? s_matchStandardPaperSize(paperWidth, paperLength) : 0;
 
-		// call DocumentProperties() on the DEVMODE to ensure changes propagate down into
-		// the private part
-		if (!fixDevMode(m_hDevMode))
-		{
-			m_bPrintCancelled = true;
-			return false;
-		}
-		
-		pDevMode = (DEVMODEW*) GlobalLock(m_hDevMode);
+		bool needReset = false;
+		std::vector<BYTE> savedDevMode;
+
+		DEVMODEW * pDevMode = static_cast<DEVMODEW *>(GlobalLock(m_hDevMode));
 		if (pDevMode)
 		{
-			const HDC reset = ResetDCW(m_hdc, pDevMode);
+			const bool orientationMatches =
+				((pDevMode->dmFields & DM_ORIENTATION) != 0) &&
+				(pDevMode->dmOrientation == desiredOrientation);
+
+			bool paperMatches = !haveValidSize;
+			if (haveValidSize)
+			{
+				if (matchedPaperSize != 0)
+				{
+					if (((pDevMode->dmFields & DM_PAPERSIZE) != 0) &&
+					    (pDevMode->dmPaperSize == matchedPaperSize))
+					{
+						const bool widthOk = ((pDevMode->dmFields & DM_PAPERWIDTH) == 0) ||
+							(std::abs(static_cast<int>(pDevMode->dmPaperWidth) - paperWidth) <= 15);
+						const bool lengthOk = ((pDevMode->dmFields & DM_PAPERLENGTH) == 0) ||
+							(std::abs(static_cast<int>(pDevMode->dmPaperLength) - paperLength) <= 15);
+						paperMatches = widthOk && lengthOk;
+					}
+				}
+				else if ((pDevMode->dmFields & (DM_PAPERWIDTH | DM_PAPERLENGTH)) == (DM_PAPERWIDTH | DM_PAPERLENGTH))
+				{
+					paperMatches =
+						(std::abs(static_cast<int>(pDevMode->dmPaperWidth) - paperWidth) <= 15) &&
+						(std::abs(static_cast<int>(pDevMode->dmPaperLength) - paperLength) <= 15);
+				}
+			}
+
+			if (!orientationMatches || !paperMatches)
+			{
+				const SIZE_T dmBytes = GlobalSize(m_hDevMode);
+				const SIZE_T structBytes = static_cast<SIZE_T>(pDevMode->dmSize) + static_cast<SIZE_T>(pDevMode->dmDriverExtra);
+				const SIZE_T copyBytes = (structBytes > 0 && structBytes <= dmBytes) ? structBytes : dmBytes;
+				if (copyBytes > 0)
+				{
+					savedDevMode.resize(copyBytes);
+					memcpy(savedDevMode.data(), pDevMode, copyBytes);
+				}
+
+				// Preserve unrelated dmFields (duplex, color, tray, quality, etc.).
+				pDevMode->dmFields |= DM_ORIENTATION;
+				pDevMode->dmOrientation = desiredOrientation;
+				if (haveValidSize)
+				{
+					if (matchedPaperSize != 0)
+					{
+						pDevMode->dmFields |= DM_PAPERSIZE;
+						pDevMode->dmFields &= ~(DM_PAPERLENGTH | DM_PAPERWIDTH);
+						pDevMode->dmPaperSize = matchedPaperSize;
+						pDevMode->dmPaperLength = 0;
+						pDevMode->dmPaperWidth = 0;
+					}
+					else
+					{
+						pDevMode->dmFields &= ~DM_PAPERSIZE;
+						pDevMode->dmFields |= DM_PAPERLENGTH | DM_PAPERWIDTH;
+						pDevMode->dmPaperSize = 0;
+						pDevMode->dmPaperLength = paperLength;
+						pDevMode->dmPaperWidth = paperWidth;
+					}
+				}
+				needReset = true;
+			}
 			GlobalUnlock(m_hDevMode);
-			if (!reset)
-				return false;
 		}
+
+		if (needReset)
+		{
+			bool resetOk = false;
+			const wchar_t * printerName = m_printerName.empty() ? nullptr : m_printerName.c_str();
+			// Call DocumentProperties() on the DEVMODE to propagate public fields
+			// into the driver's private part before ResetDCW.
+			if (fixDevMode(m_hDevMode, printerName))
+			{
+				pDevMode = static_cast<DEVMODEW *>(GlobalLock(m_hDevMode));
+				if (pDevMode)
+				{
+					resetOk = (ResetDCW(m_hdc, pDevMode) != nullptr);
+					GlobalUnlock(m_hDevMode);
+				}
+			}
+
+			if (resetOk)
+			{
+				// ResetDCW resets all selected GDI objects on m_hdc back to defaults.
+				m_pFont = nullptr;
+				m_iFontAllocNo = 0;
+				m_iDCFontAllocNo = 0;
+				const int logY = GetDeviceCaps(m_hdc, LOGPIXELSY);
+				const int logX = GetDeviceCaps(m_hdc, LOGPIXELSX);
+				if (logY > 0)
+				{
+					m_nLogPixelsY = logY;
+					m_fXYRatio = static_cast<double>(logX) / static_cast<double>(logY);
+				}
+			}
+			else
+			{
+				// Restore DEVMODE and fall back to the existing DC configuration
+				// instead of aborting the job when a driver rejects a page change.
+				if (!savedDevMode.empty())
+				{
+					pDevMode = static_cast<DEVMODEW *>(GlobalLock(m_hDevMode));
+					if (pDevMode && GlobalSize(m_hDevMode) >= savedDevMode.size())
+						memcpy(pDevMode, savedDevMode.data(), savedDevMode.size());
+					if (pDevMode)
+						GlobalUnlock(m_hDevMode);
+				}
+				LOG_WIN32_EXCPT("fixDevMode/ResetDCW rejected page change; keeping existing DC settings");
+			}
+		}
+	}
+
+	if (s_printAbort)
+	{
+		m_bPrintCancelled = true;
+		return false;
 	}
 
 	const int iRet = StartPage(m_hdc);
@@ -3344,6 +3544,8 @@ GR_Graphics * GR_Win32Graphics::getPrinterGraphics(const wchar_t * pPrinterName,
 	
 		pGr = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
 		UT_ASSERT_HARMLESS(pGr);
+		if (pGr && pPN)
+			pGr->setPrinterName(pPN);
 	}
 	
  cleanup:
@@ -3395,31 +3597,50 @@ GR_Graphics * GR_Win32Graphics::getPrinterGraphics(const wchar_t * pPrinterName,
        sets the public section, but does not call DocumentProperties(), so we have to do
        that ourselves once we get the handle back.
 */
-bool GR_Win32Graphics::fixDevMode(HGLOBAL hDevMode)
+bool GR_Win32Graphics::fixDevMode(HGLOBAL hDevMode, const wchar_t * pPrinterName)
 {
+	if (!hDevMode)
+		return false;
+
 	DEVMODEW * pDM = (DEVMODEW*)GlobalLock(hDevMode);
 	UT_return_val_if_fail( pDM, false );
 
-	// dmDeviceName is CCHDEVICENAME characters and is not NUL-terminated when
-	// the friendly name fills the field. OpenPrinterW would then read past it.
-	wchar_t printerName[CCHDEVICENAME + 1];
-	memcpy(printerName, pDM->dmDeviceName, CCHDEVICENAME * sizeof(wchar_t));
-	printerName[CCHDEVICENAME] = L'\0';
+	// dmDeviceName is CCHDEVICENAME (32) characters, is truncated on long or
+	// network printer names, and is not NUL-terminated when full. Prefer the
+	// full printer name from DEVNAMES when available.
+	std::wstring printerName;
+	if (pPrinterName && pPrinterName[0] != L'\0')
+	{
+		printerName = pPrinterName;
+	}
+	else
+	{
+		const wchar_t * end = std::wmemchr(pDM->dmDeviceName, L'\0', CCHDEVICENAME);
+		const size_t len = end ? static_cast<size_t>(end - pDM->dmDeviceName) : CCHDEVICENAME;
+		printerName.assign(pDM->dmDeviceName, len);
+	}
 
-	char printerUtf8[(CCHDEVICENAME + 1) * 4];
-	printerUtf8[0] = '\0';
-	WideCharToMultiByte(CP_UTF8, 0, printerName, -1, printerUtf8,
-						 static_cast<int>(sizeof(printerUtf8)), nullptr, nullptr);
-	printerUtf8[sizeof(printerUtf8) - 1] = '\0';
+	std::string printerUtf8;
+	if (!printerName.empty())
+	{
+		const int utf8Len = WideCharToMultiByte(CP_UTF8, 0, printerName.c_str(), -1, nullptr, 0, nullptr, nullptr);
+		if (utf8Len > 1)
+		{
+			printerUtf8.resize(static_cast<size_t>(utf8Len));
+			WideCharToMultiByte(CP_UTF8, 0, printerName.c_str(), -1, &printerUtf8[0], utf8Len, nullptr, nullptr);
+			printerUtf8.resize(static_cast<size_t>(utf8Len - 1));
+		}
+	}
 
 	// find out how big structure this particular printer really needs
 	HANDLE      hPrinter = nullptr;
+	wchar_t *   printerNameBuf = printerName.empty() ? nullptr : &printerName[0];
 
 	//Start by opening the printer
-	if(!OpenPrinterW(printerName, &hPrinter, nullptr))
+	if(!printerNameBuf || !OpenPrinterW(printerNameBuf, &hPrinter, nullptr))
 	{
 		UT_String msg;
-		UT_String_sprintf(msg,"Unable to open printer [%s]", printerUtf8);
+		UT_String_sprintf(msg,"Unable to open printer [%s]", printerUtf8.c_str());
 		LOG_WIN32_EXCPT(msg.c_str());
 		GlobalUnlock(hDevMode);
 		UT_ASSERT_HARMLESS( UT_SHOULD_NOT_HAPPEN );
@@ -3428,16 +3649,17 @@ bool GR_Win32Graphics::fixDevMode(HGLOBAL hDevMode)
 
 	// A failure is a negative LONG. Storing it in a DWORD turns it into a
 	// huge size, and casting that back to int hides the failure.
-	const LONG needed = DocumentPropertiesW(nullptr, hPrinter, printerName, nullptr, nullptr, 0);
+	const LONG needed = DocumentPropertiesW(nullptr, hPrinter, printerNameBuf, nullptr, nullptr, 0);
 	const LONG have = static_cast<LONG>(pDM->dmSize) + static_cast<LONG>(pDM->dmDriverExtra);
+	const SIZE_T allocSize = GlobalSize(hDevMode);
 
-	if( needed <= 0 || needed > have )
+	if( needed <= 0 || needed > have || static_cast<SIZE_T>(needed) > allocSize )
 	{
 		// we are knees deep in crap here ... log it into the users profile, so we have
 		// some debug info to go on
 		UT_String msg;
 		UT_String_sprintf(msg,"DEVMODE too small [%s, needs %ld, got %d + %d]",
-						  printerUtf8, static_cast<long>(needed), pDM->dmSize, pDM->dmDriverExtra);
+						  printerUtf8.c_str(), static_cast<long>(needed), pDM->dmSize, pDM->dmDriverExtra);
 		LOG_WIN32_EXCPT(msg.c_str());
 		ClosePrinter(hPrinter);
 		GlobalUnlock(hDevMode);
@@ -3446,7 +3668,7 @@ bool GR_Win32Graphics::fixDevMode(HGLOBAL hDevMode)
 	}
 	
 	// now get the printer driver to merge the data in the public section into its private part
-	const LONG dwRet = DocumentPropertiesW(nullptr, hPrinter, printerName, pDM, pDM, DM_OUT_BUFFER | DM_IN_BUFFER);
+	const LONG dwRet = DocumentPropertiesW(nullptr, hPrinter, printerNameBuf, pDM, pDM, DM_OUT_BUFFER | DM_IN_BUFFER);
 
 	// g_free what needs be ...
 	ClosePrinter(hPrinter);
