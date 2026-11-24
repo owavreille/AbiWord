@@ -19,6 +19,8 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <cwchar>
+#include <string>
 #include "ut_debugmsg.h"
 #include "ut_string.h"
 #include "ut_assert.h"
@@ -29,6 +31,77 @@
 #include "xav_View.h"
 #include "gr_Win32Graphics.h"
 #include "xap_Win32DialogBase.h"
+
+namespace {
+
+bool s_extractDevNames(HGLOBAL hDevNames, std::wstring & driver, std::wstring & device)
+{
+	driver.clear();
+	device.clear();
+	if (!hDevNames)
+		return false;
+
+	const SIZE_T bytes = GlobalSize(hDevNames);
+	if (bytes < sizeof(DEVNAMES))
+		return false;
+
+	const DEVNAMES * pDevNames = static_cast<const DEVNAMES *>(GlobalLock(hDevNames));
+	if (!pDevNames)
+		return false;
+
+	const SIZE_T wcharCount = bytes / sizeof(wchar_t);
+	const wchar_t * base = reinterpret_cast<const wchar_t *>(pDevNames);
+	if (pDevNames->wDriverOffset < wcharCount)
+	{
+		const wchar_t * start = base + pDevNames->wDriverOffset;
+		const SIZE_T maxLen = wcharCount - pDevNames->wDriverOffset;
+		const wchar_t * end = std::wmemchr(start, L'\0', maxLen);
+		driver.assign(start, end ? static_cast<SIZE_T>(end - start) : maxLen);
+	}
+	if (pDevNames->wDeviceOffset < wcharCount)
+	{
+		const wchar_t * start = base + pDevNames->wDeviceOffset;
+		const SIZE_T maxLen = wcharCount - pDevNames->wDeviceOffset;
+		const wchar_t * end = std::wmemchr(start, L'\0', maxLen);
+		device.assign(start, end ? static_cast<SIZE_T>(end - start) : maxLen);
+	}
+	GlobalUnlock(hDevNames);
+	return !device.empty();
+}
+
+HDC s_createPrinterMetricDC(HGLOBAL hDevNames, HGLOBAL hDevMode)
+{
+	std::wstring driver;
+	std::wstring device;
+	if (!s_extractDevNames(hDevNames, driver, device))
+		return nullptr;
+
+	const wchar_t * pDriver = driver.empty() ? nullptr : driver.c_str();
+	const DEVMODEW * pDevMode = hDevMode ? static_cast<const DEVMODEW *>(GlobalLock(hDevMode)) : nullptr;
+	HDC hMetricDC = CreateICW(pDriver, device.c_str(), nullptr, pDevMode);
+	if (!hMetricDC)
+		hMetricDC = CreateDCW(pDriver, device.c_str(), nullptr, pDevMode);
+	if (pDevMode)
+		GlobalUnlock(hDevMode);
+	return hMetricDC;
+}
+
+void s_updateScreenPrinterMetrics(HGLOBAL hDevNames, HGLOBAL hDevMode)
+{
+	// Give the screen view its own information context so WM_PAINT during
+	// StartDocW/StartPage/EndPage never touches the active spooling HDC.
+	XAP_Frame * focussed = XAP_App::getApp()->getLastFocussedFrame();
+	AV_View * focussedView = focussed ? focussed->getCurrentView() : nullptr;
+	GR_Win32Graphics * pG = focussedView ? static_cast<GR_Win32Graphics *>(focussedView->getGraphics()) : nullptr;
+	if (!pG)
+		return;
+
+	HDC hMetricDC = s_createPrinterMetricDC(hDevNames, hDevMode);
+	if (hMetricDC)
+		pG->setPrintDC(hMetricDC);
+}
+
+} // namespace
 
 /*****************************************************************/
 static UINT_PTR CALLBACK s_PrintHookProc(
@@ -146,6 +219,11 @@ XAP_Win32Dialog_Print::~XAP_Win32Dialog_Print(void)
 {
 	if (m_pPersistPrintDlg)
 	{
+		if (m_pPersistPrintDlg->hDC)
+		{
+			DeleteDC(m_pPersistPrintDlg->hDC);
+			m_pPersistPrintDlg->hDC = nullptr;
+		}
 		if (m_pPersistPrintDlg->hDevMode)
 			GlobalFree(m_pPersistPrintDlg->hDevMode);
 		if (m_pPersistPrintDlg->hDevNames)
@@ -177,7 +255,13 @@ GR_Graphics * XAP_Win32Dialog_Print::getPrinterGraphicsContext(void)
 	GR_Win32Graphics *pGr = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
 	UT_ASSERT(pGr);
 	if (pGr)
+	{
 		pGr->setPrintOwner(m_pPersistPrintDlg->hwndOwner);
+		std::wstring driver;
+		std::wstring device;
+		if (s_extractDevNames(m_pPersistPrintDlg->hDevNames, driver, device))
+			pGr->setPrinterName(device.c_str());
+	}
 
 	return pGr;
 }
@@ -187,13 +271,11 @@ void XAP_Win32Dialog_Print::releasePrinterGraphicsContext(GR_Graphics * pGraphic
 	if (pGraphics)
 		delete pGraphics;
 
-#if 0
-	// Do not delete the DC, since the original view will use it to do its layout and will
-	// delete it when no longer needed. Tomas
-	DeleteDC(m_pPersistPrintDlg->hDC);
-#endif
-	if(m_pPersistPrintDlg)
+	if (m_pPersistPrintDlg && m_pPersistPrintDlg->hDC)
+	{
+		DeleteDC(m_pPersistPrintDlg->hDC);
 		m_pPersistPrintDlg->hDC = nullptr;
+	}
 
 	memset(&m_DocInfo, 0, sizeof(m_DocInfo));
 }
@@ -204,6 +286,13 @@ void XAP_Win32Dialog_Print::runModal(XAP_Frame * pFrame)
 {
 	UT_return_if_fail(pFrame);
 	UT_return_if_fail(m_pPersistPrintDlg);
+
+	m_answer = a_CANCEL;
+	if (m_pPersistPrintDlg->hDC)
+	{
+		DeleteDC(m_pPersistPrintDlg->hDC);
+		m_pPersistPrintDlg->hDC = nullptr;
+	}
 
 	HWND hwnd = static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow();
 
@@ -252,50 +341,43 @@ void XAP_Win32Dialog_Print::runModal(XAP_Frame * pFrame)
 	// bothering the user.
 	if (m_bPersistValid && m_bBypassActualDialog)
 	{
-		_extractResults(pFrame);
-		if (m_answer == a_OK)
+		// Create the printer HDC before _extractResults() so any needed
+		// ResetDCW operates on a valid handle instead of nullptr.
+		std::wstring driver;
+		std::wstring device;
+		if (!m_pPersistPrintDlg->hDevMode ||
+		    !s_extractDevNames(m_pPersistPrintDlg->hDevNames, driver, device))
 		{
-			// create a new hDC for this printer...
-			
-			DEVMODEW * pDevMode = (DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
-			DEVNAMES * pDevNames = (DEVNAMES *)GlobalLock(m_pPersistPrintDlg->hDevNames);
-			if (!pDevMode || !pDevNames)
-			{
-				if (pDevMode)
-					GlobalUnlock(m_pPersistPrintDlg->hDevMode);
-				if (pDevNames)
-					GlobalUnlock(m_pPersistPrintDlg->hDevNames);
-				m_answer = a_CANCEL;
-				return;
-			}
-
-			wchar_t * p = (wchar_t *)pDevNames;
-			m_pPersistPrintDlg->hDC = CreateDCW(p + pDevNames->wDriverOffset,
-											   p + pDevNames->wDeviceOffset,
-											   nullptr,
-											   pDevMode);
-			
-			GlobalUnlock(m_pPersistPrintDlg->hDevMode);
-			GlobalUnlock(m_pPersistPrintDlg->hDevNames);
-			if (!m_pPersistPrintDlg->hDC)
-			{
-				m_answer = a_CANCEL;
-				return;
-			}
-
-			// notify layout of printer (this results in redoing doc layout !!!)
-			XAP_Frame * focussed = XAP_App::getApp()->getLastFocussedFrame();
-			AV_View * focussedView = focussed ? focussed->getCurrentView() : nullptr;
-			GR_Win32Graphics* pG = focussedView ? static_cast<GR_Win32Graphics*>(focussedView->getGraphics()) : nullptr;
-			if (!pG)
-			{
-				DeleteDC(m_pPersistPrintDlg->hDC);
-				m_pPersistPrintDlg->hDC = nullptr;
-				m_answer = a_CANCEL;
-				return;
-			}
-			pG->setPrintDC(m_pPersistPrintDlg->hDC);
+			m_answer = a_CANCEL;
+			return;
 		}
+
+		DEVMODEW * pDevMode = static_cast<DEVMODEW *>(GlobalLock(m_pPersistPrintDlg->hDevMode));
+		if (!pDevMode)
+		{
+			m_answer = a_CANCEL;
+			return;
+		}
+
+		const wchar_t * pDriver = driver.empty() ? nullptr : driver.c_str();
+		m_pPersistPrintDlg->hDC = CreateDCW(pDriver, device.c_str(), nullptr, pDevMode);
+		GlobalUnlock(m_pPersistPrintDlg->hDevMode);
+		if (!m_pPersistPrintDlg->hDC)
+		{
+			m_answer = a_CANCEL;
+			return;
+		}
+
+		_extractResults(pFrame);
+		if (m_answer != a_OK)
+		{
+			DeleteDC(m_pPersistPrintDlg->hDC);
+			m_pPersistPrintDlg->hDC = nullptr;
+			return;
+		}
+
+		// notify layout of printer using a separate IC/DC (this may redo doc layout)
+		s_updateScreenPrinterMetrics(m_pPersistPrintDlg->hDevNames, m_pPersistPrintDlg->hDevMode);
 	}
 	else if (PrintDlgW(m_pPersistPrintDlg))		// raise the actual dialog.
 	{
@@ -306,34 +388,39 @@ void XAP_Win32Dialog_Print::runModal(XAP_Frame * pFrame)
 			m_answer = a_CANCEL;
 			return;
 		}
-		_extractResults(pFrame);
 
-		// notify layout of printer (this results in redoing doc layout !!!)
-		XAP_Frame * focussed = XAP_App::getApp()->getLastFocussedFrame();
-		AV_View * focussedView = focussed ? focussed->getCurrentView() : nullptr;
-		GR_Win32Graphics* pG = focussedView ? static_cast<GR_Win32Graphics*>(focussedView->getGraphics()) : nullptr;
-		if (!pG)
+		// we need to differentiate between actual OK being pressed by user and simulated
+		// by our hook procedure -- in the latter case we want to return a_CANCEL so that
+		// the document does not get sent to the printer. We will also set m_bPersistValid
+		// as if OK was clicked and update screen metrics for the newly selected printer.
+		if (m_bClosed)
 		{
+			s_updateScreenPrinterMetrics(m_pPersistPrintDlg->hDevNames, m_pPersistPrintDlg->hDevMode);
 			DeleteDC(m_pPersistPrintDlg->hDC);
 			m_pPersistPrintDlg->hDC = nullptr;
 			m_answer = a_CANCEL;
+			m_bPersistValid = true;
 			return;
 		}
-		pG->setPrintDC(m_pPersistPrintDlg->hDC);
 
-		// we need to differentiate between actual OK being pressed by user and simulated
-		// by our hook procedure -- in the later case we want to return a_CANCEL so that
-		// the document does not get sent to the printer. We will also set m_bPersistValid
-		// as if OK was clicked
-		if(m_bClosed)
+		_extractResults(pFrame);
+		if (m_answer != a_OK)
 		{
-			m_answer = a_CANCEL;
-			m_bPersistValid = true;
+			DeleteDC(m_pPersistPrintDlg->hDC);
+			m_pPersistPrintDlg->hDC = nullptr;
+			return;
 		}
-		
+
+		// notify layout of printer using a separate IC/DC (this may redo doc layout)
+		s_updateScreenPrinterMetrics(m_pPersistPrintDlg->hDevNames, m_pPersistPrintDlg->hDevMode);
 	}
 	else
 	{
+		if (m_pPersistPrintDlg->hDC)
+		{
+			DeleteDC(m_pPersistPrintDlg->hDC);
+			m_pPersistPrintDlg->hDC = nullptr;
+		}
 		// The user clicked the cancel button and did not change the printer, there is
 		// nothing for us to do
 		m_answer = a_CANCEL;
@@ -344,6 +431,7 @@ void XAP_Win32Dialog_Print::runModal(XAP_Frame * pFrame)
 
 void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 {
+	m_answer = a_CANCEL;
 	UT_return_if_fail(m_pPersistPrintDlg);
 	UT_return_if_fail(m_pPersistPrintDlg->hDevMode!=nullptr);
 
@@ -354,7 +442,9 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 	m_nLastPage			= m_pPersistPrintDlg->nToPage;
 
 	// The driver must not print the copies as well: AbiWord loops itself,
-	// as on the other ports. Read the count first, then force a single copy.
+	// as on the other ports. Read the count first, then force a single copy
+	// only when the driver DEVMODE actually requests more than one copy or
+	// collation, avoiding unnecessary DocumentPropertiesW/ResetDCW calls.
 	DEVMODEW *pDevMode=(DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
 	if (!pDevMode)
 	{
@@ -371,27 +461,46 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 		m_bCollate = (pDevMode->dmCollate == DMCOLLATE_TRUE);
 	else
 		m_bCollate = (m_pPersistPrintDlg->Flags & PD_COLLATE) != 0;
-	pDevMode->dmCopies = 1;
-	pDevMode->dmCollate = DMCOLLATE_FALSE;
-	pDevMode->dmFields |= DM_COPIES | DM_COLLATE;
-	GlobalUnlock(m_pPersistPrintDlg->hDevMode);
 
-	// any changes to the DEVMODE structure must be followed by this call before the
-	// modified structure can be used !!!
-	GR_Win32Graphics::fixDevMode(m_pPersistPrintDlg->hDevMode);
-
-	pDevMode=(DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
-	if (!pDevMode)
+	bool bNeedReset = false;
+	if ((pDevMode->dmFields & DM_COPIES) && pDevMode->dmCopies > 1)
 	{
-		m_answer = a_CANCEL;
-		return;
+		pDevMode->dmCopies = 1;
+		pDevMode->dmFields |= DM_COPIES;
+		bNeedReset = true;
 	}
-	const HDC reset = ResetDCW(m_pPersistPrintDlg->hDC, pDevMode);
-	GlobalUnlock(m_pPersistPrintDlg->hDevMode);
-	if (!reset)
+	if ((pDevMode->dmFields & DM_COLLATE) && pDevMode->dmCollate != DMCOLLATE_FALSE)
 	{
-		m_answer = a_CANCEL;
-		return;
+		pDevMode->dmCollate = DMCOLLATE_FALSE;
+		pDevMode->dmFields |= DM_COLLATE;
+		bNeedReset = true;
+	}
+	GlobalUnlock(m_pPersistPrintDlg->hDevMode);
+
+	if (bNeedReset)
+	{
+		std::wstring driver;
+		std::wstring device;
+		s_extractDevNames(m_pPersistPrintDlg->hDevNames, driver, device);
+
+		// any changes to the DEVMODE structure must be followed by this call before the
+		// modified structure can be used !!!
+		GR_Win32Graphics::fixDevMode(m_pPersistPrintDlg->hDevMode,
+									 device.empty() ? nullptr : device.c_str());
+
+		pDevMode=(DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
+		if (!pDevMode)
+		{
+			m_answer = a_CANCEL;
+			return;
+		}
+		const HDC reset = m_pPersistPrintDlg->hDC ? ResetDCW(m_pPersistPrintDlg->hDC, pDevMode) : nullptr;
+		GlobalUnlock(m_pPersistPrintDlg->hDevMode);
+		if (!reset)
+		{
+			m_answer = a_CANCEL;
+			return;
+		}
 	}
 	
 	if (m_bDoPrintToFile)

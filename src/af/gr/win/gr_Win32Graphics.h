@@ -25,6 +25,7 @@
 #include "gr_Graphics.h"
 #include "gr_Win32CharWidths.h"
 #include "ut_vector.h"
+#include <string>
 #include <vector>
 #include <wchar.h>
 #include <winuser.h>
@@ -296,10 +297,11 @@ public:
 	double                getXYRatio() const {return m_fXYRatio;}
 	double                getXYRatioPrint() const {return m_fXYRatioPrint;}
 
-	static bool fixDevMode(HGLOBAL hModDev);
+	static bool fixDevMode(HGLOBAL hModDev, const wchar_t * pPrinterName = nullptr);
 
 	void closePrintAbort(void);
 	void setPrintOwner(HWND hwnd) { m_hwndPrintOwner = hwnd; }
+	void setPrinterName(const wchar_t * pPrinterName) { m_printerName = pPrinterName ? pPrinterName : L""; }
 
 	static DOCINFOW *getDocInfo();
 	static HDC createbestmetafilehdc();
@@ -407,6 +409,7 @@ protected:
 
 private:
 	void 					_constructorCommonCode(HDC);
+	void					_showPrintAbort(void);
 	UT_uint16*				_remapGlyphs(const UT_UCS4Char* pChars, int iCharOffset, int &iLength);
 	virtual bool            _setTransform(const GR_Transform & tr) override;
 
@@ -424,8 +427,11 @@ private:
 	int						m_nLogPixelsY;
 	HGLOBAL					m_hDevMode;
 	bool					m_bPrintCancelled;
+	bool					m_bPrintTimersPaused;
+	bool					m_bPrevTimersPaused;
 	HWND					m_hwndPrintOwner;
 	HWND					m_hwndPrintDisabled;
+	std::wstring			m_printerName;
 
 	typedef struct
 	{
