@@ -663,12 +663,11 @@ void FL_DocLayout::fillLayouts(void)
 		m_pView->clearCursorWait();
 		// The section was broken while the layout was still filling, which
 		// empties the first column before placing each line. Updating again
-		// reformats each pending paragraph against the final column width,
-		// then breaks the section without emptying the columns. On paper the
-		// header, the body and the footer then land on different pages.
+		// reformats each pending paragraph against the final column width.
+		// On paper the section is restacked in place: breaking it again put
+		// the header, the body and the footer on different pages.
 		const bool paper = pG && pG->queryProperties(GR_Graphics::DGP_PAPER);
-		if (!paper)
-			updateLayout(true);
+		updateLayout(true);
 		if(!paper)
 		{
 			m_pView->queueDraw();
@@ -680,9 +679,9 @@ void FL_DocLayout::fillLayouts(void)
 		}
 	}
 	setLayoutIsFilling(false);
-	// A paper export has no screen view. The same second pass that splits a
-	// header and a footer must not run here either.
-	if(!m_pView && !(pG && pG->queryProperties(GR_Graphics::DGP_PAPER)))
+	// A paper export has no screen view. The same second pass still runs:
+	// the section restacks its columns instead of breaking them apart.
+	if(!m_pView)
 	{
 		updateLayout(true);
 	}

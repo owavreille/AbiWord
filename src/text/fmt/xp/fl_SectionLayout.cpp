@@ -1931,7 +1931,18 @@ void fl_DocSectionLayout::updateLayout(bool bDoFull)
 	}
 	if(needsSectionBreak() && !getDocument()->isDontImmediateLayout() )
 	{
-		if (!isFirstPageValid())
+		GR_Graphics * paperG = m_pLayout ? m_pLayout->getGraphics() : nullptr;
+		const bool paper = paperG && paperG->queryProperties(GR_Graphics::DGP_PAPER);
+		if (paper)
+		{
+			// The second pass already recomputed tab positions. Breaking the
+			// section again moves the header, the body and the footer onto
+			// separate pages. Restack the lines that already sit in the columns.
+			m_bNeedsSectionBreak = false;
+			for (fp_Column * col = m_pFirstColumn; col; col = static_cast<fp_Column *>(col->getNext()))
+				col->layout();
+		}
+		else if (!isFirstPageValid())
 		{
 			// The previous section ends on a page farther in the document than the present section
 			// first page. We reformat completely the section
@@ -1943,7 +1954,10 @@ void fl_DocSectionLayout::updateLayout(bool bDoFull)
 			format();
 			return;
 		}
-		m_ColumnBreaker.breakSection();
+		else
+		{
+			m_ColumnBreaker.breakSection();
+		}
 	}
 	if(needsRebuild() && !getDocument()->isDontImmediateLayout() )
 	{

@@ -97,6 +97,44 @@ struct Paragraph
 {
 	std::vector<Run> runs;
 	std::string pap_grpprl;
+	const PP_AttrProp * block_ap = nullptr;
+	uint16_t end_mark = 0x000D;
+};
+
+struct FontCatalog
+{
+	std::vector<std::string> names;
+	FontCatalog()
+	{
+		names.push_back("Times New Roman");
+	}
+	unsigned index_of(const char * raw)
+	{
+		if (!raw || !*raw)
+			return 0;
+		const char * start = raw;
+		while (*start == ' ' || *start == '\t' || *start == '"' || *start == '\'')
+			++start;
+		const char * end = start;
+		while (*end && *end != ',')
+			++end;
+		while (end > start && (end[-1] == ' ' || end[-1] == '\t' || end[-1] == '"' || end[-1] == '\''))
+			--end;
+		if (end <= start)
+			return 0;
+		std::string name(start, static_cast<size_t>(end - start));
+		if (name.size() > 64)
+			name.resize(64);
+		for (size_t i = 0; i < names.size(); ++i)
+		{
+			if (!g_ascii_strcasecmp(names[i].c_str(), name.c_str()))
+				return static_cast<unsigned>(i);
+		}
+		if (names.size() >= 64)
+			return 0;
+		names.push_back(name);
+		return static_cast<unsigned>(names.size() - 1);
+	}
 };
 
 struct ChRun
@@ -147,30 +185,44 @@ static bool property_is(const PP_AttrProp * ap, const char * name, const char * 
 	return ap && ap->getProperty(name, value) && value && !strcmp(value, wanted);
 }
 
-static std::string character_grpprl(const PP_AttrProp * ap)
+static const gchar * block_property(PD_Document * doc, const PP_AttrProp * ap, const char * name);
+
+static std::string character_grpprl(PD_Document * doc, FontCatalog & fonts, const PP_AttrProp * span, const PP_AttrProp * block)
 {
 	std::string grpprl;
-	if (!ap)
-		return grpprl;
-	const gchar * weight = nullptr;
-	if (ap->getProperty("font-weight", weight) && weight)
+	const PP_AttrProp * ap = span ? span : block;
+	if (ap)
 	{
-		const int numeric = atoi(weight);
-		if (!strcmp(weight, "bold") || numeric >= 700)
-			append_sprm(grpprl, 0x0835, 1, 1);
+		const gchar * weight = nullptr;
+		if (ap->getProperty("font-weight", weight) && weight)
+		{
+			const int numeric = atoi(weight);
+			if (!strcmp(weight, "bold") || numeric >= 700)
+				append_sprm(grpprl, 0x0835, 1, 1);
+		}
+		if (property_is(ap, "font-style", "italic"))
+			append_sprm(grpprl, 0x0836, 1, 1);
+		const gchar * decoration = nullptr;
+		if (ap->getProperty("text-decoration", decoration) && decoration &&
+			strstr(decoration, "underline"))
+			append_sprm(grpprl, 0x2A3E, 1, 1);
+		const gchar * size = nullptr;
+		if (ap->getProperty("font-size", size) && size && *size)
+		{
+			const double points = UT_convertToPoints(size);
+			if (points > 0.0 && points < 1000.0)
+				append_sprm(grpprl, 0x4A43, static_cast<unsigned>(points * 2.0 + 0.5), 2);
+		}
 	}
-	if (property_is(ap, "font-style", "italic"))
-		append_sprm(grpprl, 0x0836, 1, 1);
-	const gchar * decoration = nullptr;
-	if (ap->getProperty("text-decoration", decoration) && decoration &&
-		strstr(decoration, "underline"))
-		append_sprm(grpprl, 0x2A3E, 1, 1);
-	const gchar * size = nullptr;
-	if (ap->getProperty("font-size", size) && size && *size)
+	const gchar * family = block_property(doc, span, "font-family");
+	if (!family || !*family)
+		family = block_property(doc, block, "font-family");
+	if (family && *family)
 	{
-		const double points = UT_convertToPoints(size);
-		if (points > 0.0 && points < 1000.0)
-			append_sprm(grpprl, 0x4A43, static_cast<unsigned>(points * 2.0 + 0.5), 2);
+		const unsigned font = fonts.index_of(family);
+		append_sprm(grpprl, 0x4A4F, font, 2); // sprmCRgFtc0
+		append_sprm(grpprl, 0x4A50, font, 2); // sprmCRgFtc1
+		append_sprm(grpprl, 0x4A51, font, 2); // sprmCRgFtc2
 	}
 	return grpprl;
 }
@@ -379,7 +431,30 @@ static bool ended_skipped_section(PTStruxType kind)
 
 static bool append_image(PD_Document * doc, Paragraph & current, const PP_AttrProp * ap, std::vector<Picture> & pics);
 
-static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics)
+struct TableCell
+{
+	int left = 0;
+	int right = 0;
+	int top = 0;
+	int bot = 0;
+	std::vector<Paragraph> paragraphs;
+};
+
+struct OpenTable
+{
+	int depth = 0;
+	const PP_AttrProp * ap = nullptr;
+	std::vector<TableCell> cells;
+	int current = -1;
+	bool in_paragraph = false;
+	Paragraph paragraph;
+};
+
+static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts,
+	pf_Frag * frag, std::vector<Picture> & pics,
+	bool & in_paragraph, Paragraph & current, std::vector<Paragraph> & dest);
+
+static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts)
 {
 	std::vector<Paragraph> paragraphs;
 	Paragraph current;
@@ -387,12 +462,16 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 	bool in_paragraph = false;
 	int frame_depth = 0;
 	int skip_depth = 0;
+	OpenTable open_table;
 	pt_PieceTable * table = doc->getPieceTable();
 	if (!table)
 		return paragraphs;
 
 	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
 	{
+		if (accept && !frame_depth &&
+			feed_table(open_table, doc, fonts, frag, pics, in_paragraph, current, paragraphs))
+			continue;
 		if (frag->getType() == pf_Frag::PFT_Strux)
 		{
 			const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
@@ -416,6 +495,7 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 					current = Paragraph();
 					const PP_AttrProp * blockAP = nullptr;
 					doc->getAttrProp(frag->getIndexAP(), &blockAP);
+					current.block_ap = blockAP;
 					current.pap_grpprl = paragraph_grpprl(doc, blockAP);
 					in_paragraph = true;
 				}
@@ -499,7 +579,7 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 		const PP_AttrProp * props = nullptr;
 		doc->getAttrProp(text->getIndexAP(), &props);
 		Run run;
-		run.grpprl = character_grpprl(props);
+		run.grpprl = character_grpprl(doc, fonts, props, current.block_ap);
 		for (UT_uint32 i = 0; chars && i < text->getLength(); ++i)
 			append_code_unit(run.text, chars[i]);
 		if (!current.runs.empty() && current.runs.back().picture < 0 && current.runs.back().grpprl == run.grpprl)
@@ -574,10 +654,10 @@ static int slot_for_type(const char * type)
 	return -1;
 }
 
-static void append_run(Paragraph & current, const PP_AttrProp * props, const UT_UCS4Char * chars, UT_uint32 length)
+static void append_run(Paragraph & current, PD_Document * doc, FontCatalog & fonts, const PP_AttrProp * props, const UT_UCS4Char * chars, UT_uint32 length)
 {
 	Run run;
-	run.grpprl = character_grpprl(props);
+	run.grpprl = character_grpprl(doc, fonts, props, current.block_ap);
 	for (UT_uint32 i = 0; chars && i < length; ++i)
 		append_code_unit(run.text, chars[i]);
 	if (!current.runs.empty() && current.runs.back().picture < 0 && current.runs.back().grpprl == run.grpprl)
@@ -652,7 +732,351 @@ static bool append_image(PD_Document * doc, Paragraph & current, const PP_AttrPr
 	return true;
 }
 
-static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
+static int property_int(const PP_AttrProp * ap, const char * name)
+{
+	const gchar * value = nullptr;
+	if (!ap || !ap->getProperty(name, value) || !value || !*value)
+		return 0;
+	return atoi(value);
+}
+
+static void close_table_paragraph(OpenTable & table)
+{
+	if (!table.in_paragraph)
+		return;
+	if (table.current >= 0 && table.current < static_cast<int>(table.cells.size()))
+		table.cells[static_cast<size_t>(table.current)].paragraphs.push_back(table.paragraph);
+	table.paragraph = Paragraph();
+	table.in_paragraph = false;
+}
+
+static std::string in_table_grpprl(const std::string & grp)
+{
+	// make_papx writes the style index itself. The grpprl is only sprms.
+	std::string marked;
+	append_sprm(marked, 0x2416, 1, 1); // sprmPFInTable
+	marked += grp;
+	return marked;
+}
+
+static std::vector<unsigned> table_column_widths(const PP_AttrProp * ap, unsigned columns)
+{
+	std::vector<unsigned> widths;
+	const gchar * props = nullptr;
+	if (ap && ap->getProperty("table-column-props", props) && props)
+	{
+		const char * p = props;
+		while (*p && widths.size() < 39)
+		{
+			while (*p == '/' || *p == ' ' || *p == '\t')
+				++p;
+			if (!*p)
+				break;
+			const char * end = p;
+			while (*end && *end != '/')
+				++end;
+			std::string token(p, static_cast<size_t>(end - p));
+			int twips = 0;
+			if (parse_signed_twips(token.c_str(), twips) && twips > 0)
+				widths.push_back(static_cast<unsigned>(twips));
+			p = end;
+		}
+	}
+	const unsigned fill = widths.empty() ? 1440u : widths.back();
+	while (widths.size() < columns && widths.size() < 39)
+		widths.push_back(fill);
+	if (columns > 0 && widths.size() > columns)
+		widths.resize(columns);
+	return widths;
+}
+
+static std::string row_mark_grpprl(const std::vector<unsigned> & widths)
+{
+	std::string grp;
+	append_sprm(grp, 0x2416, 1, 1);
+	append_sprm(grp, 0x2417, 1, 1); // sprmPFTtp, the row mark
+	append_sprm(grp, 0x9602, 108, 2); // sprmTDxaGapHalf
+	const unsigned n = static_cast<unsigned>(widths.size());
+	if (n < 1 || n > 39)
+		return grp;
+	std::string operand;
+	operand.push_back(static_cast<char>(n));
+	int x = 0;
+	auto put16 = [&operand](int value)
+	{
+		const unsigned u = static_cast<unsigned>(value) & 0xFFFFu;
+		operand.push_back(static_cast<char>(u & 0xff));
+		operand.push_back(static_cast<char>((u >> 8) & 0xff));
+	};
+	put16(0);
+	for (unsigned i = 0; i < n; ++i)
+	{
+		x += static_cast<int>(widths[i]);
+		put16(x);
+	}
+	for (unsigned i = 0; i < n; ++i)
+	{
+		operand.push_back(0);
+		operand.push_back(0);
+		for (int border = 0; border < 4; ++border)
+		{
+			operand.push_back(0x08);
+			operand.push_back(0x01);
+		}
+	}
+	grp.push_back(0x08);
+	grp.push_back(static_cast<char>(0xD6)); // sprmTDefTable
+	const unsigned cb = static_cast<unsigned>(operand.size());
+	grp.push_back(static_cast<char>(cb & 0xff));
+	grp.push_back(static_cast<char>((cb >> 8) & 0xff));
+	grp += operand;
+	return grp;
+}
+
+static Paragraph mark_paragraph(uint16_t mark, const std::string & pap)
+{
+	Paragraph paragraph;
+	paragraph.end_mark = mark;
+	paragraph.pap_grpprl = pap;
+	return paragraph;
+}
+
+static std::vector<Paragraph> build_table(OpenTable & table)
+{
+	std::vector<Paragraph> out;
+	close_table_paragraph(table);
+	if (table.cells.empty())
+		return out;
+
+	bool grid = false;
+	int columns = 0;
+	for (size_t i = 0; i < table.cells.size(); ++i)
+	{
+		const TableCell & cell = table.cells[i];
+		if (cell.right > cell.left || cell.bot > cell.top)
+			grid = true;
+		if (cell.right > columns)
+			columns = cell.right;
+	}
+	if (!grid)
+		columns = static_cast<int>(table.cells.size());
+	if (columns < 1)
+		columns = 1;
+	if (columns > 39)
+		columns = 39;
+
+	std::vector<std::vector<int>> rows;
+	if (!grid)
+	{
+		std::vector<int> row;
+		for (int i = 0; i < columns && i < static_cast<int>(table.cells.size()); ++i)
+			row.push_back(i);
+		rows.push_back(row);
+	}
+	else
+	{
+		std::vector<int> tops;
+		for (size_t i = 0; i < table.cells.size(); ++i)
+		{
+			const int top = table.cells[i].top;
+			bool seen = false;
+			for (size_t t = 0; t < tops.size(); ++t)
+				if (tops[t] == top)
+					seen = true;
+			if (!seen)
+				tops.push_back(top);
+		}
+		for (size_t a = 1; a < tops.size(); ++a)
+		{
+			const int key = tops[a];
+			size_t b = a;
+			while (b > 0 && tops[b - 1] > key)
+			{
+				tops[b] = tops[b - 1];
+				--b;
+			}
+			tops[b] = key;
+		}
+		for (size_t t = 0; t < tops.size(); ++t)
+		{
+			std::vector<int> row;
+			for (size_t i = 0; i < table.cells.size(); ++i)
+				if (table.cells[i].top == tops[t])
+					row.push_back(static_cast<int>(i));
+			for (size_t a = 1; a < row.size(); ++a)
+			{
+				const int key = row[a];
+				size_t b = a;
+				while (b > 0 && table.cells[static_cast<size_t>(row[b - 1])].left > table.cells[static_cast<size_t>(key)].left)
+				{
+					row[b] = row[b - 1];
+					--b;
+				}
+				row[b] = key;
+			}
+			rows.push_back(row);
+		}
+	}
+
+	const std::vector<unsigned> widths = table_column_widths(table.ap, static_cast<unsigned>(columns));
+	const std::string row_pap = row_mark_grpprl(widths);
+	for (size_t r = 0; r < rows.size(); ++r)
+	{
+		for (int c = 0; c < columns; ++c)
+		{
+			int found = -1;
+			if (!grid)
+			{
+				if (c < static_cast<int>(rows[r].size()))
+					found = rows[r][static_cast<size_t>(c)];
+			}
+			else
+			{
+				for (size_t i = 0; i < rows[r].size(); ++i)
+				{
+					const TableCell & cell = table.cells[static_cast<size_t>(rows[r][i])];
+					if (cell.left == c)
+						found = rows[r][i];
+				}
+			}
+			if (found >= 0)
+			{
+				const std::vector<Paragraph> & paras = table.cells[static_cast<size_t>(found)].paragraphs;
+				if (paras.empty())
+					out.push_back(mark_paragraph(0x000D, in_table_grpprl(std::string())));
+				for (size_t p = 0; p < paras.size(); ++p)
+				{
+					Paragraph paragraph = paras[p];
+					paragraph.pap_grpprl = in_table_grpprl(paragraph.pap_grpprl);
+					out.push_back(paragraph);
+				}
+			}
+			else
+			{
+				out.push_back(mark_paragraph(0x000D, in_table_grpprl(std::string())));
+			}
+			out.push_back(mark_paragraph(0x0007, in_table_grpprl(std::string())));
+		}
+		out.push_back(mark_paragraph(0x0007, row_pap));
+	}
+	return out;
+}
+
+static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts,
+	pf_Frag * frag, std::vector<Picture> & pics,
+	bool & in_paragraph, Paragraph & current, std::vector<Paragraph> & dest)
+{
+	if (frag->getType() == pf_Frag::PFT_Strux)
+	{
+		const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
+		if (table.depth == 0)
+		{
+			if (kind != PTX_SectionTable)
+				return false;
+			if (in_paragraph)
+			{
+				dest.push_back(current);
+				current = Paragraph();
+				in_paragraph = false;
+			}
+			table = OpenTable();
+			table.depth = 1;
+			doc->getAttrProp(frag->getIndexAP(), &table.ap);
+			return true;
+		}
+		if (kind == PTX_SectionTable)
+		{
+			++table.depth;
+			return true;
+		}
+		if (kind == PTX_EndTable)
+		{
+			if (table.depth > 0)
+				--table.depth;
+			if (table.depth == 0)
+			{
+				const std::vector<Paragraph> built = build_table(table);
+				dest.insert(dest.end(), built.begin(), built.end());
+				table = OpenTable();
+			}
+			return true;
+		}
+		if (table.depth > 1)
+			return true;
+		if (kind == PTX_SectionCell)
+		{
+			close_table_paragraph(table);
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(frag->getIndexAP(), &ap);
+			TableCell cell;
+			cell.left = property_int(ap, "left-attach");
+			cell.right = property_int(ap, "right-attach");
+			cell.top = property_int(ap, "top-attach");
+			cell.bot = property_int(ap, "bot-attach");
+			table.cells.push_back(cell);
+			table.current = static_cast<int>(table.cells.size() - 1);
+			return true;
+		}
+		if (kind == PTX_EndCell)
+		{
+			close_table_paragraph(table);
+			table.current = -1;
+			return true;
+		}
+		if (kind == PTX_Block)
+		{
+			close_table_paragraph(table);
+			if (table.current < 0)
+			{
+				table.cells.push_back(TableCell());
+				table.current = static_cast<int>(table.cells.size() - 1);
+			}
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(frag->getIndexAP(), &ap);
+			table.paragraph = Paragraph();
+			table.paragraph.block_ap = ap;
+			table.paragraph.pap_grpprl = paragraph_grpprl(doc, ap);
+			table.in_paragraph = true;
+			return true;
+		}
+		return true;
+	}
+	if (table.depth == 0)
+		return false;
+	if (table.depth > 1)
+		return true;
+	if (!table.in_paragraph)
+	{
+		if (table.current < 0)
+		{
+			table.cells.push_back(TableCell());
+			table.current = static_cast<int>(table.cells.size() - 1);
+		}
+		table.paragraph = Paragraph();
+		table.in_paragraph = true;
+	}
+	if (frag->getType() == pf_Frag::PFT_Object)
+	{
+		const pf_Frag_Object * object = static_cast<const pf_Frag_Object *>(frag);
+		if (object->getObjectType() == PTO_Image)
+		{
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(object->getIndexAP(), &ap);
+			append_image(doc, table.paragraph, ap, pics);
+		}
+		return true;
+	}
+	if (frag->getType() == pf_Frag::PFT_Text)
+	{
+		const pf_Frag_Text * text = static_cast<const pf_Frag_Text *>(frag);
+		const PP_AttrProp * props = nullptr;
+		doc->getAttrProp(text->getIndexAP(), &props);
+		append_run(table.paragraph, doc, fonts, props, doc->getPointer(text->getBufIndex()), text->getLength());
+	}
+	return true;
+}
+
+static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts)
 {
 	Headers out;
 	pt_PieceTable * table = doc->getPieceTable();
@@ -665,9 +1089,13 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 	std::string current_id;
 	Paragraph current;
 	std::vector<bool> frame_skipped;
+	OpenTable open_table;
 
 	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
 	{
+		if (in_story && skip_depth == 0 &&
+			feed_table(open_table, doc, fonts, frag, pics, in_paragraph, current, out.stories[current_id].paragraphs))
+			continue;
 		if (frag->getType() == pf_Frag::PFT_Strux)
 		{
 			const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
@@ -680,6 +1108,7 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 					current = Paragraph();
 					const PP_AttrProp * blockAP = nullptr;
 					doc->getAttrProp(frag->getIndexAP(), &blockAP);
+					current.block_ap = blockAP;
 					current.pap_grpprl = paragraph_grpprl(doc, blockAP);
 					in_paragraph = true;
 				}
@@ -806,7 +1235,7 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics)
 		const pf_Frag_Text * text = static_cast<const pf_Frag_Text *>(frag);
 		const PP_AttrProp * props = nullptr;
 		doc->getAttrProp(text->getIndexAP(), &props);
-		append_run(current, props, doc->getPointer(text->getBufIndex()), text->getLength());
+		append_run(current, doc, fonts, props, doc->getPointer(text->getBufIndex()), text->getLength());
 	}
 	if (in_story && skip_depth == 0 && in_paragraph)
 		out.stories[current_id].paragraphs.push_back(current);
@@ -889,7 +1318,7 @@ static void append_paragraphs(const std::vector<Paragraph> & paragraphs,
 			for (size_t c = 0; c < source[r].text.size(); ++c)
 				units.push_back(static_cast<uint16_t>(source[r].text[c]));
 		}
-		units.push_back(0x000D);
+		units.push_back(paragraphs[p].end_mark);
 		bounds.push_back(FC_MIN + static_cast<unsigned>(units.size() * 2));
 		pap_grpprls.push_back(paragraphs[p].pap_grpprl);
 	}
@@ -1142,12 +1571,10 @@ static Buf stylesheet()
 	return out;
 }
 
-static Buf font_table()
+static Buf font_ffn(const std::string & name)
 {
-	// SttbfFfn is a non-extended STTB. cData 0xFFFF would mark it extended
-	// and Word then rejects the file. The string is one FFN: Roman TrueType
-	// Times New Roman, weight 400, no alternate name.
-	const char * name = "Times New Roman";
+	// FFN: Roman TrueType, weight 400, empty panose and signature.
+	// The STTB length byte must stay under 256, so the name is capped.
 	Buf ffn;
 	ffn.push_back(static_cast<unsigned char>(0x02 | 0x04 | (0x01 << 4)));
 	append_u16(ffn, 400);
@@ -1155,15 +1582,56 @@ static Buf font_table()
 	ffn.push_back(0);
 	ffn.insert(ffn.end(), 10, 0);
 	ffn.insert(ffn.end(), 24, 0);
-	for (const char * p = name; *p; ++p)
-		append_u16(ffn, static_cast<unsigned char>(*p));
+	size_t i = 0;
+	unsigned chars = 0;
+	while (i < name.size() && chars < 64)
+	{
+		const unsigned char c = static_cast<unsigned char>(name[i]);
+		unsigned cp = c;
+		size_t step = 1;
+		if ((c & 0x80) == 0)
+			cp = c;
+		else if ((c & 0xE0) == 0xC0 && i + 1 < name.size())
+		{
+			cp = ((c & 0x1F) << 6) | (static_cast<unsigned char>(name[i + 1]) & 0x3F);
+			step = 2;
+		}
+		else if ((c & 0xF0) == 0xE0 && i + 2 < name.size())
+		{
+			cp = ((c & 0x0F) << 12) | ((static_cast<unsigned char>(name[i + 1]) & 0x3F) << 6) |
+				(static_cast<unsigned char>(name[i + 2]) & 0x3F);
+			step = 3;
+		}
+		if (cp > 0xFFFF)
+			cp = '?';
+		append_u16(ffn, cp);
+		i += step;
+		++chars;
+		if (ffn.size() > 250)
+			break;
+	}
 	append_u16(ffn, 0);
+	return ffn;
+}
 
+static Buf font_table(const FontCatalog & fonts)
+{
+	// SttbfFfn is a non-extended STTB. cData 0xFFFF would mark it extended
+	// and Word then rejects the file. Slot 0 stays Times New Roman.
 	Buf out;
-	append_u16(out, 1);
+	const unsigned count = static_cast<unsigned>(fonts.names.empty() ? 1 : fonts.names.size());
+	append_u16(out, count);
 	append_u16(out, 0);
-	out.push_back(static_cast<unsigned char>(ffn.size()));
-	out.insert(out.end(), ffn.begin(), ffn.end());
+	const std::vector<std::string> & names = fonts.names;
+	for (unsigned i = 0; i < count; ++i)
+	{
+		const std::string & name = (i < names.size() && !names[i].empty()) ? names[i] : std::string("Times New Roman");
+		Buf ffn = font_ffn(name);
+		if (ffn.size() > 255)
+			ffn.resize(255);
+		out.push_back(static_cast<unsigned char>(ffn.size()));
+		out.insert(out.end(), ffn.begin(), ffn.end());
+	}
 	return out;
 }
 
@@ -1738,8 +2206,9 @@ GsfOutput * IE_Exp_MsWord_97::_openFile(const char * /*szFilename*/)
 UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 {
 	std::vector<Picture> pictures;
-	std::vector<Paragraph> paragraphs = collect_paragraphs(getDoc(), pictures);
-	Headers headers = collect_headers(getDoc(), pictures);
+	FontCatalog fonts;
+	std::vector<Paragraph> paragraphs = collect_paragraphs(getDoc(), pictures, fonts);
+	Headers headers = collect_headers(getDoc(), pictures, fonts);
 	const Buf data = layout_pictures(pictures);
 	seal_pictures(paragraphs, pictures);
 	for (std::map<std::string, Story>::iterator it = headers.stories.begin(); it != headers.stories.end(); ++it)
@@ -1869,9 +2338,9 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const Buf pap_bin = bin_table(pap_pages, pap_pns);
 	const unsigned pap_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), pap_bin.begin(), pap_bin.end());
-	const Buf fonts = font_table();
+	const Buf fontBytes = font_table(fonts);
 	const unsigned font_at = static_cast<unsigned>(table.size());
-	table.insert(table.end(), fonts.begin(), fonts.end());
+	table.insert(table.end(), fontBytes.begin(), fontBytes.end());
 
 	// FibRgFcLcb97 index 11 is fcPlcfHdd / lcbPlcfHdd. The CPs are relative
 	// to the header subdocument and the last one equals ccpHdd.
@@ -1927,7 +2396,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 		place(fib, 11, hdd_at, static_cast<unsigned>(hdd.size()));
 	place(fib, 12, ch_at, static_cast<unsigned>(ch_bin.size()));
 	place(fib, 13, pap_at, static_cast<unsigned>(pap_bin.size()));
-	place(fib, 15, font_at, static_cast<unsigned>(fonts.size()));
+	place(fib, 15, font_at, static_cast<unsigned>(fontBytes.size()));
 	place(fib, 31, dop_at, 500);
 	place(fib, 33, clx_at, clx_len);
 	memcpy(&word[0], &fib[0], FIB_BYTES);

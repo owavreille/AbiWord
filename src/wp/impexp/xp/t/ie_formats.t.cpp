@@ -1830,6 +1830,108 @@ TFTEST_MAIN("DOC export keeps the header text in WordDocument")
 	std::remove(path.c_str());
 }
 
+TFTEST_MAIN("DOC export keeps a table grid and the document fonts")
+{
+	if (!exporter_known(".doc"))
+		return;
+
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+
+	const PT_DocPosition body = first_block_content(doc);
+	const std::string styled = "PoliceCourier";
+	if (!TFPASS(doc->insertSpan(body, styled)))
+	{
+		doc->unref();
+		return;
+	}
+	const PP_PropertyVector spanProps = {"font-family", "Courier New"};
+	if (!TFPASS(doc->changeSpanFmt(PTC_AddFmt, body, body + static_cast<PT_DocPosition>(styled.size()),
+		PP_NOPROPS, spanProps)))
+	{
+		doc->unref();
+		return;
+	}
+
+	pf_Frag_Strux * table = nullptr;
+	const PP_PropertyVector tableProps = {
+		"table-column-props", "2in/3in/"
+	};
+	if (!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionTable, PP_NOPROPS, tableProps, &table)) ||
+		!TFPASS(table != nullptr))
+	{
+		doc->unref();
+		return;
+	}
+	for (int r = 0; r < 2; ++r)
+	{
+		for (int c = 0; c < 2; ++c)
+		{
+			pf_Frag_Strux * cell = nullptr;
+			const PP_PropertyVector cellProps = {
+				"left-attach", std::to_string(c),
+				"right-attach", std::to_string(c + 1),
+				"top-attach", std::to_string(r),
+				"bot-attach", std::to_string(r + 1)
+			};
+			const std::string label = (r == 0 && c == 0) ? std::string("CelluleA") : std::string("Cellule");
+			if (!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionCell, PP_NOPROPS, cellProps, &cell)) ||
+				!TFPASS(cell != nullptr) ||
+				!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+				!TFPASS(doc->insertSpan(document_end(doc), label)) ||
+				!TFPASS(doc->insertStrux(document_end(doc), PTX_EndCell)))
+			{
+				doc->unref();
+				return;
+			}
+		}
+	}
+	if (!TFPASS(doc->insertStrux(document_end(doc), PTX_EndTable)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmtdoctable", ".doc");
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * ole = package_open(path, input, gsf_infile_msole_new);
+	if (!TFPASS(ole != nullptr))
+	{
+		package_close(input, ole);
+		std::remove(path.c_str());
+		return;
+	}
+	const std::string word = ole_read(ole, "WordDocument");
+	const std::string fontTable = ole_read(ole, "1Table");
+	const unsigned fcMin = word.size() >= 0x20 ? le32(word, 0x18) : 0;
+	const unsigned fcMac = word.size() >= 0x20 ? le32(word, 0x1C) : 0;
+	const std::string main = (fcMac > fcMin && fcMac <= word.size()) ? word.substr(fcMin, fcMac - fcMin) : std::string();
+	TFPASS(main.find(utf16_ascii("CelluleA")) != std::string::npos);
+	TFPASS(main.find(std::string("\x07\x00", 2)) != std::string::npos);
+	TFPASS(fontTable.find(utf16_ascii("Courier New")) != std::string::npos);
+	TFPASS(word.find(std::string("\x08\xD6", 2)) != std::string::npos);
+	TFPASS(word.find(std::string("\x4F\x4A", 2)) != std::string::npos);
+	const unsigned fontAt = word.size() >= 0x9A + 16 * 8 ? le32(word, 0x9A + 15 * 8) : 0;
+	const unsigned fontLen = word.size() >= 0x9A + 16 * 8 ? le32(word, 0x9A + 15 * 8 + 4) : 0;
+	TFPASS(fontLen >= 4 && fontAt + fontLen <= fontTable.size() &&
+		le16(fontTable, fontAt) >= 2 && le16(fontTable, fontAt + 2) == 0);
+
+	package_close(input, ole);
+	std::remove(path.c_str());
+}
+
 TFTEST_MAIN("DOCX export keeps a body image in word/media")
 {
 	ensure_plugin(".docx", "openxml");
