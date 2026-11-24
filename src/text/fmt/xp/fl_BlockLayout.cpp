@@ -4028,13 +4028,13 @@ void fl_BlockLayout::format()
 		}
 	}
 
-	// Paragraph has been reformatted. A block that already has lines does
-	// not need the load-time second pass.
-	if(!m_pLayout->isLayoutFilling() || getFirstContainer())
+	// Paragraph has been reformatted. While the document is still loading,
+	// keep the block pending so the pass after the columns exist can
+	// recompute tabs against the final column width.
+	if(!m_pLayout->isLayoutFilling())
     {
 		m_iNeedsReformat = -1;
-		if (!m_pLayout->isLayoutFilling())
-			getDocSectionLayout()->clearNeedsReformat(this);
+		getDocSectionLayout()->clearNeedsReformat(this);
 	}
 	else
 	{
@@ -4300,16 +4300,6 @@ fp_Container* fl_BlockLayout::getNewContainer(const fp_Container* /* pCon*/)
 	UT_ASSERT(findLineInBlock(pLine) >= 0);
 	pLine->recalcMaxWidth(true);
 	return static_cast<fp_Container *>(pLine);
-}
-
-void fl_BlockLayout::releaseLoadReformat(void)
-{
-	if (m_iNeedsReformat != 0 || !getFirstContainer())
-		return;
-	m_iNeedsReformat = -1;
-	fl_DocSectionLayout * section = getDocSectionLayout();
-	if (section)
-		section->clearNeedsReformat(this);
 }
 
 void fl_BlockLayout::setNeedsReformat(fl_ContainerLayout * pCL,UT_uint32 offset)

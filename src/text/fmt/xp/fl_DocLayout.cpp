@@ -663,11 +663,10 @@ void FL_DocLayout::fillLayouts(void)
 		m_pView->clearCursorWait();
 		// The section was broken while the layout was still filling, which
 		// empties the first column before placing each line. Updating again
-		// breaks that section without emptying the columns. On paper the
+		// reformats each pending paragraph against the final column width,
+		// then breaks the section without emptying the columns. On paper the
 		// header, the body and the footer then land on different pages.
 		const bool paper = pG && pG->queryProperties(GR_Graphics::DGP_PAPER);
-		// Columns now exist. Revisit only the blocks that still have no
-		// lines. A later keystroke uses the dirty queue.
 		if (!paper)
 			updateLayout(true);
 		if(!paper)

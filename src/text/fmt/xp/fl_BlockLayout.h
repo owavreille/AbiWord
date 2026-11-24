@@ -351,10 +351,6 @@ public:
 	virtual void			setNeedsReformat(fl_ContainerLayout * pCL, UT_uint32 offset = 0) override;
 	inline bool 		    needsReformat(void) const override
 		{ return (m_iNeedsReformat >= 0); }
-	// A block formatted while the document was still loading keeps a zero
-	// flag so a later pass can revisit it. Once its lines sit in a column,
-	// that pass has nothing left to do.
-	void                    releaseLoadReformat(void);
 	virtual void			setNeedsRedraw(void) override;
 	virtual bool 		    needsRedraw(void) const override
 		{ return m_bNeedsRedraw; }
