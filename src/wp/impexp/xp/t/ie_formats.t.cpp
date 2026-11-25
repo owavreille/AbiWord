@@ -2795,8 +2795,10 @@ TFTEST_MAIN("ABW import keeps a margin note")
 	const char * abw =
 		"<?xml version=\"1.0\"?>\n"
 		"<abiword version=\"1.0\">\n"
-		"<section><p><c>corps</c></p></section>\n"
+		"<section>\n"
+		"<p><c>corps</c></p>\n"
 		"<margin><p><c>note</c></p></margin>\n"
+		"</section>\n"
 		"</abiword>\n";
 	PD_Document * doc = import_bytes(abw, ".abw");
 	if (!TFPASS(doc != nullptr))
