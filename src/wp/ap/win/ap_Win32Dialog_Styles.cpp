@@ -536,7 +536,7 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 		return 1;
 
 	case IDCANCEL:
-		if (hWnd == _win32DialogNewModify.getHandle())
+		if (GetDlgItem(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_EBX_NAME) != nullptr)
 			m_answer = a_CANCEL;
 		EndDialog(hWnd,0);
 		return 1;
