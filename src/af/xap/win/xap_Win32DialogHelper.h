@@ -141,6 +141,7 @@ public:
 						     const UT_RGBColor & Color);
 
 	void				setHandle(HWND hWnd){m_hDlg=hWnd;}
+	HWND				getHandle(void) const { return m_hDlg; }
 
 private:
 	XAP_Win32Dialog	*			m_pDialog;

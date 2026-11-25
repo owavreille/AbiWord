@@ -99,6 +99,7 @@
 #include "ap_Dialog_SplitCells.h"
 #include "ev_Mouse.h"
 #include "fv_View.h"
+#include "ut_unicode.h"
 
 // RIVERA
 #include "ap_Dialog_Annotation.h"
@@ -1014,7 +1015,7 @@ bool FV_View::cmdMergeCells(PT_DocPosition posSource, PT_DocPosition posDestinat
 //            s  |        |
 		if(sRight >= dRight)
 		{
-			if(sRight < numCols)
+			if(UT_table_span_continues(sRight, numCols))
 			{
 				posWork = findCellPosAt(posTable,dTop,sRight) +1;
 				getCellParams(posWork,&Left,&Right,&Top,&Bot);
@@ -1070,7 +1071,7 @@ bool FV_View::cmdMergeCells(PT_DocPosition posSource, PT_DocPosition posDestinat
 //
 //			check that the source column lines up with the destination column.
 //
-			if(dRight < numCols)
+			if(UT_table_span_continues(dRight, numCols))
 			{
 				posWork = findCellPosAt(posTable,sTop,dRight) +1;
 				getCellParams(posWork,&Left,&Right,&Top,&Bot);
@@ -1145,7 +1146,7 @@ bool FV_View::cmdMergeCells(PT_DocPosition posSource, PT_DocPosition posDestinat
 //
 		if(dBot >= sBot)
 		{
-			if(dBot < numRows)
+			if(UT_table_span_continues(dBot, numRows))
 			{
 				posWork = findCellPosAt(posTable,dBot,sLeft) +1;
 				getCellParams(posWork,&Left,&Right,&Top,&Bot);
@@ -1226,7 +1227,7 @@ bool FV_View::cmdMergeCells(PT_DocPosition posSource, PT_DocPosition posDestinat
 //     |   -----
 //
 
-			if(sBot < numRows)
+			if(UT_table_span_continues(sBot, numRows))
 			{
 				posWork = findCellPosAt(posTable,sBot,dLeft) +1;
 				getCellParams(posWork,&Left,&Right,&Top,&Bot);
@@ -2571,7 +2572,7 @@ bool FV_View::cmdDeleteRow(PT_DocPosition posRow)
 			if (posCell != 0 && getCellParams(posCell+1,&Left,&Right,&Top,&Bot))
 			{
 				UT_DEBUGMSG(("SEVIOR: Before delete left %d right %d top %d bot %d \n",Left,Right,Top,Bot));
-				if(Top >= iTop && Bot <= iDelEnd)
+				if(UT_cell_inside_row_span(Top, Bot, iTop, iDelEnd))
 				{
 					_deleteCellAt(posTable,iTop+j, i);
 				}

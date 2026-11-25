@@ -33,6 +33,7 @@
 #include "ut_debugmsg.h"
 #include "ut_string.h"
 #include "ap_LeftRuler.h"
+#include "ut_unicode.h"
 #include "xap_App.h"
 #include "xav_View.h"
 #include "gr_Graphics.h"
@@ -896,9 +897,9 @@ void AP_LeftRuler::mouseMotion(EV_EditModifierState ems, UT_sint32 x, UT_sint32 
 	// if they drag vertically off the ruler, we ignore the whole thing.
 	xxx_UT_DEBUGMSG(("In Left mouseMotion x %d y %d width %d \n",x,y,getWidth()));
 
-	const UT_sint32 xSlack = (m_bValidMouseClick && (m_draggingWhat == DW_TOPMARGIN || m_draggingWhat == DW_BOTTOMMARGIN))
-		? static_cast<UT_sint32>(getWidth()) * 2
-		: 0;
+	const UT_sint32 xSlack = UT_ruler_drag_slack(
+		m_bValidMouseClick && (m_draggingWhat == DW_TOPMARGIN || m_draggingWhat == DW_BOTTOMMARGIN),
+		static_cast<UT_sint32>(getWidth()));
 	if ((x < -xSlack) || (x > static_cast<UT_sint32>(getWidth()) + xSlack))
 	{
 		if(!m_bEventIgnored)

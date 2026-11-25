@@ -163,3 +163,47 @@ inline void UT_copy_utf8_bounded (char * dest, int capacity, const char * utf8)
 		dest[i] = utf8[i];
 	dest[n] = 0;
 }
+
+// A keystroke id is 16 bits. An emoji above U+FFFF must not be stored in it.
+inline UT_UCS4Char UT_keystroke_char (UT_UCS4Char ch)
+{
+	return ch > 0xFFFF ? static_cast<UT_UCS4Char>('a') : ch;
+}
+
+// A cell edge is exclusive. The neighbor exists while the edge is still
+// inside the table, including the last column or row.
+inline bool UT_table_span_continues (int edge, int count)
+{
+	return edge < count;
+}
+
+// A row deletion removes a cell only when the cell sits entirely in the
+// deleted span. A cell that starts above that span is adjusted, not removed.
+inline bool UT_cell_inside_row_span (int top, int bot, int spanTop, int spanEnd)
+{
+	return top >= spanTop && bot <= spanEnd;
+}
+
+// Without a page range, every page is printed. A range is clamped to the
+// document. The first page is never below 1.
+inline void UT_print_page_bounds (bool rangeSelected, int first, int last,
+		int pageCount, int & outFirst, int & outLast)
+{
+	if (!rangeSelected)
+	{
+		outFirst = 1;
+		outLast = pageCount;
+		return;
+	}
+	outFirst = first < 1 ? 1 : first;
+	outLast = last > pageCount ? pageCount : last;
+}
+
+// Dragging a vertical margin may leave the ruler by two widths. Any other
+// drag stops at the ruler edge.
+inline int UT_ruler_drag_slack (bool draggingMargin, int width)
+{
+	if (!draggingMargin || width <= 0)
+		return 0;
+	return width * 2;
+}

@@ -140,3 +140,28 @@ TFTEST_MAIN("fl_AutoNum labels stay inside their buffers")
   fl_AutoNum::dec2hebrew(hebrew, &point, 2000000000);
   TFPASS(point < 100);
 }
+
+TFTEST_MAIN("A list item is stored once and a missing block has no label")
+{
+  PD_Document * pDoc = makeDocument();
+  FV_View * pView = nullptr;
+  fl_AutoNumPtr autoNum = std::make_shared<fl_AutoNum>(9001, 0, NUMBERED_LIST, 1, ".", ".",
+                                                       pDoc, pView);
+  pDoc->addList(autoNum);
+
+  const pf_Frag_Strux * block = nullptr;
+  TFPASS(pDoc->getStruxOfTypeFromPosition(2, PTX_Block, &block));
+  if (block)
+  {
+    pf_Frag_Strux * item = const_cast<pf_Frag_Strux *>(block);
+    autoNum->addItem(item);
+    TFPASS(autoNum->getNumLabels() == 1);
+    autoNum->addItem(item);
+    TFPASS(autoNum->getNumLabels() == 1);
+    TFPASS(autoNum->getPositionInList(item) == 0);
+    TFPASS(autoNum->getPositionInList(nullptr) == -1);
+  }
+  TFPASS(!autoNum->doesItemHaveLabel(nullptr));
+
+  pDoc->unref();
+}

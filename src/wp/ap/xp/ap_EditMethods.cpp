@@ -137,6 +137,7 @@
 #include "xap_Dlg_FileOpenSaveAs.h"
 #include "xap_Dlg_FontChooser.h"
 #include "xap_Dlg_Print.h"
+#include "ut_unicode.h"
 #include "xap_Dlg_PrintPreview.h"
 #include "xap_Dlg_WindowMore.h"
 #include "xap_Dlg_Zoom.h"
@@ -8905,18 +8906,12 @@ UT_return_val_if_fail(pDialog, false);
 		UT_sint32 nFromPage = 1, nToPage = 1;
 		// must use the layout of the print view here !!!
 		const UT_sint32 nPrintPages = pPrintView->getLayout()->countPages();
-		if (!pDialog->getDoPrintRange(&nFromPage, &nToPage))
-		{
-			nFromPage = 1;
-			nToPage = nPrintPages;
-		}
-		else
-		{
-			if (nFromPage < 1)
-				nFromPage = 1;
-			if (nToPage > nPrintPages)
-				nToPage = nPrintPages;
-		}
+		const bool rangeSelected = pDialog->getDoPrintRange(&nFromPage, &nToPage);
+		int resolvedFirst = nFromPage;
+		int resolvedLast = nToPage;
+		UT_print_page_bounds(rangeSelected, nFromPage, nToPage, nPrintPages, resolvedFirst, resolvedLast);
+		nFromPage = resolvedFirst;
+		nToPage = resolvedLast;
 
 		// TODO add code to handle getDoPrintSelection()
 

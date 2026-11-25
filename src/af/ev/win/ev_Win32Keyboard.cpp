@@ -25,6 +25,7 @@
 
 #include "ut_assert.h"
 #include "ut_types.h"
+#include "ut_unicode.h"
 #include "ut_debugmsg.h"
 #include "ut_Win32OS.h"
 #include "ev_Keyboard.h"
@@ -371,7 +372,7 @@ void ev_Win32Keyboard::_emitChar(AV_View * pView,
 		charData[1] = 0;
 	}
 
-	const UT_UCS4Char mapChar = (charData[0] > 0xFFFF) ? static_cast<UT_UCS4Char>('a') : charData[0];
+	const UT_UCS4Char mapChar = UT_keystroke_char(charData[0]);
 	EV_EditMethod * pEM;
 	EV_EditEventMapperResult result = m_pEEM->Keystroke(EV_EKP_PRESS|ems|mapChar,&pEM);
 
@@ -449,7 +450,7 @@ bool ev_Win32Keyboard::onUniChar(AV_View * pView,
 	
 	EV_EditModifierState ems = _getModifierState();
 	UT_UCS4Char ch = static_cast<UT_UCS4Char>(nVirtKey);
-	const UT_UCS4Char mapChar = (ch > 0xFFFF) ? static_cast<UT_UCS4Char>('a') : ch;
+	const UT_UCS4Char mapChar = UT_keystroke_char(ch);
 
 	EV_EditMethod * pEM;
 	EV_EditEventMapperResult result = m_pEEM->Keystroke(EV_EKP_PRESS|ems|mapChar,&pEM);

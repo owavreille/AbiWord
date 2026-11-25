@@ -13,6 +13,7 @@
 #include "ut_dib.h"
 #include "ut_go_file.h"
 #include "ut_bytebuf.h"
+#include "ut_mbtowc.h"
 
 #define TFSUITE "core.af.util.winproof"
 
@@ -151,6 +152,67 @@ TFTEST_MAIN("DPI scale matches MulDiv")
 	UT_copy_utf8_bounded(nullptr, 4, "a");
 	UT_copy_utf8_bounded(bounded, 4, nullptr);
 	TFPASS(bounded[0] == 0);
+}
+
+TFTEST_MAIN("An emoji keystroke stays inside 16 bits")
+{
+	TFPASS(UT_keystroke_char('a') == static_cast<UT_UCS4Char>('a'));
+	TFPASS(UT_keystroke_char(0xE9) == 0xE9);
+	TFPASS(UT_keystroke_char(0xFFFF) == 0xFFFF);
+	TFPASS(UT_keystroke_char(0x1F600) == static_cast<UT_UCS4Char>('a'));
+	TFPASS(UT_keystroke_char(0) == 0);
+}
+
+TFTEST_MAIN("UTF-8 paste keeps a partial character")
+{
+	UT_UCS4_mbtowc conv("UTF-8");
+	UT_UCS4Char wc = 0;
+	TFPASS(conv.mbtowc(wc, static_cast<char>(0xC3)) == 0);
+	TFPASS(conv.mbtowc(wc, static_cast<char>(0xA9)) == 1);
+	TFPASS(wc == 0xE9);
+
+	wc = 0;
+	TFPASS(conv.mbtowc(wc, static_cast<char>(0xF0)) == 0);
+	TFPASS(conv.mbtowc(wc, static_cast<char>(0x9F)) == 0);
+	TFPASS(conv.mbtowc(wc, static_cast<char>(0x98)) == 0);
+	TFPASS(conv.mbtowc(wc, static_cast<char>(0x80)) == 1);
+	TFPASS(wc == 0x1F600);
+
+	wc = 0x1111;
+	TFPASS(conv.mbtowc(wc, 'A') == 1);
+	TFPASS(wc == static_cast<UT_UCS4Char>('A'));
+}
+
+TFTEST_MAIN("A print range is clamped and a whole document is every page")
+{
+	int first = 0;
+	int last = 0;
+	UT_print_page_bounds(false, 4, 9, 12, first, last);
+	TFPASS(first == 1);
+	TFPASS(last == 12);
+
+	UT_print_page_bounds(true, 0, 40, 12, first, last);
+	TFPASS(first == 1);
+	TFPASS(last == 12);
+
+	UT_print_page_bounds(true, 3, 5, 12, first, last);
+	TFPASS(first == 3);
+	TFPASS(last == 5);
+}
+
+TFTEST_MAIN("A margin drag may leave the ruler and a cell stops at the table edge")
+{
+	TFPASS(UT_ruler_drag_slack(false, 40) == 0);
+	TFPASS(UT_ruler_drag_slack(true, 40) == 80);
+	TFPASS(UT_ruler_drag_slack(true, 0) == 0);
+
+	TFPASS(UT_table_span_continues(3, 4));
+	TFPASS(!UT_table_span_continues(4, 4));
+	TFPASS(!UT_table_span_continues(3, 3));
+
+	TFPASS(UT_cell_inside_row_span(2, 3, 2, 4));
+	TFPASS(!UT_cell_inside_row_span(1, 3, 2, 4));
+	TFPASS(!UT_cell_inside_row_span(2, 5, 2, 4));
 }
 
 TFTEST_MAIN("ShellExecute failure is a result at or below 32")
