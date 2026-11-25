@@ -111,6 +111,7 @@ BOOL AP_Win32Dialog_InsertHyperlink::_onInitDialog(HWND hWnd, WPARAM /*wParam*/,
 
 BOOL AP_Win32Dialog_InsertHyperlink::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam*/)
 {
+	WORD wNotifyCode = HIWORD(wParam);
 	WORD wId = LOWORD(wParam);
 
 	switch (wId)
@@ -144,6 +145,7 @@ BOOL AP_Win32Dialog_InsertHyperlink::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
 		return 1;
 
 	case AP_RID_DIALOG_INSERTHYPERLINK_LBX_LINK:
+		if (wNotifyCode == LBN_SELCHANGE || wNotifyCode == LBN_DBLCLK)
 		{
 			UT_sint32 result = getListSelectedIndex( wId );
 			if( result != LB_ERR )
@@ -157,8 +159,9 @@ BOOL AP_Win32Dialog_InsertHyperlink::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
 					SetDlgItemTextW(m_hDlg, AP_RID_DIALOG_INSERTHYPERLINK_EBX_LINK, buf);
 				delete [] buf;
 			}
+			return 1;
 		}
-		return 1;
+		return 0;
 
 	default:							// we did not handle this notification
 		UT_DEBUGMSG(("WM_Command for id %ld\n",wId));

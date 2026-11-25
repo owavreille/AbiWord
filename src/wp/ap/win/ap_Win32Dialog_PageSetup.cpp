@@ -155,12 +155,11 @@ int AP_Win32Dialog_PageSetup_Sheet::_onCommand(HWND /*hWnd*/, WPARAM wParam, LPA
 	
 	if (wID==IDOK)
 	{
-		if ( m_pParent->validatePageSettings() )
+		const fp_PageSize prev = m_pParent->getPageSize();
+		m_pParent->setPageSize( m_pParent->m_PageSize );
+		if ( !m_pParent->validatePageSettings() )
 		{
-			m_pParent->setPageSize( m_pParent->m_PageSize );
-		}
-		else
-		{
+			m_pParent->setPageSize( prev );
 			// "The margins selected are too large to fit on the page."
 			m_pParent->m_pFrame->showMessageBox(AP_STRING_ID_DLG_PageSetup_ErrBigMargins,
 												XAP_Dialog_MessageBox::b_O,
@@ -225,7 +224,9 @@ INT_PTR CALLBACK AP_Win32Dialog_PageSetup_Page::s_pageWndProc(HWND hWnd, UINT ms
 
 		if ( lpnmud->hdr.code == UDN_DELTAPOS )
 		{
-			pThis->doSpinControl(lpnmud->hdr.idFrom, lpnmud->iDelta);
+			pThis->doSpinControl(lpnmud->hdr.idFrom, -static_cast<UT_sint32>(lpnmud->iDelta));
+			SetWindowLongPtrW(hWnd, DWLP_MSGRESULT, TRUE);
+			return TRUE;
 		}
 
 		if (pHdr->code==PSN_SETACTIVE)			
@@ -276,13 +277,14 @@ void AP_Win32Dialog_PageSetup_Page::doSpinControl(UT_uint32 id, UT_sint32 delta)
 
 	case AP_RID_DIALOG_PAGE_SETUP_SPN_SCALE:
 		updatedData = m_pParent->getPageScale() + delta;
-		if( updatedData >= 0 )
-		{
-			m_pParent->setPageScale( updatedData);
-			SetDlgItemText( getHandle(),
-		                    AP_RID_DIALOG_PAGE_SETUP_EBX_SCALE,
-			                itoa( m_pParent->getPageScale() , buf, 10 ) );
-		}
+		if( updatedData < 1 )
+			updatedData = 1;
+		else if( updatedData > 1000 )
+			updatedData = 1000;
+		m_pParent->setPageScale( updatedData );
+		SetDlgItemText( getHandle(),
+	                    AP_RID_DIALOG_PAGE_SETUP_EBX_SCALE,
+		                itoa( m_pParent->getPageScale() , buf, 10 ) );
 		break;
 
 	default:
@@ -748,7 +750,9 @@ INT_PTR CALLBACK AP_Win32Dialog_PageSetup_Margin::s_pageWndProc(HWND hWnd, UINT 
 
 		if ( lpnmud->hdr.code == UDN_DELTAPOS )
 		{
-			pThis->doSpinControl(lpnmud->hdr.idFrom, lpnmud->iDelta);
+			pThis->doSpinControl(lpnmud->hdr.idFrom, -static_cast<UT_sint32>(lpnmud->iDelta));
+			SetWindowLongPtrW(hWnd, DWLP_MSGRESULT, TRUE);
+			return TRUE;
 		}
 	}   	
 	

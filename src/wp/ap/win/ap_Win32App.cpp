@@ -61,6 +61,7 @@
 #include "ap_Convert.h"
 #include "ap_Win32Frame.h"
 #include "ap_Win32App.h"
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include "spell_manager.h"
@@ -426,7 +427,8 @@ bool AP_Win32App::getPrefsValueDirectory(bool bAppSpecific,
 	if (!m_prefs->getPrefsValue(szKey, value) || value.empty())
 		return false;
 
-	if ((value[0] == '/') || (value[0]== '\\')) {
+	if ((value[0] == '/') || (value[0] == '\\') ||
+		(value.size() >= 2 && isalpha(static_cast<unsigned char>(value[0])) && value[1] == ':')) {
 		return true;
 	}
 
@@ -1780,8 +1782,8 @@ bool AP_Win32App::doWindowlessArgs(const AP_Args *Args, bool & bSuccess)
 			s+= Args->m_sFiles[0];
 			
             UT_Win32LocaleString prn, doc;
-			prn.fromASCII (Args->m_sPrintTo);
-			doc.fromASCII (s.c_str());
+			prn.fromUTF8 (Args->m_sPrintTo);
+			doc.fromUTF8 (s.c_str());
 			GR_Graphics * pG = GR_Win32Graphics::getPrinterGraphics(prn.c_str(), doc.c_str());			
             if(!pG)
 			{

@@ -43,6 +43,7 @@
 
 #include <cstdio>
 #include <set>
+#include <vector>
 
 /*****************************************************************/
 
@@ -401,7 +402,6 @@ BOOL AP_Win32Dialog_Goto::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*l
 
 BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-	wchar_t * pBuf = nullptr;
 	bool bValueOK = TRUE;
 	WORD wNotifyCode = HIWORD(wParam);
 	WORD wId = LOWORD(wParam);
@@ -526,15 +526,13 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 			{
 				if( dwTextLength )
 				{
-					pBuf = new wchar_t [ dwTextLength + 1 ];
-					if( !pBuf )
-						return 0;
-				
-					GetWindowTextW( hWndCtrl, pBuf, dwTextLength + 1 );
+					std::vector<wchar_t> buf(dwTextLength + 1, 0);
+
+					GetWindowTextW( hWndCtrl, buf.data(), dwTextLength + 1 );
 
 					// If the first character is + or -, skip over it in the
 					// check loop below
-					if( *pBuf == '-' || *pBuf == '+' )
+					if( buf[0] == '-' || buf[0] == '+' )
 						dwStart = 1;
 					else
 						dwStart = 0;
@@ -542,31 +540,26 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 					// Make sure everything we have is numeric
 					for( dwCounter = dwStart; dwCounter < dwTextLength; dwCounter++ )
 					{
-						if( !UT_UCS4_isdigit( pBuf[ dwCounter ] ) )
+						if( !UT_UCS4_isdigit( buf[ dwCounter ] ) )
 						{
-							if (!m_oldvalue.empty ())
-								m_oldvalue.fromLocale(L"0");
- 							
 							SetWindowTextW( hWndCtrl, m_oldvalue.c_str());
-							
+
 							bValueOK = FALSE;
 
 							break;
 						}
 					}
-	
+
 					if( bValueOK )
 					{
-						m_oldvalue.fromLocale (pBuf);
-	
+						m_oldvalue.fromLocale (buf.data());
+
 						// Only enable the goto button if what we have actually contains a number
-						EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), !(((pBuf[ 0 ] == '-') || (pBuf[ 0 ] == '+')) && (pBuf[ 1 ] == '\0')) );
+						EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), !(((buf[ 0 ] == '-') || (buf[ 0 ] == '+')) && (buf[ 1 ] == '\0')) );
 					}
 					else
 					{
-						FREEP( pBuf );
-		
-						EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), FALSE );
+						EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), !m_oldvalue.empty() );
 					}
 				}
 				else
@@ -580,11 +573,10 @@ BOOL AP_Win32Dialog_Goto::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 
 				if( dwTextLength )
 				{
-					EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), TRUE ); 						
-					wchar_t* value = new wchar_t [dwTextLength+1];
-					GetWindowTextW( hWndCtrl, value, dwTextLength + 1 );
-					m_oldvalue.fromLocale (value);
-					delete value;
+					EnableWindow( GetDlgItem(hWnd,AP_RID_DIALOG_GOTO_BTN_GOTO), TRUE );
+					std::vector<wchar_t> value(dwTextLength + 1, 0);
+					GetWindowTextW( hWndCtrl, value.data(), dwTextLength + 1 );
+					m_oldvalue.fromLocale (value.data());
 				}
 				else
 				{

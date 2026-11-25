@@ -685,12 +685,15 @@ void AP_Dialog_FormatFrame::applyChanges()
 		return;
 	}
 
-	FV_View * pView = static_cast<FV_View *>(m_pApp->getLastFocussedFrame()->getCurrentView());
-	if (!pView)
+	XAP_Frame * pFrame = m_pApp->getLastFocussedFrame();
+	FV_View * pView = pFrame ? static_cast<FV_View *>(pFrame->getCurrentView()) : nullptr;
+	if (!pFrame || !pView)
 		return;
 
 	//Check if the position mode changed. Update xpos and ypos parameters if necessary
 	fl_FrameLayout * pFL = pView->getFrameLayout();
+	if (!pFL)
+		return;
 	fl_BlockLayout * pCloseBL = nullptr;
 	const std::string sMode = PP_getAttribute("position-to", m_vecProps);
 

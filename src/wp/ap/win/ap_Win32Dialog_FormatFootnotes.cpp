@@ -160,7 +160,7 @@ BOOL AP_Win32Dialog_FormatFootnotes::_onInitDialog(HWND hWnd, WPARAM /*wParam*/,
 	      
 	centerDialog();
 	
-	return 0; // 0 because we called SetFocus
+	return 1; // 1 because we did not call SetFocus
 
 }
 

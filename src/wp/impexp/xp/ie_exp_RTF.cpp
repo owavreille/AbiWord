@@ -644,24 +644,38 @@ void IE_Exp_RTF::_rtf_chardata(const char * pbuf, UT_uint32 buflen)
 	UT_return_if_fail (UT_iconv_isValid(m_conv));
 	while (count < buflen) {
 		if (*current & 0x80) {  // check for non-ASCII value
-			UT_UCS4Char wc;
-			size_t insz, sz;
+			UT_UCS4Char wc = 0;
+			size_t before = buflen - count;
+			size_t insz = before;
+			size_t sz = sizeof(wc);
 			char * dest = (char*)(&wc);
-			insz = buflen - count;
-			sz = sizeof(wc);
-			UT_iconv(m_conv, &current, &insz, &dest, &sz);
+			size_t ret = UT_iconv(m_conv, &current, &insz, &dest, &sz);
+			size_t consumed = before - insz;
+			if (ret == static_cast<size_t>(-1) && consumed == 0) {
+				current++;
+				count++;
+				continue;
+			}
 			if (wc > 0x00ff) {
-//				UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED);
+				if (wc <= 0xffff) {
+					signed short tmp = static_cast<signed short>(static_cast<unsigned short>(wc));
+					write(UT_UTF8String_sprintf("\\u%d?", tmp).utf8_str());
+				}
+				else if (wc <= 0x10ffff) {
+					const UT_UCS4Char value = wc - 0x10000;
+					const signed short high = static_cast<signed short>(0xD800 + (value >> 10));
+					const signed short low = static_cast<signed short>(0xDC00 + (value & 0x3FF));
+					write(UT_UTF8String_sprintf("\\u%d?\\u%d?", high, low).utf8_str());
+				}
 			}
 			else {
 				_rtf_nonascii_hex2(wc);
 			}
-			if(buflen - insz > 0)
-			{
-				count += buflen - insz;
+			if (consumed > 0) {
+				count += consumed;
 			}
-			else
-			{
+			else {
+				current++;
 				count++;
 			}
 		}

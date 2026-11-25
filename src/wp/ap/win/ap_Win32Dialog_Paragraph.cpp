@@ -553,17 +553,42 @@ BOOL AP_Win32Dialog_Paragraph::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lPara
 
 	case IDCANCEL:						// also AP_RID_DIALOG_PARA_BTN_CANCEL
 		m_answer = a_CANCEL;
-		EndDialog(hWnd,0);
+		EndDialog(m_hwndDlg,0);
 		return 1;
 
 	case IDOK:							// also AP_RID_DIALOG_PARA_BTN_OK
+		if (m_bEditChanged && m_hwndSpacing)
+		{
+			HWND hFocus = GetFocus();
+			static const struct { int id; tControl ctrl; } kEditControls[] = {
+				{ AP_RID_DIALOG_PARA_EDIT_LEFT,		id_SPIN_LEFT_INDENT },
+				{ AP_RID_DIALOG_PARA_EDIT_RIGHT,	id_SPIN_RIGHT_INDENT },
+				{ AP_RID_DIALOG_PARA_EDIT_BY,		id_SPIN_SPECIAL_INDENT },
+				{ AP_RID_DIALOG_PARA_EDIT_BEFORE,	id_SPIN_BEFORE_SPACING },
+				{ AP_RID_DIALOG_PARA_EDIT_AFTER,	id_SPIN_AFTER_SPACING },
+				{ AP_RID_DIALOG_PARA_EDIT_AT,		id_SPIN_SPECIAL_SPACING },
+			};
+			for (const auto & item : kEditControls)
+			{
+				HWND hEdit = GetDlgItem(m_hwndSpacing, item.id);
+				if (hFocus && hFocus == hEdit)
+				{
+					char buf[SPIN_BUF_TEXT_SIZE] = {};
+					UT_Win32GetWindowTextUtf8(hEdit, buf, SPIN_BUF_TEXT_SIZE);
+					_setSpinItemValue(item.ctrl, buf);
+					_syncControls(item.ctrl);
+					m_bEditChanged = false;
+					break;
+				}
+			}
+		}
 		m_answer = a_OK;
-		EndDialog(hWnd,0);
+		EndDialog(m_hwndDlg,0);
 		return 1;
 
 	case AP_RID_DIALOG_PARA_BTN_TABS:
 		m_answer = a_TABS;
-		EndDialog(hWnd,0);
+		EndDialog(m_hwndDlg,0);
 		return 1;
 
 	default:							// we did not handle this notification
@@ -582,7 +607,7 @@ BOOL AP_Win32Dialog_Paragraph::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lPara
 			_setSpinItemValue(i,buf);	\
 			m_bEditChanged = false;	\
 		}								\
-		_doSpin(i, (UT_sint32) pnmud->iDelta);	\
+		_doSpin(i, -static_cast<UT_sint32>(pnmud->iDelta));	\
 		break;							\
 
 BOOL AP_Win32Dialog_Paragraph::_onDeltaPos(NM_UPDOWN * pnmud)
@@ -611,7 +636,7 @@ BOOL AP_Win32Dialog_Paragraph::_onDeltaPos(NM_UPDOWN * pnmud)
 		break;
 	}
 
-	return FALSE;
+	return TRUE;
 }
 
 /*****************************************************************/

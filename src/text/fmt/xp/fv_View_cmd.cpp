@@ -3968,14 +3968,12 @@ void FV_View::cmdHyperlinkJump(UT_sint32 xPos, UT_sint32 yPos)
 	warpInsPtToXY(xPos, yPos,true);
 
 	fl_BlockLayout * pBlock = getCurrentBlock();
+	UT_return_if_fail(pBlock);
 	PT_DocPosition iRelPos = getPoint() - pBlock->getPosition(false);
 
 	fp_Run *pRun = pBlock->getFirstRun();
 	while (pRun && pRun->getBlockOffset()+ pRun->getLength() < iRelPos)
 		pRun= pRun->getNextRun();
-
-	UT_return_if_fail(pRun);
-	pRun->getPrevRun();
 
 	UT_return_if_fail(pRun);
 #if 0
@@ -3989,6 +3987,7 @@ void FV_View::cmdHyperlinkJump(UT_sint32 xPos, UT_sint32 yPos)
 	UT_return_if_fail(pH);
 
 	const gchar * pTarget = pH->getTarget();
+	UT_return_if_fail(pTarget);
 
 	if(*pTarget == '#')
 		pTarget++;
@@ -4030,6 +4029,7 @@ void FV_View::cmdHyperlinkJump(PT_DocPosition pos)
 		return;
 	}
 	const gchar * pTarget = pH->getTarget();
+	UT_return_if_fail(pTarget);
 
 	if(*pTarget == '#')
 		pTarget++;
@@ -4473,6 +4473,8 @@ UT_Error FV_View::cmdHyperlinkStatusBar(UT_sint32 xPos, UT_sint32 yPos)
 {
 	UT_sint32 xClick, yClick;
 	fp_Page* pPage = _getPageForXY(xPos, yPos, xClick, yClick);
+	if (!pPage)
+		return false;
 
 	PT_DocPosition pos;
 	bool bBOL = false;
@@ -4484,6 +4486,8 @@ UT_Error FV_View::cmdHyperlinkStatusBar(UT_sint32 xPos, UT_sint32 yPos)
 	fp_HyperlinkRun * pH1 = nullptr;
 
 	fl_BlockLayout *pBlock = _findBlockAtPosition(pos);
+	if (!pBlock)
+		return false;
 	PT_DocPosition curPos = pos - pBlock->getPosition(false);
 
 	fp_Run * pRun = pBlock->getFirstRun();
@@ -4620,7 +4624,11 @@ bool FV_View::cmdEditAnnotationWithDialog(UT_uint32 aID)
 	else if (bApply)
 	{
 		pAL = insertAnnotationDescription(aID, pDialog);
-		UT_return_val_if_fail(pAL, false);
+		if (!pAL)
+		{
+			pDialogFactory->releaseDialog(pDialog);
+			return false;
+		}
 		setAnnotationParent(aID, pDialog->getParent());
 		setAnnotationResolved(aID, pDialog->getResolved());
 	}
@@ -4780,7 +4788,7 @@ UT_Error FV_View::cmdInsertHyperlink(const char * szName, const char * szTitle)
 // despite being past the end of the block. This extra fail-safe code
 // prevents this.
 //
-	if((pBl1->getPosition() + pBl1->getLength() -1) < posEnd)
+	if(!pBl1 || (pBl1->getPosition() + pBl1->getLength() -1) < posEnd)
 	{
 		return false;
 	}
@@ -4867,11 +4875,13 @@ void FV_View::getCmdInsertRangeVariables( PT_DocPosition& posStart,
 	// complications this would cause are possibly not worth it)
 	if(posStart < 2)
 		posStart = 2;
-	
-	posEnd++;
+	if(posEnd < posStart)
+		posEnd = posStart;
 
-	pBL1 =_findBlockAtPosition(posStart);
-	pBL2 =_findBlockAtPosition(posEnd);
+	pBL1 = _findBlockAtPosition(posStart);
+	pBL2 = _findBlockAtPosition(posEnd);
+
+	posEnd++;
 	
 	//
 	// Handle corner case of selection from outside the left column
@@ -4939,6 +4949,7 @@ UT_Error FV_View::cmdInsertBookmark(const char * szName)
 		else
 		{
 			xxx_UT_DEBUGMSG(("User canceled bookmark replacement\n"));
+			_restorePieceTableState();
 			return false;
 		}
 	}
@@ -6267,13 +6278,22 @@ void FV_View::cmdAcceptRejectRevision(bool bReject, UT_sint32 xPos, UT_sint32 yP
 		}
 
 		pBlock = getCurrentBlock();
+		if(!pBlock)
+		{
+			_restorePieceTableState();
+			return;
+		}
 		PT_DocPosition iRelPos = getPoint() - pBlock->getPosition(false);
 
 		pRun = pBlock->getFirstRun();
 		while (pRun && pRun->getNextRun() && pRun->getBlockOffset()+ pRun->getLength() <= iRelPos)
 			pRun= pRun->getNextRun();
 
-		UT_return_if_fail(pRun);
+		if(!pRun)
+		{
+			_restorePieceTableState();
+			return;
+		}
 
 		iStart = pBlock->getPosition(false) + pRun->getBlockOffset();
 		iEnd = pBlock->getPosition(false) + pRun->getBlockOffset() + pRun->getLength();
@@ -6374,6 +6394,7 @@ bool FV_View::cmdFindRevision(bool bNext, UT_sint32 xPos, UT_sint32 yPos)
 				}
 
 				pBL = pBL->getNextBlockInDocument();
+				pRun = pBL ? pBL->getFirstRun() : nullptr;
 			}
 
 			pSL = pSL->getNextDocSection();
@@ -6398,6 +6419,11 @@ bool FV_View::cmdFindRevision(bool bNext, UT_sint32 xPos, UT_sint32 yPos)
 				}
 
 				pBL = pBL->getPrevBlockInDocument();
+				pRun = pBL ? pBL->getFirstRun() : nullptr;
+				while (pRun && pRun->getNextRun())
+				{
+					pRun = pRun->getNextRun();
+				}
 			}
 
 			pSL = pSL->getPrevDocSection();

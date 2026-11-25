@@ -1016,6 +1016,7 @@ private:
 	bool                  m_bCellActive;
 
 	std::string           m_ctMoveID;
+	UT_UCS4Char           m_uSurrogateBuf;
 
 	PD_XMLIDCreatorHandle  m_XMLIDCreatorHandle;
 	std::map< std::string, std::string > m_rdfAnchorCloseXMLIDs;

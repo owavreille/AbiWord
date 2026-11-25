@@ -214,8 +214,8 @@ bool IE_Imp_RTF::InsertImage (const FG_ConstGraphicPtr& pFG, const char * image_
 				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0f) * (imgProps.wGoal/ 1440.0f));
 				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0f) * (imgProps.hGoal/ 1440.0f));
 			} else {
-				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0f) * (imgProps.width));
-				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0f) * (imgProps.height));
+				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0) * (static_cast<double>(imgProps.width) / 96.0));
+				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0) * (static_cast<double>(imgProps.height) / 96.0));
 			}
 			break;
 		default:
@@ -341,8 +341,8 @@ bool IE_Imp_RTF::InsertImage (const FG_ConstGraphicPtr& pFG, const char * image_
 				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0f) * imgProps.wGoal/ 1440.0f);
 				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0f) * imgProps.hGoal/ 1440.0f);
 			} else {
-				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0f) * (imgProps.width));
-				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0f) * (imgProps.height));
+				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0) * (static_cast<double>(imgProps.width) / 96.0));
+				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0) * (static_cast<double>(imgProps.height) / 96.0));
 			}
 			break;
 		default:
@@ -494,16 +494,6 @@ bool IE_Imp_RTF::HandlePicture()
 					UT_UTF8String image_name;
 					UT_UTF8String_sprintf(image_name,"%d",getDoc()->getUID(UT_UniqueId::Image));
 
-					unsigned char ch;
-					if(ReadCharFromFileWithCRLF(&ch)) {
-						if(ch != ' ') {
-							SkipBackChar(ch);
-						}
-						else {
-							UT_DEBUGMSG(("Skipped space after \\bin keyword \n"));
-						}
-					}
-					
 					if (!LoadPictData(format, image_name.utf8_str(), imageProps, isBinary, binaryLen)) {
 						return false;
 					}

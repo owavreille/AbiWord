@@ -386,6 +386,7 @@ void AP_Win32StatusBar::layoutParts(void)
 {
 	if (!m_hwndStatusBar || !getFields())
 		return;
+	m_iPrevWidth = -1;
 	const int count = getFields()->getItemCount();
 	if (count < 0)
 		return;

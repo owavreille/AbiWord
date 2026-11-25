@@ -79,7 +79,7 @@ BEGIN
                     CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     CONTROL         "Restart on each selection",
                     AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_RSEL,"Button",
-                    BS_AUTORADIOBUTTON,115,52,141,10
+                    BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,115,52,141,10
     CONTROL         "Restart on each page",
                     AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_PAGE,"Button",
                     BS_AUTORADIOBUTTON,115,67,141,10
@@ -88,7 +88,7 @@ BEGIN
                     BS_AUTORADIOBUTTON,115,82,141,10    
     LTEXT           "Initial footnote value",
                     AP_RID_DIALOG_FORMATFOOTNOTES_STATIC_INITFOOTVAL,16,104,
-                    93,8,SS_CENTERIMAGE
+                    93,8,SS_CENTERIMAGE | WS_GROUP
     EDITTEXT        AP_RID_DIALOG_FORMATFOOTNOTES_TEXT_FSTYLE,115,101,20,14,
                     ES_AUTOHSCROLL
     CONTROL         "Spin2",AP_RID_DIALOG_FORMATFOOTNOTES_SPIN_FSTYLE,
@@ -104,13 +104,13 @@ BEGIN
                     50,CBS_DROPDOWNLIST | WS_VSCROLL | WS_TABSTOP
     CONTROL         "Place at end of Document",
                     AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_ENDDOC,"Button",
-                    BS_AUTORADIOBUTTON,115,165,103,10
+                    BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP,115,165,103,10
     CONTROL         "Place at end of Section",
                     AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_ENDSEC,"Button",
                     BS_AUTORADIOBUTTON,115,180,103,10
     CONTROL         "Restart on each Section",
                     AP_RID_DIALOG_FORMATFOOTNOTES_RADIO_ERSTSEC,"Button",
-                    BS_AUTOCHECKBOX | WS_TABSTOP,115,195,130,10
+                    BS_AUTOCHECKBOX | WS_GROUP | WS_TABSTOP,115,195,130,10
     LTEXT           "Initial endnote value",
                     AP_RID_DIALOG_FORMATFOOTNOTES_STATIC_INITENDVAL,16,218,
                     92,8,SS_CENTERIMAGE

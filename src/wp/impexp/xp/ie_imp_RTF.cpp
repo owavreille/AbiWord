@@ -1565,7 +1565,8 @@ IE_Imp_RTF::IE_Imp_RTF(PD_Document * pDocument)
 	m_bFrameTextBox(false),
 	m_bParaActive(false),
 	m_bCellActive(false),
-	m_ctMoveID("")
+	m_ctMoveID(""),
+	m_uSurrogateBuf(0x10000)
 {
 	UT_DEBUGMSG(("New ie_imp_RTF %p \n", (void*)this));
 	m_sImageName.clear();
@@ -3476,7 +3477,12 @@ bool IE_Imp_RTF::SkipCurrentGroup(bool bConsumeLastBrace)
 		if (!ReadCharFromFileWithCRLF(&ch))
 			return false;
 
-		if (ch == '{')
+		if (ch == '\\')
+		{
+			if (!ReadCharFromFileWithCRLF(&ch))
+				return false;
+		}
+		else if (ch == '{')
 		{
 			++nesting;
 		}
@@ -3516,7 +3522,13 @@ bool IE_Imp_RTF::StuffCurrentGroup(UT_ByteBuf & buf)
 		if (!ReadCharFromFileWithCRLF(&ch))
 			return false;
 
-		if (ch == '{')
+		if (ch == '\\')
+		{
+			buf.append(&ch, 1);
+			if (!ReadCharFromFileWithCRLF(&ch))
+				return false;
+		}
+		else if (ch == '{')
 		{
 			++nesting;
 		}
@@ -3616,6 +3628,8 @@ bool IE_Imp_RTF::HandleField()
 		// since we enter a brace group, we push the RTFState.
 		PushRTFState ();
 		nested = 0;
+		UT_sint32 iUniCharsLeftToSkip = 0;
+		UT_UCS4Char uFldSurrogate = 0x10000;
 		do
 		{
 			tokenType = NextToken (keyword, &parameter, &paramUsed, MAX_KEYWORD_LEN,false);
@@ -3645,6 +3659,58 @@ bool IE_Imp_RTF::HandleField()
 				{
 					fldBuf.append (keyword, 1);
 				}
+				else if (strcmp(reinterpret_cast<const char *>(&keyword[0]), "'") == 0)
+				{
+					UT_UCS4Char wc = ReadHexChar();
+					if (iUniCharsLeftToSkip > 0)
+					{
+						iUniCharsLeftToSkip--;
+					}
+					else
+					{
+						UT_UCS4Char ucs = 0;
+						if (m_mbtowc.mbtowc(ucs, static_cast<UT_Byte>(wc)))
+						{
+							UT_UTF8String utf8;
+							utf8.appendUCS4(&ucs, 1);
+							fldBuf.append(reinterpret_cast<const UT_Byte *>(utf8.utf8_str()), utf8.byteLength());
+						}
+					}
+				}
+				else if (strcmp(reinterpret_cast<const char *>(&keyword[0]), "u") == 0 && paramUsed)
+				{
+					UT_sint32 uval = parameter;
+					if (uval < 0)
+					{
+						uval = static_cast<UT_sint32>(static_cast<unsigned short>(static_cast<signed short>(uval)));
+					}
+					if (static_cast<unsigned>(uval) >= 0xD800 && static_cast<unsigned>(uval) <= 0xDBFF)
+					{
+						uFldSurrogate = (static_cast<UT_UCS4Char>(uval) - 0xD800) << 10;
+						uFldSurrogate += 0x10000;
+					}
+					else
+					{
+						UT_UCS4Char ucs;
+						if (static_cast<unsigned>(uval) >= 0xDC00 && static_cast<unsigned>(uval) <= 0xDFFF)
+						{
+							ucs = uFldSurrogate + (static_cast<UT_UCS4Char>(uval) - 0xDC00);
+						}
+						else
+						{
+							ucs = static_cast<UT_UCS4Char>(uval);
+						}
+						uFldSurrogate = 0x10000;
+						UT_UTF8String utf8;
+						utf8.appendUCS4(&ucs, 1);
+						fldBuf.append(reinterpret_cast<const UT_Byte *>(utf8.utf8_str()), utf8.byteLength());
+					}
+					iUniCharsLeftToSkip = m_currentRTFState.m_unicodeAlternateSkipCount;
+				}
+				else if (strcmp(reinterpret_cast<const char *>(&keyword[0]), "uc") == 0 && paramUsed)
+				{
+					m_currentRTFState.m_unicodeAlternateSkipCount = parameter;
+				}
 				break;
 			case RTF_TOKEN_OPEN_BRACE:
 				nested++;
@@ -3656,7 +3722,14 @@ bool IE_Imp_RTF::HandleField()
 				break;
 			case RTF_TOKEN_DATA:
 				// add data to the field
-				fldBuf.append (keyword, 1);
+				if (iUniCharsLeftToSkip > 0)
+				{
+					iUniCharsLeftToSkip--;
+				}
+				else
+				{
+					fldBuf.append (keyword, 1);
+				}
 				break;
 			default:
 				break;
@@ -3932,15 +4005,41 @@ gchar *IE_Imp_RTF::_parseFldinstBlock (UT_ByteBuf & _buf, gchar *xmlField, bool 
 			xmlField = nullptr;
 			isXML = false;
 			
-			instr = strtok(nullptr, " \\{}");
-			if (instr == nullptr)  // ignore empty hyperlinks
+			const char * p = newBuf + (instr - Instr.c_str()) + strlen(instr);
+			auto nextArg = [&p](std::string & out, bool & wasQuoted) -> bool {
+				wasQuoted = false;
+				while (*p == ' ' || *p == '\t' || *p == '\\' || *p == '{' || *p == '}')
+					++p;
+				if (!*p)
+					return false;
+				if (*p == '"')
+				{
+					wasQuoted = true;
+					++p;
+					const char * start = p;
+					while (*p && *p != '"')
+						++p;
+					out.assign(start, p - start);
+					if (*p == '"')
+						++p;
+					return true;
+				}
+				const char * start = p;
+				while (*p && *p != ' ' && *p != '\t' && *p != '\\' && *p != '{' && *p != '}')
+					++p;
+				out.assign(start, p - start);
+				return true;
+			};
+
+			std::string arg;
+			bool wasQuoted = false;
+			if (!nextArg(arg, wasQuoted))  // ignore empty hyperlinks
 				break;
 
 			std::string href;
-			if ( !strcmp(instr, "l") )
+			if (!wasQuoted && arg == "l")
 			{
-				instr = strtok (nullptr, " \\{}");
-				if (instr == nullptr)
+				if (!nextArg(arg, wasQuoted))
 					break;
 				href = "#";
 			}
@@ -3949,16 +4048,7 @@ gchar *IE_Imp_RTF::_parseFldinstBlock (UT_ByteBuf & _buf, gchar *xmlField, bool 
 				href.clear();
 			}
 
-			// the full address is enclosed in quotation marks,
-			// which need to be removed
-			if(*instr == '\"')
-				instr++;
-
-			size_t instrLen = strlen(instr);
-			if (instrLen > 0 && instr[instrLen - 1] == '\"')
-				instr[instrLen - 1] = 0;
-
-			href += instr;
+			href += arg;
 
 			std::string full_href;
 
@@ -5737,7 +5827,6 @@ bool IE_Imp_RTF::TranslateKeywordID(RTF_KEYWORD_ID keywordID,
 		/* RTF is limited to +/-32K ints so we need to use negative numbers for large unicode values.
 		 * So, check for Unicode chars wrapped to negative values.
 		 */
-		static UT_UCS4Char buf = 0x10000;
 		bool bResult;
 		if (param < 0)
 		{
@@ -5746,21 +5835,24 @@ bool IE_Imp_RTF::TranslateKeywordID(RTF_KEYWORD_ID keywordID,
 		}
 		if ((unsigned) param >= 0xD800 && (unsigned) param <= 0xDBFF)
 		{
-			buf = (UT_UCS4Char) param - 0xD800;
-			buf <<= 10;
-			buf += 0x10000;
+			m_uSurrogateBuf = (UT_UCS4Char) param - 0xD800;
+			m_uSurrogateBuf <<= 10;
+			m_uSurrogateBuf += 0x10000;
 			m_currentRTFState.m_unicodeInAlternate = m_currentRTFState.m_unicodeAlternateSkipCount;
 			return true;
 		}
 		if ((unsigned) param >= 0xDC00 && (unsigned) param <= 0xDFFF)
 		{
-			buf += (UT_UCS4Char) param;
-			buf -= 0xDC00;
-			bResult = ParseChar(static_cast<UT_UCS4Char>(buf));
-			buf = 0x10000;
+			m_uSurrogateBuf += (UT_UCS4Char) param;
+			m_uSurrogateBuf -= 0xDC00;
+			bResult = ParseChar(static_cast<UT_UCS4Char>(m_uSurrogateBuf), true);
+			m_uSurrogateBuf = 0x10000;
 		}
 		else
-			bResult = ParseChar(static_cast<UT_UCS4Char>(param));
+		{
+			m_uSurrogateBuf = 0x10000;
+			bResult = ParseChar(static_cast<UT_UCS4Char>(param), true);
+		}
 		m_currentRTFState.m_unicodeInAlternate = m_currentRTFState.m_unicodeAlternateSkipCount;
 		return bResult;
 	}
@@ -12603,6 +12695,11 @@ bool IE_Imp_RTF::HandlePCData(UT_UTF8String & str)
 				UT_UCS4Char wc;
 				UT_Byte ch;
 				wc = ReadHexChar();
+				if (iUniCharsLeftToSkip > 0)
+				{
+					iUniCharsLeftToSkip--;
+					break;
+				}
 				// here we assume that the read char fit on ONE byte. Should be correct.
 				ch = static_cast<UT_Byte>(wc);
 				buf->append(&ch, 1);

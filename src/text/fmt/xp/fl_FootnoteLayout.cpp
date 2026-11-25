@@ -114,7 +114,7 @@ UT_uint32 fl_EmbedLayout::getLength(void) const
 	PT_DocPosition startPos = getDocPosition();
 	const pf_Frag_Strux* sdhEnd = nullptr;
 	const pf_Frag_Strux* sdhStart = getStruxDocHandle();
-	UT_DebugOnly<bool> bres;
+	bool bres = false;
 	if(getContainerType() == FL_CONTAINER_FOOTNOTE)
 	{
 		bres = m_pLayout->getDocument()->getNextStruxOfType(sdhStart,PTX_EndFootnote,&sdhEnd);
@@ -136,6 +136,8 @@ UT_uint32 fl_EmbedLayout::getLength(void) const
 		return 0;
 	}
 	UT_ASSERT(bres && sdhEnd);
+	if (!bres || !sdhEnd)
+		return 0;
 	PT_DocPosition endPos = m_pLayout->getDocument()->getStruxPosition(sdhEnd);
 	UT_uint32 length = static_cast<UT_uint32>(endPos - startPos + 1); 
 	return length;
@@ -172,7 +174,10 @@ bool fl_EmbedLayout::bl_doclistener_insertEndEmbed(fl_ContainerLayout*,
 	}
 	m_bHasEndFootnote = true;
 	fl_BlockLayout * pBL = static_cast<fl_BlockLayout *>(getFirstLayout());
-	pBL->updateEnclosingBlockIfNeeded();
+	if (pBL)
+	{
+		pBL->updateEnclosingBlockIfNeeded();
+	}
 	return true;
 }
 
@@ -292,7 +297,11 @@ bool fl_EmbedLayout::doclistener_deleteStrux(const PX_ChangeRecord_Strux * pcrx)
 {
 	UT_ASSERT(pcrx->getType()==PX_ChangeRecord::PXT_DeleteStrux);
 	// Move cursor to its new position
-	m_pLayout->getView()->setPoint(pcrx->getPosition());
+	FV_View * pView = m_pLayout->getView();
+	if (pView)
+	{
+		pView->setPoint(pcrx->getPosition());
+	}
 //
 // Remove all remaining structures
 //
@@ -311,8 +320,15 @@ bool fl_EmbedLayout::doclistener_deleteStrux(const PX_ChangeRecord_Strux * pcrx)
 // Fix the offsets for the block
 //
 	m_bHasEndFootnote = false;
-	pEncBlock->updateOffsets(prevPos,0,-getOldSize());
-	getSectionLayout()->remove(this);	
+	if (pEncBlock)
+	{
+		pEncBlock->updateOffsets(prevPos,0,-getOldSize());
+	}
+	fl_SectionLayout * pSL = getSectionLayout();
+	if (pSL)
+	{
+		pSL->remove(this);
+	}
 	delete this;			// TODO whoa!  this construct is VERY dangerous.
 
 	return true;
@@ -400,7 +416,9 @@ void fl_FootnoteLayout::_createFootnoteContainer(void)
 
 	fp_Container * pCon = pCL->getLastContainer();
 	UT_return_if_fail(pCon);
-	UT_sint32 iWidth = pCon->getPage()->getWidth();
+	fp_Page * pPage = pCon->getPage();
+	UT_return_if_fail(pPage);
+	UT_sint32 iWidth = pPage->getWidth();
 	iWidth = iWidth - pDSL->getLeftMargin() - pDSL->getRightMargin();
 	pFootnoteContainer->setWidth(iWidth);
 }
@@ -455,17 +473,17 @@ void fl_FootnoteLayout::_insertFootnoteContainer(fp_Container * pNewFC)
 		{
 			pPrevCon = pPrevL->getLastContainer();
 		}
-		pUpCon = pPrevCon->getContainer();
+		pUpCon = pPrevCon ? pPrevCon->getContainer() : (pUPCL ? pUPCL->getLastContainer() : nullptr);
 	}
 	else
 	{
-		pUpCon = pUPCL->getLastContainer();
+		pUpCon = pUPCL ? pUPCL->getLastContainer() : nullptr;
 	}
 	if(pPrevCon)
 	{
 		pPage = pPrevCon->getPage();
 	}
-	else
+	else if(pUpCon)
 	{
 		pPage = pUpCon->getPage();
 	}
@@ -712,17 +730,17 @@ void fl_AnnotationLayout::_insertAnnotationContainer(fp_Container * pNewAC)
 		{
 			pPrevCon = pPrevL->getLastContainer();
 		}
-		pUpCon = pPrevCon->getContainer();
+		pUpCon = pPrevCon ? pPrevCon->getContainer() : (pUPCL ? pUPCL->getLastContainer() : nullptr);
 	}
 	else
 	{
-		pUpCon = pUPCL->getLastContainer();
+		pUpCon = pUPCL ? pUPCL->getLastContainer() : nullptr;
 	}
 	if(pPrevCon)
 	{
 		pPage = pPrevCon->getPage();
 	}
-	else
+	else if(pUpCon)
 	{
 		pPage = pUpCon->getPage();
 	}
@@ -972,9 +990,13 @@ void fl_EndnoteLayout::_createEndnoteContainer(void)
 	setFirstContainer(pEndnoteContainer);
 	setLastContainer(pEndnoteContainer);
 	fl_DocSectionLayout * pDSL = m_pLayout->getDocSecForEndnote(pEndnoteContainer);
-	UT_sint32 iWidth = m_pLayout->getLastPage()->getWidth();
-	iWidth = iWidth - pDSL->getLeftMargin() - pDSL->getRightMargin();
-	pEndnoteContainer->setWidth(iWidth);
+	fp_Page * pLastPage = m_pLayout->getLastPage();
+	if (pDSL && pLastPage)
+	{
+		UT_sint32 iWidth = pLastPage->getWidth();
+		iWidth = iWidth - pDSL->getLeftMargin() - pDSL->getRightMargin();
+		pEndnoteContainer->setWidth(iWidth);
+	}
 	m_bNeedsReformat = true;
 	m_bNeedsFormat = true;
 }

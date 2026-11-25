@@ -924,7 +924,7 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 						UT_convertInchesToDimension(m_iMaxWidth, m_dim) - rightIndent)
   		{
   			_setSpinItemValue(id_SPIN_LEFT_INDENT,
-  									(const gchar *)UT_convertInchesToDimensionString(m_dim, m_iMaxWidth - rightIndent),
+  									(const gchar *)UT_formatDimensionString(m_dim, UT_convertInchesToDimension(m_iMaxWidth, m_dim) - rightIndent),
   									op_SYNC);
   		}
 	}
@@ -950,7 +950,7 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 						UT_convertInchesToDimension(m_iMaxWidth, m_dim) - leftIndent)
   		{
   			_setSpinItemValue(id_SPIN_RIGHT_INDENT,
-  									(const gchar *)UT_convertInchesToDimensionString(m_dim, m_iMaxWidth - leftIndent),
+  									(const gchar *)UT_formatDimensionString(m_dim, UT_convertInchesToDimension(m_iMaxWidth, m_dim) - leftIndent),
   									op_SYNC);
   		}
 	}
@@ -978,11 +978,11 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 				dDefault = UT_convertDimensionless(_getSpinItemValue(id_SPIN_SPECIAL_INDENT));
 				if (dDefault == 0)
 				{
-					bDefault = false;
+					dDefault = 0.5;
 				}
 				else
 				{
-					dDefault = 0.5;
+					bDefault = false;
 				}
 				break;
 
@@ -993,9 +993,6 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 
 			if (bDefault)
 			{
-				if (m_dim != DIM_IN)
-					dDefault = UT_convertInchesToDimension(dDefault, m_dim);
-
 				const gchar* szNew = UT_convertInchesToDimensionString(m_dim, dDefault, ".1");
 
 				_setSpinItemValue(id_SPIN_SPECIAL_INDENT, szNew, op_SYNC);
@@ -1052,7 +1049,7 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 			UT_convertInchesToDimension(m_iMaxWidth, m_dim) - rightIndent)
   		{
   			_setSpinItemValue(id_SPIN_SPECIAL_INDENT,
-  									(const gchar *)UT_convertInchesToDimensionString(m_dim, m_iMaxWidth - rightIndent),
+  									(const gchar *)UT_formatDimensionString(m_dim, UT_convertInchesToDimension(m_iMaxWidth, m_dim) - rightIndent),
   									op_SYNC);
   		}
 	}

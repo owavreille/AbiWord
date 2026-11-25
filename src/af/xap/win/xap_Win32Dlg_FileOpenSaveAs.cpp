@@ -173,8 +173,9 @@ void XAP_Win32Dialog_FileOpenSaveAs::_buildFilterList(UT_String& sFilter)
 			}
 			if (*s2 == 0)
 				break;
-			UT_ASSERT(s2[0] == ';' && s2[1] == ' ');
-			s1 = s2 + 2;
+			s1 = s2 + 1;
+			while (*s1 == ' ')
+				++s1;
 		}
 	}
 
@@ -318,8 +319,10 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 
 			// use directory(m_szPersistPathname)
 
+			gchar * szPersist = g_filename_from_uri(m_persistPathname.c_str(), nullptr, nullptr);
 			UT_Win32LocaleString path;
-			path.fromUTF8 (m_persistPathname.c_str());
+			path.fromUTF8 (szPersist ? szPersist : m_persistPathname.c_str());
+			g_free(szPersist);
 
 			if (s_copyW(szDir, G_N_ELEMENTS(szDir), path.c_str()))
 			{
@@ -529,7 +532,32 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 				const std::string want = sniffer->getPreferredSuffix().utf8_str();
 				if (!path.empty() && !want.empty() &&
 					(suffix.empty() || g_ascii_strcasecmp(suffix.c_str(), want.c_str())))
+				{
+					const std::string origPath = path;
 					UT_addOrReplacePathSuffix(path, want.c_str());
+					if (path != origPath)
+					{
+						UT_Win32LocaleString newPathW;
+						newPathW.fromUTF8(path.c_str());
+						if (GetFileAttributesW(newPathW.c_str()) != INVALID_FILE_ATTRIBUTES)
+						{
+							const char * fmt = pSS->getValue(XAP_STRING_ID_DLG_OverwriteFile);
+							UT_UTF8String msgUtf8;
+							UT_UTF8String_sprintf(msgUtf8,
+								fmt ? fmt : "File already exists. Overwrite file '%s'?",
+								path.c_str());
+							UT_Win32LocaleString msgW;
+							msgW.fromUTF8(msgUtf8.utf8_str());
+							int res = MessageBoxW(hFrame, msgW.c_str(), title.c_str(),
+								MB_YESNO | MB_ICONWARNING | MB_DEFBUTTON2);
+							if (res != IDYES)
+							{
+								m_answer = a_CANCEL;
+								return;
+							}
+						}
+					}
+				}
 			}
 		}
 

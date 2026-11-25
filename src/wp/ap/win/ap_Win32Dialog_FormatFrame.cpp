@@ -159,6 +159,10 @@ BOOL AP_Win32Dialog_FormatFrame::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 	
 	
 	/* Load the bitmaps into the dialog box */
+	if (m_hBitmapBottom) { DeleteObject(m_hBitmapBottom); m_hBitmapBottom = nullptr; }
+	if (m_hBitmapTop) { DeleteObject(m_hBitmapTop); m_hBitmapTop = nullptr; }
+	if (m_hBitmapRight) { DeleteObject(m_hBitmapRight); m_hBitmapRight = nullptr; }
+	if (m_hBitmapLeft) { DeleteObject(m_hBitmapLeft); m_hBitmapLeft = nullptr; }
 	m_hBitmapBottom = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_FORMATFRAME_BMP_BOTTOM, "FT_LINEBOTTOM",  BITMAP_WITDH, BITMAP_HEIGHT, Color);
 	m_hBitmapTop = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_FORMATFRAME_BMP_TOP, "FT_LINETOP",  BITMAP_WITDH, BITMAP_HEIGHT, Color);
 	m_hBitmapRight = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_FORMATFRAME_BMP_RIGHT, "FT_LINERIGHT",  BITMAP_WITDH, BITMAP_HEIGHT, Color);
@@ -168,6 +172,7 @@ BOOL AP_Win32Dialog_FormatFrame::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 	HWND hwndChild = GetDlgItem(hWnd, AP_RID_DIALOG_FORMATFRAME_STATIC_PREVIEW);	
 	UT_return_val_if_fail (hwndChild,1);
 
+	DELETEP(m_pPreviewWidget);
 	m_pPreviewWidget = new XAP_Win32PreviewWidget(static_cast<XAP_Win32App *>(m_pApp),  hwndChild, 0);	
 	m_pPreviewWidget->getGraphics()->init3dColors();
 	m_pPreviewWidget->getWindowSize(&w,&h);
@@ -328,10 +333,7 @@ BOOL AP_Win32Dialog_FormatFrame::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*l
 
 			
 		case AP_RID_DIALOG_FORMATFRAME_BTN_CANCEL:			
-			m_answer = AP_Dialog_FormatFrame::a_CLOSE;
-			destroy();
 			event_Close();
-			EndDialog(hWnd,0);
 			return 1;
 
 		case AP_RID_DIALOG_FORMATFRAME_COMBO_THICKNESS:
@@ -391,19 +393,45 @@ void AP_Win32Dialog_FormatFrame::event_previewExposed(void)
 }
 
 
-void AP_Win32Dialog_FormatFrame::setSensitivity(bool /*bSens*/)
+void AP_Win32Dialog_FormatFrame::setSensitivity(bool bSens)
 {
+	if (!m_hDlg)
+		return;
 	CheckDlgButton(m_hDlg, AP_RID_DIALOG_FORMATFRAME_BMP_TOP, getTopToggled() ? BST_CHECKED: BST_UNCHECKED);
 	CheckDlgButton(m_hDlg, AP_RID_DIALOG_FORMATFRAME_BMP_BOTTOM, getBottomToggled() ? BST_CHECKED: BST_UNCHECKED);
 	CheckDlgButton(m_hDlg, AP_RID_DIALOG_FORMATFRAME_BMP_RIGHT, getRightToggled() ? BST_CHECKED: BST_UNCHECKED);
 	CheckDlgButton(m_hDlg, AP_RID_DIALOG_FORMATFRAME_BMP_LEFT, getLeftToggled() ? BST_CHECKED: BST_UNCHECKED);	
 	CheckDlgButton(m_hDlg, AP_RID_DIALOG_FORMATFRAME_CHK_TEXTWRAP, getWrapping()?  BST_CHECKED: BST_UNCHECKED);
+
+	const BOOL bEnable = bSens ? TRUE : FALSE;
+	static const int kControls[] = {
+		AP_RID_DIALOG_FORMATFRAME_BTN_APPLY,
+		AP_RID_DIALOG_FORMATFRAME_BMP_TOP,
+		AP_RID_DIALOG_FORMATFRAME_BMP_BOTTOM,
+		AP_RID_DIALOG_FORMATFRAME_BMP_RIGHT,
+		AP_RID_DIALOG_FORMATFRAME_BMP_LEFT,
+		AP_RID_DIALOG_FORMATFRAME_BTN_BORDERCOLOR,
+		AP_RID_DIALOG_FORMATFRAME_BTN_BACKCOLOR,
+		AP_RID_DIALOG_FORMATFRAME_COMBO_THICKNESS,
+		AP_RID_DIALOG_FORMATFRAME_CHK_TEXTWRAP,
+		AP_RID_DIALOG_FORMATFRAME_RADIO_PARA,
+		AP_RID_DIALOG_FORMATFRAME_RADIO_COLUMN,
+		AP_RID_DIALOG_FORMATFRAME_RADIO_PAGE,
+		AP_RID_DIALOG_FORMATFRAME_BUTTON_SELIMAGE,
+		AP_RID_DIALOG_FORMATFRAME_BUTTON_NOIMAGE
+	};
+	for (int id : kControls)
+		EnableWindow(GetDlgItem(m_hDlg, id), bEnable);
 }
 
 void AP_Win32Dialog_FormatFrame::destroy(void) 
 {
 	finalize();	
-	DestroyWindow(m_hDlg);	
+	if (m_hDlg)
+	{
+		DestroyWindow(m_hDlg);
+		m_hDlg = nullptr;
+	}
 }
 
 
@@ -457,6 +485,8 @@ void AP_Win32Dialog_FormatFrame::_showFrameColors(void)
 
 void AP_Win32Dialog_FormatFrame::notifyActiveFrame(XAP_Frame *pFrame)
 { 	
+	if (!pFrame || !m_hDlg)
+		return;
 	setAllSensitivities();
 	setBorderThicknessInGUI(getBorderThicknessLeft());
 	_showFrameColors();

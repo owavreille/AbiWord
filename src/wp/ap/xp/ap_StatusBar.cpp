@@ -367,7 +367,7 @@ void AP_StatusBarField_ProgressBar::setStatusProgressValue(int value)
 {
     UT_sint32 prev =  m_ProgressValue;
     m_ProgressValue = value;
-    if(getListener() && (prev < value))
+    if(getListener() && (prev != value))
       getListener()->notify();
 }
 
@@ -378,7 +378,12 @@ double AP_StatusBarField_ProgressBar::getFraction(void)
   {
     return 0.0;
   }
-  return static_cast<double>( m_ProgressValue)/denom;
+  double frac = (static_cast<double>(m_ProgressValue) - static_cast<double>(m_ProgressStart)) / denom;
+  if (frac < 0.0)
+    return 0.0;
+  if (frac > 1.0)
+    return 1.0;
+  return frac;
 }
 
 bool AP_StatusBarField_ProgressBar::isDefinate(void)
