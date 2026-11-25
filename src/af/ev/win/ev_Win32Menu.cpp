@@ -1304,8 +1304,7 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 	}
 	else 
 		if (lpdis->itemState & ODS_CHECKED)
-		{	
-			const int menuDpi = m_fontDpi >= 96 ? m_fontDpi : 96;
+		{
 			const int nWidth = UT_Win32GetSystemMetricsForDpi(SM_CXMENUCHECK, menuDpi);
 			const int nHeight = UT_Win32GetSystemMetricsForDpi(SM_CYMENUCHECK, menuDpi);
 			const int inset = UT_ui_px_at_dpi(20, menuDpi);

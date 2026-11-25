@@ -13,8 +13,15 @@
 #include "ut_bytebuf.h"
 
 // BI_BITFIELDS. A 24-bit or 32-bit DIB with this compression stores 12 mask bytes.
-static const UT_uint32 UT_DIB_BI_BITFIELDS = 3;
-static const UT_sint32 UT_DIB_MAX_SIDE = 16384;
+// A translation unit that includes this header may not mention the constants.
+#if defined(__GNUC__)
+#define UT_DIB_CONST __attribute__((unused))
+#else
+#define UT_DIB_CONST
+#endif
+static const UT_uint32 UT_DIB_BI_BITFIELDS UT_DIB_CONST = 3;
+static const UT_sint32 UT_DIB_MAX_SIDE UT_DIB_CONST = 16384;
+#undef UT_DIB_CONST
 
 struct UT_ImagePixels
 {

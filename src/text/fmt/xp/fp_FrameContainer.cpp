@@ -511,7 +511,6 @@ void  fp_FrameContainer::drawBoundaries(dg_DrawArgs * pDA)
 	UT_sint32 iXhigh = iXlow + getFullWidth() ;
 	UT_sint32 iYlow = pDA->yoff - m_iYpad;
 	UT_sint32 iYhigh = iYlow + getFullHeight();
-	GR_Graphics * pG = pDA->pG;
 	if(getPage())
 	{
 		getPage()->expandDamageRect(iXlow,iYlow,getFullWidth(),getFullHeight());

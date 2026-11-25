@@ -868,7 +868,11 @@ std::string XAP_Frame::makeBackupName(const char* szExt)
       {
           std::string sDir(szDir);
           char last = sDir[sDir.size() - 1];
-          if (last != '/' && last != G_DIR_SEPARATOR)
+#ifdef G_OS_WIN32
+          if (last != '/' && last != '\\')
+#else
+          if (last != '/')
+#endif
               sDir += G_DIR_SEPARATOR;
           oldName = sDir + oldName;
       }

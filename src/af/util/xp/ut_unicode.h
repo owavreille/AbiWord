@@ -329,7 +329,7 @@ inline int UT_rtf_append_int (char * dest, int capacity, int at, int value)
 	} while (mag && n < static_cast<int>(sizeof digits));
 	if (neg && n < static_cast<int>(sizeof digits))
 		digits[n++] = '-';
-	if (at + n >= capacity)
+	if (at < 0 || at + n >= capacity)
 		return -1;
 	while (n > 0)
 		dest[at++] = digits[--n];
@@ -343,7 +343,7 @@ inline int UT_rtf_append_text (char * dest, int capacity, int at, const char * t
 		return at;
 	while (*text)
 	{
-		if (at + 1 >= capacity)
+		if (at < 0 || at + 1 >= capacity)
 			return -1;
 		dest[at++] = *text++;
 	}

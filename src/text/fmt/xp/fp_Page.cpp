@@ -2206,7 +2206,7 @@ void fp_Page::_reformatAnnotations(void)
 			for (fl_ContainerLayout * pBL = pWrap ? pWrap->getFirstLayout() : nullptr; pBL; pBL = pBL->getNext())
 				pBL->format();
 			UT_sint32 iY = pG ? pG->tlu(24) : 24;
-			for (UT_uint32 c = 0; c < pAC->countCons(); c++)
+			for (UT_sint32 c = 0; c < pAC->countCons(); c++)
 			{
 				fp_Container * pInner = static_cast<fp_Container *>(pAC->getNthCon(c));
 				if (!pInner)
