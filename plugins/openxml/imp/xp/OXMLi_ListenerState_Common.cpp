@@ -642,12 +642,18 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 					if ( 0 != strcmp(previousVal, "-none-"))
 						val = previousVal;
 				}
-				if ( val != nullptr)
+				if (val != nullptr)
+				{
 					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", val) ));
-				else if ( eastAsia != nullptr)
+				}
+				else if (eastAsia != nullptr)
+				{
 					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", eastAsia) ));
-				else if ( bidi != nullptr)
+				}
+				else if (bidi != nullptr)
+				{
 					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", bidi) ));
+				}
 
 			} else if (nameMatches(rqst->pName, NS_W_KEY, "noProof")) {
 				//noProof has priority over lang, so no need to check for previous values
