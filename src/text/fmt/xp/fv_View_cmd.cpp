@@ -272,6 +272,22 @@ bool FV_View::cmdSplitCells(AP_CellSplitType iSplitType)
 	};
 	m_pDoc->changeStruxFmt(PTC_AddFmt, posTable, posTable, PP_NOPROPS, tableProps, PTX_SectionTable);
 
+	auto abortSplit = [&]() {
+		if (pTL->getTableWaitIndex() == 1)
+		{
+			m_pDoc->changeStruxFmt(PTC_RemoveFmt, posTable, posTable, PP_NOPROPS, tableProps, PTX_SectionTable);
+		}
+		else if (pTL->getTableWaitIndex() > 1)
+		{
+			tableProps[1] = UT_std_string_sprintf("%d", pTL->getTableWaitIndex() - 1);
+			m_pDoc->changeStruxFmt(PTC_AddFmt, posTable, posTable, PP_NOPROPS, tableProps, PTX_SectionTable);
+		}
+		m_pDoc->setDontImmediatelyLayout(false);
+		_restorePieceTableState();
+		m_pDoc->endUserAtomicGlob();
+		m_pDoc->enableListUpdates();
+	};
+
 	UT_sint32 splitLeft,splitRight,splitTop,splitBot;
 	splitLeft = splitRight = 0;
 	UT_sint32 newLeft,newRight,newTop,newBot;
@@ -442,6 +458,7 @@ bool FV_View::cmdSplitCells(AP_CellSplitType iSplitType)
 					// Disaster! the table structure in the piecetable is screwed.
 					// we're totally stuffed now.
 					UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+					abortSplit();
 					return false;
 				}
 				posCell = m_pDoc->getStruxPosition(endTableStrux);
@@ -464,10 +481,12 @@ bool FV_View::cmdSplitCells(AP_CellSplitType iSplitType)
 							// Disaster! the table structure in the piecetable is screwed.
 							// we're totally stuffed now.
 							UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+							abortSplit();
 							return false;
 						}
 						posCell = m_pDoc->getStruxPosition(endTableStrux);
 						bFound = true;
+						break;
 					}
 					UT_sint32 kLeft,kRight,kTop,kBot;
 					PT_DocPosition posTmp = m_pDoc->getStruxPosition(curSDH)+1;
@@ -497,6 +516,7 @@ bool FV_View::cmdSplitCells(AP_CellSplitType iSplitType)
 								// Disaster! the table structure in the piecetable is screwed.
 								// we're totally stuffed now.
 								UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+								abortSplit();
 								return false;
 							}
 							posCell = m_pDoc->getStruxPosition(endTableStrux);
@@ -994,7 +1014,7 @@ bool FV_View::cmdMergeCells(PT_DocPosition posSource, PT_DocPosition posDestinat
 //            s  |        |
 		if(sRight >= dRight)
 		{
-			if(sRight < numCols -1)
+			if(sRight < numCols)
 			{
 				posWork = findCellPosAt(posTable,dTop,sRight) +1;
 				getCellParams(posWork,&Left,&Right,&Top,&Bot);
@@ -1050,7 +1070,7 @@ bool FV_View::cmdMergeCells(PT_DocPosition posSource, PT_DocPosition posDestinat
 //
 //			check that the source column lines up with the destination column.
 //
-			if(dRight < numCols -1)
+			if(dRight < numCols)
 			{
 				posWork = findCellPosAt(posTable,sTop,dRight) +1;
 				getCellParams(posWork,&Left,&Right,&Top,&Bot);
@@ -1125,7 +1145,7 @@ bool FV_View::cmdMergeCells(PT_DocPosition posSource, PT_DocPosition posDestinat
 //
 		if(dBot >= sBot)
 		{
-			if(dBot < numRows -1)
+			if(dBot < numRows)
 			{
 				posWork = findCellPosAt(posTable,dBot,sLeft) +1;
 				getCellParams(posWork,&Left,&Right,&Top,&Bot);
@@ -1206,7 +1226,7 @@ bool FV_View::cmdMergeCells(PT_DocPosition posSource, PT_DocPosition posDestinat
 //     |   -----
 //
 
-			if(sBot < numRows -1)
+			if(sBot < numRows)
 			{
 				posWork = findCellPosAt(posTable,sBot,dLeft) +1;
 				getCellParams(posWork,&Left,&Right,&Top,&Bot);
@@ -2094,9 +2114,12 @@ bool FV_View::cmdInsertRow(PT_DocPosition posRow, bool bBefore)
 	// OK! starting immediately after this insert loop through the table adding 1 to top and bottom
 	//
 	UT_sint32 iCurLeft,iCurRight,iCurTop,iCurBot;
-	bRes = m_pDoc->getStruxOfTypeFromPosition(posCell-2,PTX_SectionCell,&cellSDH);
-	pCL = static_cast<fl_CellLayout*>(m_pDoc->getNthFmtHandle(cellSDH,m_pLayout->getLID()));
-	pCL = static_cast<fl_CellLayout*>(pCL->getNext());
+	if (!vColInsert.empty())
+	{
+		bRes = m_pDoc->getStruxOfTypeFromPosition(posCell-2,PTX_SectionCell,&cellSDH);
+		pCL = bRes ? static_cast<fl_CellLayout*>(m_pDoc->getNthFmtHandle(cellSDH,m_pLayout->getLID())) : nullptr;
+		pCL = pCL ? static_cast<fl_CellLayout*>(pCL->getNext()) : nullptr;
+	}
     while(pCL)
 	{
 		iCurLeft = pCL->getLeftAttach();
@@ -2116,16 +2139,18 @@ bool FV_View::cmdInsertRow(PT_DocPosition posRow, bool bBefore)
 		std::vector<UT_sint32>::iterator it = vColInsert.begin();
 		for (UT_sint32 k = 0; k < numCols;)
 		{
-			if (k == (*it))
+			if (it != vColInsert.end() && k == (*it))
 			{
 				++k;
-				if (it != vColInsert.end())
-				{
-					++it;
-				}
+				++it;
 				continue;
 			}
 			pCell = pTab->getCellAtRowColumn(iTopInsert,k);
+			if (!pCell)
+			{
+				++k;
+				continue;
+			}
 			pCL = static_cast<fl_CellLayout*>(pCell->getSectionLayout());
 			UT_ASSERT(pCL);
 			posCell = pCL->getPosition(true);
@@ -2264,45 +2289,64 @@ bool FV_View::cmdDeleteCol(PT_DocPosition posCol)
 	for(i=0; i <numRows; i++)
 	{
 		PT_DocPosition posCell = findCellPosAt(posTable,i,iLeft);
-		UT_sint32 Left,Right,Top,Bot;
-		getCellParams(posCell+1,&Left,&Right,&Top,&Bot);
-		UT_DEBUGMSG(("SEVIOR: Before delete left %d right %d top %d bot %d \n",Left,Right,Top,Bot));
-		if((Right - Left) == 1)
+		UT_sint32 Left = 0, Right = 0, Top = 0, Bot = 0;
+		if (posCell != 0 && getCellParams(posCell+1,&Left,&Right,&Top,&Bot))
 		{
-			_deleteCellAt(posTable,i, iLeft);
+			UT_DEBUGMSG(("SEVIOR: Before delete left %d right %d top %d bot %d \n",Left,Right,Top,Bot));
+			if((Right - Left) == 1)
+			{
+				_deleteCellAt(posTable,i, iLeft);
+			}
 		}
 	}
 //
 // OK now subtract one from all the column coordinates in the table with iLeft > iLeft
 // do this by running through the linked list of SectionCell fragments in the piecetable
 //
-// We stop when the position of the endCell strux is just before the position of
-// the endTable strux. So lets's get that now.
+// We stop when we reach the matching endTable strux, skipping nested tables.
 //
-	const pf_Frag_Strux* endTableSDH;
-	bRes = m_pDoc->getNextStruxOfType(tableSDH,PTX_EndTable,&endTableSDH);
-	if(!bRes)
+	const pf_Frag_Strux* endTableSDH = m_pDoc->getEndTableStruxFromTableStrux(tableSDH);
+	if(endTableSDH == nullptr)
 	{
 		//
 		// Disaster! the table structure in the piecetable is screwed.
 		// we're totally stuffed now.
 		UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
 	}
-	PT_DocPosition posEndTable = m_pDoc->getStruxPosition(endTableSDH);
-	PT_DocPosition posEndCell;
-	bool bEnd = false;
 	UT_sint32 iCurLeft,iCurRight,iCurTop,iCurBot,iNewLeft,iNewRight;
-	cellSDH = tableSDH;
-    while(!bEnd)
+	UT_sint32 tableDepth = 0;
+	const pf_Frag_Strux* curSDH = tableSDH;
+	while(endTableSDH != nullptr && m_pDoc->getNextStrux(curSDH, &curSDH))
 	{
-		bRes = m_pDoc->getNextStruxOfType(cellSDH,PTX_SectionCell,&cellSDH);
-		if(!bRes)
+		if(curSDH == endTableSDH)
 		{
-			bEnd = true;
 			break;
 		}
-		posCell2 =  m_pDoc->getStruxPosition(cellSDH);
-		getCellParams(posCell2+1, &iCurLeft, &iCurRight,&iCurTop,&iCurBot);
+		PTStruxType sType = m_pDoc->getStruxType(curSDH);
+		if(sType == PTX_SectionTable)
+		{
+			++tableDepth;
+			continue;
+		}
+		if(sType == PTX_EndTable)
+		{
+			if(tableDepth == 0)
+			{
+				break;
+			}
+			--tableDepth;
+			continue;
+		}
+		if(sType != PTX_SectionCell || tableDepth > 0)
+		{
+			continue;
+		}
+		posCell2 = m_pDoc->getStruxPosition(curSDH);
+		iCurLeft = iCurRight = iCurTop = iCurBot = 0;
+		if(!getCellParams(posCell2+1, &iCurLeft, &iCurRight,&iCurTop,&iCurBot))
+		{
+			continue;
+		}
 		UT_DEBUGMSG(("SEVIOR: Looking at cell left %d right %d top %d bot %d \n",iCurLeft,iCurRight,iCurTop,iCurBot));
 		bool bChange = false;
 		iNewLeft = iCurLeft;
@@ -2327,12 +2371,6 @@ bool FV_View::cmdDeleteCol(PT_DocPosition posCol)
 				"bot-attach", UT_std_string_sprintf("%d",iCurBot)
 			};
 			bRes = m_pDoc->changeStruxFmt(PTC_AddFmt, posCell2 + 1, posCell2 + 1, PP_NOPROPS, props, PTX_SectionCell);
-		}
-		const pf_Frag_Strux* endCellStrux = m_pDoc->getEndCellStruxFromCellStrux(cellSDH);
-		posEndCell =  m_pDoc->getStruxPosition(endCellStrux);
-		if(posEndCell+1 >= posEndTable)
-		{
-			bEnd = true;
 		}
 	}
 	//
@@ -2523,26 +2561,26 @@ bool FV_View::cmdDeleteRow(PT_DocPosition posRow)
 //
 	UT_sint32 i =0;
 	UT_sint32 j = 0;
+	const UT_sint32 iDelEnd = iTop + numRows;
 	for(j=numRows-1; j>=0; j--)
 	{
 		for(i=numCols-1; i >=0; i--)
 		{
 			PT_DocPosition posCell = findCellPosAt(posTable,iTop+j,i);
-			UT_sint32 Left,Right,Top,Bot;
-			getCellParams(posCell+1,&Left,&Right,&Top,&Bot);
-			UT_DEBUGMSG(("SEVIOR: Before delete left %d right %d top %d bot %d \n",Left,Right,Top,Bot));
-			if((Bot - Top) == 1)
+			UT_sint32 Left = 0, Right = 0, Top = 0, Bot = 0;
+			if (posCell != 0 && getCellParams(posCell+1,&Left,&Right,&Top,&Bot))
 			{
-				_deleteCellAt(posTable,iTop+j, i);
+				UT_DEBUGMSG(("SEVIOR: Before delete left %d right %d top %d bot %d \n",Left,Right,Top,Bot));
+				if(Top >= iTop && Bot <= iDelEnd)
+				{
+					_deleteCellAt(posTable,iTop+j, i);
+				}
 			}
 		}
 	}
 //
-// OK now subtract numRows from all the row coordinates in the table with iTop,iBot > iTop
-// do this by running through the linked list of SectionCell fragments in the piecetable
-//
-// We stop when the position of the endCell strux is just before the position of
-// the endTable strux. So lets's get that now.
+// OK now adjust row coordinates in the table for cells overlapping or below [iTop, iTop + numRows)
+// do this by running through the struxes in the piecetable, skipping nested tables.
 //
 	const pf_Frag_Strux* endTableStrux = m_pDoc->getEndTableStruxFromTableStrux(tableSDH);
 	if (!bRes || (endTableStrux == nullptr))
@@ -2551,43 +2589,81 @@ bool FV_View::cmdDeleteRow(PT_DocPosition posRow)
 		// Disaster! the table structure in the piecetable is screwed.
 		// we're totally stuffed now.
 		UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+		if (pTL->getTableWaitIndex() == 1)
+		{
+			m_pDoc->changeStruxFmt(PTC_RemoveFmt, posTable, posTable, PP_NOPROPS, tableProps, PTX_SectionTable);
+		}
+		else if (pTL->getTableWaitIndex() > 1)
+		{
+			tableProps[1] = UT_std_string_sprintf("%d", pTL->getTableWaitIndex() - 1);
+			m_pDoc->changeStruxFmt(PTC_AddFmt, posTable, posTable, PP_NOPROPS, tableProps, PTX_SectionTable);
+		}
 		m_pDoc->setDontImmediatelyLayout(false);
 	
 		// Signal PieceTable Changes have finished
 		_restorePieceTableState();
 		m_pDoc->endUserAtomicGlob();
+		m_pDoc->enableListUpdates();
 		return false;
 	}
-	PT_DocPosition posEndTable = m_pDoc->getStruxPosition(endTableStrux);
-	PT_DocPosition posEndCell;
-	bool bEnd = false;
 	UT_sint32 iCurLeft,iCurRight,iCurTop,iCurBot,iNewTop,iNewBot;
-	cellSDH = tableSDH;
-    while(!bEnd)
+	UT_sint32 tableDepth = 0;
+	const pf_Frag_Strux* curSDH = tableSDH;
+	while(m_pDoc->getNextStrux(curSDH, &curSDH))
 	{
-		bRes = m_pDoc->getNextStruxOfType(cellSDH,PTX_SectionCell,&cellSDH);
-		if(!bRes)
+		if(curSDH == endTableStrux)
 		{
-			bEnd = true;
 			break;
 		}
-		posCell2 =  m_pDoc->getStruxPosition(cellSDH);
-		getCellParams(posCell2+1, &iCurLeft, &iCurRight,&iCurTop,&iCurBot);
+		PTStruxType sType = m_pDoc->getStruxType(curSDH);
+		if(sType == PTX_SectionTable)
+		{
+			++tableDepth;
+			continue;
+		}
+		if(sType == PTX_EndTable)
+		{
+			if(tableDepth == 0)
+			{
+				break;
+			}
+			--tableDepth;
+			continue;
+		}
+		if(sType != PTX_SectionCell || tableDepth > 0)
+		{
+			continue;
+		}
+		posCell2 = m_pDoc->getStruxPosition(curSDH);
+		iCurLeft = iCurRight = iCurTop = iCurBot = 0;
+		if(!getCellParams(posCell2+1, &iCurLeft, &iCurRight,&iCurTop,&iCurBot))
+		{
+			continue;
+		}
 		UT_DEBUGMSG(("SEVIOR: Looking at cell left %d right %d top %d bot %d \n",iCurLeft,iCurRight,iCurTop,iCurBot));
-		bool bChange = false;
 		iNewTop = iCurTop;
 		iNewBot = iCurBot;
-		if(iCurTop > iTop)
+		if(iCurTop >= iDelEnd)
 		{
-			bChange = true;
 			iNewTop -= numRows;
 		}
-		if(iCurBot > iTop)
+		else if(iCurTop > iTop)
 		{
-			bChange = true;
+			iNewTop = iTop;
+		}
+		if(iCurBot >= iDelEnd)
+		{
 			iNewBot -= numRows;
 		}
-		if(bChange)
+		else if(iCurBot > iTop)
+		{
+			iNewBot = iTop;
+		}
+		if(iNewBot <= iNewTop)
+		{
+			iNewBot = iNewTop + 1;
+		}
+		if(iNewTop != iCurTop || iNewBot != iCurBot)
 		{
 			UT_DEBUGMSG(("SEVIOR: changing cell to left %d right %d top %d bot %d \n",iCurLeft,iCurRight,iNewTop,iNewBot));
 			PP_PropertyVector props = {
@@ -2597,12 +2673,6 @@ bool FV_View::cmdDeleteRow(PT_DocPosition posRow)
 				"bot-attach", UT_std_string_sprintf("%d", iNewBot),
 			};
 			bRes = m_pDoc->changeStruxFmt(PTC_AddFmt, posCell2 + 1, posCell2 + 1, PP_NOPROPS, props, PTX_SectionCell);
-		}
-		const pf_Frag_Strux* endCellStrux = m_pDoc->getEndCellStruxFromCellStrux(cellSDH);
-		posEndCell =  m_pDoc->getStruxPosition(endCellStrux);
-		if(posEndCell+1 >= posEndTable)
-		{
-			bEnd = true;
 		}
 	}
 	//

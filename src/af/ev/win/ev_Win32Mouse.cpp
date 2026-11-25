@@ -57,6 +57,8 @@ void EV_Win32Mouse::onCaptureLost(HWND hwnd)
 		return;
 	m_iCaptureCount = 0;
 	m_embCaptured = 0;
+	m_clickState = 0;
+	m_contextState = 0;
 }
 
 void EV_Win32Mouse::onButtonDown(AV_View * pView,

@@ -8902,13 +8902,21 @@ UT_return_val_if_fail(pDialog, false);
 				}
 		}
 
-		UT_sint32 nFromPage, nToPage;
-		static_cast<void>(pDialog->getDoPrintRange(&nFromPage,&nToPage));
-
+		UT_sint32 nFromPage = 1, nToPage = 1;
 		// must use the layout of the print view here !!!
 		const UT_sint32 nPrintPages = pPrintView->getLayout()->countPages();
-		if (nToPage > nPrintPages)
-		  nToPage = nPrintPages;
+		if (!pDialog->getDoPrintRange(&nFromPage, &nToPage))
+		{
+			nFromPage = 1;
+			nToPage = nPrintPages;
+		}
+		else
+		{
+			if (nFromPage < 1)
+				nFromPage = 1;
+			if (nToPage > nPrintPages)
+				nToPage = nPrintPages;
+		}
 
 		// TODO add code to handle getDoPrintSelection()
 

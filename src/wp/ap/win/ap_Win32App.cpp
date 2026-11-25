@@ -578,7 +578,12 @@ bool AP_Win32App::copyAllFmtsToClipboardOnDemand()
 	// it to the format requested
 	PD_DocumentRange DocRange;
 	DocRange.m_pDoc = m_pClipboard->getClipboardDoc();
-	UT_return_val_if_fail(DocRange.m_pDoc, false);
+	if (!DocRange.m_pDoc)
+	{
+		m_pClipboard->closeClipboard();
+		UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+		return false;
+	}
 
 	DocRange.m_pos1 = 2;
 	DocRange.m_pos2 = DocRange.m_pDoc->getLastFrag()->getPos() + DocRange.m_pDoc->getLastFrag()->getLength();
@@ -587,6 +592,7 @@ bool AP_Win32App::copyAllFmtsToClipboardOnDemand()
 	_copyFmtToClipboard(&DocRange, AP_CLIPBOARD_TEXTPLAIN_UCS2);
 	_copyFmtToClipboard(&DocRange, AP_CLIPBOARD_TEXTPLAIN_8BIT);
 
+	m_pClipboard->closeClipboard();
 	return true;
 }
 
@@ -835,12 +841,14 @@ void AP_Win32App::copyToClipboard(PD_DocumentRange * pDocRange, bool /*bUseClipb
 	//
 	// TODO do we need to put something in .ABW format on the clipboard ??
 
-	AP_Win32FrameImpl * pFrameImp = static_cast<AP_Win32FrameImpl*>(getLastFocussedFrame()->getFrameImpl());
+	XAP_Frame * pFrame = getLastFocussedFrame();
+	UT_return_if_fail(pFrame);
+	AP_Win32FrameImpl * pFrameImp = static_cast<AP_Win32FrameImpl*>(pFrame->getFrameImpl());
 	UT_return_if_fail(pFrameImp);
 
 	UT_ByteBuf imageDib;
 	UT_ConstByteBufPtr imagePng;
-	s_selectedImageForClipboard(getLastFocussedFrame(), imageDib, imagePng);
+	s_selectedImageForClipboard(pFrame, imageDib, imagePng);
 	
 	if (!m_pClipboard->openClipboard(pFrameImp->getHwndDocument()))
 		return;
@@ -1063,7 +1071,9 @@ void AP_Win32App::pasteFromClipboard(PD_DocumentRange * pDocRange, bool /*bUseCl
 	// therefore, we do a strlen() and **hope** that this is
 	// right.  Oh, and the value returned by GlobalSize() varies
 	// from call-to-call on the same object.... sigh.
-	AP_Win32FrameImpl * pFrameImp = static_cast<AP_Win32FrameImpl*>(getLastFocussedFrame()->getFrameImpl());
+	XAP_Frame * pFrame = getLastFocussedFrame();
+	UT_return_if_fail(pFrame);
+	AP_Win32FrameImpl * pFrameImp = static_cast<AP_Win32FrameImpl*>(pFrame->getFrameImpl());
 	UT_return_if_fail(pFrameImp);
 	
 	if (!m_pClipboard->openClipboard(pFrameImp->getHwndDocument())) // lock clipboard
@@ -1144,6 +1154,11 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
 
  		// Insert graphic in the view
  		pFrame = getLastFocussedFrame(); 						
+ 		if (!pFrame)
+ 		{
+ 			DELETEP(pIEG);
+ 			return false;
+ 		}
  		pFrameData = (AP_FrameData*) pFrame->getFrameData();		
  		pDocLy =	pFrameData->m_pDocLayout;	
  		pView =  pDocLy->getView();		
@@ -1152,7 +1167,7 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
  	
 		DELETEP(pIEG);
  		
- 		bSuccess = true;
+ 		bSuccess = (errorCode == UT_OK);
  	}
  	else	
 	{

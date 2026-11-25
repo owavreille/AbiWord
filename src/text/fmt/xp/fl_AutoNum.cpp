@@ -124,7 +124,7 @@ bool fl_AutoNum::checkReference(const fl_AutoNum & pAuto) const
 
 void fl_AutoNum::addItem(pf_Frag_Strux* pItem)
 {
-	if(m_items.hasItem(pItem)) {
+	if(!m_items.hasItem(pItem)) {
 		m_items.addItem(pItem);
 		fixListOrder();
 	}
@@ -786,7 +786,7 @@ void fl_AutoNum::prependItem(pf_Frag_Strux* pItem, const pf_Frag_Strux* pNext, b
 			{
 				pAuto->setParentItem(pItem);
 				pAuto->m_bDirty = true;
-				if(	pAuto->_updateItems(0, nullptr)) {
+				if(!pAuto->_updateItems(0, nullptr)) {
 					return;
 				}
 			}
@@ -869,7 +869,7 @@ UT_sint32 fl_AutoNum::getPositionInList(const pf_Frag_Strux* pItem) const
 	for (UT_uint32 i = 0; i < count; i++)
 	{
 		pTmp = m_items.at(i);
-		fl_AutoNumConstPtr pAuto = getAutoNumFromSdh(pItem);
+		fl_AutoNumConstPtr pAuto = getAutoNumFromSdh(pTmp);
 		bOnLevel = (pAuto.get() == this);
 		bFirstItem = (pTmp == m_items.front());
 		if (pTmp == pItem)
@@ -970,25 +970,18 @@ pf_Frag_Strux* fl_AutoNum::getLastItem() const
 
 bool fl_AutoNum::doesItemHaveLabel(const fl_BlockLayout * pItem) const
 {
-	fp_Run * pRun = pItem->getFirstRun();
-	bool bStop = false;
-	while(bStop == false)
+	fp_Run * pRun = pItem ? pItem->getFirstRun() : nullptr;
+	while(pRun)
 	{
 		if(pRun->getType() == FPRUN_FIELD)
 		{
 			fp_FieldRun * pFRun = static_cast<fp_FieldRun *>(pRun);
 			if(pFRun->getFieldType() == FPFIELD_list_label)
 			{
-				bStop = true;
 				return true;
 			}
 		}
 		pRun = pRun->getNextRun();
-		if(pRun == nullptr)
-		{
-			bStop = true;
-			return false;
-		}
 	}
 	return false;
 }
@@ -1122,6 +1115,7 @@ bool fl_AutoNum::_updateItems(UT_sint32 start, const pf_Frag_Strux* notMe)
 				if( pAuto && (pItem == pAuto->getParentItem()) && (pItem != notMe))
 				{
 					if(!pAuto->_updateItems(0, pItem)) {
+						m_bUpdatingItems = false;
 						return false;
 					}
 				}

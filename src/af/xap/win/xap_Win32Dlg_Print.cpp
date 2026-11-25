@@ -438,8 +438,11 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 	m_bDoPrintRange		= ((m_pPersistPrintDlg->Flags & PD_PAGENUMS) != 0);
 	m_bDoPrintSelection = ((m_pPersistPrintDlg->Flags & PD_SELECTION) != 0);
 	m_bDoPrintToFile	= ((m_pPersistPrintDlg->Flags & PD_PRINTTOFILE) != 0);	
-	m_nFirstPage		= m_pPersistPrintDlg->nFromPage;
-	m_nLastPage			= m_pPersistPrintDlg->nToPage;
+	if (m_bDoPrintRange)
+	{
+		m_nFirstPage	= m_pPersistPrintDlg->nFromPage;
+		m_nLastPage		= m_pPersistPrintDlg->nToPage;
+	}
 
 	// The driver must not print the copies as well: AbiWord loops itself,
 	// as on the other ports. Read the count first, then force a single copy

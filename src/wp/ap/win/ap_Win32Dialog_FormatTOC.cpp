@@ -807,15 +807,18 @@ void AP_Win32Dialog_FormatTOC_Layout::saveCtrlsValuesForDetailsLevel ()
 		
 	std::string sProp, sVal;
 	std::string sNum;
-	char szText[1024];
+	wchar_t wszText[1024];
+	UT_Win32LocaleString str;
 	int nSelected;
 
 	
 	/* Text Before */
-	GetWindowText(GetDlgItem (getHandle(),
-		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_TEXTBEFORE), szText, 1024);
+	wszText[0] = L'\0';
+	GetWindowTextW(GetDlgItem (getHandle(),
+		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_TEXTBEFORE), wszText, 1024);
 
-	sVal = AP_Win32App::s_fromWinLocaleToUTF8 (szText).utf8_str();
+	str.fromLocale (wszText);
+	sVal = str.utf8_str().utf8_str();
 	
 	sNum =  UT_std_string_sprintf("%d",getContainer()->getDetailsLevel());	
 	sProp = "toc-label-before";
@@ -823,10 +826,12 @@ void AP_Win32Dialog_FormatTOC_Layout::saveCtrlsValuesForDetailsLevel ()
 	getContainer()->setTOCProperty(sProp, sVal);
 
 	/* Text After */
-	GetWindowText(GetDlgItem (getHandle(),
-		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_TEXTAFTER), szText, 1024);
+	wszText[0] = L'\0';
+	GetWindowTextW(GetDlgItem (getHandle(),
+		AP_RID_DIALOG_FORMATTOC_LAYOUTDETAILS_EDIT_TEXTAFTER), wszText, 1024);
 
-	sVal = AP_Win32App::s_fromWinLocaleToUTF8 (szText).utf8_str();
+	str.fromLocale (wszText);
+	sVal = str.utf8_str().utf8_str();
 	sProp = "toc-label-after";
 	sProp += sNum;
 	getContainer()->setTOCProperty(sProp, sVal);

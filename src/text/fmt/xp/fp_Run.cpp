@@ -4740,6 +4740,41 @@ bool fp_FieldDDMMYYRun::calculateValue(void)
 	return _setValue(sz_ucs_FieldValue);
 }
 
+static void setFieldFromUtf8(fd_Field * pField, UT_UCS4Char * szOut, size_t outCap, const char * utf8)
+{
+	const char * szSafe = utf8 ? utf8 : "";
+	if (pField)
+		pField->setValue(static_cast<const gchar*>(szSafe));
+
+	if (!szOut || outCap == 0)
+		return;
+
+	UT_UCS4String ucs4 = UT_UTF8String(szSafe).ucs4_str();
+	const UT_UCS4Char * src = ucs4.ucs4_str();
+	size_t len = ucs4.size();
+	if (len >= outCap)
+		len = outCap - 1;
+	if (len > 0 && src)
+		memcpy(szOut, src, len * sizeof(UT_UCS4Char));
+	szOut[len] = 0;
+}
+
+static void setFieldFromStrftime(fd_Field * pField, UT_UCS4Char * szOut, size_t outCap,
+								 const char * fmt, const struct tm * pTime)
+{
+	char buf[FPFIELD_MAX_LENGTH] = {};
+	if (fmt && pTime && strftime(buf, sizeof(buf), fmt, pTime) > 0)
+	{
+		gchar * utf8 = g_locale_to_utf8(buf, -1, nullptr, nullptr, nullptr);
+		setFieldFromUtf8(pField, szOut, outCap, utf8 ? utf8 : buf);
+		g_free(utf8);
+	}
+	else
+	{
+		setFieldFromUtf8(pField, szOut, outCap, "");
+	}
+}
+
 // Month Day, Year
 fp_FieldMonthDayYearRun::fp_FieldMonthDayYearRun(fl_BlockLayout* pBL,UT_uint32 iOffsetFirst, UT_uint32 iLen) : fp_FieldRun(pBL, iOffsetFirst, iLen)
 {
@@ -4750,16 +4785,10 @@ bool fp_FieldMonthDayYearRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	time_t	tim = time(nullptr);
 	struct tm *pTime = localtime(&tim);
 
-	strftime(szFieldValue, FPFIELD_MAX_LENGTH, "%B %d, %Y", pTime);
-	if (getField())
-		getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromStrftime(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), "%B %d, %Y", pTime);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -4773,16 +4802,10 @@ bool fp_FieldMthDayYearRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	time_t	tim = time(nullptr);
 	struct tm *pTime = localtime(&tim);
 
-	strftime(szFieldValue, FPFIELD_MAX_LENGTH, "%b %d, %Y", pTime);
-	if (getField())
-		getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromStrftime(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), "%b %d, %Y", pTime);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -4796,16 +4819,10 @@ bool fp_FieldDefaultDateRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	time_t	tim = time(nullptr);
 	struct tm *pTime = localtime(&tim);
 
-	strftime(szFieldValue, FPFIELD_MAX_LENGTH, "%c", pTime);
-	if (getField())
-		getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromStrftime(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), "%c", pTime);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -4819,16 +4836,10 @@ bool fp_FieldDefaultDateNoTimeRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	time_t	tim = time(nullptr);
 	struct tm *pTime = localtime(&tim);
 
-	strftime(szFieldValue, FPFIELD_MAX_LENGTH, "%x", pTime);
-	if (getField())
-		getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromStrftime(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), "%x", pTime);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -4842,16 +4853,10 @@ bool fp_FieldWkdayRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	time_t	tim = time(nullptr);
 	struct tm *pTime = localtime(&tim);
 
-	strftime(szFieldValue, FPFIELD_MAX_LENGTH, "%A", pTime);
-	if (getField())
-		getField()->setValue(static_cast<const gchar*>(g_strdup(szFieldValue)));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromStrftime(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), "%A", pTime);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -4957,16 +4962,10 @@ bool fp_FieldDateTimeCustomRun::calculateValue(void)
 	  UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	  sz_ucs_FieldValue[0] = 0;
 	  
-	  char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-	  
 	  time_t	tim = time(nullptr);
 	  struct tm *pTime = localtime(&tim);
 	  
-	  strftime(szFieldValue, FPFIELD_MAX_LENGTH, param, pTime);
-	  if (getField())
-		  getField()->setValue(static_cast<const gchar*>(szFieldValue));
-	  
-	  UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	  setFieldFromStrftime(fld, sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), param, pTime);
 	  
 	  return _setValue(sz_ucs_FieldValue);
 	}
@@ -4983,16 +4982,10 @@ bool fp_FieldTimeZoneRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	time_t	tim = time(nullptr);
 	struct tm *pTime = localtime(&tim);
 
-	strftime(szFieldValue, FPFIELD_MAX_LENGTH, "%Z", pTime);
-	if (getField())
-		getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromStrftime(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), "%Z", pTime);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5295,16 +5288,10 @@ bool fp_FieldTimeRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	time_t	tim = time(nullptr);
 	struct tm *pTime = localtime(&tim);
 
-	strftime(szFieldValue, FPFIELD_MAX_LENGTH, "%X", pTime);
-	if (getField())
-		getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromStrftime(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), "%X", pTime);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5318,16 +5305,10 @@ bool fp_FieldDateRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	time_t	tim = time(nullptr);
 	struct tm *pTime = localtime(&tim);
 
-	strftime(szFieldValue, FPFIELD_MAX_LENGTH, "%A %B %d, %Y", pTime);
-	if (getField())
-		getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromStrftime(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), "%A %B %d, %Y", pTime);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5341,8 +5322,6 @@ bool fp_FieldFileNameRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	PD_Document * pDoc = getBlock()->getDocument();
 	UT_return_val_if_fail(pDoc, false);
 
@@ -5352,13 +5331,7 @@ bool fp_FieldFileNameRun::calculateValue(void)
 		name = "*";
 	}
 
-	strncpy (szFieldValue, name.c_str(), FPFIELD_MAX_LENGTH);
-	szFieldValue[FPFIELD_MAX_LENGTH] = '\0';
-
-	if (getField())
-	  getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromUtf8(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), name.c_str());
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5372,8 +5345,6 @@ bool fp_FieldShortFileNameRun::calculateValue(void)
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	char szFieldValue[FPFIELD_MAX_LENGTH + 1];
-
 	PD_Document * pDoc = getBlock()->getDocument();
 	UT_return_val_if_fail(pDoc, false);
 
@@ -5382,13 +5353,7 @@ bool fp_FieldShortFileNameRun::calculateValue(void)
 	if (!name)
 		name = "*";
 
-	strncpy (szFieldValue, name, FPFIELD_MAX_LENGTH);
-	szFieldValue[FPFIELD_MAX_LENGTH] = '\0';
-
-	if (getField())
-	  getField()->setValue(static_cast<const gchar*>(szFieldValue));
-
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, szFieldValue);
+	setFieldFromUtf8(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), name);
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5426,6 +5391,40 @@ fp_FieldPageReferenceRun::fp_FieldPageReferenceRun(fl_BlockLayout* pBL, UT_uint3
 {
 }
 
+static fp_Run * findBookmarkInLayout(fl_ContainerLayout * pCL, const std::string & sBookmarkName)
+{
+	while (pCL)
+	{
+		if (pCL->getContainerType() == FL_CONTAINER_BLOCK)
+		{
+			fl_BlockLayout * pBlock = static_cast<fl_BlockLayout *>(pCL);
+			fp_Run * pRun = pBlock->getFirstRun();
+			while (pRun)
+			{
+				xxx_UT_DEBUGMSG(("pRun 0x%x, type %d\n", pRun, pRun->getType()));
+				if (pRun->getType() == FPRUN_BOOKMARK)
+				{
+					fp_BookmarkRun * pB = static_cast<fp_BookmarkRun *>(pRun);
+					if (pB->isStartOfBookmark() && pB->getName() && sBookmarkName == pB->getName())
+					{
+						return pRun;
+					}
+				}
+				pRun = pRun->getNextRun();
+			}
+		}
+		else if (fl_ContainerLayout * pChild = pCL->getFirstLayout())
+		{
+			if (fp_Run * pFound = findBookmarkInLayout(pChild, sBookmarkName))
+			{
+				return pFound;
+			}
+		}
+		pCL = pCL->getNext();
+	}
+	return nullptr;
+}
+
 bool fp_FieldPageReferenceRun::calculateValue(void)
 {
 	UT_UTF8String szFieldValue ("?");
@@ -5440,39 +5439,15 @@ bool fp_FieldPageReferenceRun::calculateValue(void)
 	if(!pView)
 		return false;
 
+	const std::string sBookmarkName(_getParameter());
 	fp_Run* pRun = nullptr;
-	fl_BlockLayout * pBlock;
 	fl_SectionLayout * pSection = pView->getLayout()->getFirstSection();
 	UT_ASSERT(pSection);
-	bool bFound = false;
 
 	while (pSection)
 	{
-		pBlock = static_cast<fl_BlockLayout *>(pSection->getFirstLayout());
-
-		while (pBlock)
-		{
-			pRun = pBlock->getFirstRun();
-			while (pRun)
-			{
-				xxx_UT_DEBUGMSG(("pRun 0x%x, type %d\n", pRun, pRun->getType()));
-				if(pRun->getType() == FPRUN_BOOKMARK)
-				{
-					fp_BookmarkRun * pB = static_cast<fp_BookmarkRun*>(pRun);
-					if(pB->isStartOfBookmark() && !strcmp(_getParameter(),pB->getName()))
-					{
-						bFound = true;
-						break;
-					}
-				}
-				pRun = pRun->getNextRun();
-			}
-			if(bFound)
-				break;
-
-			pBlock = static_cast<fl_BlockLayout *>(pBlock->getNext());
-		}
-		if(bFound)
+		pRun = findBookmarkInLayout(pSection->getFirstLayout(), sBookmarkName);
+		if (pRun)
 			break;
 		pSection = static_cast<fl_SectionLayout *>(pSection->getNext());
 	}
@@ -5483,21 +5458,12 @@ bool fp_FieldPageReferenceRun::calculateValue(void)
 		&& pRun->getLine()->getContainer()->getPage())
 	{
 		fp_Page* pPage = pRun->getLine()->getContainer()->getPage();
-		FL_DocLayout* pDL = pPage->getDocLayout();
-
-		UT_sint32 iPageNum = 0;
-		UT_uint32 iNumPages = pDL->countPages();
-		for (UT_uint32 i=0; i<iNumPages; i++)
+		pPage->resetFieldPageNumber();
+		UT_sint32 iPageNum = pPage->getFieldPageNumber();
+		if (iPageNum > 0)
 		{
-			fp_Page* pPg = pDL->getNthPage(i);
-
-        	if (pPg == pPage)
-			{
-				iPageNum = i + 1;
-				break;
-			}
+			UT_UTF8String_sprintf(szFieldValue, "%d", iPageNum);
 		}
-		UT_UTF8String_sprintf(szFieldValue, "%d", iPageNum);
 	}
 	else
 	{

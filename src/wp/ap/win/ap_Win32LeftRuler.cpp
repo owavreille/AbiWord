@@ -163,7 +163,7 @@ LRESULT CALLBACK AP_Win32LeftRuler::_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPAR
 	{
 	case WM_CAPTURECHANGED:
 		if (reinterpret_cast<HWND>(lParam) != hwnd)
-			pRuler->mouseRelease(0, EV_EMB_BUTTON1, 0, 0);
+			pRuler->mouseRelease(0, EV_EMB_BUTTON1, -1, 0);
 		return 0;
 
 	case WM_LBUTTONDOWN:

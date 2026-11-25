@@ -1275,10 +1275,14 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 			}
 			return 0;
 
-		case WM_KILLFOCUS:			
+		case WM_KILLFOCUS:
+			if (fImpl->m_pKeyboard)
+			{
+				static_cast<ev_Win32Keyboard *>(fImpl->m_pKeyboard)->clearDeadKey();
+			}
 			if (pView)
 			{
-				pView->focusChange(AV_FOCUS_NONE);			
+				pView->focusChange(AV_FOCUS_NONE);
 			}
 			return 0;
 
@@ -1298,8 +1302,12 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 		}
 
 		case WM_CAPTURECHANGED:
-			if (pMouse && reinterpret_cast<HWND>(lParam) != hwnd)
-				pMouse->onCaptureLost(hwnd);
+			if (reinterpret_cast<HWND>(lParam) != hwnd)
+			{
+				fImpl->m_bMouseWheelTrack = false;
+				if (pMouse)
+					pMouse->onCaptureLost(hwnd);
+			}
 			return 0;
 
 		case WM_LBUTTONDOWN:
@@ -1427,6 +1435,16 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 	 		else
  				return false;	    				 	     			
     		
+		}
+
+		case WM_DEADCHAR:
+		case WM_SYSDEADCHAR:
+		{
+			if (fImpl->m_pKeyboard)
+			{
+				static_cast<ev_Win32Keyboard *>(fImpl->m_pKeyboard)->onDeadChar();
+			}
+			return UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
 		}
 
 		case WM_SYSCHAR:

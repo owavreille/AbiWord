@@ -208,14 +208,14 @@ bool XAP_Dialog_Print::getCollate(void) const
 {
 	UT_ASSERT(m_answer == a_OK);
 
-	return m_persistCollate;
+	return m_bCollate;
 }
 
 GR_Graphics::ColorSpace XAP_Dialog_Print::getColorSpace(void) const
 {
 	UT_ASSERT(m_answer == a_OK);
 
-	return m_persistColorSpace;
+	return m_cColorSpace;
 }
 
 bool XAP_Dialog_Print::_getPrintToFilePathname(XAP_Frame * pFrame,

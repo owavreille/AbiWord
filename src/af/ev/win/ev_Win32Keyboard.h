@@ -47,6 +47,9 @@ public:
 	bool onUniChar(AV_View * pView,
 				   HWND hWnd, UINT iMsg, WPARAM nVirtKey, LPARAM keyData);
 
+	void onDeadChar(void);
+	void clearDeadKey(void);
+
 protected:
 	EV_EditBits			_getModifierState(void);
 	void				_emitChar(AV_View * pView,
@@ -63,6 +66,7 @@ protected:
 	bool				m_bIsUnicodeInput;
 	bool				m_bWasAnAbiCommand;
 	UT_uint32			m_utf16Lead;
+	bool				m_bDeadKeyPending;
 };
 
 #endif /* EV_WIN32KEYBOARD_H */

@@ -22,6 +22,7 @@
 //////////////////////////////////////////////////////////////////
 
 #include <windows.h>
+#include <vector>
 
 #include "ut_string.h"
 #include "ut_assert.h"
@@ -93,7 +94,7 @@ void AP_Win32Dialog_Replace::activate(void)
 		if (!findstr.empty())
 		{			
 			SetDlgItemTextW(m_hDlg,AP_RID_DIALOG_REPLACE_COMBO_REPLACE,findstr.c_str());
-			SendMessageW(GetDlgItem(m_hDlg,AP_RID_DIALOG_REPLACE_COMBO_FIND), CB_SETEDITSEL, 0, MAKELONG (0, -1));		
+			SendMessageW(GetDlgItem(m_hDlg,AP_RID_DIALOG_REPLACE_COMBO_REPLACE), CB_SETEDITSEL, 0, MAKELONG (0, -1));		
 		}
 		FREEP(bufferUnicode);
 	}
@@ -111,6 +112,10 @@ void AP_Win32Dialog_Replace::destroy(void)
 
 void AP_Win32Dialog_Replace::notifyActiveFrame(XAP_Frame *pFrame)
 {
+	if (!pFrame)
+		return;
+	if (pFrame->getCurrentView())
+		setView(static_cast<FV_View*>(pFrame->getCurrentView()));
 	if((HWND)GetWindowLongPtrW(m_hDlg, GWLP_HWNDPARENT) != static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow())
 	{
 		// Update the caption
@@ -238,7 +243,8 @@ BOOL AP_Win32Dialog_Replace::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lPara
 
 	// before doing anything else, make sure that the main window is not entirely
 	// without focus
-	m_pView->focusChange(AV_FOCUS_MODELESS);
+	if (m_pView)
+		m_pView->focusChange(AV_FOCUS_MODELESS);
 	xxx_UT_DEBUGMSG(("s_dlgProc: wId 0x%x\n",wId));
 
 	switch (wId)
@@ -300,7 +306,7 @@ BOOL AP_Win32Dialog_Replace::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lPara
 		return _onBtn_Find(hWnd, find_REPLACE_ALL);
 		
 	case IDCANCEL:						// also AP_RID_DIALOG_REPLACE_BTN_CLOSE
-		EndDialog(hWnd,0);
+		destroy();
 		return 1;
 
 	default:							// we did not handle this notification
@@ -311,43 +317,31 @@ BOOL AP_Win32Dialog_Replace::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lPara
 
 BOOL AP_Win32Dialog_Replace::_onBtn_Find(HWND hWnd, tFindType findType)
 {
-	wchar_t * pBufFromDialogFind = nullptr;
-	wchar_t * pBufFromDialogReplace = nullptr;
-	UT_UCS4Char * pUCSReplace = nullptr;
-    UT_Win32LocaleString findstr;    
-    UT_Win32LocaleString replacestr;
+	UT_Win32LocaleString findstr;
+	UT_Win32LocaleString replacestr;
 
 	// Check find string
-	HWND hWndEditFind = GetDlgItem(hWnd,AP_RID_DIALOG_REPLACE_COMBO_FIND);
+	HWND hWndEditFind = GetDlgItem(hWnd, AP_RID_DIALOG_REPLACE_COMBO_FIND);
 	DWORD lenFind = GetWindowTextLengthW(hWndEditFind);
 	if (!lenFind)
 		return 1;
 
-	pBufFromDialogFind = new wchar_t [lenFind + 1];
-	if (!pBufFromDialogFind)
-		goto FreeMemory;
-	GetWindowTextW(hWndEditFind,pBufFromDialogFind,lenFind+1);
+	std::vector<wchar_t> bufFromDialogFind(lenFind + 1, L'\0');
+	GetWindowTextW(hWndEditFind, bufFromDialogFind.data(), static_cast<int>(lenFind + 1));
 
-	UT_DEBUGMSG(("Find entry contents: [%s]\n",pBufFromDialogFind));
-
-    findstr.fromLocale (pBufFromDialogFind);
-
+	findstr.fromLocale(bufFromDialogFind.data());
 	setFindString(findstr.ucs4_str().ucs4_str());
 
-    if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE))
+	if (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_REPLACE))
 	{
 		// Check Replace string
-		HWND hWndEditReplace = GetDlgItem(hWnd,AP_RID_DIALOG_REPLACE_COMBO_REPLACE);
+		HWND hWndEditReplace = GetDlgItem(hWnd, AP_RID_DIALOG_REPLACE_COMBO_REPLACE);
 		DWORD lenReplace = GetWindowTextLengthW(hWndEditReplace);
 
-		pBufFromDialogReplace = new wchar_t [lenReplace + 1];
-		if (!pBufFromDialogReplace)
-			goto FreeMemory;
-		GetWindowTextW(hWndEditReplace,pBufFromDialogReplace,lenReplace+1);
+		std::vector<wchar_t> bufFromDialogReplace(lenReplace + 1, L'\0');
+		GetWindowTextW(hWndEditReplace, bufFromDialogReplace.data(), static_cast<int>(lenReplace + 1));
 
-		UT_DEBUGMSG(("Replace entry contents: [%s]\n",pBufFromDialogReplace));
-
-	    replacestr.fromLocale (pBufFromDialogReplace);
+		replacestr.fromLocale(bufFromDialogReplace.data());
 		setReplaceString(replacestr.ucs4_str().ucs4_str());
 	}
 
@@ -372,10 +366,6 @@ BOOL AP_Win32Dialog_Replace::_onBtn_Find(HWND hWnd, tFindType findType)
 			findPrev();
 	}
 
-    FreeMemory:
-	DELETEP(pBufFromDialogFind);
-	DELETEP(pBufFromDialogReplace);
-	FREEP(pUCSReplace);
 	return 1;
 }
 

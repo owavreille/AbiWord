@@ -896,7 +896,10 @@ void AP_LeftRuler::mouseMotion(EV_EditModifierState ems, UT_sint32 x, UT_sint32 
 	// if they drag vertically off the ruler, we ignore the whole thing.
 	xxx_UT_DEBUGMSG(("In Left mouseMotion x %d y %d width %d \n",x,y,getWidth()));
 
-	if ((x < 0) || (x > static_cast<UT_sint32>(getWidth())))
+	const UT_sint32 xSlack = (m_bValidMouseClick && (m_draggingWhat == DW_TOPMARGIN || m_draggingWhat == DW_BOTTOMMARGIN))
+		? static_cast<UT_sint32>(getWidth()) * 2
+		: 0;
+	if ((x < -xSlack) || (x > static_cast<UT_sint32>(getWidth()) + xSlack))
 	{
 		if(!m_bEventIgnored)
 		{
@@ -967,14 +970,12 @@ void AP_LeftRuler::mouseMotion(EV_EditModifierState ems, UT_sint32 x, UT_sint32 
 		}
 		return;
 	}		
-	m_bEventIgnored = false;
-
 	UT_DEBUGMSG(("mouseMotion: [ems 0x%08x][x %d][y %d]\n",(int)ems,x,y));
 	ap_RulerTicks tick(pG,m_dim);
 
 	// if they drag vertically off the ruler, we ignore the whole thing.
 
-	if ((x < 0) || (x > static_cast<UT_sint32>(getWidth())))
+	if ((x < -xSlack) || (x > static_cast<UT_sint32>(getWidth()) + xSlack))
 	{
 		if(!m_bEventIgnored)
 		{
@@ -987,6 +988,7 @@ void AP_LeftRuler::mouseMotion(EV_EditModifierState ems, UT_sint32 x, UT_sint32 
 		}
 		return;
 	}
+	m_bEventIgnored = false;
 
 	// lots of stuff omitted here; we should see about including it.
 	// it has to do with autoscroll.
@@ -1018,7 +1020,7 @@ void AP_LeftRuler::mouseMotion(EV_EditModifierState ems, UT_sint32 x, UT_sint32 
 
 		UT_sint32 yAbsTop = m_infoCache.m_yPageStart - m_yScrollOffset;
 
-		m_draggingCenter = tick.snapPixelToGrid(y);
+		m_draggingCenter = yAbsTop + tick.snapPixelToGrid(y - yAbsTop);
 
 		// bounds checking for end-of-page
 

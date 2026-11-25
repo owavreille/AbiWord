@@ -98,6 +98,9 @@ int UT_UCS2_mbtowc::mbtowc (UT_UCS2Char & wc, char mb)
 	gsize bytes_written = 0;
 	GError* error = nullptr;
 	gchar* out = g_convert_with_iconv(inptr, inlen, (GIConv)cd, &bytes_read, &bytes_written, &error);
+	const bool hadError = (error != nullptr);
+	const bool isPartial = (error && g_error_matches(error, G_CONVERT_ERROR, G_CONVERT_ERROR_PARTIAL_INPUT));
+	g_clear_error(&error);
 	if (out && bytes_written == 2)
 	{
 		memcpy(&wc, out, 2);
@@ -108,7 +111,7 @@ int UT_UCS2_mbtowc::mbtowc (UT_UCS2Char & wc, char mb)
 
 	FREEP(out);
 
-	if (bytes_written != 2 || (out == nullptr && !error))
+	if ((out == nullptr && (!hadError || isPartial)) || (bytes_written != 2 && (!hadError || isPartial)))
 	{
 		// reset iconv, pointer might be messed up; need more chars...
 		initialize (false);
@@ -193,6 +196,9 @@ int UT_UCS4_mbtowc::mbtowc (UT_UCS4Char & wc, char mb)
 	gsize bytes_written = 0;
 	GError* error = nullptr;
 	gchar* out = g_convert_with_iconv(inptr, inlen, (GIConv)cd, &bytes_read, &bytes_written, &error);
+	const bool hadError = (error != nullptr);
+	const bool isPartial = (error && g_error_matches(error, G_CONVERT_ERROR, G_CONVERT_ERROR_PARTIAL_INPUT));
+	g_clear_error(&error);
 	if (out && bytes_written == 4)
 	{
 		memcpy(&wc, out, 4);
@@ -203,7 +209,7 @@ int UT_UCS4_mbtowc::mbtowc (UT_UCS4Char & wc, char mb)
 
 	FREEP(out);
 
-	if (bytes_written != 4 && (out == nullptr && !error))
+	if ((out == nullptr && (!hadError || isPartial)) || (bytes_written != 4 && (!hadError || isPartial)))
 	{
 		// reset iconv, pointer might be messed up; need more chars...
 		initialize (false);

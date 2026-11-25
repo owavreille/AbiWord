@@ -79,7 +79,8 @@ ev_Win32Keyboard::ev_Win32Keyboard(EV_EditEventMapper * pEEM)
 	  m_iconv(UT_ICONV_INVALID),
 	  m_bIsUnicodeInput(false),
 	  m_bWasAnAbiCommand(false),
-	  m_utf16Lead(0)
+	  m_utf16Lead(0),
+	  m_bDeadKeyPending(false)
 {
 	HINSTANCE hInstUser = LoadLibraryW(L"USER32.DLL");
 	if (hInstUser)
@@ -99,6 +100,16 @@ ev_Win32Keyboard::~ev_Win32Keyboard()
 }
 
 
+void ev_Win32Keyboard::onDeadChar(void)
+{
+	m_bDeadKeyPending = true;
+}
+
+void ev_Win32Keyboard::clearDeadKey(void)
+{
+	m_bDeadKeyPending = false;
+}
+
 void ev_Win32Keyboard::remapKeyboard(HKL hKeyboardLayout)
 {
 	char  szCodePage[16];
@@ -106,6 +117,7 @@ void ev_Win32Keyboard::remapKeyboard(HKL hKeyboardLayout)
 	// A pending high surrogate belongs to the previous layout; keeping
 	// it would pair it with the next low surrogate from the new one.
 	m_utf16Lead = 0;
+	m_bDeadKeyPending = false;
 
 	if( m_iconv != UT_ICONV_INVALID )
 	{
@@ -190,6 +202,11 @@ bool ev_Win32Keyboard::onKeyDown(AV_View * pView,
 		return true;
 	}
 	
+	if (m_bDeadKeyPending && nVirtKey == VK_SPACE && (ems & (EV_EMS_CONTROL | EV_EMS_ALT)) == 0)
+	{
+		return true;
+	}
+
 	// Get abiword keyid
 	nvk = s_mapVirtualKeyCodeToNVK(nVirtKey);
 
@@ -354,8 +371,9 @@ void ev_Win32Keyboard::_emitChar(AV_View * pView,
 		charData[1] = 0;
 	}
 
+	const UT_UCS4Char mapChar = (charData[0] > 0xFFFF) ? static_cast<UT_UCS4Char>('a') : charData[0];
 	EV_EditMethod * pEM;
-	EV_EditEventMapperResult result = m_pEEM->Keystroke(EV_EKP_PRESS|ems|charData[0],&pEM);
+	EV_EditEventMapperResult result = m_pEEM->Keystroke(EV_EKP_PRESS|ems|mapChar,&pEM);
 
 	switch (result)
 	{
@@ -392,6 +410,8 @@ void ev_Win32Keyboard::_emitChar(AV_View * pView,
 bool ev_Win32Keyboard::onChar(AV_View * pView,
 								 HWND hWnd, UINT iMsg, WPARAM nVirtKey, LPARAM keyData)
 {
+	m_bDeadKeyPending = false;
+
 	/* 
 		If the key is NOT processed as an Abiword command
 		we follow their path and need to emit the char
@@ -425,11 +445,14 @@ bool ev_Win32Keyboard::onUniChar(AV_View * pView,
 {
 	// as WM_UNICHAR is not proceeded by WM_KEYDOWN message, we need to reset this flag here.
 	m_bWasAnAbiCommand = false;
+	m_bDeadKeyPending = false;
 	
-	EV_EditModifierState ems = _getModifierState(); 		
+	EV_EditModifierState ems = _getModifierState();
+	UT_UCS4Char ch = static_cast<UT_UCS4Char>(nVirtKey);
+	const UT_UCS4Char mapChar = (ch > 0xFFFF) ? static_cast<UT_UCS4Char>('a') : ch;
 
 	EV_EditMethod * pEM;
-	EV_EditEventMapperResult result = m_pEEM->Keystroke(EV_EKP_PRESS|ems|nVirtKey,&pEM);
+	EV_EditEventMapperResult result = m_pEEM->Keystroke(EV_EKP_PRESS|ems|mapChar,&pEM);
 
 	switch (result)
 	{
@@ -443,7 +466,7 @@ bool ev_Win32Keyboard::onUniChar(AV_View * pView,
 
 		case EV_EEMR_COMPLETE:
 			UT_ASSERT(pEM);
-			invokeKeyboardMethod(pView,pEM,(UT_UCS4Char*)&nVirtKey,1);
+			invokeKeyboardMethod(pView,pEM,&ch,1);
 			break;
 
 		case EV_EEMR_INCOMPLETE:
