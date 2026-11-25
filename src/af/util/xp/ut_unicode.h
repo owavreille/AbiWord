@@ -82,3 +82,66 @@ inline int UT_scale_by_dpi (int value, int fromDpi, int toDpi)
 		return value;
 	return static_cast<int>(scaled);
 }
+
+// A size chosen at 96 DPI. Below 96 the toolbar keeps the 96 size.
+inline int UT_ui_px_at_dpi (int pxAt96, int dpi)
+{
+	if (dpi < 96)
+		dpi = 96;
+	const int scaled = UT_scale_by_dpi(pxAt96, 96, dpi);
+	if (pxAt96 > 0 && scaled < 1)
+		return 1;
+	return scaled;
+}
+
+// Copy whole UTF-8 characters that fit. capacity is the byte size of dest,
+// including the NUL that is always written when capacity is positive.
+inline void UT_copy_utf8_bounded (char * dest, int capacity, const char * utf8)
+{
+	if (!dest || capacity <= 0)
+		return;
+	if (!utf8)
+	{
+		dest[0] = 0;
+		return;
+	}
+
+	int n = 0;
+	const int max = capacity - 1;
+	while (utf8[n] && n < max)
+	{
+		const unsigned char c = static_cast<unsigned char>(utf8[n]);
+		int clen = 1;
+		if ((c & 0x80) == 0)
+			clen = 1;
+		else if ((c & 0xe0) == 0xc0)
+			clen = 2;
+		else if ((c & 0xf0) == 0xe0)
+			clen = 3;
+		else if ((c & 0xf8) == 0xf0)
+			clen = 4;
+		else
+			break;
+
+		if (n + clen > max)
+			break;
+
+		bool complete = true;
+		for (int i = 1; i < clen; ++i)
+		{
+			if (utf8[n + i] == 0)
+			{
+				complete = false;
+				break;
+			}
+		}
+		if (!complete)
+			break;
+
+		n += clen;
+	}
+
+	for (int i = 0; i < n; ++i)
+		dest[i] = utf8[i];
+	dest[n] = 0;
+}

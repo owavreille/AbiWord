@@ -506,7 +506,7 @@ BOOL AP_Win32Dialog_Paragraph::_onInitTab(HWND hWnd, WPARAM /*wParam*/, LPARAM l
 			case EN_KILLFOCUS:	\
 				char buf[SPIN_BUF_TEXT_SIZE];	\
 				buf[0] = 0;	\
-				GetWindowText(hWndCtrl,buf,SPIN_BUF_TEXT_SIZE);		\
+				UT_Win32GetWindowTextUtf8(hWndCtrl, buf, SPIN_BUF_TEXT_SIZE);	\
 				_setSpinItemValue(i,buf);		\
 				_syncControls(i);				\
 				m_bEditChanged = false;		\
@@ -578,7 +578,7 @@ BOOL AP_Win32Dialog_Paragraph::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lPara
 	case AP_RID_DIALOG_PARA_SPIN_##c:	\
 		if (m_bEditChanged)				\
 		{								\
-			GetDlgItemText(w,AP_RID_DIALOG_PARA_EDIT_##c,buf,SPIN_BUF_TEXT_SIZE);	\
+			UT_Win32GetWindowTextUtf8(GetDlgItem(w, AP_RID_DIALOG_PARA_EDIT_##c), buf, SPIN_BUF_TEXT_SIZE);	\
 			_setSpinItemValue(i,buf);	\
 			m_bEditChanged = false;	\
 		}								\

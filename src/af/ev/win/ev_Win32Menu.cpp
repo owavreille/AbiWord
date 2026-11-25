@@ -48,6 +48,7 @@
 #include "xap_Win32App.h"
 #include "xap_Win32Toolbar_Icons.h"
 #include "ap_Win32App.h"
+#include "ut_unicode.h"
 #include "ut_Win32OS.h"
 #include "ut_Win32LocaleString.h"
 
@@ -441,6 +442,8 @@ void EV_Win32Menu::refreshForDpi(int dpi)
 	if (UT_Win32GetNonClientMetrics(&ncm, dpi))
 		m_hFont = CreateFontIndirectW(&ncm.lfMenuFont);
 	m_fontDpi = m_hFont ? dpi : 0;
+	m_nBitmapCX = static_cast<UINT>(UT_ui_px_at_dpi(BITMAP_WITDH + 2, dpi));
+	m_nBitmapCY = static_cast<UINT>(UT_ui_px_at_dpi(BITMAP_HEIGHT + 2, dpi));
 }
 
 void	EV_Win32Menu::destroy()
@@ -1252,10 +1255,14 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 	else 
 		if (lpdis->itemState & ODS_CHECKED)
 		{	
-			UINT nWidth = GetSystemMetrics(SM_CXMENUCHECK);
-			UINT nHeight = GetSystemMetrics(SM_CYMENUCHECK);
+			const int menuDpi = m_fontDpi >= 96 ? m_fontDpi : 96;
+			const int nWidth = UT_Win32GetSystemMetricsForDpi(SM_CXMENUCHECK, menuDpi);
+			const int nHeight = UT_Win32GetSystemMetricsForDpi(SM_CYMENUCHECK, menuDpi);
+			const int inset = UT_ui_px_at_dpi(20, menuDpi);
+			const int edge = UT_ui_px_at_dpi(2, menuDpi);
 			RECT r;
-			HBITMAP bm = CreateBitmap(nWidth, nHeight, 1, 1, nullptr );
+			HBITMAP bm = (nWidth > 0 && nHeight > 0)
+				? CreateBitmap(nWidth, nHeight, 1, 1, nullptr) : nullptr;
 			HDC hdcMem = bm ? CreateCompatibleDC(lpdis->hDC) : nullptr;
 
 			const COLORREF checkBk = SetBkColor(lpdis->hDC, GetSysColor(colorID));
@@ -1266,10 +1273,10 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 				DrawFrameControl(hdcMem, &r, DFC_MENU,DFCS_MENUCHECK);
 
 				if(m_iDIR)
-					BitBlt(lpdis->hDC, lpdis->rcItem.right - 20, lpdis->rcItem.top+2, nWidth, nHeight,
+					BitBlt(lpdis->hDC, lpdis->rcItem.right - inset, lpdis->rcItem.top + edge, nWidth, nHeight,
 						   hdcMem, 0, 0, SRCCOPY);
 				else
-					BitBlt(lpdis->hDC, lpdis->rcItem.left+2, lpdis->rcItem.top+2, nWidth, nHeight,
+					BitBlt(lpdis->hDC, lpdis->rcItem.left + edge, lpdis->rcItem.top + edge, nWidth, nHeight,
 						   hdcMem, 0, 0, SRCCOPY);
 
 				if (previous)

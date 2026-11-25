@@ -9,6 +9,7 @@
 
 #include "tf_test.h"
 #include "ut_unicode.h"
+#include <string.h>
 #include "ut_dib.h"
 #include "ut_go_file.h"
 #include "ut_bytebuf.h"
@@ -123,6 +124,27 @@ TFTEST_MAIN("DPI scale matches MulDiv")
 	TFPASS(UT_scale_by_dpi(-11, 96, 144) == -17);
 	TFPASS(UT_scale_by_dpi(12, 96, 96) == 12);
 	TFPASS(UT_scale_by_dpi(12, 0, 192) == 12);
+
+	TFPASS(UT_ui_px_at_dpi(22, 96) == 22);
+	TFPASS(UT_ui_px_at_dpi(22, 192) == 44);
+	TFPASS(UT_ui_px_at_dpi(22, 144) == 33);
+	TFPASS(UT_ui_px_at_dpi(6, 192) == 12);
+	TFPASS(UT_ui_px_at_dpi(4, 192) == 8);
+	TFPASS(UT_ui_px_at_dpi(20, 48) == 20);
+	TFPASS(UT_ui_px_at_dpi(0, 192) == 0);
+
+	char bounded[4];
+	UT_copy_utf8_bounded(bounded, 4, "abcd");
+	TFPASS(strcmp(bounded, "abc") == 0);
+	const char accent[] = "\xc3\xa9";
+	UT_copy_utf8_bounded(bounded, 2, accent);
+	TFPASS(bounded[0] == 0);
+	UT_copy_utf8_bounded(bounded, 3, accent);
+	TFPASS(strcmp(bounded, accent) == 0);
+	UT_copy_utf8_bounded(bounded, 0, "a");
+	UT_copy_utf8_bounded(nullptr, 4, "a");
+	UT_copy_utf8_bounded(bounded, 4, nullptr);
+	TFPASS(bounded[0] == 0);
 }
 
 TFTEST_MAIN("ShellExecute failure is a result at or below 32")

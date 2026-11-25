@@ -27,6 +27,7 @@
 #include "ut_string.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
+#include "ut_Win32OS.h"
 #include "ut_Xpm2Bmp.h"
 
 #include "xap_App.h"
@@ -65,6 +66,14 @@ static double s_dialogMeasure(const char * text)
 		normalized[i] = (text[i] == ',') ? '.' : text[i];
 	normalized[i] = 0;
 	return strtod(normalized, nullptr);
+}
+
+// The edit control is Unicode. GetDlgItemText follows the A or W macro
+// from whichever windows.h saw UNICODE first, so read the wide text.
+static void s_readDialogText(HWND dialog, int id, char * buf, int cap)
+{
+	HWND child = dialog ? GetDlgItem(dialog, id) : nullptr;
+	UT_Win32GetWindowTextUtf8(child, buf, cap);
 }
 
 float mScale[] = { 25.4f, 10.0f, 1.0f };
@@ -335,8 +344,7 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( s_dialogMeasure(buf) >= 0.0 && s_dialogMeasure(buf) != m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()) )
 			{
 				m_pParent->m_PageSize.Set( (m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? s_dialogMeasure(buf) : m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()),
@@ -355,8 +363,7 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( s_dialogMeasure(buf) >= 0.0 && s_dialogMeasure(buf) != m_pParent->m_PageSize.Height(m_pParent->m_PageSize.getDims()) )
 			{
 				m_pParent->m_PageSize.Set( (m_pParent->getPageOrientation() == m_pParent->PORTRAIT) ? m_pParent->m_PageSize.Width(m_pParent->m_PageSize.getDims()) : s_dialogMeasure(buf), 
@@ -374,8 +381,7 @@ BOOL AP_Win32Dialog_PageSetup_Page::_onCommand(HWND hWnd, WPARAM wParam, LPARAM 
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( (atoi(buf) >= 1) && (atoi(buf) <= 1000) && (atoi(buf) != m_pParent->getPageScale()) )
 			{
 				m_pParent->setPageScale( atoi(buf) );
@@ -617,8 +623,7 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginTop()) > EPSILON ) )
 			{
 				m_pParent->setMarginTop( (float) s_dialogMeasure(buf) );
@@ -633,8 +638,7 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginBottom()) > EPSILON ) )
 			{
 				m_pParent->setMarginBottom( (float) s_dialogMeasure(buf) );
@@ -649,8 +653,7 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginLeft()) > EPSILON ) )
 			{
 				m_pParent->setMarginLeft( (float) s_dialogMeasure(buf) );
@@ -665,8 +668,7 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginRight()) > EPSILON ) )
 			{
 				m_pParent->setMarginRight( (float) s_dialogMeasure(buf) );
@@ -681,8 +683,7 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginHeader()) > EPSILON ) )
 			{
 				m_pParent->setMarginHeader( (float) s_dialogMeasure(buf) );
@@ -697,8 +698,7 @@ BOOL AP_Win32Dialog_PageSetup_Margin::_onCommand(HWND hWnd, WPARAM wParam, LPARA
 		{
 			char buf[BUFSIZE];
 			buf[0] = 0;
-			GetDlgItemText( hWnd, wId, buf, BUFSIZE );
-			buf[BUFSIZE - 1] = 0;
+			s_readDialogText(hWnd, wId, buf, BUFSIZE);
 			if( (s_dialogMeasure(buf) > -EPSILON) && (fabs(s_dialogMeasure(buf) - (double) m_pParent->getMarginFooter()) > EPSILON ) )
 			{
 				m_pParent->setMarginFooter( (float) s_dialogMeasure(buf) );

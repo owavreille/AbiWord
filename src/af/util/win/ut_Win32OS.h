@@ -73,6 +73,14 @@ void UT_Win32ApplyWindowTheme(HWND hwnd);
 // per-monitor; the fonts are scaled when ForDpi is absent.
 // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfofordpi
 bool UT_Win32GetNonClientMetrics(NONCLIENTMETRICSW * metrics, int dpi);
+// GetSystemMetrics follows the system DPI. The per-window call is loaded by
+// name so the Windows 2000 target stays.
+// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getsystemmetricsfordpi
+int UT_Win32GetSystemMetricsForDpi(int index, int dpi);
+// Dialog text is UTF-16. The A entry points convert through the ANSI code
+// page. destChars is the byte capacity, including the NUL.
+// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowtextw
+void UT_Win32GetWindowTextUtf8(HWND hwnd, char * dest, int destChars);
 // Recreate the status font from the current NONCLIENTMETRICS and DPI.
 void UT_Win32RefreshStatusFont(HWND bar);
 #endif /* UT_Win32OS_H */

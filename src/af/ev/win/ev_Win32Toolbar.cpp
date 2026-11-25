@@ -38,6 +38,7 @@
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_vector.h"
+#include "ut_unicode.h"
 #include "ut_Win32OS.h"
 #include "ev_Win32Toolbar.h"
 #include "xap_Win32App.h"
@@ -957,8 +958,12 @@ bool EV_Win32Toolbar::synthesize(void)
 	else
 		SendMessageW(m_hwnd, TB_SETBITMAPSIZE, 0, (LPARAM) MAKELONG(0,0));
 
-	// Room around the 24px glyphs, closer to a Windows 11 command bar.
-	SendMessageW(m_hwnd, TB_SETPADDING, 0, MAKELPARAM(6, 4));
+	// Padding is in pixels. 6 and 4 are the 96 DPI sizes.
+	{
+		const int dpi = toolbarIconDpi(m_hwnd);
+		SendMessageW(m_hwnd, TB_SETPADDING, 0,
+			MAKELPARAM(UT_ui_px_at_dpi(6, dpi), UT_ui_px_at_dpi(4, dpi)));
+	}
 	DWORD exStyle = (DWORD)SendMessageW(m_hwnd, TB_GETEXTENDEDSTYLE, 0, 0);
 	exStyle |= TBSTYLE_EX_DOUBLEBUFFER | TBSTYLE_EX_HIDECLIPPEDBUTTONS;
 	SendMessageW(m_hwnd, TB_SETEXTENDEDSTYLE, 0, exStyle);
@@ -1075,7 +1080,8 @@ bool EV_Win32Toolbar::synthesize(void)
 							: (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 						SendMessageW(hwndCombo, WM_SETFONT, (WPARAM)hComboFont, MAKELPARAM(TRUE, 0));
 						if (id == AP_TOOLBAR_ID_FMT_FONT)
-							SendMessageW(hwndCombo, CB_SETITEMHEIGHT, 0, 22);
+							SendMessageW(hwndCombo, CB_SETITEMHEIGHT, 0,
+								UT_ui_px_at_dpi(22, toolbarIconDpi(m_hwnd)));
 
 						// populate it
 						if (pControl)
@@ -1313,6 +1319,11 @@ void EV_Win32Toolbar::_placeControls(void)
 	const EV_Toolbar_ActionSet * pToolbarActionSet = m_pWin32App->getToolbarActionSet();
 	if (!pToolbarActionSet)
 		return;
+	{
+		const int dpi = toolbarIconDpi(m_hwnd);
+		SendMessageW(m_hwnd, TB_SETPADDING, 0,
+			MAKELPARAM(UT_ui_px_at_dpi(6, dpi), UT_ui_px_at_dpi(4, dpi)));
+	}
 	const UT_uint32 count = m_pToolbarLayout->getLayoutItemCount();
 	for (UT_uint32 k = 0; k < count; ++k)
 	{
@@ -1329,12 +1340,8 @@ void EV_Win32Toolbar::_placeControls(void)
 			continue;
 		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(toolbarIconDpi(m_hwnd)), TRUE);
 		if (id == AP_TOOLBAR_ID_FMT_FONT)
-		{
-			int item = (22 * toolbarIconDpi(m_hwnd) + 48) / 96;
-			if (item < 22)
-				item = 22;
-			SendMessageW(hwndCtrl, CB_SETITEMHEIGHT, 0, item);
-		}
+			SendMessageW(hwndCtrl, CB_SETITEMHEIGHT, 0,
+				UT_ui_px_at_dpi(22, toolbarIconDpi(m_hwnd)));
 		RECT r;
 		memset(&r, 0, sizeof(r));
 		if (!GetWindowRect(hwndCtrl, &r))

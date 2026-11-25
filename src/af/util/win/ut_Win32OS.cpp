@@ -28,6 +28,7 @@
 #include "ut_iconv.h"
 #include "ut_unicode.h"
 #include "ut_Win32OS.h"
+#include "ut_Win32LocaleString.h"
 
 /*!
  Returns Windows's OSVERSIONINFO structure
@@ -539,6 +540,50 @@ static int s_systemDpi(void)
 	if (dc)
 		ReleaseDC(nullptr, dc);
 	return dpi >= 96 ? dpi : 96;
+}
+
+int UT_Win32GetSystemMetricsForDpi(int index, int dpi)
+{
+	typedef int (WINAPI *ForDpiFn)(int, UINT);
+	static ForDpiFn forDpi = nullptr;
+	static bool resolved = false;
+	if (!resolved)
+	{
+		resolved = true;
+		HMODULE user32 = GetModuleHandleW(L"user32.dll");
+		if (!user32)
+			user32 = LoadLibraryW(L"user32.dll");
+		if (user32)
+			forDpi = reinterpret_cast<ForDpiFn>(
+				reinterpret_cast<void *>(GetProcAddress(user32, "GetSystemMetricsForDpi")));
+	}
+	if (dpi < 96)
+		dpi = 96;
+	if (forDpi)
+	{
+		const int got = forDpi(index, static_cast<UINT>(dpi));
+		if (got > 0)
+			return got;
+	}
+	return GetSystemMetrics(index);
+}
+
+void UT_Win32GetWindowTextUtf8(HWND hwnd, char * dest, int destChars)
+{
+	if (!dest || destChars <= 0)
+		return;
+	dest[0] = 0;
+	if (!hwnd)
+		return;
+
+	wchar_t wide[512];
+	wide[0] = 0;
+	if (GetWindowTextW(hwnd, wide, 512) <= 0)
+		return;
+
+	UT_Win32LocaleString str;
+	str.fromLocale(wide);
+	UT_copy_utf8_bounded(dest, destChars, str.utf8_str().utf8_str());
 }
 
 static void s_scaleLogFont(LOGFONTW * font, int fromDpi, int toDpi)
