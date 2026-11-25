@@ -4695,8 +4695,7 @@ void OXMLi_ListenerState_Valid::startElement (OXMLi_StartElementRequest * rqst)
 
 void OXMLi_ListenerState_Valid::endElement (OXMLi_EndElementRequest * rqst)
 {
-	std::map<std::string, int>::iterator it;
-	it = m_keywordMap.find(rqst->pName);
+	auto it = m_keywordMap.find(rqst->pName);
 	if(it == m_keywordMap.end())
 	{
 		rqst->valid = false;
