@@ -155,6 +155,7 @@ class ABI_EXPORT IE_Exp_HTML_OutputWriter
 public:
     virtual ~IE_Exp_HTML_OutputWriter() {}
     virtual void write(const UT_UTF8String &str) = 0;
+    virtual void write(const char *data, size_t len) = 0;
  };
 
 class ABI_EXPORT IE_Exp_HTML_FileWriter : public IE_Exp_HTML_OutputWriter
@@ -162,6 +163,7 @@ class ABI_EXPORT IE_Exp_HTML_FileWriter : public IE_Exp_HTML_OutputWriter
 public:
     IE_Exp_HTML_FileWriter(GsfOutput *output);
     virtual void write(const UT_UTF8String &str) override;
+    virtual void write(const char *data, size_t len) override;
 private:
     GsfOutput *m_output;
 };
@@ -171,6 +173,7 @@ class ABI_EXPORT IE_Exp_HTML_StringWriter: public IE_Exp_HTML_OutputWriter
 public:
     IE_Exp_HTML_StringWriter();
     virtual void write(const UT_UTF8String &str) override;
+    virtual void write(const char *data, size_t len) override;
     UT_UTF8String getString() const { return m_buffer; }
 private:
     UT_UTF8String m_buffer;
@@ -183,6 +186,7 @@ class ABI_EXPORT IE_Exp_HTML_TagWriter
 {
 public:
     IE_Exp_HTML_TagWriter(IE_Exp_HTML_OutputWriter *pOutputWriter);
+    ~IE_Exp_HTML_TagWriter();
     void openTag(const std::string &tagName, bool isInline = false, bool isSingle = false);
     void addAttribute(const std::string &name, const std::string &value);
     void writeData(const std::string &data);

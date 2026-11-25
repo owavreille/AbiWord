@@ -224,7 +224,6 @@ void UT_StringImpl<char_type>::operator=(const UT_StringImpl<char_type>& rhs)
 {
 	if (this != &rhs)
 	{
-		clear();
 		assign(rhs.m_psz, rhs.size());
 	}
 }

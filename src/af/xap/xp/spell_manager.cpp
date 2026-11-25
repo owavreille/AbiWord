@@ -115,12 +115,20 @@ SpellChecker::SpellCheckResult SpellChecker::checkWord(const UT_UCS4Char* word, 
 	// NB iWordCount is really 'word count' - 1 after the loop above, hence the <=
 	for(i = 0; i <= iWordCount; ++i)
 	{
+		if (iWordLengths[i] == 0)
+		{
+			ret = SpellChecker::LOOKUP_FAILED;
+			break;
+		}
 		ret = _checkWord(pWords[i], iWordLengths[i]);
 		if(ret == SpellChecker::LOOKUP_FAILED)
 			break;
 	}
 
 	if(ret == SpellChecker::LOOKUP_SUCCEEDED)
+		return ret;
+
+	if (iWordCount == 0)
 		return ret;
 
 	// try the whole hyphenated phrase ...
@@ -186,7 +194,7 @@ void SpellChecker::correctWord (const UT_UCS4Char * /*toCorrect*/, size_t /*toCo
 /* private */ SpellManager::SpellManager ()
   : m_map (NBUCKETS), m_lastDict(nullptr), m_nLoadedDicts(0)
 {
-	m_missingHashs += "-none-";
+	m_missingHashs.insert("-none-");
 }
 
 /*!
@@ -224,10 +232,13 @@ SpellManager::instance ()
 SpellChecker *
 SpellManager::requestDictionary (const char * szLang)
 {
+	if (!szLang || !*szLang)
+		return nullptr;
+
 	SpellCheckerClass * checker = nullptr;
 
 	// Don't try to load hashes we know are missing
-	if (strstr(m_missingHashs.c_str(), szLang))
+	if (m_missingHashs.count(szLang))
 		return nullptr;
 
 	// first look up the entry in the hashtable
@@ -251,7 +262,7 @@ SpellManager::requestDictionary (const char * szLang)
 	else
     {
 		checker->setDictionaryFound(false);
-		m_missingHashs += szLang;
+		m_missingHashs.insert(szLang);
 		delete checker;
 		checker = nullptr;
     }

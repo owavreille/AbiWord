@@ -117,7 +117,7 @@ bool pt_PieceTable::changeSpanFmt(PTChangeFmt ptc,
 				name, Revisions.getXMLstring()
 			};
 
-			PT_DocPosition dposEnd = UT_MIN(dpos2,dpos1 + pf1->getLength());
+			PT_DocPosition dposEnd = UT_MIN(dpos2, dpos1 + (pf1->getLength() - Offset1));
 
 			if(!_realChangeSpanFmt(PTC_AddFmt, dpos1, dposEnd, ppRevAttrib, PP_NOPROPS, false))
 				return false;
@@ -507,8 +507,20 @@ bool pt_PieceTable::_realChangeSpanFmt(PTChangeFmt ptc,
 	// NOTE: the undo/redo won't be properly bracketed.
 
 	bool bSimple = (pf_First == pf_End);
-	if (!bSimple)
-		beginMultiStepGlob();
+	struct MultiStepGlobGuard
+	{
+		pt_PieceTable * m_pPT;
+		explicit MultiStepGlobGuard(pt_PieceTable * pPT) : m_pPT(pPT)
+		{
+			if (m_pPT)
+				m_pPT->beginMultiStepGlob();
+		}
+		~MultiStepGlobGuard()
+		{
+			if (m_pPT)
+				m_pPT->endMultiStepGlob();
+		}
+	} globGuard(bSimple ? nullptr : this);
     // UT_DEBUGMSG(("ODTCT: realChangeSpanFmt() bSimple:%d\n", bSimple ));
 
 	pf_Frag_Strux * pfsContainer = nullptr;
@@ -549,6 +561,8 @@ bool pt_PieceTable::_realChangeSpanFmt(PTChangeFmt ptc,
 					while(pfNewEnd && !isEndFootnote(pfNewEnd))
 					{
 						pfNewEnd = pfNewEnd->getNext();
+						if (!pfNewEnd)
+							break;
 						extraLength += pfNewEnd->getLength();
 					}
 					if(lengthThisStep + extraLength <= length)
@@ -560,7 +574,8 @@ bool pt_PieceTable::_realChangeSpanFmt(PTChangeFmt ptc,
 						UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
 						lengthThisStep = length;
 					}
-					pfNewEnd = pfNewEnd->getNext();
+					if (pfNewEnd)
+						pfNewEnd = pfNewEnd->getNext();
 					fragOffsetNewEnd = 0;
 				}
 				else
@@ -665,9 +680,6 @@ bool pt_PieceTable::_realChangeSpanFmt(PTChangeFmt ptc,
 			length = 0;
 		fragOffset_First = fragOffsetNewEnd;
 	}
-
-	if (!bSimple)
-		endMultiStepGlob();
 
 	return true;
 }

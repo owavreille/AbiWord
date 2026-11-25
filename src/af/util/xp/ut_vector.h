@@ -95,9 +95,9 @@ public:
 	{
 	    UT_ASSERT_HARMLESS(m_pEntries);
 	    UT_ASSERT_HARMLESS(m_iCount > 0);
-	    UT_ASSERT_HARMLESS(n<m_iCount);
+	    UT_ASSERT_HARMLESS(n >= 0 && n < m_iCount);
 
-	    if(n >= m_iCount || !m_pEntries) {
+	    if(n < 0 || n >= m_iCount || !m_pEntries) {
 			return UT_null<T>::value;
 		}
 	    return m_pEntries[n];
@@ -151,6 +151,7 @@ public:
 
 #include <stdlib.h>
 #include <string.h>
+#include <cstdint>
 
 /*!
     sizehint: expected size of the vector
@@ -223,16 +224,24 @@ UT_GenericVector<T>::~UT_GenericVector()
 template <class T>
 UT_sint32 UT_GenericVector<T>::grow(UT_sint32 ndx)
 {
+	if (ndx < 0)
+		return -1;
+
 	UT_sint32 new_iSpace;
 	if(!m_iSpace) {
-		new_iSpace = m_iPostCutoffIncrement;
+		new_iSpace = (m_iPostCutoffIncrement > 0) ? m_iPostCutoffIncrement : 4;
 	}
 	else if (m_iSpace < m_iCutoffDouble) {
 		xxx_UT_DEBUGMSG(("Vector growing (%d -> %d\n", m_iSpace, ndx));
-		new_iSpace = m_iSpace * 2;
+		new_iSpace = (m_iSpace > INT32_MAX / 2) ? INT32_MAX : (m_iSpace * 2);
 	}
 	else {
-		new_iSpace = m_iSpace + m_iPostCutoffIncrement;
+		UT_sint32 incr = m_iSpace / 2;
+		if (incr < m_iPostCutoffIncrement)
+			incr = m_iPostCutoffIncrement;
+		if (incr < 1)
+			incr = 1;
+		new_iSpace = (m_iSpace > INT32_MAX - incr) ? INT32_MAX : (m_iSpace + incr);
 	}
 
 	if (new_iSpace < ndx)
@@ -240,14 +249,19 @@ UT_sint32 UT_GenericVector<T>::grow(UT_sint32 ndx)
 		new_iSpace = ndx;
 	}
 
-	T * new_pEntries = static_cast<T *>(g_try_realloc(m_pEntries, new_iSpace * sizeof(T)));
+	if (new_iSpace <= m_iSpace || static_cast<size_t>(new_iSpace) > SIZE_MAX / sizeof(T))
+	{
+		return -1;
+	}
+
+	T * new_pEntries = static_cast<T *>(g_try_realloc(m_pEntries, static_cast<size_t>(new_iSpace) * sizeof(T)));
 	if (!new_pEntries) {
 		return -1;
 	}
 	//Is this required? We always check Count first anyways.
 	// TMN: Unfortunately it is, since the class GR_CharWidths
 	// uses UT_GenericVector<T> as a sparse array!
-	memset(&new_pEntries[m_iSpace], 0, (new_iSpace - m_iSpace) * sizeof(T));
+	memset(&new_pEntries[m_iSpace], 0, static_cast<size_t>(new_iSpace - m_iSpace) * sizeof(T));
 	m_iSpace = new_iSpace;
 	m_pEntries = new_pEntries;
 
@@ -257,7 +271,7 @@ UT_sint32 UT_GenericVector<T>::grow(UT_sint32 ndx)
 template <class T>
 UT_sint32 UT_GenericVector<T>::insertItemAt(const T p, UT_sint32 ndx)
 {
-	if (ndx > m_iCount + 1)
+	if (ndx < 0 || ndx > m_iCount)
 		return -1;
 
 	if ((m_iCount+1) > m_iSpace)
@@ -270,7 +284,8 @@ UT_sint32 UT_GenericVector<T>::insertItemAt(const T p, UT_sint32 ndx)
 	}
 
 	// bump the elements -> thataway up to the ndxth position
-	memmove(&m_pEntries[ndx+1], &m_pEntries[ndx], (m_iCount - ndx) * sizeof(T));
+	if (m_iCount > ndx)
+		memmove(&m_pEntries[ndx+1], &m_pEntries[ndx], static_cast<size_t>(m_iCount - ndx) * sizeof(T));
 
 	m_pEntries[ndx] = (T)p;
 	++m_iCount;
@@ -377,10 +392,13 @@ const T UT_GenericVector<T>::getFirstItem() const
 template <class T>
 void UT_GenericVector<T>::deleteNthItem(UT_sint32 n)
 {
-	UT_ASSERT_HARMLESS(n < m_iCount);
+	UT_ASSERT_HARMLESS(n >= 0 && n < m_iCount);
 	UT_ASSERT_HARMLESS(m_iCount > 0);
+	if (n < 0 || n >= m_iCount || !m_pEntries)
+		return;
 
-	memmove(&m_pEntries[n], &m_pEntries[n+1], (m_iCount - (n + 1)) * sizeof(T));
+	if (n + 1 < m_iCount)
+		memmove(&m_pEntries[n], &m_pEntries[n+1], static_cast<size_t>(m_iCount - (n + 1)) * sizeof(T));
 
 	m_pEntries[m_iCount-1] = UT_null<T>::value;
 	m_iCount--;
@@ -448,20 +466,24 @@ UT_sint32 UT_GenericVector<T>::binarysearchForSlot(const void* key, compar_fn_t 
 template <class T>
 bool UT_GenericVector<T>::copy(const UT_GenericVector<T> *pVec)
 {
-	clear();
-
-	if (!pVec) {
+	if (pVec == this) {
 		return false;
 	}
 
-	for (UT_sint32 i=0; i < pVec->m_iCount; i++)
-	{
-		UT_sint32 err;
+	clear();
 
-		err = addItem(pVec->m_pEntries[i]);
-		if(err == -1)
-			return (err ? true : false);
+	if (!pVec || pVec->m_iCount <= 0) {
+		return false;
 	}
+
+	if (pVec->m_iCount > m_iSpace)
+	{
+		if (grow(pVec->m_iCount) != 0)
+			return true;
+	}
+
+	memcpy(m_pEntries, pVec->m_pEntries, static_cast<size_t>(pVec->m_iCount) * sizeof(T));
+	m_iCount = pVec->m_iCount;
 
 	return false;
 }

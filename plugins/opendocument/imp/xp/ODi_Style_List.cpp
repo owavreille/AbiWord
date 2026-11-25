@@ -62,7 +62,7 @@ void ODi_Style_List::startElement (const gchar* pName, const gchar** ppAtts,
     }
     if (!strcmp("text:list-style", pName)) {
         pVal = UT_getAttribute ("style:name", ppAtts);
-        UT_ASSERT(pVal);
+        UT_return_if_fail(pVal && *pVal);
         m_name = pVal;
 	m_bListStyle = true;
 	//

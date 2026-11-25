@@ -975,7 +975,7 @@ bool pt_PieceTable::deleteSpan(PT_DocPosition dpos1,
 			else if(eType == pf_Frag:: PFT_FmtMark)
 			{
 				iLen = 0;
-				if(!getAttrProp(static_cast<pf_Frag_Object*>(pf1)->getIndexAP(),&pAP2))
+				if(!getAttrProp(pf1->getIndexAP(),&pAP2))
 					return false;
 				// something that does not carry AP
 			}
@@ -1014,7 +1014,7 @@ bool pt_PieceTable::deleteSpan(PT_DocPosition dpos1,
 			const PP_Revision * pS;
 			const PP_Revision * pRev = Revisions.getGreatestLesserOrEqualRevision(iId, &pS);
 
-			PT_DocPosition dposEnd = UT_MIN(dpos2,dpos1 + pf1->getLength());
+			PT_DocPosition dposEnd = UT_MIN(dpos2, dpos1 + (pf1->getLength() - Offset1));
 
 #ifdef BUILD_ODT_GCT
 #if DEBUG

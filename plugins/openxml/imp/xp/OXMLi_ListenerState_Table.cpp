@@ -439,6 +439,7 @@ void OXMLi_ListenerState_Table::endElement (OXMLi_EndElementRequest * rqst)
 				//this means there is no cell before this starting a vertical merge
 				//revert back to vertical merge start instead of continue
 				pCell->setVerticalMergeStart(true);
+				row->appendElement(cell);
 				UT_DEBUGMSG(("FRT:OpenXML importer, invalid <vMerge val=continue> attribute.\n"));
 			}
 		}
@@ -450,6 +451,7 @@ void OXMLi_ListenerState_Table::endElement (OXMLi_EndElementRequest * rqst)
 				//this means there is no cell before this starting a horizontal merge
 				//revert back to horizontal merge start instead of continue
 				pCell->setHorizontalMergeStart(true);
+				row->appendElement(cell);
 				UT_DEBUGMSG(("FRT:OpenXML importer, invalid <hMerge val=continue> attribute.\n"));
 			}
 		}

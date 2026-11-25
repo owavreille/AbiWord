@@ -20,6 +20,8 @@
 #pragma once
 
 #include <memory>
+#include <string>
+#include <unordered_set>
 #include <vector>
 
 #include "ut_types.h"
@@ -127,7 +129,7 @@ private:
 
 
 	UT_StringPtrMap m_map;
-	std::string m_missingHashs;
+	std::unordered_set<std::string> m_missingHashs;
 	SpellChecker * m_lastDict;
 	UT_uint32 m_nLoadedDicts;
 };

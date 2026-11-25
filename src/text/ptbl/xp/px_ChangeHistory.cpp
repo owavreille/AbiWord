@@ -71,20 +71,38 @@ void px_ChangeHistory::_invalidateRedo(void)
 	UT_sint32 kLimit = m_vecChangeRecords.getItemCount();
 	UT_return_if_fail (m_undoPosition <= kLimit);
 
-	UT_sint32 i = m_undoPosition - m_iAdjustOffset;
-	for (UT_sint32 k = m_undoPosition - m_iAdjustOffset; k < kLimit; k++)
+	UT_sint32 start = m_undoPosition - m_iAdjustOffset;
+	if (start < 0)
+		start = 0;
+
+	UT_sint32 readIdx = start;
+	UT_sint32 writeIdx = start;
+	for (; readIdx < kLimit; ++readIdx)
 	{
-		PX_ChangeRecord * pcrTemp = m_vecChangeRecords.getNthItem(i);
+		PX_ChangeRecord * pcrTemp = m_vecChangeRecords.getNthItem(readIdx);
 		if (!pcrTemp)
 			break;
 		if (pcrTemp->isFromThisDoc())
 		{
-		    delete pcrTemp;
-		    m_vecChangeRecords.deleteNthItem(i);
+			delete pcrTemp;
 		}
 		else
-		    i++;
+		{
+			if (writeIdx != readIdx)
+				m_vecChangeRecords.setNthItem(writeIdx, pcrTemp, nullptr);
+			++writeIdx;
+		}
 	}
+	for (; readIdx < kLimit; ++readIdx)
+	{
+		PX_ChangeRecord * pcrTemp = m_vecChangeRecords.getNthItem(readIdx);
+		if (writeIdx != readIdx)
+			m_vecChangeRecords.setNthItem(writeIdx, pcrTemp, nullptr);
+		++writeIdx;
+	}
+	while (m_vecChangeRecords.getItemCount() > writeIdx)
+		m_vecChangeRecords.pop_back();
+
 	m_undoPosition = m_vecChangeRecords.getItemCount();
 	if (m_savePosition > m_undoPosition)
 		m_savePosition = -1;

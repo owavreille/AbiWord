@@ -289,11 +289,13 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
         }
         
         
-        // TODO: A faster (wiser) implementation can be done, I think. (Daniel d'Andrada)
-        string.clear();
-        for (i=0; i<spaceCount; i++) {
-            string += " ";
+        constexpr UT_uint32 kMaxSpaceCount = 65536;
+        if (spaceCount > kMaxSpaceCount) {
+            spaceCount = kMaxSpaceCount;
         }
+
+        std::string spaces(spaceCount, ' ');
+        string = spaces.c_str();
         
         // Write the text that has not been written yet.
         // Otherwise the spaces will appear in the wrong position.

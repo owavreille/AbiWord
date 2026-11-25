@@ -333,11 +333,12 @@ UT_uint32 PD_DocIterator::find(UT_TextIterator & text, UT_uint32 iLen, bool bFor
 		}
 
 		if(i == iLen) // that was the last char, return ...
-			return getPosition() - iLen + 1;
+			return bForward ? (getPosition() - iLen + 1) : getPosition();
 
-		// too bad, start over again
+		// too bad, start over again from the character after the match start
 		UT_return_val_if_fail ( i < iLen,0 );
-		(*this) += iInc;
+		if (i > 1)
+			(*this) += -static_cast<UT_sint32>(i - 1) * iInc;
 		text.setPosition(iOrigPos);
 	}
 
@@ -387,11 +388,12 @@ UT_uint32 PD_DocIterator::find(UT_UCS4Char * what, UT_uint32 iLen, bool bForward
 		}
 
 		if(i == iLen) // that was the last char, return ...
-			return getPosition() - iLen + 1;
+			return bForward ? (getPosition() - iLen + 1) : getPosition();
 
-		// too bad, start over again
+		// too bad, start over again from the character after the match start
 		UT_return_val_if_fail ( i < iLen, 0 );
-		(*this) += iInc;
+		if (i > 1)
+			(*this) += -static_cast<UT_sint32>(i - 1) * iInc;
 	}
 
 	UT_return_val_if_fail (getStatus() != UTIter_OK, 0 );
@@ -483,6 +485,8 @@ bool PD_StruxIterator::_findFrag()
 		if(m_offset < m_frag_offset)
 		{
 			m_frag = m_frag->getPrev();
+			if (!m_frag)
+				break;
 			m_frag_offset -= m_frag->getLength();
 		}
 		else if(m_offset >= m_frag_offset + m_frag->getLength())

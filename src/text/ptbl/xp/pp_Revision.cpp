@@ -74,7 +74,7 @@ PP_Revision::PP_Revision(UT_uint32 Id, PP_RevisionType eType, const gchar * prop
 			}
 		}
 
-		FREEP(pProps);
+		g_free(pProps);
 	}
 
 	if(attrs)
@@ -114,7 +114,7 @@ PP_Revision::PP_Revision(UT_uint32 Id, PP_RevisionType eType, const gchar * prop
 			}
 		}
 
-		FREEP(pAttrs);
+		g_free(pAttrs);
 	}
 }
 
@@ -338,9 +338,8 @@ bool PP_Revision::operator == (const PP_Revision &op2) const
 
 	for(i = 0; i < iPCount1; i++)
 	{
-
-		getNthProperty(i,n,v1);
-		op2.getProperty(n,v2);
+		if(!getNthProperty(i,n,v1) || !op2.getProperty(n,v2))
+			return false;
 
 		if(strcmp(v1,v2))
 			return false;
@@ -348,9 +347,8 @@ bool PP_Revision::operator == (const PP_Revision &op2) const
 
 	for(i = 0; i < iACount1; i++)
 	{
-
-		getNthAttribute(i,n,v1);
-		op2.getAttribute(n,v2);
+		if(!getNthAttribute(i,n,v1) || !op2.getAttribute(n,v2))
+			return false;
 
 		if(strcmp(v1,v2))
 			return false;
@@ -382,6 +380,9 @@ PP_RevisionAttr::PP_RevisionAttr(const gchar * r):
 PP_RevisionAttr::PP_RevisionAttr(UT_uint32 iId, PP_RevisionType eType,
                                  const PP_PropertyVector & attrs,
                                  const PP_PropertyVector & props)
+	: m_bDirty(false)
+	, m_iSuperfluous(0)
+	, m_pLastRevision(nullptr)
 {
 	m_vRev.push_back(new PP_Revision((UT_uint32)iId, eType, props, attrs));
 }
@@ -535,7 +536,7 @@ void PP_RevisionAttr::_init(const gchar *r)
 			t = nullptr;
 	}
 
-	FREEP(s);
+	g_free(s);
 	m_bDirty = true;
 	m_iSuperfluous = 0;
 	m_pLastRevision = nullptr;
@@ -591,9 +592,11 @@ void PP_RevisionAttr::pruneForCumulativeResult(PD_Document * pDoc)
 	}
 
     m_bDirty = true;
+    m_pLastRevision = nullptr;
 
-	for (size_t i = m_vRev.size() - 1; i != 0; --i) {
-		const PP_Revision* r = m_vRev.at(i);
+	for (size_t i = m_vRev.size(); i > 0; --i) {
+		size_t idx = i - 1;
+		PP_Revision* r = m_vRev.at(idx);
 		UT_nonnull_or_continue(r);
 		if (!bDelete && r->getType() == PP_REVISION_DELETION) {
 			bDelete = true;
@@ -601,7 +604,8 @@ void PP_RevisionAttr::pruneForCumulativeResult(PD_Document * pDoc)
 		}
 
 		if (bDelete) {
-			m_vRev.erase(m_vRev.begin() + i);
+			delete r;
+			m_vRev.erase(m_vRev.begin() + idx);
 		}
 	}
 
@@ -613,14 +617,14 @@ void PP_RevisionAttr::pruneForCumulativeResult(PD_Document * pDoc)
 	PP_Revision* r0 = m_vRev.at(0);
 	UT_nonnull_or_return(r0, );
 
-	for (size_t i = 1; i < m_vRev.size(); ++i) {
-		const PP_Revision* r = m_vRev.at(i);
+	for (size_t i = 1; i < m_vRev.size(); ) {
+		PP_Revision* r = m_vRev.at(i);
 		UT_nonnull_or_return(r, );
 		r0->setProperties(r->getProperties());
 		r0->setAttributes(r->getAttributes());
 
+		delete r;
 		m_vRev.erase(m_vRev.begin() + i);
-		--i;
 	}
 
     // explode the style if present
@@ -860,7 +864,7 @@ bool PP_RevisionAttr::isVisible(UT_uint32 id) const
 
 		// deletions and fmt changes can be ignored; insertions need
 		// to be hidden
-		return ((eType != PP_REVISION_ADDITION) && (eType == PP_REVISION_ADDITION_AND_FMT));
+		return ((eType != PP_REVISION_ADDITION) && (eType != PP_REVISION_ADDITION_AND_FMT));
 	}
 
 	// the revision with the lowest id is a change of format, this
@@ -1445,15 +1449,24 @@ bool PP_RevisionAttr::isFragmentSuperfluous() const
 
 bool PP_RevisionAttr::operator== (const PP_RevisionAttr &op2) const
 {
+	if (m_vRev.size() != op2.m_vRev.size())
+		return false;
+
 	for (size_t i = 0; i < m_vRev.size(); i++) {
 		const PP_Revision * r1 = m_vRev.at(i);
+		if (!r1)
+			return false;
 
+		bool bMatched = false;
 		for (size_t j = 0; j < op2.m_vRev.size(); j++) {
 			const PP_Revision * r2 = op2.m_vRev.at(j);
-
-			if(!(*r1 == *r2))
-				return false;
+			if (r2 && (*r1 == *r2)) {
+				bMatched = true;
+				break;
+			}
 		}
+		if (!bMatched)
+			return false;
 	}
 	return true;
 }
@@ -1488,6 +1501,8 @@ bool PP_RevisionAttr::hasProperty(UT_uint32 iId, const gchar * pName, const gcha
 bool PP_RevisionAttr::hasProperty(const gchar * pName, const gchar * &pValue) const
 {
 	const PP_Revision * r = getLastRevision();
+	if (!r)
+		return false;
 	return r->getProperty(pName, pValue);
 }
 
@@ -1512,6 +1527,8 @@ PP_RevisionType PP_RevisionAttr::getType(UT_uint32 iId) const
 PP_RevisionType PP_RevisionAttr::getType() const
 {
 	const PP_Revision * r = getLastRevision();
+	if (!r)
+		return PP_REVISION_FMT_CHANGE;
 	return r->getType();
 }
 

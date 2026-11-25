@@ -24,6 +24,7 @@
 #include <ctype.h>
 #include <stdio.h>
 #include <algorithm>
+#include <cstdint>
 
 #include <libxml/uri.h>
 #include <libxml/xmlmemory.h>
@@ -382,25 +383,32 @@ void UT_UTF8Stringbuf::appendUCS2 (const UT_UCS2Char * sz, size_t n /* == 0 => n
 void UT_UTF8Stringbuf::escape (const UT_UTF8String & utf8_str1,
 							   const UT_UTF8String & utf8_str2)
 {
-	size_t diff = 0;
 	size_t len1 = utf8_str1.byteLength ();
 	size_t len2 = utf8_str2.byteLength ();
 
+	if (len1 == 0 || !m_psz)
+		return;
+
+	const size_t oldLen = static_cast<size_t>(m_pEnd - m_psz);
+	if (oldLen < len1)
+		return;
+
 	const char * str1 = utf8_str1.utf8_str ();
 	const char * str2 = utf8_str2.utf8_str ();
+	const size_t ulen1 = utf8_str1.length ();
+	const size_t ulen2 = utf8_str2.length ();
 
 	if (len2 > len1)
 	{
-		diff = len2 - len1;
+		const size_t diff = len2 - len1;
+		size_t matches = 0;
 
-		size_t incr = 0;
-
-		char * ptr = m_psz;
-		while (ptr + len1 <= m_pEnd)
+		const char * ptr = m_psz;
+		while (static_cast<size_t>(m_pEnd - ptr) >= len1)
 		{
 			if (memcmp (ptr, str1, len1) == 0)
 			{
-				incr += diff;
+				++matches;
 				ptr += len1;
 			}
 			else
@@ -408,39 +416,68 @@ void UT_UTF8Stringbuf::escape (const UT_UTF8String & utf8_str1,
 				++ptr;
 			}
 		}
-		if (!grow (incr)) return;
+
+		if (matches == 0)
+			return;
+		if (matches > SIZE_MAX / diff)
+			return;
+
+		const size_t incr = matches * diff;
+		if (!grow (incr))
+			return;
+
+		// Shift original content to the end of the grown region so we can
+		// perform a single O(N) forward pass without overwriting unread bytes.
+		memmove (m_psz + incr, m_psz, oldLen);
+		const char * src = m_psz + incr;
+		const char * srcEnd = src + oldLen;
+		char * dst = m_psz;
+
+		while (src < srcEnd)
+		{
+			if (static_cast<size_t>(srcEnd - src) >= len1 && memcmp (src, str1, len1) == 0)
+			{
+				memcpy (dst, str2, len2);
+				dst += len2;
+				src += len1;
+			}
+			else
+			{
+				*dst++ = *src++;
+			}
+		}
+
+		*dst = 0;
+		m_pEnd = dst;
+		m_strlen = m_strlen + matches * ulen2 - matches * ulen1;
 	}
 	else
 	{
-		diff = len1 - len2;
-	}
+		char * src = m_psz;
+		char * dst = m_psz;
+		size_t matches = 0;
 
-	char * ptr = m_psz;
-	while (ptr + len1 <= m_pEnd)
-	{
-		if (memcmp (ptr, str1, len1) == 0)
+		while (src < m_pEnd)
 		{
-			if (diff)
+			if (static_cast<size_t>(m_pEnd - src) >= len1 && memcmp (src, str1, len1) == 0)
 			{
-				if (len2 > len1)
+				if (len2 > 0)
 				{
-					memmove (ptr + diff, ptr, m_pEnd - ptr + 1);
-					m_pEnd += diff;
+					memcpy (dst, str2, len2);
+					dst += len2;
 				}
-				else
-				{
-					memmove (ptr, ptr + diff, m_pEnd - (ptr + diff) + 1);
-					m_pEnd -= diff;
-				}
+				src += len1;
+				++matches;
 			}
-			memcpy (ptr, str2, len2);
-			ptr += len2;
-			m_strlen += utf8_str2.length () - utf8_str1.length ();
+			else
+			{
+				*dst++ = *src++;
+			}
 		}
-		else
-		{
-			++ptr;
-		}
+
+		*dst = 0;
+		m_pEnd = dst;
+		m_strlen = m_strlen + matches * ulen2 - matches * ulen1;
 	}
 }
 
@@ -502,12 +539,16 @@ void UT_UTF8Stringbuf::decodeXML ()
 
 	*p_dst = 0;
 	m_pEnd -= shrink;
+	m_strlen -= shrink;
 }
 
 /* escapes '<', '>', '\"' and '&' in the current string
  */
 void UT_UTF8Stringbuf::escapeXML ()
 {
+	if (!m_psz || m_pEnd == m_psz)
+		return;
+
 	size_t incr = 0;
 
 	char * ptr = m_psz;
@@ -518,49 +559,55 @@ void UT_UTF8Stringbuf::escapeXML ()
 			else if (*ptr == '"') incr += 5;
 			ptr++;
 		}
-	bool bInsert = grow (incr);
+	if (incr == 0)
+		return;
 
-	ptr = m_psz;
-	while (ptr < m_pEnd)
+	bool bInsert = grow (incr);
+	if (!bInsert)
 		{
-			if (*ptr == '<')
+			ptr = m_psz;
+			while (ptr < m_pEnd)
 				{
-					if (bInsert)
-						{
-							*ptr++ = '&';
-							insert (ptr, "lt;", 3);
-						}
-					else *ptr++ = '?';
+					if (*ptr == '<' || *ptr == '>' || *ptr == '&' || *ptr == '"')
+						*ptr = '?';
+					ptr++;
 				}
-			else if (*ptr == '>')
-				{
-					if (bInsert)
-						{
-							*ptr++ = '&';
-							insert (ptr, "gt;", 3);
-						}
-					else *ptr++ = '?';
-				}
-			else if (*ptr == '&')
-				{
-					if (bInsert)
-						{
-							*ptr++ = '&';
-							insert (ptr, "amp;", 4);
-						}
-					else *ptr++ = '?';
-				}
-			else if (*ptr == '"')
-				{
-					if (bInsert)
-						{
-							*ptr++ = '&';
-							insert (ptr, "quot;", 5);
-						}
-					else *ptr++ = '?';
-				}
-			else ptr++;
+			return;
 		}
+
+	const char * src = m_pEnd;
+	char * dst = m_pEnd + incr;
+	*dst = 0;
+
+	while (src > m_psz)
+		{
+			char c = *--src;
+			switch (c)
+				{
+				case '<':
+					dst -= 4;
+					memcpy (dst, "&lt;", 4);
+					break;
+				case '>':
+					dst -= 4;
+					memcpy (dst, "&gt;", 4);
+					break;
+				case '&':
+					dst -= 5;
+					memcpy (dst, "&amp;", 5);
+					break;
+				case '"':
+					dst -= 6;
+					memcpy (dst, "&quot;", 6);
+					break;
+				default:
+					*--dst = c;
+					break;
+				}
+		}
+
+	m_pEnd += incr;
+	m_strlen += incr;
 }
 
 /*
@@ -601,9 +648,11 @@ void UT_UTF8Stringbuf::decodeURL()
 	if(!m_psz || !*m_psz)
 		return;
 
-	char * buff = (char*)g_try_malloc(byteLength() + 1);
+	const size_t totalLen = byteLength();
+	char * buff = (char*)g_try_malloc(totalLen + 1);
 	UT_return_if_fail( buff );
-	buff[0] = 0;
+	char * dst = buff;
+	*dst = 0;
 
 	UTF8Iterator J(this);
 	const char * ptr = J.current();
@@ -658,14 +707,12 @@ void UT_UTF8Stringbuf::decodeURL()
 					// which was encoded directly according to the RFC 1738 scheme, we
 					// just append it
 					
-					size_t iLenBuff = strlen(buff);
-					size_t iLenLeft = byteLength() - iLenBuff;
-					
-					char * p = buff + iLenBuff;
-					UT_Unicode::UCS4_to_UTF8(p, iLenLeft, code);
+					size_t iLenLeft = totalLen - static_cast<size_t>(dst - buff);
+					UT_Unicode::UCS4_to_UTF8(dst, iLenLeft, code);
  
 					// we need to null-terminate
-					*p = 0;
+					*dst = 0;
+					iCachePos = 0;
 				}
 				
 				if(iCacheNeeded && iCacheNeeded <= iCachePos)
@@ -673,9 +720,9 @@ void UT_UTF8Stringbuf::decodeURL()
 					UT_ASSERT_HARMLESS( iCacheNeeded == iCachePos );
 					
 					// append the cache to our buffer
-					UT_uint32 iLenBuff = strlen(buff);
-					char * p = buff + iLenBuff;
-					strcat(p, utf8cache);
+					memcpy(dst, utf8cache, iCachePos);
+					dst += iCachePos;
+					*dst = 0;
 
 					iCacheNeeded = iCachePos = 0;
 				}
@@ -699,8 +746,10 @@ void UT_UTF8Stringbuf::decodeURL()
 			else
 			{
 				const char * p = J.current();
-				UT_uint32 iLen = p ? p - ptr : strlen(ptr);
-				strncat(buff, ptr, iLen);
+				size_t iLen = p ? static_cast<size_t>(p - ptr) : strlen(ptr);
+				memcpy(dst, ptr, iLen);
+				dst += iLen;
+				*dst = 0;
 			}
 		}
 
@@ -837,23 +886,34 @@ void UT_UTF8Stringbuf::reserve(size_t n)
 
 bool UT_UTF8Stringbuf::grow (size_t length)
 {
-	if (length + 1 <= (m_buflen - (m_pEnd - m_psz))) return true;
+	const size_t end_offset = static_cast<size_t>(m_pEnd - m_psz);
+	if (length > SIZE_MAX - 1 || end_offset > SIZE_MAX - (length + 1))
+		return false;
+
+	const size_t required = end_offset + length + 1;
+	if (required <= m_buflen)
+		return true;
 
 	if (m_psz == nullptr)
 	{
-		if (length == 0) return true;
-		m_psz = static_cast<char *>(g_try_malloc(length));
+		if (length == 0)
+			return true;
+		m_psz = static_cast<char *>(g_try_malloc(required));
 		if (m_psz == nullptr)
 			return false;
 		m_strlen = 0;
-		m_buflen = length;
+		m_buflen = required;
 		m_pEnd = m_psz;
 		*m_pEnd = 0;
 		return true;
 	}
 
-	size_t new_length = length + (m_pEnd - m_psz) + 1;
-	size_t end_offset = m_pEnd - m_psz;
+	size_t new_length = required;
+	const size_t half = m_buflen / 2;
+	if (m_buflen <= SIZE_MAX - half)
+	{
+		new_length = std::max(required, m_buflen + half);
+	}
 
 	char * more = static_cast<char *>(g_try_realloc(static_cast<void *>(m_psz), new_length));
 	if (more == nullptr)

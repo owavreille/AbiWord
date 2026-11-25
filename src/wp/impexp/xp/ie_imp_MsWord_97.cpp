@@ -23,6 +23,8 @@
  */
 
 #include <algorithm>
+#include <memory>
+#include <vector>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -2990,10 +2992,14 @@ int IE_Imp_MsWord_97::_beginPara (wvParseStruct *ps, UT_uint32 /*tag*/,
 		// the list separated by a higher level list entry will have different id's
 
 
-		for(j = apap->ilvl + 1; j < 9; j++)
+		UT_uint32 ilvl = apap->ilvl;
+		if (ilvl >= 9)
+			ilvl = 8;
+
+		for(j = ilvl + 1; j < 9; j++)
 			m_iListIdIncrement[j]++;
 
-		myListId += m_iListIdIncrement[apap->ilvl];
+		myListId += m_iListIdIncrement[ilvl];
 
 		// see if this id is already in our map
 		UT_sint32 k;
@@ -4275,35 +4281,41 @@ UT_Error IE_Imp_MsWord_97::_handleImage (Blip * b, long width, long height, long
 		return UT_ERROR;
 	}
 
+	if (!pwv)
+		return UT_ERROR;
+
 	size_t size = wvStream_size (pwv);
-	char *data = new char[size];
+	std::unique_ptr<char[]> data(new char[size]);
 	wvStream_rewind(pwv);
-	wvStream_read(data,size,sizeof(char),pwv);
+	wvStream_read(data.get(), size, sizeof(char), pwv);
 
 	UT_ByteBufPtr pictData(new UT_ByteBuf);
 	if (decompress)
 	{
-
+		constexpr unsigned long kMaxUncomprLen = 64u * 1024u * 1024u;
 		unsigned long uncomprLen, comprLen;
 		comprLen = size;
 		uncomprLen = b->blip.metafile.m_cb;
-		Bytef *uncompr = new Bytef[uncomprLen];
-		int err = uncompress (uncompr, &uncomprLen, reinterpret_cast<const unsigned char *>(data), comprLen);
+		if (uncomprLen == 0 || uncomprLen > kMaxUncomprLen)
+		{
+			UT_DEBUGMSG(("Invalid uncompressed image size: %lu\n", uncomprLen));
+			return UT_ERROR;
+		}
+		std::vector<Bytef> uncompr(uncomprLen);
+		int err = uncompress (uncompr.data(), &uncomprLen, reinterpret_cast<const unsigned char *>(data.get()), comprLen);
 		if (err != Z_OK)
 		{
 			UT_DEBUGMSG(("Could not uncompress image\n"));
-			DELETEPV(uncompr);
-			goto Cleanup;
+			return UT_ERROR;
 		}
-		pictData->append(reinterpret_cast<const UT_Byte*>(uncompr), uncomprLen);
-		DELETEPV(uncompr);
+		pictData->append(reinterpret_cast<const UT_Byte*>(uncompr.data()), uncomprLen);
 	}
 	else
 	{
-		pictData->append(reinterpret_cast<const UT_Byte*>(data), size);
+		pictData->append(reinterpret_cast<const UT_Byte*>(data.get()), size);
 	}
 
-	delete [] data;
+	data.reset();
 
 	if(!pictData->getPointer(0))
 		error =  UT_ERROR;
@@ -4367,8 +4379,6 @@ UT_Error IE_Imp_MsWord_97::_handleImage (Blip * b, long width, long height, long
 		return UT_ERROR;
 	}
 
-Cleanup:
-
 	return error;
 }
 
@@ -4410,36 +4420,42 @@ UT_Error IE_Imp_MsWord_97::_handlePositionedImage (Blip * b, UT_String & sImageN
 	  return UT_ERROR;
 	}
 
+  if (!pwv)
+	return UT_ERROR;
+
   size_t size = wvStream_size (pwv);
-  char *data = new char[size];
+  std::unique_ptr<char[]> data(new char[size]);
   wvStream_rewind(pwv);
-  wvStream_read(data,size,sizeof(char),pwv);
+  wvStream_read(data.get(), size, sizeof(char), pwv);
 
   UT_ByteBufPtr pictData(new UT_ByteBuf);
 
   if (decompress)
   {
-
+    constexpr unsigned long kMaxUncomprLen = 64u * 1024u * 1024u;
     unsigned long uncomprLen, comprLen;
     comprLen = size;
     uncomprLen = b->blip.metafile.m_cb;
-    Bytef *uncompr = new Bytef[uncomprLen];
-    int err = uncompress (uncompr, &uncomprLen, reinterpret_cast<const unsigned char *>(data), comprLen);
+    if (uncomprLen == 0 || uncomprLen > kMaxUncomprLen)
+    {
+        UT_DEBUGMSG(("Invalid uncompressed image size: %lu\n", uncomprLen));
+        return UT_ERROR;
+    }
+    std::vector<Bytef> uncompr(uncomprLen);
+    int err = uncompress (uncompr.data(), &uncomprLen, reinterpret_cast<const unsigned char *>(data.get()), comprLen);
     if (err != Z_OK)
     {
         UT_DEBUGMSG(("Could not uncompress image\n"));
-        DELETEPV(uncompr);
-        goto Cleanup;
+        return UT_ERROR;
     }
-    pictData->append(reinterpret_cast<const UT_Byte*>(uncompr), uncomprLen);
-    DELETEPV(uncompr);
+    pictData->append(reinterpret_cast<const UT_Byte*>(uncompr.data()), uncomprLen);
   }
   else
   {
-    pictData->append(reinterpret_cast<const UT_Byte*>(data), size);
+    pictData->append(reinterpret_cast<const UT_Byte*>(data.get()), size);
   }
 
-  delete [] data;
+  data.reset();
 
   if(!pictData->getPointer(0))
 	  error =  UT_ERROR;
@@ -4470,8 +4486,6 @@ UT_Error IE_Imp_MsWord_97::_handlePositionedImage (Blip * b, UT_String & sImageN
 	  UT_DEBUGMSG (("Could not create data item\n"));
 	  return UT_ERROR;
 	}
-
- Cleanup:
 
   return error;
 }
@@ -5520,10 +5534,21 @@ int IE_Imp_MsWord_97::_handleBookmarks(const wvParseStruct *ps)
 			//g_free the bkf and posf
 			wvFree(bkf);
 			wvFree(posf);
+			bkf = nullptr;
+			posf = nullptr;
 			m_iBookmarksCount = 0;
 		}
 	}
-	UT_return_val_if_fail(nobkl == nobkf, 0);
+	if (nobkl != nobkf)
+	{
+		wvFree(bkf);
+		wvFree(bkl);
+		wvFree(posf);
+		wvFree(posl);
+		m_iBookmarksCount = 0;
+		UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+		return 0;
+	}
 	if(m_iBookmarksCount > 0)
 	{
 		try
@@ -5535,7 +5560,16 @@ int IE_Imp_MsWord_97::_handleBookmarks(const wvParseStruct *ps)
 			m_pBookmarks = nullptr;
 		}
 
-		UT_return_val_if_fail(m_pBookmarks, 0);
+		if (!m_pBookmarks)
+		{
+			wvFree(bkf);
+			wvFree(bkl);
+			wvFree(posf);
+			wvFree(posl);
+			m_iBookmarksCount = 0;
+			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+			return 0;
+		}
 		for(i = 0; i < nobkf; i++)
 		{
 			m_pBookmarks[i].name = _getBookmarkName(ps, i);

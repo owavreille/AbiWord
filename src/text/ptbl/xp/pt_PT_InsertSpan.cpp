@@ -577,10 +577,10 @@ bool pt_PieceTable::_realInsertSpan(PT_DocPosition dpos,
 	UT_return_val_if_fail (pcr, false);
 	
 	pcr->setDocument(m_pDocument);
-	bool canCoalesce = _canCoalesceInsertSpan(pcr);
+	bool canCoalesce = bAddChangeRec && _canCoalesceInsertSpan(pcr);
 	if (!bAddChangeRec || (canCoalesce && !m_pDocument->isCoalescingMasked()))
 	{
-		if (canCoalesce)
+		if (bAddChangeRec && canCoalesce)
 			m_history.coalesceHistory(pcr);
 		
 		m_pDocument->notifyListeners(pfs,pcr);

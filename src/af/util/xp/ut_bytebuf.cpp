@@ -21,6 +21,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <algorithm>
+#include <cstdint>
 
 #include "ut_assert.h"
 #include "ut_types.h"
@@ -48,18 +50,46 @@ UT_ByteBuf::~UT_ByteBuf()
 
 bool UT_ByteBuf::_byteBuf(UT_uint32 spaceNeeded)
 {
-	// expand the buffer if necessary to accomidate the requested space.
-	// round up to the next multiple of the chunk size.
-	
-	UT_uint32 newSize = ((m_iSize+spaceNeeded+m_iChunk-1)/m_iChunk)*m_iChunk;
-	UT_Byte * pNew = static_cast<UT_Byte *>(UT_calloc(newSize,sizeof(*m_pBuf)));
+	// expand the buffer if necessary to accommodate the requested space.
+	// use geometric growth rounded up to the next multiple of the chunk size.
+
+	if (spaceNeeded > UINT32_MAX - m_iSize)
+		return false;
+
+	const UT_uint32 required = m_iSize + spaceNeeded;
+	UT_uint32 target = required;
+	if (m_iSpace <= UINT32_MAX / 2)
+	{
+		target = std::max(required, m_iSpace * 2);
+	}
+	else
+	{
+		target = UINT32_MAX;
+	}
+
+	UT_uint32 newSize;
+	if (target > UINT32_MAX - (m_iChunk - 1))
+	{
+		if (required > UINT32_MAX - (m_iChunk - 1))
+			newSize = required;
+		else
+			newSize = ((required + m_iChunk - 1) / m_iChunk) * m_iChunk;
+	}
+	else
+	{
+		newSize = ((target + m_iChunk - 1) / m_iChunk) * m_iChunk;
+	}
+
+	if (newSize == 0)
+		newSize = m_iChunk;
+
+	UT_Byte * pNew = static_cast<UT_Byte *>(g_try_realloc(m_pBuf, static_cast<size_t>(newSize) * sizeof(*m_pBuf)));
 	if (!pNew)
 		return false;
-	
-	if (m_pBuf)
+
+	if (newSize > m_iSpace)
 	{
-		memmove(pNew,m_pBuf,m_iSize*sizeof(*m_pBuf));
-		g_free(m_pBuf);
+		memset(pNew + m_iSpace, 0, static_cast<size_t>(newSize - m_iSpace) * sizeof(*m_pBuf));
 	}
 
 	m_pBuf = pNew;
@@ -77,6 +107,9 @@ bool UT_ByteBuf::ins(UT_uint32 position, const UT_Byte * pValue, UT_uint32 lengt
 {
 	// insert the given buffer into the bytebuf
 
+	if (position > m_iSize)
+		return false;
+
 	if (!length)
 	{
 		UT_ASSERT(!pValue);
@@ -84,6 +117,8 @@ bool UT_ByteBuf::ins(UT_uint32 position, const UT_Byte * pValue, UT_uint32 lengt
 	}
 	
 	UT_ASSERT(pValue);
+	if (!pValue)
+		return false;
 	
 	if (m_iSpace-m_iSize < length)
 		if (!_byteBuf(length))
@@ -100,6 +135,9 @@ bool UT_ByteBuf::ins(UT_uint32 position, const UT_Byte * pValue, UT_uint32 lengt
 bool UT_ByteBuf::ins(UT_uint32 position, UT_uint32 length)
 {
 	// insert zeroed space into the bytebuf
+
+	if (position > m_iSize)
+		return false;
 
 	if (!length)
 		return true;
@@ -125,16 +163,31 @@ bool UT_ByteBuf::del(UT_uint32 position, UT_uint32 amount)
 	if (!m_pBuf)
 		return false;
 	UT_ASSERT(position < m_iSize);
-	UT_ASSERT(position+amount <= m_iSize);
+	UT_ASSERT(amount <= m_iSize - position);
+	if (position >= m_iSize || amount > m_iSize - position)
+		return false;
 	
 	memmove(m_pBuf+position,m_pBuf+position+amount,(m_iSize-position-amount)*sizeof(*m_pBuf));
 	m_iSize -= amount;
 
-	UT_uint32 newSpace = ((m_iSize+m_iChunk-1)/m_iChunk)*m_iChunk; //Calculate the new space needed
+	UT_uint32 newSpace = (m_iSize == 0) ? 0
+		: (m_iSize > UINT32_MAX - (m_iChunk - 1) ? m_iSize : ((m_iSize+m_iChunk-1)/m_iChunk)*m_iChunk);
 	if (newSpace != m_iSpace)
 	{
-		m_pBuf = static_cast<UT_Byte *>(g_try_realloc(m_pBuf, newSpace*sizeof(*m_pBuf)));  //Re-allocate to the smaller size
-		m_iSpace = newSpace; //update m_iSpace to the new figure
+		if (newSpace == 0)
+		{
+			FREEP(m_pBuf);
+			m_iSpace = 0;
+		}
+		else
+		{
+			UT_Byte * pNew = static_cast<UT_Byte *>(g_try_realloc(m_pBuf, static_cast<size_t>(newSpace)*sizeof(*m_pBuf)));
+			if (pNew)
+			{
+				m_pBuf = pNew;
+				m_iSpace = newSpace;
+			}
+		}
 	}
 
 	
@@ -169,12 +222,26 @@ bool UT_ByteBuf::overwrite(UT_uint32 position, const UT_Byte * pValue, UT_uint32
 	}
 	
 	UT_ASSERT(pValue);
+	if (!pValue)
+		return false;
 
-	if (m_iSpace < position+length)
-		if (!_byteBuf(position+length-m_iSpace))
+	if (length > UINT32_MAX - position)
+		return false;
+
+	const UT_uint32 endPos = position + length;
+	if (endPos > m_iSpace)
+	{
+		if (!_byteBuf(endPos - m_iSize))
 			return false;
+	}
 
-	memmove(m_pBuf+position,pValue,length*sizeof(*m_pBuf));
+	if (position > m_iSize)
+	{
+		memset(m_pBuf + m_iSize, 0, static_cast<size_t>(position - m_iSize) * sizeof(*m_pBuf));
+	}
+
+	memmove(m_pBuf+position,pValue,static_cast<size_t>(length)*sizeof(*m_pBuf));
+	m_iSize = std::max(m_iSize, endPos);
 	return true;
 }
 
@@ -183,11 +250,24 @@ void UT_ByteBuf::truncate(UT_uint32 position)
 	if (position < m_iSize)
 		m_iSize = position;
 
-	UT_uint32 newSpace = ((m_iSize+m_iChunk-1)/m_iChunk)*m_iChunk; //Calculate the new space needed
+	UT_uint32 newSpace = (m_iSize == 0) ? 0
+		: (m_iSize > UINT32_MAX - (m_iChunk - 1) ? m_iSize : ((m_iSize+m_iChunk-1)/m_iChunk)*m_iChunk);
 	if (newSpace != m_iSpace)
 	{
-		m_pBuf = static_cast<UT_Byte *>(g_try_realloc(m_pBuf, newSpace*sizeof(*m_pBuf)));  //Re-allocate to the smaller size
-		m_iSpace = newSpace; //update m_iSpace to the new figure
+		if (newSpace == 0)
+		{
+			FREEP(m_pBuf);
+			m_iSpace = 0;
+		}
+		else
+		{
+			UT_Byte * pNew = static_cast<UT_Byte *>(g_try_realloc(m_pBuf, static_cast<size_t>(newSpace)*sizeof(*m_pBuf)));
+			if (pNew)
+			{
+				m_pBuf = pNew;
+				m_iSpace = newSpace;
+			}
+		}
 	}
 }
 
@@ -207,14 +287,22 @@ bool UT_ByteBuf::insertFromInput(UT_uint32 iPosition, GsfInput * fp)
 {
   UT_return_val_if_fail (fp != nullptr, false);
 
-  UT_uint32 iLengthOfFile = gsf_input_size(fp);
+  gsf_off_t fileSize = gsf_input_size(fp);
+  if (fileSize < 0 || static_cast<UT_uint64>(fileSize) > UINT32_MAX)
+    return false;
+
+  UT_uint32 iLengthOfFile = static_cast<UT_uint32>(fileSize);
+  if (iLengthOfFile == 0)
+    return iPosition <= m_iSize;
 
   // create a lot of space initialized to 0s
-  this->ins (iPosition, iLengthOfFile);
+  if (!this->ins (iPosition, iLengthOfFile))
+    return false;
   
   UT_Byte *pBuf = m_pBuf + iPosition;	
 
-  gsf_input_read(fp, iLengthOfFile, pBuf);
+  if (!gsf_input_read(fp, iLengthOfFile, pBuf))
+    return false;
 
   return true;
 }
@@ -222,24 +310,36 @@ bool UT_ByteBuf::insertFromInput(UT_uint32 iPosition, GsfInput * fp)
 
 bool UT_ByteBuf::insertFromFile(UT_uint32 iPosition, FILE * fp)
 {
-	UT_uint32 iLengthOfFile = ftell (fp);
+	UT_return_val_if_fail (fp != nullptr, false);
+
+	long len = ftell (fp);
+	if (len < 0 || static_cast<unsigned long>(len) > UINT32_MAX)
+		return false;
+
+	UT_uint32 iLengthOfFile = static_cast<UT_uint32>(len);
 
 	if (0 != fseek(fp, 0, SEEK_SET))
 	{
 		return false;
 	}
 
+	if (iLengthOfFile == 0)
+		return iPosition <= m_iSize;
+
 	// create a lot of space initialized to 0s
-	this->ins (iPosition, iLengthOfFile);
+	if (!this->ins (iPosition, iLengthOfFile))
+		return false;
 
 	UT_Byte *pBuf = m_pBuf + iPosition;	
 	UT_uint32 iBytesRead = 0;
 
 	while (iBytesRead < iLengthOfFile)
 	{
-		iBytesRead += fread (pBuf + iBytesRead, sizeof(UT_Byte), 
-							 iLengthOfFile - iBytesRead, fp);
-	
+		size_t nRead = fread (pBuf + iBytesRead, sizeof(UT_Byte), 
+							  iLengthOfFile - iBytesRead, fp);
+		if (nRead == 0)
+			return false;
+		iBytesRead += static_cast<UT_uint32>(nRead);
 	}
 	return true;
 }

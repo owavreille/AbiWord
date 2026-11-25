@@ -148,6 +148,7 @@ bool pt_PieceTable::createAndSendDocPropCR( const PP_PropertyVector & pAtts, con
 	PP_AttrProp * pAP = new PP_AttrProp();
 	pAP->setAttributes(pAtts);
 	pAP->setProperties(pProps);
+	pAP->markReadOnly();
 	bool b = m_varset.addIfUniqueAP(pAP,&indexAP);
 	PX_ChangeRecord * pcr= new PX_ChangeRecord(PX_ChangeRecord::PXT_ChangeDocProp,0,indexAP,0);
 	auto pfStart = static_cast<const pf_Frag_Strux *>(getFragments().getFirst());
@@ -1311,7 +1312,8 @@ pf_Frag *    pt_PieceTable::_findNextHyperlink(pf_Frag * pfStart) const
 	pf_Frag * pf = pfStart;
 	pf_Frag_Object *pOb = nullptr;
 	UT_sint32 iCountFootnotes = 0;
-	while(pf && pf != m_fragments.getLast())
+	const pf_Frag * pfLast = m_fragments.getLast();
+	while(pf && pf != pfLast)
 	{
 		if(pf->getType() == pf_Frag::PFT_Strux)
 		{
@@ -1367,7 +1369,7 @@ bool pt_PieceTable::_getStruxFromFrag(const pf_Frag * pfStart, pf_Frag_Strux ** 
 	pf_Frag * pf;
 	for (pf=pfStart->getPrev(); (pf && (pf->getType() != pf_Frag::PFT_Strux)); pf=pf->getPrev())
 		;
-	if (!pf)
+	if (!pf || pf->getType() != pf_Frag::PFT_Strux)
 		return false;
 
 	*ppfs = static_cast<pf_Frag_Strux *>(pf);
@@ -1407,7 +1409,7 @@ bool pt_PieceTable::_getNextStruxAfterFragSkip(const pf_Frag *pfStart, pf_Frag_S
 		xxx_UT_DEBUGMSG(("_getStruxFromFragStrux: 2 countFoots %d \n",countFoots));
 	}
 		;
-	if (!pf)
+	if (!pf || pf->getType() != pf_Frag::PFT_Strux)
 		return false;
 
 	*ppfs = static_cast<pf_Frag_Strux *>(pf);
@@ -1453,7 +1455,7 @@ bool pt_PieceTable::_getStruxFromFragSkip(const pf_Frag * pfStart, pf_Frag_Strux
 		xxx_UT_DEBUGMSG(("_getStruxFromFragStrux: 2 countFoots %d \n",countFoots));
 	}
 		;
-	if (!pf)
+	if (!pf || pf->getType() != pf_Frag::PFT_Strux)
 		return false;
 
 	*ppfs = static_cast<pf_Frag_Strux *>(pf);

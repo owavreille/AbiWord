@@ -173,7 +173,7 @@ UT_String UT_String::substr(size_t iStart, size_t nChars) const
 	}
 
 	const char* p = pimpl->data() + iStart;
-	if (iStart + nChars > nSize) {
+	if (nChars > nSize - iStart) {
 		nChars = nSize - iStart;
 	}
 
@@ -267,7 +267,7 @@ size_t UT_String_findCh(const UT_String &st, char ch)
 
 size_t UT_String_findRCh(const UT_String &st, char ch)
 {
-  for (size_t i = st.size() ; i > 0; i--)
+  for (size_t i = st.size(); i-- > 0; )
     if (st[i] == ch)
       return i;
   return (size_t)-1;
@@ -395,50 +395,55 @@ UT_String UT_String_getPropVal(const UT_String & sPropertyString, const UT_Strin
  */
 void UT_String_addPropertyString(UT_String & sPropertyString, const UT_String & sNewProp)
 {
-	UT_sint32 iSize = static_cast<UT_sint32>(sNewProp.size());
-	UT_sint32 iBase  =0;
+	const char * szBase = sNewProp.c_str();
+	const size_t iSize = sNewProp.size();
+	size_t iBase = 0;
 	UT_String sProp;
 	UT_String sVal;
-	UT_String sSubStr;
-	const char * szWork = nullptr;
-	const char * szLoc = nullptr;
-	while(iBase < iSize)
+	while (iBase < iSize)
 	{
 		bool bBreakAtEnd = false;
-		sSubStr = sNewProp.substr(iBase, iSize-iBase);
-		szWork = sSubStr.c_str();
-		szLoc = strstr(szWork,":");
-		if(szLoc)
+		const char * szWork = szBase + iBase;
+		const char * szLoc = strchr(szWork, ':');
+		if (szLoc)
 		{
-			sProp = sNewProp.substr(iBase,szLoc - szWork);
+			const size_t propLen = static_cast<size_t>(szLoc - szWork);
+			if (propLen == 0)
+				break;
+			sProp = UT_String(szWork, propLen);
 		}
 		else
 		{
 			break;
 		}
-		iBase += szLoc-szWork+1;
-		sSubStr = sNewProp.substr(iBase, iSize-iBase);
-		szWork = sSubStr.c_str();
-		szLoc = strstr(szWork,";");
-		if(szLoc)
+		iBase = static_cast<size_t>(szLoc - szBase) + 1;
+		szWork = szBase + iBase;
+		szLoc = strchr(szWork, ';');
+		if (szLoc)
 		{
-			sVal = sNewProp.substr(iBase,szLoc - szWork);
-			iBase += szLoc-szWork+1;
+			const size_t valLen = static_cast<size_t>(szLoc - szWork);
+			if (valLen == 0)
+				break;
+			sVal = UT_String(szWork, valLen);
+			iBase = static_cast<size_t>(szLoc - szBase) + 1;
 		}
 		else
 		{
-			sVal = sNewProp.substr(iBase,iSize-iBase);
+			const size_t valLen = iSize - iBase;
+			if (valLen == 0)
+				break;
+			sVal = UT_String(szWork, valLen);
 			bBreakAtEnd = true;
 		}
-		if((sProp.size()>0) && (sVal.size() >0))
+		if ((sProp.size() > 0) && (sVal.size() > 0))
 		{
-			UT_String_setProperty(sPropertyString,sProp,sVal);
+			UT_String_setProperty(sPropertyString, sProp, sVal);
 		}
 		else
 		{
 			break;
 		}
-		if(bBreakAtEnd)
+		if (bBreakAtEnd)
 		{
 			break;
 		}
@@ -876,14 +881,14 @@ const UT_UTF8String & UT_UTF8String::decodeURL ()
 
 UT_UTF8String  UT_UTF8String::substr(size_t iStart, size_t nChars) const
 {
-	const size_t nSize = pimpl->utf8Length ();
+	const size_t nSize = pimpl->byteLength ();
 
 	if (iStart >= nSize || !nChars) {
 		return UT_UTF8String();
 	}
 
 	const char* p = pimpl->data() + iStart;
-	if (iStart + nChars > nSize) {
+	if (nChars > nSize - iStart) {
 		nChars = nSize - iStart;
 	}
 
@@ -969,57 +974,60 @@ UT_UTF8String UT_UTF8String_getPropVal(const UT_UTF8String & sPropertyString, co
  */
 void UT_UTF8String_addPropertyString(UT_UTF8String & sPropertyString, const UT_UTF8String & sNewProp)
 {
-	UT_sint32 iSize = static_cast<UT_sint32>(sNewProp.size());
-	UT_sint32 iBase  =0;
+	const char * szBase = sNewProp.utf8_str();
+	const size_t iSize = sNewProp.byteLength();
+	size_t iBase = 0;
 	UT_UTF8String sProp;
 	UT_UTF8String sVal;
-	UT_UTF8String sSubStr;
-	const char * szWork = nullptr;
-	const char * szLoc = nullptr;
-	while(iBase < iSize)
+	while (iBase < iSize)
 	{
 		bool bBreakAtEnd = false;
-		sSubStr = sNewProp.substr(iBase, iSize-iBase);
-		szWork = sSubStr.utf8_str();
-		szLoc = strstr(szWork,":");
-		UT_sint32 iextra = 0;
-		if(szLoc)
+		const char * szWork = szBase + iBase;
+		const char * szLoc = strchr(szWork, ':');
+		if (szLoc)
 		{
-		        UT_sint32 k = iBase;
-			while(*sNewProp.substr(k,k).utf8_str() == ' ')
+			size_t k = iBase;
+			while (k < iSize && szBase[k] == ' ')
 			{
-			  k++;
-			  iextra++;
+				k++;
 			}
-			sProp = sNewProp.substr(k,szLoc - szWork-iextra);
+			const size_t colonPos = static_cast<size_t>(szLoc - szBase);
+			if (colonPos <= k)
+				break;
+			sProp.assign(szBase + k, colonPos - k);
 		}
 		else
 		{
 			break;
 		}
-		iBase += szLoc-szWork+1;
-		sSubStr = sNewProp.substr(iBase, iSize-iBase);
-		szWork = sSubStr.utf8_str();
-		szLoc = strstr(szWork,";");
-		if(szLoc)
+		iBase = static_cast<size_t>(szLoc - szBase) + 1;
+		szWork = szBase + iBase;
+		szLoc = strchr(szWork, ';');
+		if (szLoc)
 		{
-			sVal = sNewProp.substr(iBase,szLoc - szWork);
-			iBase += szLoc-szWork+1;
+			const size_t valLen = static_cast<size_t>(szLoc - szWork);
+			if (valLen == 0)
+				break;
+			sVal.assign(szWork, valLen);
+			iBase = static_cast<size_t>(szLoc - szBase) + 1;
 		}
 		else
 		{
-			sVal = sNewProp.substr(iBase,iSize-iBase);
+			const size_t valLen = iSize - iBase;
+			if (valLen == 0)
+				break;
+			sVal.assign(szWork, valLen);
 			bBreakAtEnd = true;
 		}
-		if((sProp.size()>0) && (sVal.size() >0))
+		if ((sProp.size() > 0) && (sVal.size() > 0))
 		{
-			UT_UTF8String_setProperty(sPropertyString,sProp,sVal);
+			UT_UTF8String_setProperty(sPropertyString, sProp, sVal);
 		}
 		else
 		{
 			break;
 		}
-		if(bBreakAtEnd)
+		if (bBreakAtEnd)
 		{
 			break;
 		}
@@ -1137,6 +1145,8 @@ void UT_UTF8String_removeProperty(UT_UTF8String & sPropertyString, const UT_UTF8
 UT_UCS4String UT_UTF8String::ucs4_str() const
 {
 	UT_UCS4String ucs4string;
+	if (pimpl->utf8Length() > 0)
+		ucs4string.reserve(pimpl->utf8Length());
 
 	const char * utf8string = pimpl->data ();
 	size_t bytelength = pimpl->byteLength ();
@@ -1178,13 +1188,13 @@ bool operator!=(const UT_UTF8String& s1, const char * s2)
 
 bool operator==(const UT_UTF8String& s1, const std::string &s2)
 {
-        if (s1.size() != s2.size()) return false;
+        if (s1.byteLength() != s2.size()) return false;
 	return s1.utf8_str() == s2;
 }
 
 bool operator!=(const UT_UTF8String& s1, const std::string &s2)
 {
-        if (s1.size() != s2.size()) return true;
+        if (s1.byteLength() != s2.size()) return true;
 	return s1.utf8_str() != s2;
 }
 
@@ -1261,6 +1271,9 @@ UT_UCS4String::UT_UCS4String(const UT_UCS4String& rhs)
 
 void UT_UCS4String::_loadUtf8(const char * _utf8_str, size_t bytelength)
 {
+	if (bytelength > 0)
+		pimpl->reserve(bytelength);
+
 	UT_UCS4Char ucs4;
 	do {
 		ucs4 = UT_Unicode::UTF8_to_UCS4 (_utf8_str, bytelength);
@@ -1393,7 +1406,7 @@ UT_UCS4String UT_UCS4String::substr(size_t iStart, size_t nChars) const
 	}
 
 	const UT_UCS4Char* p = pimpl->data() + iStart;
-	if (iStart + nChars > nSize) {
+	if (nChars > nSize - iStart) {
 		nChars = nSize - iStart;
 	}
 

@@ -181,9 +181,9 @@ IE_Imp_AbiWord_1::~IE_Imp_AbiWord_1()
 	if(!getLoadStylesOnly()	)
 	{
 		if ( !m_bWroteSection )
-			X_CheckError(appendStrux(PTX_Section, PP_NOPROPS));
+			appendStrux(PTX_Section, PP_NOPROPS);
 		if ( !m_bWroteParagraph )
-			X_CheckError(appendStrux(PTX_Block, PP_NOPROPS));
+			appendStrux(PTX_Block, PP_NOPROPS);
 	}
 	
   if (m_refMap)
@@ -1191,7 +1191,7 @@ void IE_Imp_AbiWord_1::endElement(const gchar *name)
 	case TT_DATAITEM:
 		X_VerifyParseState(_PS_DataItem);
 		m_parseState = _PS_DataSec;
-#ifndef ENABLE_RESOURCEMANAGER
+#ifndef ENABLE_RESOURCE_MANAGER
 #define MyIsWhite(c)			(((c)==' ') || ((c)=='\t') || ((c)=='\n') || ((c)=='\r'))
 		trim = 0;
 		len = m_currentDataItem->getLength();
@@ -1219,7 +1219,7 @@ void IE_Imp_AbiWord_1::endElement(const gchar *name)
  		return;
 
 	case TT_RESOURCE:
-#ifdef ENABLE_RESOURCEMANAGER
+#ifdef ENABLE_RESOURCE_MANAGER
 		X_VerifyParseState(_PS_DataItem);
 		m_parseState = _PS_Doc;
 #endif
@@ -1473,6 +1473,7 @@ bool IE_Imp_AbiWord_1::_handleImage(const gchar ** atts)
 				{
 					*new_attr++ = psz_href; // href="#ID"
 					*new_attr++ = new_id->utf8_str ();
+					attr += 2;
 				}
 			else
 				{
@@ -1571,7 +1572,7 @@ bool IE_Imp_AbiWord_1::_handleResource (const gchar ** atts, bool isResource)
 
 							if (strcmp (*attr, "image/png") == 0)
 								mt = mt_png;
-							else if (strcmp (*attr, "image/svg+xml") == 0 || strcmp (*attr, "image/svg"))
+							else if (strcmp (*attr, "image/svg+xml") == 0 || strcmp (*attr, "image/svg") == 0)
 								mt = mt_svg;
 							else if (strcmp (*attr, "application/mathml+xml") == 0)
 								mt = mt_mathml;

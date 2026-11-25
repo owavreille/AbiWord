@@ -431,21 +431,21 @@ bool PD_Style::getAllAttributes(PP_PropertyVector & vAttribs, UT_sint32 depth) c
 //
 // This method will be recursively called to basedon style
 //
-	UT_sint32 count = getAttributeCount();
-	const gchar * szName = nullptr;
-	const gchar * szValue = nullptr;
-	for (UT_sint32 i = 0; i < count; i++) {
-		getNthAttribute(i, szName, szValue);
-		bool bfound = false;
+	const PP_AttrProp * pAP = nullptr;
+	if (m_pPT && m_pPT->getAttrProp(m_indexAP, &pAP) && pAP) {
+		PP_PropertyVector attrs = pAP->getAttributes();
+		for (PP_PropertyVector::size_type i = 0; i + 1 < attrs.size(); i += 2) {
+			bool bfound = false;
 //
 // Only keep the most recently defined properties
 //
-		for (PP_PropertyVector::size_type j = 0; (j < vAttribs.size()) && !bfound ; j += 2) {
-			bfound = (vAttribs[j] == szName);
-		}
-		if (!bfound) {
-			vAttribs.push_back(szName);
-			vAttribs.push_back(szValue);
+			for (PP_PropertyVector::size_type j = 0; (j < vAttribs.size()) && !bfound; j += 2) {
+				bfound = (vAttribs[j] == attrs[i]);
+			}
+			if (!bfound) {
+				vAttribs.push_back(attrs[i]);
+				vAttribs.push_back(attrs[i + 1]);
+			}
 		}
 	}
 	if (depth < pp_BASEDON_DEPTH_LIMIT && getBasedOn() != nullptr)	{
@@ -465,22 +465,21 @@ bool PD_Style::getAllProperties(PP_PropertyVector & vProps, UT_sint32 depth) con
 //
 // This method will be recursively called to basedon style
 //
-	UT_sint32 count = getPropertyCount();
-	const gchar * szName = nullptr;
-	const gchar * szValue = nullptr;
-
-	for (UT_sint32 i = 0; i < count; i++) {
-		getNthProperty(i, szName, szValue);
-		bool bfound = false;
+	const PP_AttrProp * pAP = nullptr;
+	if (m_pPT && m_pPT->getAttrProp(m_indexAP, &pAP) && pAP) {
+		PP_PropertyVector props = pAP->getProperties();
+		for (PP_PropertyVector::size_type i = 0; i + 1 < props.size(); i += 2) {
+			bool bfound = false;
 //
 // Only keep the most recently defined properties
 //
-		for (PP_PropertyVector::size_type j = 0; (j < vProps.size()) && !bfound ; j += 2) {
-			bfound = (vProps[j] == szName);
-		}
-		if (!bfound) {
-			vProps.push_back(szName);
-			vProps.push_back(szValue);
+			for (PP_PropertyVector::size_type j = 0; (j < vProps.size()) && !bfound; j += 2) {
+				bfound = (vProps[j] == props[i]);
+			}
+			if (!bfound) {
+				vProps.push_back(props[i]);
+				vProps.push_back(props[i + 1]);
+			}
 		}
 	}
 	if (depth < pp_BASEDON_DEPTH_LIMIT && getBasedOn() != nullptr) {

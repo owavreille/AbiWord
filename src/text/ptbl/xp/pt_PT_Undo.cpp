@@ -20,6 +20,8 @@
 
 // undo/redo-related functions for class pt_PieceTable.
 
+#include <memory>
+
 #include "ut_types.h"
 #include "ut_misc.h"
 #include "ut_assert.h"
@@ -54,7 +56,12 @@
 bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 {
 	// actually do the work of the undo or redo.
-	m_bDoingTheDo = true;
+	struct DoingTheDoGuard
+	{
+		bool & m_bFlag;
+		explicit DoingTheDoGuard(bool & bFlag) : m_bFlag(bFlag) { m_bFlag = true; }
+		~DoingTheDoGuard() { m_bFlag = false; }
+	} doingGuard(m_bDoingTheDo);
 	switch (pcr->getType())
 	{
 
@@ -129,7 +136,7 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 			pf_Frag_Text * pft = static_cast<pf_Frag_Text *> (pf);
 			UNDO_return_val_if_fail (pft->getIndexAP() == pcrSpan->getIndexAP(),false);
 			xxx_UT_DEBUGMSG(("deletespan in _doTheDo length %d \n",pcrSpan->getLength()));
-			UT_uint32 iLenDeleted = fragOffset + pft->getLength();
+			UT_uint32 iLenDeleted = pft->getLength() - fragOffset;
 			if(iLenDeleted >= pcrSpan->getLength())
 			{
 			    _deleteSpan(pft,fragOffset,pcrSpan->getBufIndex(),pcrSpan->getLength(),nullptr,nullptr);
@@ -139,12 +146,16 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 			    pf_Frag_Text * pftNext = static_cast<pf_Frag_Text *>(pft->getNext());
 			    UT_uint32 iLenDel = pft->getLength() - fragOffset;
 			    iLenDeleted = 0;
-			    while(pft && (pft ->getType() == pf_Frag::PFT_Text) && (iLenDeleted <pcrSpan->getLength()) )
+			    while(pft && (pft ->getType() == pf_Frag::PFT_Text) && (iLenDeleted < pcrSpan->getLength()) )
 			    {
 				_deleteSpan(pft,fragOffset,pcrSpan->getBufIndex(),iLenDel,nullptr,nullptr);
-				pft = pftNext;
-				pftNext = static_cast<pf_Frag_Text *>(pft->getNext());
 				iLenDeleted += iLenDel;
+				if (iLenDeleted >= pcrSpan->getLength())
+				  break;
+				pft = pftNext;
+				if (!pft || pft->getType() != pf_Frag::PFT_Text)
+				  break;
+				pftNext = static_cast<pf_Frag_Text *>(pft->getNext());
 				iLenDel = pcrSpan->getLength() - iLenDeleted;
 				if(iLenDel > pft->getLength())
 				  iLenDel = pft->getLength();
@@ -178,12 +189,12 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 
 			pf_Frag_Strux * pfs = nullptr;
 			bool bFoundStrux = _getStruxFromFrag(pf,&pfs);
+			UNDO_return_val_if_fail (bFoundStrux, false);
 			if(isEndFootnote(static_cast<pf_Frag *>(pfs)))
 			{
 				bFoundStrux = _getStruxFromFragSkip(static_cast<pf_Frag *>(pfs),&pfs);
 				UNDO_return_val_if_fail (bFoundStrux, false);
 			}
-			UNDO_return_val_if_fail (bFoundStrux, false);
 			PT_BlockOffset newOffset = pcrs->getPosition() - pfs->getPos() -1;
 
 			// we need to loop here, because even though we have a simple (atomic) change,
@@ -222,9 +233,10 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 	case PX_ChangeRecord::PXT_InsertStrux:
 		{
 			const PX_ChangeRecord_Strux * pcrStrux = static_cast<const PX_ChangeRecord_Strux *>(pcr);
-			pf_Frag_Strux * pfsNew = nullptr;
-			if (!_createStrux(pcrStrux->getStruxType(),pcrStrux->getIndexAP(),&pfsNew))
+			pf_Frag_Strux * pfsRaw = nullptr;
+			if (!_createStrux(pcrStrux->getStruxType(),pcrStrux->getIndexAP(),&pfsRaw))
 				return false;
+			std::unique_ptr<pf_Frag_Strux> pfsNewGuard(pfsRaw);
 
 			pf_Frag * pf = nullptr;
 			PT_BlockOffset fragOffset = 0;
@@ -242,11 +254,11 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 				bool bFoundStrux = _getStruxFromFragSkip(static_cast<pf_Frag *>(pfsContainer),&pfsContainer);
 				UNDO_return_val_if_fail (bFoundStrux, false);
 			}
-			if (!_insertStrux(pf,fragOffset,pfsNew))
+			if (!_insertStrux(pf,fragOffset,pfsNewGuard.get()))
 			{
-				delete pfsNew;
 				return false;
 			}
+			pf_Frag_Strux * pfsNew = pfsNewGuard.release();
 			// insert frag in the embedded_strux list if needed
 			PTStruxType pts = pcrStrux->getStruxType();
 			if ((pts == PTX_EndFootnote) || (pts == PTX_EndEndnote) || (pts == PTX_EndAnnotation)) 
@@ -453,7 +465,10 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 			// we backup one because we have zero length and getFragFromPosition()
 			// returns the right-most thing with this document position.
 			if(pf->getType() != pf_Frag::PFT_FmtMark)
+			{
 			  pf = pf->getPrev();
+			  UNDO_return_val_if_fail (pf, false);
+			}
 			if(pf->getType()==pf_Frag::PFT_Strux)
 			{
 			    if(pf->getNext() && pf->getNext()->getType() == pf_Frag::PFT_Strux)
@@ -506,7 +521,10 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 			// we backup one because we have zero length and getFragFromPosition()
 			// returns the right-most thing with this document position.
 			if(pf->getType() != pf_Frag::PFT_FmtMark)
+			{
 			  pf = pf->getPrev();
+			  UNDO_return_val_if_fail (pf, false);
+			}
 			if(pf->getType()==pf_Frag::PFT_Strux)
 			{
 			    if(pf->getNext() && pf->getNext()->getType() == pf_Frag::PFT_Strux)
@@ -602,10 +620,10 @@ bool pt_PieceTable::undoCmd(void)
 	do
 	{
 		PX_ChangeRecord * pcrRev = pcr->reverse(); // we must delete this.
+		UT_return_val_if_fail (pcrRev,false);
 		pcrRev->setAdjustment(pcr->getAdjustment());
 		pcrRev->setDocument(getDocument());
 		pcrRev->setCRNumber();
-		UT_return_val_if_fail (pcrRev,false);
 		UT_Byte flagsRev = GETGLOBFLAGS(pcrRev);
 		bool bResult = _doTheDo(pcrRev, true);
 		delete pcrRev;

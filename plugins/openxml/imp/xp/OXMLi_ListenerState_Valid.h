@@ -24,6 +24,7 @@
 #define _OXMLI_LISTENERSTATE_VALID_H_
 
 // Internal includes
+#include <unordered_map>
 #include <OXMLi_ListenerState.h>
 #include <OXMLi_Types.h>
 #include <OXML_Types.h>
@@ -40,9 +41,9 @@ public:
 	virtual void charData (OXMLi_CharDataRequest * rqst) override;
 
 private:
-	void populateKeywordTable();
+	static void populateKeywordTable();
 
-	std::map<std::string, int> m_keywordMap;
+	static std::unordered_map<std::string, int> m_keywordMap;
 };
 
 #endif //_OXMLI_LISTENERSTATE_VALID_H_

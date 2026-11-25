@@ -40,7 +40,9 @@
 #include "OXMLi_ListenerState_Comment.h"
 #include "OXMLi_ListenerState_Image.h"
 #include "OXMLi_ListenerState_Textbox.h"
+#ifdef DEBUG
 #include "OXMLi_ListenerState_Valid.h"
+#endif
 #include "OXMLi_ListenerState_Math.h"
 
 // AbiWord includes
@@ -73,9 +75,11 @@ void OXMLi_StreamListener::setupStates(OXML_PartType type, const char * partId)
 	OXMLi_ListenerState * state = nullptr;
 	m_namespaces->reset();
 
+#ifdef DEBUG
 	//this has to be the first pushed state since it checks the validity of the input
 	state = new OXMLi_ListenerState_Valid();
 	this->pushState(state);
+#endif
 
 	switch (type) {
 	case DOCUMENT_PART:

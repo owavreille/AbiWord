@@ -733,11 +733,12 @@ bool pt_PieceTable::_insertNoteInEmbeddedStruxList(pf_Frag_Strux * pfsNew)
 	{
 		if (pfPrev->getType() == pf_Frag::PFT_Strux) 
 		{
-			pfsPrev = static_cast <pf_Frag_Strux *> (pfPrev);
-			if ((pfsPrev->getStruxType() == PTX_SectionFootnote) ||
-				(pfsPrev->getStruxType() == PTX_SectionEndnote) ||
-				(pfsPrev->getStruxType() == PTX_SectionAnnotation))
+			pf_Frag_Strux * pfsCand = static_cast <pf_Frag_Strux *> (pfPrev);
+			if ((pfsCand->getStruxType() == PTX_SectionFootnote) ||
+				(pfsCand->getStruxType() == PTX_SectionEndnote) ||
+				(pfsCand->getStruxType() == PTX_SectionAnnotation))
 			{
+				pfsPrev = pfsCand;
 				break;
 			}
 		}

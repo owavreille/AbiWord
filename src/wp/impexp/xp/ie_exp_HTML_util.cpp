@@ -283,10 +283,13 @@ bool getPropertySize(const PP_AttrProp * pAP, const gchar* szWidthProp,
 			total =  dPageWidthInches - dSecLeftMarginInches - dSecRightMarginInches;
 		}
 
-		double dWidth = UT_convertToInches(*szWidth);
-		widthPercentage = 100.0 * dWidth / total;
-		if (widthPercentage > 100.)
-			widthPercentage = 100.0;
+		if (total > 0.0)
+		{
+			double dWidth = UT_convertToInches(*szWidth);
+			widthPercentage = 100.0 * dWidth / total;
+			if (widthPercentage > 100.)
+				widthPercentage = 100.0;
+		}
 	}
 		
 	return true;
@@ -406,9 +409,14 @@ UT_UTF8String IE_Exp_HTML_FileExporter::saveData(const UT_UTF8String &name,
         UT_go_file_create((m_baseDirectory + SEPARATOR  + 
         m_fileDirectory + SEPARATOR + name).utf8_str(), 
                              nullptr);
+    if (!output)
+    {
+        return filePath;
+    }
     
     gsf_output_write(output, data.byteLength(), reinterpret_cast<const guint8*>(data.utf8_str()));
     gsf_output_close(output);
+    g_object_unref(output);
     m_saved[name] = filePath;
     return filePath;
 }
@@ -460,7 +468,7 @@ UT_UTF8String IE_Exp_HTML_MultipartExporter::saveData(const UT_UTF8String &name,
     const gchar *szSuffix = strchr(name.utf8_str(), '.');
     UT_UTF8String mime;
     
-    if (!g_ascii_strcasecmp(szSuffix, ".css"))
+    if (szSuffix && !g_ascii_strcasecmp(szSuffix, ".css"))
     {
         mime = "text/css";
     } else
@@ -583,6 +591,12 @@ void IE_Exp_HTML_FileWriter::write(const UT_UTF8String& str)
                      reinterpret_cast<const guint8*>(str.utf8_str()));
 }
 
+void IE_Exp_HTML_FileWriter::write(const char* data, size_t len)
+{
+    gsf_output_write(m_output, len,
+                     reinterpret_cast<const guint8*>(data));
+}
+
 IE_Exp_HTML_StringWriter::IE_Exp_HTML_StringWriter()
 {
     
@@ -590,6 +604,11 @@ IE_Exp_HTML_StringWriter::IE_Exp_HTML_StringWriter()
 void IE_Exp_HTML_StringWriter::write(const UT_UTF8String& str)
 {
     m_buffer += str;
+}
+
+void IE_Exp_HTML_StringWriter::write(const char* data, size_t len)
+{
+    m_buffer.append(data, len);
 }
 
 IE_Exp_HTML_TagWriter::IE_Exp_HTML_TagWriter(IE_Exp_HTML_OutputWriter* pOutputWriter):
@@ -601,7 +620,12 @@ m_pOutputWriter(pOutputWriter),
     m_bInComment(false),
     m_buffer("")
 {
-    
+    m_buffer.reserve(8192);
+}
+
+IE_Exp_HTML_TagWriter::~IE_Exp_HTML_TagWriter()
+{
+    flush();
 }
 
 
@@ -630,15 +654,10 @@ void IE_Exp_HTML_TagWriter::openTag(const std::string& tagName, bool isInline, b
     
     if (!isInline)
     {
-        std::string indent = "";
-        for (size_t i = 0; i < m_tagStack.size() - 1; i++)
-        {
-            indent += "    ";
-        }
-        
-        m_buffer += indent;
+        m_buffer.append((m_tagStack.size() - 1) * 4, ' ');
     }
-    m_buffer += "<" + tagName;
+    m_buffer.push_back('<');
+    m_buffer.append(tagName);
     
     UT_DEBUGMSG(("Opened tag: %s Depth: %ld\n", tagName.c_str(), (long)m_tagStack.size())); 
 }
@@ -650,7 +669,11 @@ void IE_Exp_HTML_TagWriter::addAttribute(const std::string& name, const std::str
         UT_ASSERT("Trying to add attribute inside comment\n");
         return;
     }
-    m_buffer += " " + name + "=\"" + value + "\""; 
+    m_buffer.push_back(' ');
+    m_buffer.append(name);
+    m_buffer.append("=\"");
+    m_buffer.append(value);
+    m_buffer.push_back('"');
 }
 
 void IE_Exp_HTML_TagWriter::_closeAttributes()
@@ -715,18 +738,16 @@ void IE_Exp_HTML_TagWriter::closeTag()
 
         if (m_bDataWritten && !m_inlineFlagStack.back())
         {
-            std::string indent = "";
-            for (size_t i = 0; i < m_tagStack.size() - 1; i++)
-            {
-                indent += "    ";
-            }
-            m_buffer += "\n" + indent;
+            m_buffer.push_back('\n');
+            m_buffer.append((m_tagStack.size() - 1) * 4, ' ');
         }
         
-        m_buffer += "</" + m_tagStack.back() + ">";
+        m_buffer.append("</");
+        m_buffer.append(m_tagStack.back());
+        m_buffer.push_back('>');
         if (!m_inlineFlagStack.back())
         {
-            m_buffer += "\n";
+            m_buffer.push_back('\n');
         }
     } else
     {
@@ -737,7 +758,10 @@ void IE_Exp_HTML_TagWriter::closeTag()
     m_tagStack.pop_back();
     m_inlineFlagStack.pop_back();
     
-    flush();
+    if (m_buffer.size() >= 8192 || m_tagStack.empty())
+    {
+        flush();
+    }
     
     
 }
@@ -767,10 +791,10 @@ void IE_Exp_HTML_TagWriter::closeComment()
 
 void IE_Exp_HTML_TagWriter::flush()
 {
-    if (m_buffer.length() > 0)
+    if (!m_buffer.empty())
     {
-        m_pOutputWriter->write(m_buffer.c_str());
-        m_buffer = "";
+        m_pOutputWriter->write(m_buffer.data(), m_buffer.size());
+        m_buffer.clear();
     }
 }
 

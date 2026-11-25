@@ -102,6 +102,7 @@ public:
 		pdftoabw_argv[argc++] = nullptr;
 		
 		// run conversion
+		gint exit_status = -1;
 		if (g_spawn_sync (nullptr,
 						  (gchar **)pdftoabw_argv,
 						  nullptr,
@@ -110,8 +111,9 @@ public:
 						  nullptr,
 						  nullptr,
 						  nullptr,
-						  nullptr,
-						  nullptr))
+						  &exit_status,
+						  nullptr)
+			&& exit_status == 0)
 			{
 				char * uri = UT_go_filename_to_uri (output_on_disk.c_str ());
 				if (uri)
@@ -209,8 +211,10 @@ public:
   }
 
   virtual UT_Confidence_t recognizeContents(const char * szBuf,
-					     UT_uint32 /*iNumbytes*/) override
+					     UT_uint32 iNumbytes) override
   {
+    if (!szBuf || iNumbytes < 5)
+      return UT_CONFIDENCE_ZILCH;
     if (!strncmp (szBuf, "%PDF-", 5))
       return UT_CONFIDENCE_PERFECT;
     return UT_CONFIDENCE_ZILCH;

@@ -99,7 +99,9 @@ void ODi_ContentStream_ListenerState::startElement (const gchar* pName,
         ODi_ListenerState* pStyle;
             
         pStyle = m_pStyles->addList(ppAtts, m_rElementStack);
-        rAction.pushState(pStyle, false);
+        if (pStyle) {
+            rAction.pushState(pStyle, false);
+        }
         
     } else if (!strcmp(pName, "office:text")) {
         rAction.pushState("TextContent");

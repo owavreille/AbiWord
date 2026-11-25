@@ -1544,7 +1544,7 @@ Defun1(toggleAutoSpell)
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail (pPrefs, false);
 
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 	UT_return_val_if_fail (pPrefsScheme, false);
 
 	bool b = false;
@@ -2878,7 +2878,10 @@ Defun1(fileSaveTemplate)
   bool bOK = s_AskForPathname(pFrame,true, id, suggestedName.c_str(),&pNewFile,&ieft);
 
   if (!bOK || !pNewFile)
+  {
+    g_free(pNewFile);
     return false;
+  }
 
   UT_DEBUGMSG(("fileSaveTemplate: saving as [%s]\n",pNewFile));
 
@@ -2892,6 +2895,7 @@ Defun1(fileSaveTemplate)
       return false;
     }
 
+  g_free(pNewFile);
   return bOK;
 }
 
@@ -2905,7 +2909,10 @@ Defun1(fileSaveAsWeb)
   bool bOK = s_AskForPathname(pFrame,true, XAP_DIALOG_ID_FILE_SAVEAS, pFrame->getFilename(),&pNewFile,&ieft);
 
   if (!bOK || !pNewFile)
+  {
+	g_free(pNewFile);
 	return false;
+  }
 
   UT_Error errSaved;
   errSaved = pAV_View->cmdSaveAs(pNewFile, ieft);
@@ -2917,6 +2924,7 @@ Defun1(fileSaveAsWeb)
 	  return false;
 	}
 
+  g_free(pNewFile);
   return true;
 }
 
@@ -9071,7 +9079,7 @@ static bool s_doZoomDlg(FV_View * pView)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 	UT_return_val_if_fail (pPrefsScheme, false);
 
 	pFrame->raise();
@@ -9126,7 +9134,7 @@ Defun1(zoom100)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 	UT_return_val_if_fail (pPrefsScheme, false);
 	pPrefsScheme->setValue(static_cast<const gchar*>(XAP_PREF_KEY_ZoomType),
 						   static_cast<const gchar*>("100"));
@@ -9150,7 +9158,7 @@ Defun1(zoom200)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 	UT_return_val_if_fail (pPrefsScheme, false);
 	pPrefsScheme->setValue(static_cast<const gchar*>(XAP_PREF_KEY_ZoomType),
 						   static_cast<const gchar*>("200"));
@@ -9175,7 +9183,7 @@ Defun1(zoom50)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 UT_return_val_if_fail(pPrefsScheme, false);	pPrefsScheme->setValue(static_cast<const gchar*>(XAP_PREF_KEY_ZoomType),
 						   static_cast<const gchar*>("50"));
 
@@ -9199,7 +9207,7 @@ Defun1(zoom75)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 UT_return_val_if_fail(pPrefsScheme, false);	pPrefsScheme->setValue(static_cast<const gchar*>(XAP_PREF_KEY_ZoomType),
 						   static_cast<const gchar*>("75"));
 
@@ -9223,7 +9231,7 @@ Defun1(zoomWidth)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 UT_return_val_if_fail(pPrefsScheme, false);	pPrefsScheme->setValue(static_cast<const gchar*>(XAP_PREF_KEY_ZoomType),
 						   static_cast<const gchar*>("Width"));
 
@@ -9250,7 +9258,7 @@ Defun1(zoomWhole)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 UT_return_val_if_fail(pPrefsScheme, false);	pPrefsScheme->setValue(static_cast<const gchar*>(XAP_PREF_KEY_ZoomType),
 						   static_cast<const gchar*>("Page"));
 
@@ -9280,7 +9288,7 @@ Defun1(zoomIn)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 UT_return_val_if_fail(pPrefsScheme, false);	pPrefsScheme->setValue(static_cast<const gchar*>(XAP_PREF_KEY_ZoomType),
 						 static_cast<const gchar*>(tmp.c_str()));
 	
@@ -9306,7 +9314,7 @@ Defun1(zoomOut)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 UT_return_val_if_fail(pPrefsScheme, false);	pPrefsScheme->setValue(static_cast<const gchar*>(XAP_PREF_KEY_ZoomType),
 						 static_cast<const gchar*>(tmp.c_str()));
 	pFrame->setZoomType( XAP_Frame::z_PERCENT );
@@ -9589,7 +9597,7 @@ static bool s_doPageSetupDlg (FV_View * pView)
 		return false;
 	}
 
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 	if(!pPrefsScheme)
 	{
 		UT_ASSERT_HARMLESS(pPrefsScheme);
@@ -10394,7 +10402,7 @@ Defun(zoom)
 	UT_return_val_if_fail(pApp, false);
 	XAP_Prefs * pPrefs = pApp->getPrefs();
 	UT_return_val_if_fail(pPrefs, false);
-	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme();
+	XAP_PrefsScheme *pPrefsScheme = pPrefs->getCurrentScheme(true);
 UT_return_val_if_fail(pPrefsScheme, false);
 	UT_uint32 iZoom = 0;
 	
@@ -10665,6 +10673,9 @@ Defun1(insFile)
 	if (s_AskForPathname (pFrame, false, XAP_DIALOG_ID_INSERT_FILE,
 			      nullptr, &pathName, &fType))
 	{
+	    if (!pathName)
+	        return false;
+
 	    UT_DEBUGMSG(("DOM: insertFile %s\n", pathName));
 	    
 	    PD_Document * newDoc = new PD_Document();
@@ -10674,12 +10685,14 @@ Defun1(insFile)
 		{
 			UNREFP(newDoc);
 			s_CouldNotLoadFileMessage(pFrame, pathName, err);
+			g_free(pathName);
 			return false;
 		}
         if ( err == UT_IE_TRY_RECOVER ) 
         {
             s_CouldNotLoadFileMessage(pFrame, pathName, err);
         }
+	    g_free(pathName);
 
 	    // create a new layout and view object for the doc
 	    FL_DocLayout *pDocLayout = new FL_DocLayout(newDoc,pGraphics);
@@ -10697,6 +10710,7 @@ Defun1(insFile)
 	    return true;
 	}
 	
+	g_free(pathName);
 	return false;
 }
 
@@ -16262,16 +16276,17 @@ Defun(dragVisualText)
 	if((posLow + 1) == posHigh)
 	{
 	     fl_BlockLayout * pBL = pView->getCurrentBlock();
-	     if((pBL->getPosition() >= posLow) && ((pBL->getPosition() + pBL->getLength()) > posHigh))
+	     if(pBL && (pBL->getPosition() >= posLow) && ((pBL->getPosition() + pBL->getLength()) > posHigh))
 	     {
 	       UT_sint32 x1,x2,y1,y2,height;
 	       bool bEOL,bDir;
 	       bEOL = false;
 	       fp_Run * pRun = pBL->findPointCoords(posHigh,bEOL,x1,x2,y1,y2,height,bDir);
-	       if(pRun->getType() == FPRUN_IMAGE)
+	       if(pRun && pRun->getType() == FPRUN_IMAGE)
 	       {
 			   FV_VisualDragText * pVis = pView->getVisualText();
-			   pVis->abortDrag();
+			   if(pVis)
+			       pVis->abortDrag();
 	       }
 	     }
 	}

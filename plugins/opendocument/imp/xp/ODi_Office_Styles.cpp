@@ -77,9 +77,8 @@ ODi_Style_Style* ODi_Office_Styles::addStyle(const gchar** ppAtts,
     pFamily = UT_getAttribute("style:family", ppAtts);
     pName = UT_getAttribute("style:name", ppAtts);
     pDisplayName = UT_getAttribute("style:display-name", ppAtts);
-    UT_ASSERT(pName);
 
-    UT_return_val_if_fail(pFamily, pStyle);
+    UT_return_val_if_fail(pFamily && pName && *pName, pStyle);
     
     if(!strcmp(pFamily, "text")) {
         // AbiWord doesn't support two styles with the same name, differing only
@@ -162,12 +161,17 @@ ODi_Style_PageLayout* ODi_Office_Styles::addPageLayout(const gchar** ppAtts,
                                                      ODi_ElementStack& rElementStack,
                                                      ODi_Abi_Data& rAbiData) {
                                
-    const gchar* pAttrValue;
-    ODi_Style_PageLayout* pStyle;
-                             
-    pStyle = new ODi_Style_PageLayout(rElementStack, rAbiData);
-    pAttrValue = UT_getAttribute("style:name", ppAtts);
-    m_pageLayoutStyles.insert(std::make_pair(pAttrValue, pStyle));
+    const gchar* pAttrValue = UT_getAttribute("style:name", ppAtts);
+    if (!pAttrValue || !*pAttrValue) {
+        return nullptr;
+    }
+
+    ODi_Style_PageLayout* pStyle = new ODi_Style_PageLayout(rElementStack, rAbiData);
+    auto res = m_pageLayoutStyles.insert(std::make_pair(pAttrValue, pStyle));
+    if (!res.second) {
+        delete pStyle;
+        return nullptr;
+    }
     
     return pStyle;
 }
@@ -182,12 +186,17 @@ ODi_Style_MasterPage* ODi_Office_Styles::addMasterPage(const gchar** ppAtts,
                                                      PD_Document* pDocument,
                                                      ODi_ElementStack& rElementStack) {
                                                         
-    const gchar* pAttrValue;
-    ODi_Style_MasterPage* pStyle;
-                             
-    pStyle = new ODi_Style_MasterPage(pDocument, rElementStack);
-    pAttrValue = UT_getAttribute("style:name", ppAtts);
-    m_masterPageStyles.insert(std::make_pair(pAttrValue, pStyle));
+    const gchar* pAttrValue = UT_getAttribute("style:name", ppAtts);
+    if (!pAttrValue || !*pAttrValue) {
+        return nullptr;
+    }
+
+    ODi_Style_MasterPage* pStyle = new ODi_Style_MasterPage(pDocument, rElementStack);
+    auto res = m_masterPageStyles.insert(std::make_pair(pAttrValue, pStyle));
+    if (!res.second) {
+        delete pStyle;
+        return nullptr;
+    }
     
     return pStyle;
 }
@@ -442,13 +451,18 @@ const ODi_Style_Style* ODi_Office_Styles::getTableCellStyle(
 ODi_Style_List* ODi_Office_Styles::addList(const gchar** ppAtts,
                                          ODi_ElementStack& rElementStack)
 {
-    const gchar* pAttrValue = nullptr;
-    ODi_Style_List* pStyle = nullptr;
+    const gchar* pAttrValue = UT_getAttribute("style:name", ppAtts);
+    if (!pAttrValue || !*pAttrValue) {
+        return nullptr;
+    }
 
-    pStyle = new ODi_Style_List(rElementStack);
-    pAttrValue = UT_getAttribute("style:name", ppAtts);
+    ODi_Style_List* pStyle = new ODi_Style_List(rElementStack);
     xxx_UT_DEBUGMSG(("Adding list |%s| to outline collection \n",pAttrValue));
-    m_listStyles.insert(std::make_pair(pAttrValue, pStyle));
+    auto res = m_listStyles.insert(std::make_pair(pAttrValue, pStyle));
+    if (!res.second) {
+        delete pStyle;
+        return nullptr;
+    }
             
     return pStyle;
 }
@@ -461,13 +475,17 @@ ODi_NotesConfiguration* ODi_Office_Styles::addNotesConfiguration(
                                                const gchar** ppAtts,
                                                ODi_ElementStack& rElementStack) 
 {
-    const gchar* pAttrValue = nullptr;
-    ODi_NotesConfiguration* pNotesConfig = nullptr;
+    const gchar* pAttrValue = UT_getAttribute("text:note-class", ppAtts);
+    if (!pAttrValue || !*pAttrValue) {
+        return nullptr;
+    }
 
-    pNotesConfig = new ODi_NotesConfiguration(rElementStack);
-    pAttrValue = UT_getAttribute("text:note-class", ppAtts);
-                                            
-    m_notesConfigurations.insert(std::make_pair(pAttrValue, pNotesConfig));
+    ODi_NotesConfiguration* pNotesConfig = new ODi_NotesConfiguration(rElementStack);
+    auto res = m_notesConfigurations.insert(std::make_pair(pAttrValue, pNotesConfig));
+    if (!res.second) {
+        delete pNotesConfig;
+        return nullptr;
+    }
     
     return pNotesConfig;
 }

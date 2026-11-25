@@ -478,7 +478,7 @@ XAP_PrefsScheme * XAP_Prefs::getCurrentScheme(bool bCreate)
 	if (bCreate) {
 		// the builtin scheme is not updatable,
 		// so we may need to create one that is
-		if (m_currentScheme->getSchemeName() == "_builtin_") {
+		if (!m_currentScheme || m_currentScheme->getSchemeName() == "_builtin_") {
 
 			const gchar* new_name = "_custom_";
 
@@ -529,7 +529,7 @@ bool XAP_Prefs::getPrefsValue(const std::string& key, std::string& value, bool b
 	if (m_currentScheme->getValue(key, value)) {
 		return true;
 	}
-	if (bAllowBuiltin && m_builtinScheme->getValue(key, value)) {
+	if (bAllowBuiltin && m_builtinScheme && m_builtinScheme->getValue(key, value)) {
 		return true;
 	}
 	// It is legal for there to be arbitrary preference tags that start with
@@ -551,7 +551,7 @@ bool XAP_Prefs::getPrefsValueBool(const std::string& key, bool& bValue, bool bAl
 	if (m_currentScheme->getValueBool(key, bValue)) {
 		return true;
 	}
-	if (bAllowBuiltin && m_builtinScheme->getValueBool(key, bValue)) {
+	if (bAllowBuiltin && m_builtinScheme && m_builtinScheme->getValueBool(key, bValue)) {
 		return true;
 	}
 	// It is legal for there to be arbitrary preference tags that start with
@@ -573,7 +573,7 @@ bool XAP_Prefs::getPrefsValueInt(const std::string &key, int& nValue, bool bAllo
 	if (m_currentScheme->getValueInt(key, nValue)) {
 		return true;
 	}
-	if (bAllowBuiltin && m_builtinScheme->getValueInt(key, nValue)) {
+	if (bAllowBuiltin && m_builtinScheme && m_builtinScheme->getValueInt(key, nValue)) {
 		return true;
 	}
 	// It is legal for there to be arbitrary preference tags that start with
@@ -790,7 +790,7 @@ void XAP_Prefs::startElement(const gchar *name, const gchar **atts)
 			goto MemoryError;
 		
 		const gchar ** a = atts;
-		while (*a)
+		while (a && *a)
 		{
 			UT_ASSERT(a[1] && *a[1]);	// require a value for each attribute keyword
 
@@ -841,7 +841,7 @@ void XAP_Prefs::startElement(const gchar *name, const gchar **atts)
 			goto MemoryError;
 		
 		const gchar ** a = atts;
-		while (*a)
+		while (a && *a)
 		{
 			UT_ASSERT(a[1] && *a[1]);	// require a value for each attribute keyword
 
@@ -880,7 +880,7 @@ void XAP_Prefs::startElement(const gchar *name, const gchar **atts)
 		// <Recent max="4" name1="v1" name2="v2" ... />
 
 		const gchar ** a = atts;
-		while (*a) {
+		while (a && *a) {
 			UT_ASSERT(a[1] && *a[1]);	// require a value for each attribute keyword
 
 			if (strcmp(a[0], "max") == 0) {
@@ -894,11 +894,15 @@ void XAP_Prefs::startElement(const gchar *name, const gchar **atts)
 					recent = a[1];
 				} else {
 					gchar* uri = UT_go_filename_to_uri(a[1]);
-					recent = uri;
-					g_free (uri);
+					if (uri) {
+						recent = uri;
+						g_free (uri);
+					}
 				}
 
-				m_vecRecent.push_back(recent);
+				if (!recent.empty()) {
+					m_vecRecent.push_back(recent);
+				}
 			}
 
 			a += 2;
@@ -935,7 +939,7 @@ void XAP_Prefs::startElement(const gchar *name, const gchar **atts)
 			m_geom.m_flags = flags;
 			
 			const gchar ** a = atts;
-			while (*a)
+			while (a && *a)
 			{
 				UT_ASSERT(a[1] && *a[1]);	// require a value for each attribute keyword
 				
@@ -1175,7 +1179,7 @@ bool XAP_Prefs::savePrefsFile(void)
 					"\t    autosaveprefs=\"%d\"\n"
 					"\t    useenvlocale=\"%d\"\n"
 					"\t/>\n"),
-				m_currentScheme->getSchemeName().c_str(),
+				m_currentScheme ? m_currentScheme->getSchemeName().c_str() : "",
 				static_cast<UT_uint32>(m_bAutoSavePrefs),
 				static_cast<UT_uint32>(m_bUseEnvLocale));
 
@@ -1211,7 +1215,7 @@ bool XAP_Prefs::savePrefsFile(void)
 
 			fprintf(fp, "\n\t<Scheme\n\t\tname=\"%s\"\n", thisSchemeName.c_str());
 
-			for (auto entry : *p) {
+			for (const auto& entry : *p) {
 				bool need_print;
 				need_print = false;
 				if (bIsBuiltin)
@@ -1224,7 +1228,8 @@ bool XAP_Prefs::savePrefsFile(void)
 					// for non-builtin sets, we only print the values which are different
 					// from the builtin set.
 					std::string builtinValue = NO_PREF_VALUE;
-					m_builtinScheme->getValue(entry.first, builtinValue);
+					if (m_builtinScheme)
+						m_builtinScheme->getValue(entry.first, builtinValue);
 					if (entry.second != builtinValue ||
 						// Always print debug values
 						strncmp(entry.first.c_str(), DEBUG_PREFIX, sizeof(DEBUG_PREFIX) - 1) == 0)
@@ -1283,7 +1288,7 @@ bool XAP_Prefs::savePrefsFile(void)
 			const std::string& thisSchemeName = p->getSchemeName();
 			fprintf(fp, "\n\t<Plugin\n\t\tname=\"%s\"\n", thisSchemeName.c_str());
 
-			for (auto entry : *p) {
+			for (const auto& entry : *p) {
 					// the value is UTF-8.  Convert to Unicode and then
 					// do XML-encoding of XML-special characters and
 					// non-ASCII characters.  The printed value
@@ -1351,7 +1356,7 @@ bool XAP_Prefs::savePrefsFile(void)
 	// now the log
 	fprintf(fp, "\n\t<Log>\n");
 
-	for (auto line : m_vecLog) {
+	for (const auto& line : m_vecLog) {
 		fprintf(fp,"\t%s\n", line.c_str());
 	}
 
@@ -1383,6 +1388,13 @@ bool XAP_Prefs::savePrefsFile(void)
 	}
 	
 	fprintf(fp,"\n</AbiPreferences>\n");
+
+	{
+		bool bWriteOk = (ferror(fp) == 0);
+		bool bCloseOk = (fclose(fp) == 0);
+		fp = nullptr;
+		bResult = (bWriteOk && bCloseOk);
+	}
 	
 Cleanup:
 	if (fp)
@@ -1422,7 +1434,7 @@ void XAP_Prefs::_startElement_SystemDefaultFile(const gchar *name, const gchar *
 			// we ignore "name=<schemename>" just incase they copied and
 			// pasted a user-profile into the system file.
 
-			if (strcmp(a[0], "name") != 0) {
+			if (m_builtinScheme && strcmp(a[0], "name") != 0) {
 				m_builtinScheme->setValue(a[0], a[1]);
 			}
 
@@ -1508,6 +1520,7 @@ void XAP_Prefs::endBlockChange()
 	{
 		m_bInChangeBlock = false;
 		_sendPrefsSignal( m_ahashChanges );
+		m_ahashChanges.clear();
 	}
 }
 

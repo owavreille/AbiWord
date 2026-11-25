@@ -35,10 +35,15 @@
 // External includes
 #include <string>
 
+std::unordered_map<std::string, int> OXMLi_ListenerState_Valid::m_keywordMap;
+
 OXMLi_ListenerState_Valid::OXMLi_ListenerState_Valid():
 	OXMLi_ListenerState()
 {
-	populateKeywordTable();
+	if (m_keywordMap.empty())
+	{
+		populateKeywordTable();
+	}
 }
 
 void OXMLi_ListenerState_Valid::startElement (OXMLi_StartElementRequest * rqst)
@@ -49,8 +54,7 @@ void OXMLi_ListenerState_Valid::startElement (OXMLi_StartElementRequest * rqst)
 		contextTag = rqst->context->back();
 	}
 
-	std::map<std::string, int>::iterator it;
-	it = m_keywordMap.find(rqst->pName);
+	auto it = m_keywordMap.find(rqst->pName);
 	if(it == m_keywordMap.end())
 	{
 		rqst->valid = false;

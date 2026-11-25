@@ -269,7 +269,7 @@ bool pt_VarSet::mergeAP(PTChangeFmt ptc, PT_AttrPropIndex apiOld,
 				// (the following function cares not whether we are dealing
 				//	with attributes or properties)
 				bool has_style = PP_hasAttribute("list-style", properties);
-				if(has_style)
+				if(!has_style)
 				{
 					UT_DEBUGMSG(("new style is not a list style\n"));
 

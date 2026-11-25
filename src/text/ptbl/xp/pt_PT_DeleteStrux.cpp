@@ -341,6 +341,23 @@ bool pt_PieceTable::_unlinkStrux_Section(pf_Frag_Strux * pfs,
 			UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
 		}
 	}
+	else if ((pfs->getStruxType() == PTX_EndFootnote) ||
+			 (pfs->getStruxType() == PTX_EndEndnote) ||
+			 (pfs->getStruxType() == PTX_EndAnnotation))
+	{
+		if (!m_embeddedStrux.empty())
+		{
+			std::list<embeddedStrux>::iterator it;
+			for (it = m_embeddedStrux.begin(); it != m_embeddedStrux.end(); ++it)
+			{
+				if ((*it).endNote == pfs)
+				{
+					m_embeddedStrux.erase(it);
+					break;
+				}
+			}
+		}
+	}
 
 	switch (pfsPrev->getStruxType())
 	{

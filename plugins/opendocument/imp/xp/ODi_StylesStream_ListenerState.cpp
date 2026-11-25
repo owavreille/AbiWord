@@ -85,8 +85,9 @@ void ODi_StylesStream_ListenerState::startElement (const gchar* pName,
         ODi_ListenerState* pMasterStyle = m_pStyles->addMasterPage(ppAtts,
                                                                   m_pAbiDocument,
                                                                   m_rElementStack);
-            
-        rAction.pushState(pMasterStyle, false);
+        if (pMasterStyle) {
+            rAction.pushState(pMasterStyle, false);
+        }
 
     } else if (!strcmp (pName, "style:style")) {
 
@@ -104,8 +105,9 @@ void ODi_StylesStream_ListenerState::startElement (const gchar* pName,
         ODi_ListenerState* pStylePageLayout;
 
         pStylePageLayout = m_pStyles->addPageLayout(ppAtts, m_rElementStack, m_rAbiData);
-        
-        rAction.pushState(pStylePageLayout, false);
+        if (pStylePageLayout) {
+            rAction.pushState(pStylePageLayout, false);
+        }
         
     } else if (!strcmp (pName, "style:default-style")) {
         ODi_ListenerState* pStyle;
@@ -133,7 +135,9 @@ void ODi_StylesStream_ListenerState::startElement (const gchar* pName,
             
             // It's a regular style.
             pStyle = m_pStyles->addList(ppAtts, m_rElementStack);
-            rAction.pushState(pStyle, false);
+            if (pStyle) {
+                rAction.pushState(pStyle, false);
+            }
         }
     }
     else if(!strcmp (pName, "text:outline-style"))
@@ -158,16 +162,19 @@ void ODi_StylesStream_ListenerState::startElement (const gchar* pName,
       ppExtra[i] = nullptr;
       pStyle = m_pStyles->addList(ppExtra, m_rElementStack);
       delete [] ppExtra;
-      rAction.pushState(pStyle, false);
-      m_bOutlineStyle = true;
+      if (pStyle) {
+          rAction.pushState(pStyle, false);
+          m_bOutlineStyle = true;
+      }
     }
     else if (!strcmp (pName, "text:notes-configuration")) {
         
         ODi_ListenerState* pNotesConfig;
 
         pNotesConfig = m_pStyles->addNotesConfiguration(ppAtts, m_rElementStack);
-        
-        rAction.pushState(pNotesConfig, false);
+        if (pNotesConfig) {
+            rAction.pushState(pNotesConfig, false);
+        }
         
     }
     

@@ -931,6 +931,19 @@ private:
 	bool m_bParaHasRTFContinue;
 
 	GsfInput* m_pImportFile;
+	static constexpr size_t s_ReadBufSize = 32768;
+	unsigned char m_readBuf[s_ReadBufSize];
+	size_t m_readBufPos;
+	size_t m_readBufLen;
+	bool m_hasPushback;
+	unsigned char m_pushbackChar;
+	void _resetReadBuffer()
+	{
+		m_readBufPos = 0;
+		m_readBufLen = 0;
+		m_hasPushback = false;
+		m_pushbackChar = 0;
+	}
 
 	const unsigned char *		m_pPasteBuffer;
 	UT_uint32 			m_lenPasteBuffer;

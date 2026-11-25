@@ -113,13 +113,13 @@ EnchantChecker::EnchantChecker()
 
 EnchantChecker::~EnchantChecker()
 {
-	UT_return_if_fail (s_enchant_broker);
-
-	if (m_dict)
+	if (s_enchant_broker && m_dict)
 		enchant_broker_free_dict (s_enchant_broker, m_dict);
 
-	s_enchant_broker_count--;
-	if (s_enchant_broker_count == 0) {
+	if (s_enchant_broker_count > 0)
+		s_enchant_broker_count--;
+
+	if (s_enchant_broker_count == 0 && s_enchant_broker) {
 		enchant_broker_free (s_enchant_broker);
 		s_enchant_broker = nullptr;
 	}
@@ -160,7 +160,7 @@ EnchantChecker::_suggestWord (const UT_UCS4Char *ucszWord, size_t len)
 
 	suggestions = enchant_dict_suggest (m_dict, utf8.utf8_str(), utf8.byteLength(), &n_suggestions);
 
-	if (suggestions && n_suggestions) {
+	if (suggestions) {
 		for (size_t i = 0; i < n_suggestions; i++) {
 			UT_UCS4Char *ucszSugg = utf8_to_utf32(suggestions[i]);
 			if (ucszSugg)
@@ -232,7 +232,7 @@ EnchantChecker::_requestDictionary (const char * szLang)
 		*hyphen = '_';
 
 	m_dict = enchant_broker_request_dict(s_enchant_broker, lang);
-	FREEP(lang);
+	g_free(lang);
 
 	return (m_dict != nullptr);
 }

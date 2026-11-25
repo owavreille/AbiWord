@@ -586,7 +586,9 @@ bool RTF_msword97_listOverride::setList(void)
  */
 std::vector<UT_sint32>* RTF_msword97_listOverride::getTabStopVect(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, nullptr);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pParaProps, nullptr);
 	return &(pLevel->m_pParaProps->m_tabStops);
 }
 /*!
@@ -594,7 +596,9 @@ std::vector<UT_sint32>* RTF_msword97_listOverride::getTabStopVect(UT_uint32 iLev
  */
 std::vector<eTabType>* RTF_msword97_listOverride::getTabTypeVect(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, nullptr);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pParaProps, nullptr);
 	return &(pLevel->m_pParaProps->m_tabTypes);
 }
 /*!
@@ -602,7 +606,9 @@ std::vector<eTabType>* RTF_msword97_listOverride::getTabTypeVect(UT_uint32 iLeve
  */
 std::vector<eTabLeader>* RTF_msword97_listOverride::getTabLeaderVect(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, nullptr);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pParaProps, nullptr);
 	return &(pLevel->m_pParaProps->m_tabLeader);
 }
 /*!
@@ -610,6 +616,7 @@ std::vector<eTabLeader>* RTF_msword97_listOverride::getTabLeaderVect(UT_uint32 i
  */
 bool RTF_msword97_listOverride::isTab(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbParaProps, false);
 	return (pLevel->m_pbParaProps->bm_tabStops);
@@ -619,7 +626,9 @@ bool RTF_msword97_listOverride::isTab(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isDeletedChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_deleted);
 }
 /*!
@@ -627,7 +636,9 @@ bool RTF_msword97_listOverride::isDeletedChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getDeleted(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_deleted);
 }
 /*!
@@ -635,6 +646,7 @@ bool RTF_msword97_listOverride::getDeleted(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isBoldChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_bold);
@@ -644,7 +656,9 @@ bool RTF_msword97_listOverride::isBoldChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getBold(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_bold);
 }
 /*!
@@ -652,6 +666,7 @@ bool RTF_msword97_listOverride::getBold(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isItalicChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_italic);
@@ -661,7 +676,9 @@ bool RTF_msword97_listOverride::isItalicChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getItalic(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_italic);
 }
 /*!
@@ -669,6 +686,7 @@ bool RTF_msword97_listOverride::getItalic(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isUnderlineChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_underline);
@@ -678,8 +696,9 @@ bool RTF_msword97_listOverride::isUnderlineChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getUnderline(UT_uint32 iLevel)
 {
-
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_underline);
 }
 /*!
@@ -687,6 +706,7 @@ bool RTF_msword97_listOverride::getUnderline(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isStrikeoutChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_strikeout);
@@ -696,7 +716,9 @@ bool RTF_msword97_listOverride::isStrikeoutChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getStrikeout(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_strikeout);
 }
 /*!
@@ -704,6 +726,7 @@ bool RTF_msword97_listOverride::getStrikeout(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isSuperscriptChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_superscript);
@@ -713,7 +736,9 @@ bool RTF_msword97_listOverride::isSuperscriptChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getSuperscript(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_superscript);
 }
 /*!
@@ -722,7 +747,9 @@ bool RTF_msword97_listOverride::getSuperscript(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isSuperscriptPosChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_superscript_pos);
 }
 /*!
@@ -730,7 +757,9 @@ bool RTF_msword97_listOverride::isSuperscriptPosChanged(UT_uint32 iLevel)
  */
 double RTF_msword97_listOverride::getSuperscriptPos(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, 0.0);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, 0.0);
 	return (pLevel->m_pCharProps->m_superscript_pos);
 }
 /*!
@@ -738,6 +767,7 @@ double RTF_msword97_listOverride::getSuperscriptPos(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isSubscriptChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_subscript);
@@ -747,7 +777,9 @@ bool RTF_msword97_listOverride::isSubscriptChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getSubscript(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_subscript);
 }
 /*!
@@ -755,7 +787,9 @@ bool RTF_msword97_listOverride::getSubscript(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isSubscriptPosChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_subscript_pos);
 }
 /*!
@@ -763,7 +797,9 @@ bool RTF_msword97_listOverride::isSubscriptPosChanged(UT_uint32 iLevel)
  */
 double RTF_msword97_listOverride::getSubscriptPos(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, 0.0);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, 0.0);
 	return (pLevel->m_pCharProps->m_subscript_pos);
 }
 /*!
@@ -771,6 +807,7 @@ double RTF_msword97_listOverride::getSubscriptPos(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isFontSizeChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_fontSize);
@@ -780,7 +817,9 @@ bool RTF_msword97_listOverride::isFontSizeChanged(UT_uint32 iLevel)
  */
 double RTF_msword97_listOverride::getFontSize(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, 0.0);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, 0.0);
 	return (pLevel->m_pCharProps->m_fontSize);
 }
 /*!
@@ -788,6 +827,7 @@ double RTF_msword97_listOverride::getFontSize(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isHasColourChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_hasColour);
@@ -797,7 +837,9 @@ bool RTF_msword97_listOverride::isHasColourChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getHasColour(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_hasColour);
 }
 /*!
@@ -805,6 +847,7 @@ bool RTF_msword97_listOverride::getHasColour(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isColourNumberChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_colourNumber);
@@ -814,7 +857,9 @@ bool RTF_msword97_listOverride::isColourNumberChanged(UT_uint32 iLevel)
  */
 UT_uint32 RTF_msword97_listOverride::getColourNumber(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, 0);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, 0);
 	return (pLevel->m_pCharProps->m_colourNumber);
 }
 /*!
@@ -822,6 +867,7 @@ UT_uint32 RTF_msword97_listOverride::getColourNumber(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isHasBgColourChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_hasBgColour);
@@ -831,7 +877,9 @@ bool RTF_msword97_listOverride::isHasBgColourChanged(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::getHasBgColour(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, false);
 	return (pLevel->m_pCharProps->m_hasBgColour);
 }
 /*!
@@ -839,6 +887,7 @@ bool RTF_msword97_listOverride::getHasBgColour(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isBgColourNumberChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_bgcolourNumber);
@@ -848,7 +897,9 @@ bool RTF_msword97_listOverride::isBgColourNumberChanged(UT_uint32 iLevel)
  */
 UT_uint32 RTF_msword97_listOverride::getBgColourNumber(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, 0);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, 0);
 	return (pLevel->m_pCharProps->m_bgcolourNumber);
 }
 /*!
@@ -856,6 +907,7 @@ UT_uint32 RTF_msword97_listOverride::getBgColourNumber(UT_uint32 iLevel)
  */
 bool RTF_msword97_listOverride::isFontNumberChanged(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, false);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
 	UT_return_val_if_fail(pLevel && pLevel->m_pbCharProps, false);
 	return (pLevel->m_pbCharProps->bm_fontNumber);
@@ -865,7 +917,9 @@ bool RTF_msword97_listOverride::isFontNumberChanged(UT_uint32 iLevel)
  */
 UT_uint32 RTF_msword97_listOverride::getFontNumber(UT_uint32 iLevel)
 {
+	UT_return_val_if_fail(m_pList && iLevel < 9, 0);
 	RTF_msword97_level * pLevel = m_pList->m_RTF_level[iLevel];
+	UT_return_val_if_fail(pLevel && pLevel->m_pCharProps, 0);
 	return (pLevel->m_pCharProps->m_fontNumber);
 }
 
@@ -885,6 +939,7 @@ void RTF_msword97_listOverride::buildAbiListProperties( const char ** szListID,
 								 const char ** szListStyle,
 								 UT_uint32 iLevel)
 {
+	UT_return_if_fail(m_pList && iLevel < 9 && m_pList->m_RTF_level[iLevel]);
 	m_pList->m_RTF_level[iLevel]->buildAbiListProperties(szListID, szParentID, szLevel, szStartat, szFieldFont,
 									 szListDelim, szListDecimal, szAlign, szIndent, szListStyle);
 
@@ -1454,6 +1509,10 @@ IE_Imp_RTF::IE_Imp_RTF(PD_Document * pDocument)
 	m_currentFtrLastID(0),
 	m_numLists(0),
 	m_pImportFile(nullptr),
+	m_readBufPos(0),
+	m_readBufLen(0),
+	m_hasPushback(false),
+	m_pushbackChar(0),
 	m_pPasteBuffer(nullptr),
 	m_lenPasteBuffer(0),
 	m_pCurrentCharInPasteBuffer(nullptr),
@@ -2672,6 +2731,7 @@ UT_Error IE_Imp_RTF::_isBidiDocument()
 	
 	
 	// reset the file pointer to the beginning
+	_resetReadBuffer();
 	if(gsf_input_seek(m_pImportFile, 0, G_SEEK_SET))
 		return UT_ERROR;
 
@@ -2684,6 +2744,7 @@ UT_Error IE_Imp_RTF::_isBidiDocument()
 UT_Error IE_Imp_RTF::_parseFile(GsfInput* fp)
 {
 	m_pImportFile = fp;
+	_resetReadBuffer();
 
 	m_currentRTFState.m_internalState = RTFStateStore::risNorm;
 	m_currentRTFState.m_destinationState = RTFStateStore::rdsNorm;
@@ -3257,10 +3318,29 @@ bool IE_Imp_RTF::ReadCharFromFileWithCRLF(unsigned char* pCh)
 
 	if (m_pImportFile)					// if we are reading a file
 	{
-		if (gsf_input_read(m_pImportFile, 1, pCh) != nullptr)
+		if (m_hasPushback)
 		{
-			ok = true;
+			*pCh = m_pushbackChar;
+			m_hasPushback = false;
+			return true;
 		}
+		if (m_readBufPos >= m_readBufLen)
+		{
+			gsf_off_t remaining = gsf_input_remaining(m_pImportFile);
+			if (remaining <= 0)
+			{
+				return false;
+			}
+			size_t toRead = static_cast<size_t>(UT_MIN(static_cast<gsf_off_t>(s_ReadBufSize), remaining));
+			if (gsf_input_read(m_pImportFile, toRead, m_readBuf) == nullptr)
+			{
+				return false;
+			}
+			m_readBufPos = 0;
+			m_readBufLen = toRead;
+		}
+		*pCh = m_readBuf[m_readBufPos++];
+		ok = true;
 	}
 	else								// else we are pasting from a buffer
 	{
@@ -3350,12 +3430,24 @@ UT_UCS4Char IE_Imp_RTF::ReadHexChar(void)
   no noticeable I/O impact.
   \fixme check that ungetc() works under MacOS
  */
-bool IE_Imp_RTF::SkipBackChar(unsigned char /*ch*/)
+bool IE_Imp_RTF::SkipBackChar(unsigned char ch)
 {
 	if (m_pImportFile)					// if we are reading a file
 	{
-		// TODO - I've got a sneaking suspicion that this doesn't work on the Macintosh
-		return (!gsf_input_seek(m_pImportFile, -1, G_SEEK_CUR));
+		if (m_readBufPos > 0)
+		{
+			--m_readBufPos;
+			return true;
+		}
+		if (!m_hasPushback)
+		{
+			m_hasPushback = true;
+			m_pushbackChar = ch;
+			return true;
+		}
+		gsf_off_t unread = static_cast<gsf_off_t>(m_readBufLen - m_readBufPos);
+		_resetReadBuffer();
+		return (!gsf_input_seek(m_pImportFile, -(unread + 1), G_SEEK_CUR));
 	}
 	else								// else we are pasting from a buffer
 	{
@@ -8280,6 +8372,10 @@ bool IE_Imp_RTF::HandleTableList(void)
  */
 bool IE_Imp_RTF::HandleListLevel(RTF_msword97_list * pList, UT_uint32 levelCount  )
 {
+	if (!pList || levelCount >= 9)
+	{
+		return SkipCurrentGroup(true);
+	}
 	unsigned char keyword[MAX_KEYWORD_LEN];
 	unsigned char ch;
 	UT_sint32 parameter = 0;
@@ -8768,11 +8864,7 @@ bool IE_Imp_RTF::HandleTableListOverride(void)
 //
 // OK define this in the data structure.
 //
-	RTF_msword97_listOverride * pLOver = new  RTF_msword97_listOverride(this);
-//
-// Increment override counting vector
-//
-	m_vecWord97ListOverride.push_back(pLOver);
+	std::unique_ptr<RTF_msword97_listOverride> pLOver(new RTF_msword97_listOverride(this));
 	pLOver->m_pParaProps = std::unique_ptr<RTFProps_ParaProps>(new RTFProps_ParaProps);
 	pLOver->m_pCharProps = std::unique_ptr<RTFProps_CharProps>(new RTFProps_CharProps);
 	pLOver->m_pbParaProps = std::unique_ptr<RTFProps_bParaProps>(new RTFProps_bParaProps);
@@ -8823,6 +8915,10 @@ bool IE_Imp_RTF::HandleTableListOverride(void)
 								   pLOver->m_pbParaProps);
 			}
 		}
+	}
+	if (pLOver->m_pList != nullptr)
+	{
+		m_vecWord97ListOverride.push_back(pLOver.release());
 	}
 	return true;
 }

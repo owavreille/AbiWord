@@ -186,16 +186,36 @@ UT_Error IE_Exp_HTML::copyToBuffer(PD_DocumentRange * pDocRange,UT_ByteBuf *  bu
     char *szTempFileName = nullptr;
     GError *err = nullptr;
     int fd = g_file_open_tmp ("XXXXXX", &szTempFileName, &err);
+    g_clear_error(&err);
     if (fd != -1)
         g_close(fd, nullptr);
+    if (!szTempFileName)
+    {
+        delete pRangeListener;
+        UNREFP( outDoc);
+        return UT_ERROR;
+    }
     GsfOutput * outBuf =  gsf_output_stdio_new (szTempFileName,&err);
+    g_clear_error(&err);
+    if (!outBuf)
+    {
+        delete pRangeListener;
+        UNREFP( outDoc);
+        g_remove(szTempFileName);
+        g_free (szTempFileName);
+        return UT_ERROR;
+    }
     IEFileType ftHTML = IE_Exp::fileTypeForMimetype("text/html");
     UT_Error aerr = IE_Exp::constructExporter(outDoc,outBuf,
 											  ftHTML,(IE_Exp**)&pNewExp);
     g_object_unref(outBuf);
     if(pNewExp == nullptr)
     {
-         return aerr;
+        delete pRangeListener;
+        UNREFP( outDoc);
+        g_remove(szTempFileName);
+        g_free (szTempFileName);
+        return aerr;
     }
 
 	pNewExp->suppressDialog();
@@ -215,6 +235,7 @@ UT_Error IE_Exp_HTML::copyToBuffer(PD_DocumentRange * pDocRange,UT_ByteBuf *  bu
     //
 
     GsfInput *  fData = gsf_input_stdio_new(szTempFileName,&err);
+    g_clear_error(&err);
     if (fData)
     {
         gsf_off_t siz = gsf_input_size(fData);
@@ -603,11 +624,11 @@ UT_Error IE_Exp_HTML::_writeDocument(bool /*bClipBoard*/, bool /*bTemplateBody*/
                 }
 
                 posEnd = posCurrent;
-                PD_DocumentRange *range = new PD_DocumentRange(getDoc(), posBegin, posEnd);
+                PD_DocumentRange range(getDoc(), posBegin, posEnd);
                 UT_DEBUGMSG(("POS: BEGIN %d END %d\n", posBegin, posEnd));
                 UT_DEBUGMSG(("Now will create chapter of the document with title %s\n", currentTitle.c_str()));
 
-                _createChapter(range, currentTitle, isIndex);
+                _createChapter(&range, currentTitle, isIndex);
                 if (isIndex)
                 {
                     isIndex = false;
@@ -621,8 +642,8 @@ UT_Error IE_Exp_HTML::_writeDocument(bool /*bClipBoard*/, bool /*bTemplateBody*/
 
         if (posBegin != posEnd)
         {
-            PD_DocumentRange *range = new PD_DocumentRange(getDoc(), posBegin, posEnd);
-            _createChapter(range, chapterTitle, isIndex);
+            PD_DocumentRange range(getDoc(), posBegin, posEnd);
+            _createChapter(&range, chapterTitle, isIndex);
         }
         return UT_OK;
     }
@@ -653,18 +674,25 @@ void IE_Exp_HTML::_createChapter(PD_DocumentRange* range, const std::string &tit
     {
         output = getFp();
 		char* s = UT_go_basename_from_uri(getFileName());
-        filename = s;
-		g_free(s);
+		if (s)
+		{
+			filename = s;
+			g_free(s);
+		}
     }
 	else
     {
         filename = ConvertToClean(title.c_str()).utf8_str();
 		filename += m_suffix.utf8_str();
 		char* s = g_path_get_dirname(getFileName());
-		std::string outputUri = s;
+		std::string outputUri = s ? s : "";
 		g_free(s);
         outputUri += SEPARATOR + filename;
         output = UT_go_file_create(outputUri.c_str(), nullptr);
+        if (!output)
+        {
+            return;
+        }
     }
     IE_Exp_HTML_OutputWriter *pOutputWriter = 
         new IE_Exp_HTML_FileWriter(output);
@@ -714,6 +742,7 @@ void IE_Exp_HTML::_createChapter(PD_DocumentRange* range, const std::string &tit
     if (!isIndex)
     {
         gsf_output_close(output);
+        g_object_unref(output);
     }
 }
 

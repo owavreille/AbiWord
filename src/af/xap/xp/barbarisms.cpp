@@ -18,6 +18,7 @@
  */
 
 #include <string.h>
+#include <vector>
 #include "ut_misc.h"
 #include "barbarisms.h"
 #include "ut_debugmsg.h"
@@ -41,7 +42,7 @@ BarbarismChecker::~BarbarismChecker()
 		if (pVec)									
 		{
 			for (UT_sint32 i=0; i < pVec->getItemCount(); i++)
-				delete pVec->getNthItem(i);
+				delete[] pVec->getNthItem(i);
 				
 			delete pVec;			
 		}
@@ -89,6 +90,9 @@ bool BarbarismChecker::load(const char * szLang)
  */
 bool BarbarismChecker::checkWord(const UT_UCS4Char * word32, size_t length)
 {
+	if (m_map.size() == 0)
+		return false;
+
 	UT_UTF8String stUTF8;
 	stUTF8.appendUCS4(word32, length);
 
@@ -105,6 +109,9 @@ bool BarbarismChecker::checkWord(const UT_UCS4Char * word32, size_t length)
 */
 bool BarbarismChecker::suggestExactWord(const UT_UCS4Char *word32, size_t length, const std::unique_ptr<std::vector<UT_UCS4Char*>>& pVecsugg)
 {
+	if (!pVecsugg || m_map.size() == 0)
+		return false;
+
 	const char* pUTF8;
 	const UT_UCS4Char *pWord;
 	UT_UTF8String stUTF8;
@@ -127,8 +134,12 @@ bool BarbarismChecker::suggestExactWord(const UT_UCS4Char *word32, size_t length
 	for (UT_uint32 iItem = nItems; iItem; --iItem)
 	{
 		pWord = vec->getNthItem(iItem - 1);
+		if (!pWord)
+			continue;
 		nSize = sizeof(UT_UCS4Char) * (UT_UCS4_strlen(pWord) + 1);
 		suggest32 = static_cast<UT_UCS4Char*>(g_try_malloc(nSize));
+		if (!suggest32)
+			continue;
 		memcpy (suggest32, pWord, nSize);
 		
 		pVecsugg->insert(pVecsugg->begin(), suggest32);
@@ -154,7 +165,7 @@ bool BarbarismChecker::suggestWord(const UT_UCS4Char *word32, size_t length, con
 	size_t len;
 	UT_UCS4Char* pStr;
 
-	if (!length)
+	if (!length || !word32 || !pVecsugg || m_map.size() == 0)
 		return false;
 
 	/*
@@ -195,14 +206,12 @@ bool BarbarismChecker::suggestWord(const UT_UCS4Char *word32, size_t length, con
 
 	if (bIsUpperLower)
 	{
-		UT_UCS4Char* wordsearch;
-
-		UT_UCS4_cloneString(&wordsearch, word32);
+		std::vector<UT_UCS4Char> wordsearch(word32, word32 + length);
 
 		/* Convert word into lowercase (only need the first char) */
 		wordsearch[0] = UT_UCS4_tolower(wordsearch[0]);
 
-		if ((bIsBarbarism = suggestExactWord(wordsearch,  length, pVecsugg)))
+		if ((bIsBarbarism = suggestExactWord(wordsearch.data(), length, pVecsugg)))
 		{
 			const UT_uint32 nItems = pVecsugg->size();
 			UT_UCS4Char* pSug;
@@ -211,12 +220,10 @@ bool BarbarismChecker::suggestWord(const UT_UCS4Char *word32, size_t length, con
 			for (UT_uint32 iItem = nItems; iItem; --iItem)
 			{
 				pSug = pVecsugg->at(iItem - 1);
-				*pSug = UT_UCS4_toupper(*pSug);
+				if (pSug && *pSug)
+					*pSug = UT_UCS4_toupper(*pSug);
 			}
 		}
-
-		if (wordsearch)
-			g_free(wordsearch);
 	}
 
 	return bIsBarbarism;

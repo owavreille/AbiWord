@@ -21,6 +21,8 @@
 
 #pragma once
 
+#include <unordered_map>
+
 #include "ut_types.h"
 #include "ut_vector.h"
 #include "pt_Types.h"
@@ -56,5 +58,5 @@ public:
 
 protected:
 	UT_GenericVector<PP_AttrProp *> m_vecTable;
-	UT_GenericVector<PP_AttrProp *>	m_vecTableSorted;
+	std::unordered_multimap<UT_uint32, UT_sint32> m_mapByCheckSum;
 };
