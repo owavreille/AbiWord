@@ -463,6 +463,15 @@ void UT_Win32NoteThemeChanged(void)
 	++s_themeGeneration;
 }
 
+static bool s_highContrast(void)
+{
+	HIGHCONTRASTW contrast;
+	memset(&contrast, 0, sizeof(contrast));
+	contrast.cbSize = sizeof(contrast);
+	return SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0)
+		&& (contrast.dwFlags & HCF_HIGHCONTRASTON);
+}
+
 void UT_Win32ApplyCaptionTheme(HWND hwnd)
 {
 	if (!hwnd)
@@ -480,14 +489,28 @@ void UT_Win32ApplyCaptionTheme(HWND hwnd)
 			setAttr = reinterpret_cast<SetAttrFn>(
 				reinterpret_cast<void *>(GetProcAddress(dwm, "DwmSetWindowAttribute")));
 	}
-	if (setAttr)
-	{
-		BOOL dark = UT_Win32AppsUseDarkTheme() ? TRUE : FALSE;
-		// 20 is DWMWA_USE_IMMERSIVE_DARK_MODE. 19 is the same attribute
-		// on builds that predate the renumbering.
-		setAttr(hwnd, 20, &dark, sizeof(dark));
-		setAttr(hwnd, 19, &dark, sizeof(dark));
-	}
+	if (!setAttr)
+		return;
+
+	// DWMWA_WINDOW_CORNER_PREFERENCE is 33 and DWMWCP_ROUND is 2.
+	// https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/ui/apply-rounded-corners
+	const DWORD round = 2;
+	setAttr(hwnd, 33, &round, sizeof(round));
+
+	// High contrast keeps the system caption. Mica and the dark caption
+	// would replace those colors.
+	const bool contrast = s_highContrast();
+	const BOOL dark = (!contrast && UT_Win32AppsUseDarkTheme()) ? TRUE : FALSE;
+	// 20 is DWMWA_USE_IMMERSIVE_DARK_MODE. 19 is the same attribute
+	// on builds that predate the renumbering.
+	setAttr(hwnd, 20, &dark, sizeof(dark));
+	setAttr(hwnd, 19, &dark, sizeof(dark));
+
+	// DWMWA_SYSTEMBACKDROP_TYPE is 38. 2 is Mica on the window frame,
+	// 1 turns it off. Windows 10 rejects the attribute.
+	// https://learn.microsoft.com/en-us/windows/win32/api/dwmapi/ne-dwmapi-dwm_systembackdrop_type
+	const DWORD backdrop = contrast ? 1 : 2;
+	setAttr(hwnd, 38, &backdrop, sizeof(backdrop));
 }
 
 void UT_Win32ApplyWindowTheme(HWND hwnd)
@@ -509,7 +532,7 @@ void UT_Win32ApplyWindowTheme(HWND hwnd)
 	}
 	if (setTheme)
 	{
-		if (UT_Win32AppsUseDarkTheme())
+		if (!s_highContrast() && UT_Win32AppsUseDarkTheme())
 			setTheme(hwnd, L"DarkMode_Explorer", nullptr);
 		else
 			setTheme(hwnd, L"", nullptr);
@@ -566,6 +589,43 @@ int UT_Win32GetSystemMetricsForDpi(int index, int dpi)
 			return got;
 	}
 	return GetSystemMetrics(index);
+}
+
+int UT_Win32WindowDpi(HWND hwnd)
+{
+	typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
+	static GetDpiForWindowFn getDpi = nullptr;
+	static bool resolved = false;
+	if (!resolved)
+	{
+		resolved = true;
+		HMODULE user32 = GetModuleHandleW(L"user32.dll");
+		if (!user32)
+			user32 = LoadLibraryW(L"user32.dll");
+		if (user32)
+			getDpi = reinterpret_cast<GetDpiForWindowFn>(
+				reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForWindow")));
+	}
+	if (getDpi && hwnd)
+	{
+		const UINT dpi = getDpi(hwnd);
+		if (dpi >= 96)
+			return static_cast<int>(dpi);
+	}
+	HDC dc = hwnd ? GetDC(hwnd) : nullptr;
+	int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
+	if (dc)
+		ReleaseDC(hwnd, dc);
+	return dpi >= 96 ? dpi : 96;
+}
+
+COLORREF UT_Win32WorkspaceColor(void)
+{
+	if (s_highContrast())
+		return GetSysColor(COLOR_APPWORKSPACE);
+	if (UT_Win32AppsUseDarkTheme())
+		return RGB(32, 32, 32);
+	return GetSysColor(COLOR_BTNFACE);
 }
 
 void UT_Win32GetWindowTextUtf8(HWND hwnd, char * dest, int destChars)

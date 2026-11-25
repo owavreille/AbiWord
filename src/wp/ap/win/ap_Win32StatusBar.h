@@ -42,6 +42,7 @@ public:
 	HWND					createWindow(HWND hwndFrame,
 										 UT_uint32 left, UT_uint32 top,
 										 UT_uint32 width);
+	void					layoutParts(void);
 	virtual void			setView(AV_View * pView) override;
 
 	WNDPROC getOrgWndProc() { return m_pOrgStatusbarWndProc; }

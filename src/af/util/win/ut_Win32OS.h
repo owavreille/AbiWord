@@ -65,7 +65,7 @@ void UT_Win32TraceHeap(const char * step);
 bool UT_Win32AppsUseDarkTheme(void);
 // Drop the cached theme after WM_SETTINGCHANGE.
 void UT_Win32NoteThemeChanged(void);
-// DWMWA_USE_IMMERSIVE_DARK_MODE on the frame caption. Menus stay system menus.
+// Caption theme, rounded corners, and the window material. Menus stay system menus.
 void UT_Win32ApplyCaptionTheme(HWND hwnd);
 // DarkMode_Explorer, or an empty theme in light mode so the rebar drops its edge.
 void UT_Win32ApplyWindowTheme(HWND hwnd);
@@ -77,10 +77,17 @@ bool UT_Win32GetNonClientMetrics(NONCLIENTMETRICSW * metrics, int dpi);
 // name so the Windows 2000 target stays.
 // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getsystemmetricsfordpi
 int UT_Win32GetSystemMetricsForDpi(int index, int dpi);
+// GetDpiForWindow when the process can see it, otherwise the window DC.
+int UT_Win32WindowDpi(HWND hwnd);
 // Dialog text is UTF-16. The A entry points convert through the ANSI code
 // page. destChars is the byte capacity, including the NUL.
 // https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-getwindowtextw
 void UT_Win32GetWindowTextUtf8(HWND hwnd, char * dest, int destChars);
+// Workspace around the page. High contrast uses the system workspace.
+// Otherwise the button face, which is the dialog background. A dark
+// Windows theme has no public workspace color, so the frame reuses the
+// same dark surface as its command bar.
+COLORREF UT_Win32WorkspaceColor(void);
 // Recreate the status font from the current NONCLIENTMETRICS and DPI.
 void UT_Win32RefreshStatusFont(HWND bar);
 #endif /* UT_Win32OS_H */

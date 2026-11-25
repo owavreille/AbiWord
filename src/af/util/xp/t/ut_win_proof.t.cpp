@@ -132,6 +132,12 @@ TFTEST_MAIN("DPI scale matches MulDiv")
 	TFPASS(UT_ui_px_at_dpi(4, 192) == 8);
 	TFPASS(UT_ui_px_at_dpi(20, 48) == 20);
 	TFPASS(UT_ui_px_at_dpi(0, 192) == 0);
+	TFPASS(UT_status_fallback_width(8, 96) == 80);
+	TFPASS(UT_status_fallback_width(8, 192) == 160);
+	TFPASS(UT_status_fallback_width(0, 144) == 0);
+	TFPASS(UT_status_pane_width(60, 96) == 76);
+	TFPASS(UT_status_pane_width(120, 192) == 152);
+	TFPASS(UT_status_pane_width(0, 96) == 32);
 
 	char bounded[4];
 	UT_copy_utf8_bounded(bounded, 4, "abcd");

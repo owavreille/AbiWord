@@ -26,11 +26,42 @@
 #include "ut_debugmsg.h"
 #include "ut_Language.h"
 #include "ut_Win32OS.h"
+#include "ut_unicode.h"
 #include "ap_Win32StatusBar.h"
 #include "xap_Win32App.h"
 #include "ap_Win32Frame.h"
 #include "ap_Win32App.h"
 #include "ut_Win32LocaleString.h"
+
+static int s_paneWidth(HWND bar, const char * text)
+{
+	HDC dc = bar ? GetDC(bar) : nullptr;
+	int dpi = 96;
+	if (dc)
+	{
+		dpi = GetDeviceCaps(dc, LOGPIXELSX);
+		if (dpi < 96)
+			dpi = 96;
+	}
+	int width = UT_status_fallback_width(text ? static_cast<int>(strlen(text)) : 0, dpi);
+	if (dc && text && text[0])
+	{
+		HFONT font = reinterpret_cast<HFONT>(SendMessageW(bar, WM_GETFONT, 0, 0));
+		HFONT previous = font ? static_cast<HFONT>(SelectObject(dc, font)) : nullptr;
+		UT_Win32LocaleString str;
+		str.fromUTF8(text);
+		SIZE size;
+		memset(&size, 0, sizeof(size));
+		const wchar_t * wide = str.c_str();
+		if (wide && GetTextExtentPoint32W(dc, wide, static_cast<int>(wcslen(wide)), &size))
+			width = UT_status_pane_width(size.cx, dpi);
+		if (previous)
+			SelectObject(dc, previous);
+	}
+	if (dc)
+		ReleaseDC(bar, dc);
+	return width;
+}
 
 LRESULT APIENTRY StatusbarWndProc (HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) { 
 
@@ -282,9 +313,6 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 {
 	XAP_Win32App * app = static_cast<XAP_Win32App *>(XAP_App::getApp());
 	UINT nID = 0;
-    int* pArWidths = new int[getFields()->getItemCount()+1];    
-    int* pCurWidth = pArWidths;
-    int	nWitdh = 0;
 	
 	/*
 		The window procedure for the status bar automatically sets the 
@@ -293,14 +321,12 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 	
 	*/
 	m_hwndStatusBar = UT_CreateWindowEx(0, STATUSCLASSNAMEW, nullptr,
-										WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
+										WS_CHILD | WS_VISIBLE,
 										0, 0, 0, 0,
 										hwndFrame, nullptr, app->getInstance(),nullptr);
 	if (!m_hwndStatusBar)
-	{
-		delete [] pArWidths;
 		UT_return_val_if_fail (m_hwndStatusBar, nullptr);
-	}
+	UT_Win32ApplyWindowTheme(m_hwndStatusBar);
 	UT_Win32RefreshStatusFont(m_hwndStatusBar);
 	// add progress bar and hide it 
 	//  set the color and range 
@@ -310,6 +336,7 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 			m_hwndStatusBar, nullptr, app->getInstance(),nullptr);
 	if (m_hwndProgressBar)
 	{
+		UT_Win32ApplyWindowTheme(m_hwndProgressBar);
 		SendMessage(m_hwndProgressBar,PBM_SETRANGE,0,MAKELONG(0,100));
 		ShowWindow(m_hwndProgressBar, SW_HIDE);
 	}
@@ -336,36 +363,47 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 					
 			pf->setListener((AP_StatusBarFieldListener *)(new ap_usb_TextListener(pf_TextInfo, m_hwndStatusBar,
 																				  nID, this)));
-			
-			// size and place
-			nWitdh+= (strlen(pf_TextInfo->getRepresentativeString())*10);			
-			*pCurWidth = nWitdh;											
 		  }		  
 		}
 		else if(pf->getFillMethod() == PROGRESS_BAR)
 		{
 			pf->setListener((AP_StatusBarFieldListener *)(new ap_usb_ProgressListener(pf, m_hwndProgressBar)));
-			*pCurWidth = nWitdh;
 		}
 		else 
 		{
 			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN); // there are no other kinds of elements
 		}
 				
-		pCurWidth++;
 		nID++;		
 	}
-	
-	// Blank gadgets that gets the rest of the window
-	*pCurWidth = -1;
-		
-	
-	// Set the numer of elements in the statusbar and their size
-    SendMessageW(m_hwndStatusBar, SB_SETPARTS, getFields()->getItemCount()+1, (LPARAM)pArWidths);
-	    
-    delete [] pArWidths;
+
+	layoutParts();
 
 	return m_hwndStatusBar;
+}
+
+void AP_Win32StatusBar::layoutParts(void)
+{
+	if (!m_hwndStatusBar || !getFields())
+		return;
+	const int count = getFields()->getItemCount();
+	if (count < 0)
+		return;
+	int * edges = new int[count + 1];
+	int edge = 0;
+	for (int k = 0; k < count; ++k)
+	{
+		AP_StatusBarField * pf = static_cast<AP_StatusBarField *>(m_vecFields.getNthItem(k));
+		if (pf && (pf->getFillMethod() == REPRESENTATIVE_STRING || pf->getFillMethod() == MAX_POSSIBLE))
+		{
+			AP_StatusBarField_TextInfo * info = static_cast<AP_StatusBarField_TextInfo *>(pf);
+			edge += info ? s_paneWidth(m_hwndStatusBar, info->getRepresentativeString()) : 0;
+		}
+		edges[k] = edge;
+	}
+	edges[count] = -1;
+	SendMessageW(m_hwndStatusBar, SB_SETPARTS, static_cast<WPARAM>(count + 1), (LPARAM)edges);
+	delete [] edges;
 }
 
 

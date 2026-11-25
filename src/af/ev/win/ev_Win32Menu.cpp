@@ -407,6 +407,7 @@ EV_Win32Menu::EV_Win32Menu(XAP_Win32App * pWin32App,
 	m_bTrack = false;
 	m_hFont = nullptr;
 	m_fontDpi = 0;
+	m_iconPx = BITMAP_WITDH;
 
 	m_nBitmapCX = BITMAP_WITDH + 2;
 	m_nBitmapCY = BITMAP_HEIGHT + 2;
@@ -431,7 +432,8 @@ void EV_Win32Menu::refreshForDpi(int dpi)
 {
 	if (dpi < 96)
 		dpi = 96;
-	if (m_hFont && m_fontDpi == dpi)
+	const int icon = UT_Win32GetSystemMetricsForDpi(SM_CXSMICON, dpi);
+	if (m_hFont && m_fontDpi == dpi && m_iconPx == icon)
 		return;
 	if (m_hFont)
 	{
@@ -442,8 +444,30 @@ void EV_Win32Menu::refreshForDpi(int dpi)
 	if (UT_Win32GetNonClientMetrics(&ncm, dpi))
 		m_hFont = CreateFontIndirectW(&ncm.lfMenuFont);
 	m_fontDpi = m_hFont ? dpi : 0;
-	m_nBitmapCX = static_cast<UINT>(UT_ui_px_at_dpi(BITMAP_WITDH + 2, dpi));
-	m_nBitmapCY = static_cast<UINT>(UT_ui_px_at_dpi(BITMAP_HEIGHT + 2, dpi));
+	m_iconPx = icon > 0 ? icon : BITMAP_WITDH;
+	m_nBitmapCX = static_cast<UINT>(m_iconPx + UT_ui_px_at_dpi(2, dpi));
+	m_nBitmapCY = static_cast<UINT>(m_iconPx + UT_ui_px_at_dpi(2, dpi));
+
+	// hbmpItem is drawn at the bitmap's real size. Replace the cached
+	//  icons before deleting them, or the menu keeps a freed handle.
+	std::vector<HBITMAP> previous = m_vechBitmaps;
+	std::vector<BitmapSite> sites = m_bitmapSites;
+	m_vechBitmaps.clear();
+	m_mapMenuBitmaps.clear();
+	bool replaced = true;
+	for (std::vector<BitmapSite>::const_iterator site = sites.begin(); site != sites.end(); ++site)
+	{
+		if (!_setBitmapforID(site->menu, site->id, site->cmd))
+			replaced = false;
+	}
+	if (replaced)
+	{
+		for (std::vector<HBITMAP>::const_iterator i = previous.begin(); i != previous.end(); ++i)
+		{
+			if (*i)
+				DeleteObject(*i);
+		}
+	}
 }
 
 void	EV_Win32Menu::destroy()
@@ -460,6 +484,7 @@ void	EV_Win32Menu::destroy()
 	}
 	m_vechBitmaps.clear();
 	m_mapMenuBitmaps.clear();
+	m_bitmapSites.clear();
 
 	if (m_myMenu)
 	{
@@ -959,7 +984,7 @@ HBITMAP EV_Win32Menu::_loadBitmap(XAP_Menu_Id id, int width, int height, const U
 }
 
 // Sets the Bitmap in Windows Vista
-void EV_Win32Menu::_setBitmapforID (HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd)
+bool EV_Win32Menu::_setBitmapforID (HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd)
 {
 	HBITMAP hBitmap = nullptr;
 	std::map<XAP_Menu_Id, HBITMAP>::const_iterator found = m_mapMenuBitmaps.find(id);
@@ -971,7 +996,8 @@ void EV_Win32Menu::_setBitmapforID (HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd)
 	{
 		UT_RGBColor Color;
 		Color.m_bIsTransparent = true;
-		hBitmap = EV_Win32Menu::_loadBitmap(id, BITMAP_WITDH, BITMAP_HEIGHT, Color);
+		const int icon = m_iconPx > 0 ? m_iconPx : BITMAP_WITDH;
+		hBitmap = EV_Win32Menu::_loadBitmap(id, icon, icon, Color);
 		if (hBitmap != nullptr)
 		{
 			m_vechBitmaps.push_back(hBitmap);
@@ -988,7 +1014,27 @@ void EV_Win32Menu::_setBitmapforID (HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd)
 		info.fMask = MIIM_BITMAP;
 		info.hbmpItem = hBitmap;
 		SetMenuItemInfoW(hMenu, cmd, FALSE, &info);
+		bool known = false;
+		for (std::vector<BitmapSite>::const_iterator site = m_bitmapSites.begin();
+			 site != m_bitmapSites.end(); ++site)
+		{
+			if (site->menu == hMenu && site->cmd == cmd)
+			{
+				known = true;
+				break;
+			}
+		}
+		if (!known)
+		{
+			BitmapSite site;
+			site.menu = hMenu;
+			site.cmd = cmd;
+			site.id = id;
+			m_bitmapSites.push_back(site);
+		}
+		return true;
 	}
+	return false;
 }
 
 /*
@@ -1125,15 +1171,17 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 	rect.top =  lpdis->rcItem.top;
 	rect.bottom = lpdis->rcItem.bottom;
 
+	const int menuDpi = m_fontDpi >= 96 ? m_fontDpi : 96;
+	const int textInset = UT_ui_px_at_dpi(20, menuDpi);
 	if(m_iDIR)
 	{
-		rect.right = lpdis->rcItem.right - 20;
+		rect.right = lpdis->rcItem.right - textInset;
 		rect.left = lpdis->rcItem.left;
 	}
 	else
 	{
 		rect.right = lpdis->rcItem.right;
-		rect.left = /*m_nBitmapCX*/ 20  + lpdis->rcItem.left;
+		rect.left = textInset + lpdis->rcItem.left;
 	}
 	
 	
@@ -1153,7 +1201,8 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 	dwColor = GetSysColor(colorID);
 	
 	UT_RGBColor Color(GetRValue(dwColor),GetGValue(dwColor),GetBValue(dwColor));
-	hBitmap =  EV_Win32Menu::_loadBitmap(item->id, BITMAP_WITDH, BITMAP_HEIGHT, Color);
+	const int iconPx = m_iconPx > 0 ? m_iconPx : BITMAP_WITDH;
+	hBitmap =  EV_Win32Menu::_loadBitmap(item->id, iconPx, iconPx, Color);
 
 	if (hBitmap)	
 	{
@@ -1241,16 +1290,17 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 		{
 			HGDIOBJ previous = SelectObject(hdcMem,(void *)hBitmap);
 
+			const int edge = UT_ui_px_at_dpi(1, menuDpi);
 			if(m_iDIR)
-				BitBlt(lpdis->hDC, lpdis->rcItem.right - 20, lpdis->rcItem.top+1, BITMAP_WITDH, BITMAP_HEIGHT, hdcMem, 0, 0, SRCCOPY );
+				BitBlt(lpdis->hDC, lpdis->rcItem.right - textInset, lpdis->rcItem.top + edge, iconPx, iconPx, hdcMem, 0, 0, SRCCOPY );
 			else
-				BitBlt(lpdis->hDC, lpdis->rcItem.left+1, lpdis->rcItem.top+1, BITMAP_WITDH, BITMAP_HEIGHT, hdcMem, 0, 0, SRCCOPY );
+				BitBlt(lpdis->hDC, lpdis->rcItem.left + edge, lpdis->rcItem.top + edge, iconPx, iconPx, hdcMem, 0, 0, SRCCOPY );
 
 			if (previous)
 				SelectObject(hdcMem, previous);
 			DeleteDC(hdcMem);
 		}
-				
+		DeleteObject(hBitmap);
 	}
 	else 
 		if (lpdis->itemState & ODS_CHECKED)
@@ -1294,8 +1344,6 @@ void EV_Win32Menu::onDrawItem(HWND /*hwnd*/, WPARAM /*wParam*/, LPARAM lParam)
 		SelectObject(lpdis->hDC, hfontOld); 
     if (crText != CLR_INVALID)
 		SetTextColor(lpdis->hDC, crText); 	
-	if (hBitmap)
-		DeleteObject(hBitmap);	
 }
 
 								

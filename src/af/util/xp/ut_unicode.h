@@ -94,6 +94,24 @@ inline int UT_ui_px_at_dpi (int pxAt96, int dpi)
 	return scaled;
 }
 
+// A status pane used to be ten pixels per character. That width is the
+// 96 DPI size. Measured text adds a gap so the glyphs are not clipped.
+inline int UT_status_fallback_width (int chars, int dpi)
+{
+	if (chars < 0)
+		chars = 0;
+	return chars * UT_ui_px_at_dpi(10, dpi);
+}
+
+inline int UT_status_pane_width (int textPx, int dpi)
+{
+	if (textPx < 0)
+		textPx = 0;
+	const int width = textPx + UT_ui_px_at_dpi(16, dpi);
+	const int floor = UT_ui_px_at_dpi(32, dpi);
+	return width < floor ? floor : width;
+}
+
 // Copy whole UTF-8 characters that fit. capacity is the byte size of dest,
 // including the NUL that is always written when capacity is positive.
 inline void UT_copy_utf8_bounded (char * dest, int capacity, const char * utf8)

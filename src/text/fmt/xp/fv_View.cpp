@@ -38,6 +38,9 @@
 #include "ev_Mouse.h"
 #include "ut_misc.h"
 #include "ut_string.h"
+#ifdef TOOLKIT_WIN
+#include "ut_Win32OS.h"
+#endif
 #include "ut_std_string.h"
 #include "ut_bytebuf.h"
 #include "ut_timer.h"
@@ -393,9 +396,7 @@ FV_View::FV_View(XAP_App * pApp, void* pParentData, FL_DocLayout* pLayout)
 		UT_parseColor(tmpColor.c_str(), m_colorGrammarSquiggle);
 	}
 	if (pApp->getPrefsValue(XAP_PREF_KEY_ColorForMargin, tmpColor))
-	{
-		UT_parseColor(tmpColor.c_str(), m_colorMargin);
-	}
+		_applyMarginColor(tmpColor);
 	if (pApp->getPrefsValue(XAP_PREF_KEY_ColorForFieldOffset, tmpColor))
 	{
 		UT_parseColor(tmpColor.c_str(), m_colorFieldOffset);
@@ -684,6 +685,22 @@ FV_View::FV_View(XAP_App * pApp, void* pParentData, FL_DocLayout* pLayout)
 		}
 	}
 	
+}
+
+void FV_View::_applyMarginColor(const std::string & spec)
+{
+	if (spec.empty() || g_ascii_strcasecmp(spec.c_str(), XAP_PREF_DEFAULT_ColorForMargin) == 0)
+	{
+#ifdef TOOLKIT_WIN
+		const COLORREF workspace = UT_Win32WorkspaceColor();
+		m_colorMargin = UT_RGBColor(GetRValue(workspace), GetGValue(workspace), GetBValue(workspace));
+		return;
+#else
+		UT_parseColor(XAP_PREF_DEFAULT_ColorForMargin, m_colorMargin);
+		return;
+#endif
+	}
+	UT_parseColor(spec.c_str(), m_colorMargin);
 }
 
 FV_View::~FV_View()

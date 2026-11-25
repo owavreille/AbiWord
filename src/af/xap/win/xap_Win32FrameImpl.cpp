@@ -41,7 +41,9 @@
 #include "ut_debugmsg.h"
 #include "ut_path.h"
 #include "ut_Win32OS.h"
+#include "ut_unicode.h"
 #include "ut_Win32LocaleString.h"
+#include "ap_Win32StatusBar.h"
 #include "xap_Win32DialogBase.h"
 #include "xap_ViewListener.h"
 #include "ev_EditMethod.h"
@@ -568,7 +570,14 @@ void XAP_Win32FrameImpl::_refreshChrome(void)
 	if (m_hwndRebar)
 		UT_Win32ApplyWindowTheme(m_hwndRebar);
 	if (m_hwndStatusBar)
+	{
+		UT_Win32ApplyWindowTheme(m_hwndStatusBar);
 		UT_Win32RefreshStatusFont(m_hwndStatusBar);
+		AP_Win32StatusBar * bar = reinterpret_cast<AP_Win32StatusBar *>(
+			GetWindowLongPtrW(m_hwndStatusBar, GWLP_USERDATA));
+		if (bar)
+			bar->layoutParts();
+	}
 	if (m_pWin32Menu && m_hwndFrame)
 	{
 		HDC dc = GetDC(m_hwndFrame);
@@ -1226,6 +1235,27 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		if (fimpl->m_hwndContainer)
 			return SendMessageW(fimpl->m_hwndContainer, iMsg, wParam, lParam);
 		break;
+
+	case WM_GETMINMAXINFO:
+	{
+		MINMAXINFO * info = reinterpret_cast<MINMAXINFO *>(lParam);
+		if (!info)
+			break;
+		HDC dc = GetDC(hwnd);
+		int dpi = 96;
+		if (dc)
+		{
+			dpi = GetDeviceCaps(dc, LOGPIXELSX);
+			ReleaseDC(hwnd, dc);
+		}
+		const int minW = UT_ui_px_at_dpi(480, dpi);
+		const int minH = UT_ui_px_at_dpi(320, dpi);
+		if (info->ptMinTrackSize.x < minW)
+			info->ptMinTrackSize.x = minW;
+		if (info->ptMinTrackSize.y < minH)
+			info->ptMinTrackSize.y = minH;
+		return 0;
+	}
 
 	case WM_SYSCOLORCHANGE:
 	{

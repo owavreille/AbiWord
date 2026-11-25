@@ -77,13 +77,14 @@ protected:
 
 	static bool					_isAMenuBar(XAP_Menu_Id	id,HMENU hMenu);
 	HBITMAP						_loadBitmap(XAP_Menu_Id id, int width, int height, const UT_RGBColor & color);
-	void		 				_setBitmapforID(HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd);
+	bool		 				_setBitmapforID(HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd);
 
 	XAP_Win32App *				m_pWin32App;
 	const EV_EditEventMapper *	m_pEEM;
 	EV_Menu_Bitmap*				m_pArMenuBitmaps;
 	HMENU						m_myMenu;
 	UINT						m_nBitmapCX, m_nBitmapCY;
+	int							m_iconPx;
 	HFONT						m_hFont;
 	int							m_fontDpi;
 	UT_Vector					m_vecItems;
@@ -91,6 +92,8 @@ protected:
 	UINT                        m_iDIR;
 	std::vector <HBITMAP>		m_vechBitmaps;
 	std::map<XAP_Menu_Id, HBITMAP> m_mapMenuBitmaps;
+	struct BitmapSite { HMENU menu; UINT_PTR cmd; XAP_Menu_Id id; };
+	std::vector<BitmapSite>		m_bitmapSites;
 
 };
 

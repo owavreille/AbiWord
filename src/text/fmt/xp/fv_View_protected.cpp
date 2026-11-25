@@ -6150,9 +6150,7 @@ void FV_View::_prefsListener( XAP_Prefs *pPrefs, const XAP_PrefsChangeSet* /*phC
 		UT_parseColor(tmpColor.c_str(), pView->m_colorGrammarSquiggle);
 	}
 	if (pPrefs->getPrefsValue(XAP_PREF_KEY_ColorForMargin, tmpColor))
-	{
-		UT_parseColor(tmpColor.c_str(), pView->m_colorMargin);
-	}
+		pView->_applyMarginColor(tmpColor);
 	if (pPrefs->getPrefsValue(XAP_PREF_KEY_ColorForFieldOffset, tmpColor))
 	{
 		UT_parseColor(tmpColor.c_str(), pView->m_colorFieldOffset);

@@ -117,11 +117,36 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 		
 	UT_PNG_getDimensions(pBB, iImageWidth, iImageHeight);
 
-	HDC screen = GetDC(nullptr);
-	const int dpiY = screen ? GetDeviceCaps(screen, LOGPIXELSY) : 96;
-	if (screen)
-		ReleaseDC(nullptr, screen);
-	const int scale = dpiY > 0 ? dpiY : 96;
+	HWND hWndFrame = static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow();
+	int scale = 96;
+	typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
+	static GetDpiForWindowFn getDpi = nullptr;
+	static bool dpiResolved = false;
+	if (!dpiResolved)
+	{
+		dpiResolved = true;
+		HMODULE user32 = GetModuleHandleW(L"user32.dll");
+		if (user32)
+			getDpi = reinterpret_cast<GetDpiForWindowFn>(
+				reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForWindow")));
+	}
+	if (getDpi && hWndFrame)
+	{
+		const UINT got = getDpi(hWndFrame);
+		if (got >= 96)
+			scale = static_cast<int>(got);
+	}
+	if (scale == 96 && hWndFrame)
+	{
+		HDC windowDc = GetDC(hWndFrame);
+		if (windowDc)
+		{
+			const int caps = GetDeviceCaps(windowDc, LOGPIXELSY);
+			if (caps >= 96)
+				scale = caps;
+			ReleaseDC(hWndFrame, windowDc);
+		}
+	}
 
 	const int aboutW     = MulDiv(ABOUT_WIDTH, scale, 96);
 	const int aboutH     = MulDiv(ABOUT_HEIGHT, scale, 96);
@@ -148,8 +173,6 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 		::MessageBeep(MB_ICONEXCLAMATION);
 		return;
 	}
-
-	HWND hWndFrame = static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow();
 
 	RECT rcScreen;
 	bool haveWorkArea = false;
@@ -341,21 +364,20 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	LOGFONTW lf;
 	memset(&lf, 0, sizeof(lf));
 
-	wcscpy(lf.lfFaceName, L"MS Shell Dlg 2");
+	wcscpy(lf.lfFaceName, L"Segoe UI");
+	lf.lfQuality = CLEARTYPE_QUALITY;
 
-	// These heights are cell sizes at 96 DPI. A positive lfHeight is pixels
-	// in MM_TEXT, so it has to follow LOGPIXELSY.
-	lf.lfHeight = MulDiv(13, scale, 96);
-	lf.lfWeight = 0;
+	// A point size is a negative character height. 9 pt is the Windows UI size.
+	lf.lfHeight = -MulDiv(9, scale, 72);
+	lf.lfWeight = FW_NORMAL;
 	HFONT hfontPrimary = CreateFontIndirectW(&lf);
 
-	lf.lfHeight = MulDiv(12, scale, 96);
-	lf.lfWeight = 0;
+	lf.lfHeight = -MulDiv(9, scale, 72);
+	lf.lfWeight = FW_NORMAL;
 	HFONT hfontSmall = CreateFontIndirectW(&lf);
 
-	wcscpy(lf.lfFaceName, L"Arial");
-	lf.lfHeight = MulDiv(36, scale, 96);
-	lf.lfWeight = FW_BOLD; 
+	lf.lfHeight = -MulDiv(20, scale, 72);
+	lf.lfWeight = FW_SEMIBOLD;
 	HFONT hfontHeading = CreateFontIndirectW(&lf);
 	
 	SendMessageW(hwndStatic_Heading, WM_SETFONT, (WPARAM) hfontHeading, 0);

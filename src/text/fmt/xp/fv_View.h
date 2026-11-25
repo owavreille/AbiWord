@@ -1106,6 +1106,7 @@ private:
 
 	// prefs listener - to change cursor blink on/off (and possibly others)
 	static void _prefsListener( XAP_Prefs *, const XAP_PrefsChangeSet*, void *);
+	void _applyMarginColor(const std::string & spec);
 
 	bool				 m_bShowPara;
 	ViewMode			 m_viewMode;

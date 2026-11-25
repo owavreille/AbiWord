@@ -119,6 +119,22 @@ void AP_Win32FrameImpl::_initialize(void)
 	_createTopLevelWindow();
 }
 
+static int s_scrollMetric(HWND hwnd, int index)
+{
+	return UT_Win32GetSystemMetricsForDpi(index, UT_Win32WindowDpi(hwnd));
+}
+
+void AP_Win32FrameImpl::_refreshChrome(void)
+{
+	XAP_Win32FrameImpl::_refreshChrome();
+	if (m_hWndHScroll)
+		UT_Win32ApplyWindowTheme(m_hWndHScroll);
+	if (m_hWndVScroll)
+		UT_Win32ApplyWindowTheme(m_hWndVScroll);
+	if (m_hWndGripperHack)
+		InvalidateRect(m_hWndGripperHack, nullptr, TRUE);
+}
+
 HWND AP_Win32FrameImpl::_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent,
 							UT_uint32 iLeft, UT_uint32 iTop,
 							UT_uint32 iWidth, UT_uint32 iHeight)
@@ -132,8 +148,10 @@ HWND AP_Win32FrameImpl::_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent
 	// create a child window for us -- this will be the 'container'.
 	// the 'container' will in turn contain the document window, the
 	// rulers, and the variousscroll bars and other dead space.
+	// No sunken client edge: the page sits on a flat surface inside the
+	// rounded frame, which is the Windows 11 window geometry.
 
-	m_hwndContainer = UT_CreateWindowEx(WS_EX_CLIENTEDGE, s_ContainerWndClassName, nullptr,
+	m_hwndContainer = UT_CreateWindowEx(0, s_ContainerWndClassName, nullptr,
 									 WS_CHILD | WS_VISIBLE,
 									 iLeft, iTop, iWidth, iHeight,
 									 hwndParent, nullptr, static_cast<XAP_Win32App *>(XAP_App::getApp())->getInstance(), nullptr);
@@ -147,8 +165,8 @@ HWND AP_Win32FrameImpl::_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent
 	RECT r;
 	if (!s_clientRect(m_hwndContainer, r))
 		SetRect(&r, 0, 0, static_cast<int>(iWidth), static_cast<int>(iHeight));
-	const int cyHScroll = GetSystemMetrics(SM_CYHSCROLL);
-	const int cxVScroll = GetSystemMetrics(SM_CXVSCROLL);
+	const int cyHScroll = s_scrollMetric(m_hwndContainer, SM_CYHSCROLL);
+	const int cxVScroll = s_scrollMetric(m_hwndContainer, SM_CXVSCROLL);
 
 	m_hWndHScroll = UT_CreateWindowEx(0, L"ScrollBar", nullptr, WS_CHILD | WS_VISIBLE | SBS_HORZ,
 									0, r.bottom - cyHScroll,
@@ -170,18 +188,16 @@ HWND AP_Win32FrameImpl::_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent
 	//SWL(m_hWndVScroll, this);
 	SWL(m_hWndVScroll, pFrame);
 
-#if 1 // if the StatusBar is enabled, our lower-right corner is a dead spot
-#  define XX_StyleBits          (WS_DISABLED | SBS_SIZEBOX)
-#else
-#  define XX_StyleBits          (SBS_SIZEGRIP)
-#endif
-
-	m_hWndGripperHack = UT_CreateWindowEx(0, L"ScrollBar", nullptr,
-										WS_CHILD | WS_VISIBLE | XX_StyleBits,
+	// The corner fills the gap between the bars. A size grip is the old
+	// dotted resize handle; the thick frame already resizes the window.
+	m_hWndGripperHack = UT_CreateWindowEx(0, L"STATIC", nullptr,
+										WS_CHILD | WS_VISIBLE | SS_LEFT,
 										r.right-cxVScroll, r.bottom-cyHScroll, cxVScroll, cyHScroll,
 										m_hwndContainer, nullptr, static_cast<XAP_Win32App *>(XAP_App::getApp())->getInstance(), nullptr);
 
 	UT_return_val_if_fail (m_hWndGripperHack, nullptr);
+	UT_Win32ApplyWindowTheme(m_hWndHScroll);
+	UT_Win32ApplyWindowTheme(m_hWndVScroll);
 	// WARNING!!! many places expact an XAP_Frame or descendant!!!
 	//SWL(m_hWndGripperHack, this);
 	SWL(m_hWndGripperHack, pFrame);
@@ -359,7 +375,7 @@ void AP_Win32FrameImpl::_createTopRuler(XAP_Frame *pFrame)
 
 	if (!s_clientRect(m_hwndContainer, r))
 		return;
-	cxVScroll = GetSystemMetrics(SM_CXVSCROLL);
+	cxVScroll = s_scrollMetric(m_hwndContainer, SM_CXVSCROLL);
 
 	// create the top ruler
 	AP_Win32TopRuler * pWin32TopRuler = new AP_Win32TopRuler(pFrame);
@@ -390,7 +406,7 @@ void AP_Win32FrameImpl::_createLeftRuler(XAP_Frame *pFrame)
 
 	if (!s_clientRect(m_hwndContainer, r))
 		return;
-	cyHScroll = GetSystemMetrics(SM_CYHSCROLL);
+	cyHScroll = s_scrollMetric(m_hwndContainer, SM_CYHSCROLL);
 
 	UT_uint32 yTopRulerHeight = 0;
 
@@ -716,8 +732,8 @@ void AP_Win32FrameImpl::_onSize(AP_FrameData* pData, int nWidth, int nHeight)
 	UT_return_if_fail(m_hWndHScroll);
 	UT_return_if_fail(m_hWndGripperHack);
 
-	int cyHScroll = GetSystemMetrics(SM_CYHSCROLL);
-	const int cxVScroll = GetSystemMetrics(SM_CXVSCROLL);
+	int cyHScroll = s_scrollMetric(m_hwndContainer, SM_CYHSCROLL);
+	const int cxVScroll = s_scrollMetric(m_hwndContainer, SM_CXVSCROLL);
 	int yTopRulerHeight = 0;
 	int xLeftRulerWidth = 0;	
 
@@ -969,6 +985,26 @@ LRESULT CALLBACK AP_Win32FrameImpl::_ContainerWndProc(HWND hwnd, UINT iMsg, WPAR
 		{
 			SetFocus(fImpl->getHwndDocument());
 			return 0;
+		}
+
+		case WM_CTLCOLORSTATIC:
+		{
+			if (reinterpret_cast<HWND>(lParam) != fImpl->m_hWndGripperHack)
+				return UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
+			const COLORREF color = UT_Win32WorkspaceColor();
+			SetBkColor(reinterpret_cast<HDC>(wParam), color);
+			static HBRUSH brush = nullptr;
+			static COLORREF painted = CLR_INVALID;
+			if (!brush || painted != color)
+			{
+				if (brush)
+					DeleteObject(brush);
+				brush = CreateSolidBrush(color);
+				painted = color;
+			}
+			if (brush)
+				return reinterpret_cast<LRESULT>(brush);
+			return UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
 		}
 
 		case WM_SIZE:
