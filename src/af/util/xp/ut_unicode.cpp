@@ -55,6 +55,25 @@ bool UT_Unicode::UCS4_to_UTF8 (char *& buffer, size_t & length, UT_UCS4Char ucs4
 	return true;
 }
 
+int UT_Unicode::UCS4_to_UTF16 (UT_UCS4Char ucs4, UT_UCS2Char out[2], bool dropIgnorable)
+{
+	if (!out)
+		return 0;
+	if (dropIgnorable && (ucs4 == 0x200B || ucs4 == 0xFEFF))
+		return 0;
+	if (ucs4 > 0x10FFFF || (ucs4 >= 0xD800 && ucs4 <= 0xDFFF))
+		ucs4 = 0xFFFD;
+	if (ucs4 <= 0xFFFF)
+	{
+		out[0] = static_cast<UT_UCS2Char>(ucs4);
+		return 1;
+	}
+	ucs4 -= 0x10000;
+	out[0] = static_cast<UT_UCS2Char>(0xD800 + ((ucs4 >> 10) & 0x3FF));
+	out[1] = static_cast<UT_UCS2Char>(0xDC00 + (ucs4 & 0x3FF));
+	return 2;
+}
+
 /** scans a buffer for the next valid UTF-8 sequence and returns the corresponding
  * UCS-4 value for that sequence; the pointer and length-remaining are incremented
  * and decremented respectively; returns 0 if no valid UTF-8 sequence found by the

@@ -45,4 +45,22 @@ public:
  * returns false if not valid UCS-4 or if (length < UTF8_ByteLength (ucs4))
  */
 	static bool UCS4_to_UTF8 (char *& buffer, size_t & length, UT_UCS4Char ucs4);
+
+	// UTF-16 for the Windows text drawers. dropIgnorable skips U+200B and
+	// U+FEFF. A lone surrogate or a value past U+10FFFF becomes U+FFFD.
+	// Returns 0, 1 or 2 units written to out.
+	static int UCS4_to_UTF16 (UT_UCS4Char ucs4, UT_UCS2Char out[2], bool dropIgnorable);
 };
+
+// The second UTF-16 unit of a surrogate pair has no extra advance.
+inline int UT_utf16_unit_advance (int unitIndex, int cellAdvance)
+{
+	return unitIndex == 0 ? cellAdvance : 0;
+}
+
+// Device Y stays page-local. Folding it with the physical page height
+// sent a picture past the paper edge back to the top.
+inline UT_sint32 UT_image_page_y (UT_sint32 yDest)
+{
+	return yDest;
+}

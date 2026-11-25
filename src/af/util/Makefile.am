@@ -31,6 +31,8 @@ libutil_la_SOURCES = \
 	xp/ut_bijection.h \
 	xp/ut_bytebuf.cpp \
 	xp/ut_bytebuf.h \
+	xp/ut_dib.cpp \
+	xp/ut_dib.h \
 	xp/ut_case.h \
 	xp/ut_color.h \
 	xp/ut_color.cpp \
@@ -184,5 +186,6 @@ EXTRA_DIST = \
 	xp/t/ut_types.t.cpp \
 	xp/t/ut_units.t.cpp \
 	xp/t/ut_uuid.t.cpp \
+	xp/t/ut_win_proof.t.cpp \
 	xp/t/ut_vector.t.cpp \
 	$(rc2files)

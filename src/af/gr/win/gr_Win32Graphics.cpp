@@ -35,6 +35,7 @@
 #include "gr_Win32Graphics.h"
 #include "gr_Win32Image.h"
 #include "gr_Painter.h"
+#include "ut_unicode.h"
 
 #include <xap_Win32App.h>
 #include <xap_Win32Res_Cursors.rc2>
@@ -549,19 +550,7 @@ GR_Font* GR_Win32Graphics::_findFont(const char* pszFontFamily,
 // becomes U+FFFD.
 static int s_utf16Units(UT_UCS4Char ch, UT_UCS2Char out[2])
 {
-	if (ch == 0x200B || ch == 0xFEFF)
-		return 0;
-	if (ch > 0x10FFFF || (ch >= 0xD800 && ch <= 0xDFFF))
-		ch = 0xFFFD;
-	if (ch <= 0xFFFF)
-	{
-		out[0] = static_cast<UT_UCS2Char>(ch);
-		return 1;
-	}
-	ch -= 0x10000;
-	out[0] = static_cast<UT_UCS2Char>(0xD800 + ((ch >> 10) & 0x3FF));
-	out[1] = static_cast<UT_UCS2Char>(0xDC00 + (ch & 0x3FF));
-	return 2;
+	return UT_Unicode::UCS4_to_UTF16(ch, out, true);
 }
 
 void GR_Win32Graphics::drawGlyph(UT_uint32 /*Char*/, UT_sint32 /*xoff*/, UT_sint32 /*yoff*/)
@@ -749,10 +738,10 @@ void GR_Win32Graphics::drawChars(const UT_UCS4Char* pChars,
 					continue;
 				iwidth += pCharWidths[iCharOffset + i];
 				const UT_sint32 inextAdvance = (UT_sint32)((double)_tduX(iwidth) * m_fXYRatio);
-				pCharAdvances[j++] = inextAdvance - iadvance;
+				pCharAdvances[j++] = UT_utf16_unit_advance(0, inextAdvance - iadvance);
 				iadvance = inextAdvance;
 				if (n == 2)
-					pCharAdvances[j++] = 0;
+					pCharAdvances[j++] = UT_utf16_unit_advance(1, inextAdvance - iadvance);
 			}
 		}
 		else
@@ -2014,7 +2003,7 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 	UT_return_if_fail(pImg);
 	
 	xDest = (UT_sint32)((double)_tduX(xDest) * m_fXYRatio);
-	yDest = _tduY(yDest);
+	yDest = UT_image_page_y(_tduY(yDest));
 	
 	if (pImg->getType() != GR_Image::GRT_Raster)
 	{
@@ -2172,7 +2161,7 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 	}
 
 	xDest = (UT_sint32)((double)_tduX(xDest) * m_fXYRatio);
-	yDest = _tduY(yDest);
+	yDest = UT_image_page_y(_tduY(yDest));
 
 	const int destW = pImg->getDisplayWidth();
 	const int destH = pImg->getDisplayHeight();

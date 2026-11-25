@@ -26,6 +26,7 @@
 #include "xap_Frame.h"
 #include "xav_View.h"
 #include "ut_Win32OS.h"
+#include "ut_unicode.h"
 
 extern "C"  UT_uint16    wvLangToLIDConverter(const char * lang);
 extern "C"  const char * wvLIDToLangConverter(UT_uint16);
@@ -776,17 +777,10 @@ bool s_needsSurrogate(UT_UCS4Char ch)
 
 void s_storeUtf16(WCHAR * dest, UT_uint32 & n, UT_UCS4Char ch)
 {
-	if (s_needsSurrogate(ch))
-	{
-		UT_UCS4Char c = ch - 0x10000;
-		dest[n++] = static_cast<WCHAR>(0xD800 + ((c >> 10) & 0x3FF));
-		dest[n++] = static_cast<WCHAR>(0xDC00 + (c & 0x3FF));
-		return;
-	}
-	// A lone surrogate, or a value past the Unicode range, is not a WCHAR.
-	if (ch > 0xFFFF || (ch >= 0xD800 && ch <= 0xDFFF))
-		ch = 0xFFFD;
-	dest[n++] = static_cast<WCHAR>(ch);
+	UT_UCS2Char units[2];
+	const int count = UT_Unicode::UCS4_to_UTF16(ch, units, false);
+	for (int i = 0; i < count; ++i)
+		dest[n++] = static_cast<WCHAR>(units[i]);
 }
 
 class Utf16Index

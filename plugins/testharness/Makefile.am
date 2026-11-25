@@ -32,6 +32,7 @@ testharness_la_SOURCES = \
 	@top_srcdir@/src/af/util/xp/t/ut_stack.t.cpp \
 	@top_srcdir@/src/af/util/xp/t/ut_uuid.t.cpp \
 	@top_srcdir@/src/af/util/xp/t/ut_go_file.t.cpp \
+	@top_srcdir@/src/af/util/xp/t/ut_win_proof.t.cpp \
 	@top_srcdir@/src/af/util/xp/t/ut_path.t.cpp \
 	@top_srcdir@/src/af/util/xp/t/ut_locale.t.cpp \
 	@top_srcdir@/src/af/xap/xp/t/xap_Prefs.t.cpp \

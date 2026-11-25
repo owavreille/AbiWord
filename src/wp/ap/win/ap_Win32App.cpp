@@ -53,6 +53,7 @@
 
 #include "ut_debugmsg.h"
 #include "ut_bytebuf.h"
+#include "ut_dib.h"
 #include "ut_string.h"
 #include "ut_std_string.h"
 #include "xap_Args.h"
@@ -698,84 +699,28 @@ bool AP_Win32App::_copyFmtToClipboard(PD_DocumentRange * pDocRange, const char *
 
 static bool s_isPng(const UT_Byte * data, UT_uint32 size)
 {
-	return data && size >= 8
-		&& data[0] == 0x89 && data[1] == 'P' && data[2] == 'N' && data[3] == 'G';
+	return UT_image_is_png(data, size);
 }
 
 static bool s_isJpeg(const UT_Byte * data, UT_uint32 size)
 {
-	return data && size >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF;
+	return UT_image_is_jpeg(data, size);
 }
 
 // CF_DIB is a 24-bit bottom-up bitmap. Alpha is flattened on white so Paint
 // and Word receive a picture they can paste.
 static bool s_packClipboardDib(const BITMAPINFO * info, UT_ByteBuf & out)
 {
-	if (!info)
+	if (!info || info->bmiHeader.biSize < sizeof(BITMAPINFOHEADER))
 		return false;
 	const BITMAPINFOHEADER & hdr = info->bmiHeader;
-	if (hdr.biSize < sizeof(BITMAPINFOHEADER) || hdr.biWidth <= 0 || hdr.biHeight == 0)
-		return false;
-	const int height = hdr.biHeight < 0 ? -hdr.biHeight : hdr.biHeight;
-	if (hdr.biWidth > 16384 || height > 16384)
-		return false;
-	const int bpp = hdr.biBitCount / 8;
-	if (bpp != 3 && bpp != 4)
-		return false;
-
-	const UT_uint32 srcRow = (UT_uint32)((hdr.biWidth * bpp + 3) & ~3);
-	const UT_uint32 dstRow = (UT_uint32)((hdr.biWidth * 3 + 3) & ~3);
-	const UT_uint64 total = (UT_uint64)sizeof(BITMAPINFOHEADER) + (UT_uint64)dstRow * (UT_uint64)height;
-	if (total == 0 || total > 0x7fffffffu)
-		return false;
-
-	BITMAPINFOHEADER outHdr = hdr;
-	outHdr.biSize = sizeof(BITMAPINFOHEADER);
-	outHdr.biWidth = hdr.biWidth;
-	outHdr.biHeight = height;
-	outHdr.biPlanes = 1;
-	outHdr.biBitCount = 24;
-	outHdr.biCompression = BI_RGB;
-	outHdr.biSizeImage = dstRow * (UT_uint32)height;
-	outHdr.biClrUsed = 0;
-	outHdr.biClrImportant = 0;
-
-	out.truncate(0);
-	if (!out.append(reinterpret_cast<const UT_Byte *>(&outHdr), sizeof(outHdr)))
-		return false;
-
-	const bool topDown = hdr.biHeight < 0;
-	const UT_Byte * src = reinterpret_cast<const UT_Byte *>(info) + hdr.biSize;
-	UT_Byte * row = new UT_Byte[dstRow];
-	bool ok = true;
-	for (int y = 0; ok && y < height; ++y)
-	{
-		const int srcY = topDown ? (height - 1 - y) : y;
-		const UT_Byte * srow = src + (size_t)srcY * srcRow;
-		memset(row, 0, dstRow);
-		for (int x = 0; x < hdr.biWidth; ++x)
-		{
-			int b = srow[x * bpp + 0];
-			int g = srow[x * bpp + 1];
-			int r = srow[x * bpp + 2];
-			if (bpp == 4)
-			{
-				const int a = srow[x * bpp + 3];
-				const int inv = 255 - a;
-				b = (b * a + 255 * inv + 127) / 255;
-				g = (g * a + 255 * inv + 127) / 255;
-				r = (r * a + 255 * inv + 127) / 255;
-			}
-			row[x * 3 + 0] = (UT_Byte)b;
-			row[x * 3 + 1] = (UT_Byte)g;
-			row[x * 3 + 2] = (UT_Byte)r;
-		}
-		ok = out.append(row, dstRow);
-	}
-	delete [] row;
-	if (!ok)
-		out.truncate(0);
-	return ok;
+	UT_ImagePixels pixels;
+	pixels.rows = reinterpret_cast<const UT_Byte *>(info) + hdr.biSize;
+	pixels.width = hdr.biWidth;
+	pixels.height = hdr.biHeight < 0 ? -hdr.biHeight : hdr.biHeight;
+	pixels.bpp = hdr.biBitCount / 8;
+	pixels.topDown = hdr.biHeight < 0;
+	return UT_pack_dib24(pixels, out);
 }
 
 static void s_selectedImageForClipboard(XAP_Frame * frame, UT_ByteBuf & dib, UT_ConstByteBufPtr & png)
@@ -855,40 +800,12 @@ static bool s_pasteDib(AP_Win32App * app, XAP_Win32Clipboard * clip)
 		return false;
 	const UT_uint32 size = static_cast<UT_uint32>(GlobalSize(hData));
 	bool ok = false;
+	UT_uint32 pixelOffset = 0;
 	if (size >= sizeof(BITMAPINFOHEADER))
 	{
 		const BITMAPINFOHEADER * hdr = reinterpret_cast<const BITMAPINFOHEADER *>(data);
-		UT_uint32 pixelOffset = hdr->biSize;
-		if (hdr->biSize >= sizeof(BITMAPINFOHEADER) && hdr->biSize <= size
-			&& hdr->biWidth > 0 && hdr->biWidth <= 16384 && hdr->biHeight != 0)
-		{
-			const int height = hdr->biHeight < 0 ? -hdr->biHeight : hdr->biHeight;
-			if (height <= 16384)
-			{
-				UT_uint32 extra = 0;
-				if (hdr->biClrUsed)
-				{
-					if (hdr->biClrUsed <= 256)
-						extra = hdr->biClrUsed * (UT_uint32)sizeof(RGBQUAD);
-					else
-						pixelOffset = size + 1;
-				}
-				else if (hdr->biBitCount > 0 && hdr->biBitCount <= 8)
-					extra = (1u << hdr->biBitCount) * (UT_uint32)sizeof(RGBQUAD);
-				else if (hdr->biCompression == BI_BITFIELDS && hdr->biSize == sizeof(BITMAPINFOHEADER))
-					extra = 12;
-				if (pixelOffset <= size && extra <= size - pixelOffset)
-					pixelOffset += extra;
-				else
-					pixelOffset = size + 1;
-			}
-			else
-				pixelOffset = size + 1;
-		}
-		else
-			pixelOffset = size + 1;
-
-		if (pixelOffset <= size)
+		if (UT_dib_pixels_fit(size, hdr->biSize, hdr->biWidth, hdr->biHeight,
+			hdr->biBitCount, hdr->biCompression, hdr->biClrUsed, pixelOffset))
 		{
 			UT_ByteBuf bmp;
 			BITMAPFILEHEADER fh;

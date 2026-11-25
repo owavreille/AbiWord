@@ -1579,7 +1579,7 @@ UT_go_url_show (gchar const *url)
 	// ShellExecuteW returns a value <= 32 when the shell refused the link.
 	// https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
 	const INT_PTR opened = (INT_PTR)ShellExecuteW(nullptr, L"open", str.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
-	if (opened <= 32)
+	if (UT_go_shell_launch_failed(static_cast<long long>(opened)))
 		return g_error_new_literal(g_quark_from_static_string("abiword-url"), 1, "Could not open URL");
 	return nullptr;
 #elif TOOLKIT_COCOA

@@ -90,3 +90,9 @@ ABI_EXPORT gchar	*UT_go_get_mime_type	(gchar const *uri);
 ABI_EXPORT gint UT_go_utf8_collate_casefold (const char *a, const char *b);
 
 G_END_DECLS
+
+// ShellExecuteW returns a value <= 32 when the shell refused the link.
+inline bool UT_go_shell_launch_failed (long long code)
+{
+	return code <= 32;
+}
