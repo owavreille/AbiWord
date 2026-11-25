@@ -23,7 +23,6 @@
 
 #pragma once
 #include "ut_types.h"
-#include <cstdio>
 
 /** contain various unicode function. Just a namespace */
 class ABI_EXPORT UT_Unicode
@@ -316,6 +315,42 @@ inline bool UT_page_margins_fit (double left, double right, double top, double b
 
 // An RTF character above U+00FF is \uN? with a signed 16-bit N. A value past
 // the BMP is a surrogate pair. One ANSI byte has no unicode escape.
+// The digits are written by hand: Windows headers turn snprintf into _snprintf.
+inline int UT_rtf_append_int (char * dest, int capacity, int at, int value)
+{
+	char digits[16];
+	int n = 0;
+	const bool neg = value < 0;
+	unsigned int mag = neg ? static_cast<unsigned int>(-value) : static_cast<unsigned int>(value);
+	do
+	{
+		digits[n++] = static_cast<char>('0' + (mag % 10u));
+		mag /= 10u;
+	} while (mag && n < static_cast<int>(sizeof digits));
+	if (neg && n < static_cast<int>(sizeof digits))
+		digits[n++] = '-';
+	if (at + n >= capacity)
+		return -1;
+	while (n > 0)
+		dest[at++] = digits[--n];
+	dest[at] = 0;
+	return at;
+}
+
+inline int UT_rtf_append_text (char * dest, int capacity, int at, const char * text)
+{
+	if (!text)
+		return at;
+	while (*text)
+	{
+		if (at + 1 >= capacity)
+			return -1;
+		dest[at++] = *text++;
+	}
+	dest[at] = 0;
+	return at;
+}
+
 inline int UT_rtf_unicode_escape (UT_UCS4Char wc, char * dest, int capacity)
 {
 	if (!dest || capacity < 8)
@@ -323,11 +358,12 @@ inline int UT_rtf_unicode_escape (UT_UCS4Char wc, char * dest, int capacity)
 	dest[0] = 0;
 	if (wc <= 0x00ff || wc > 0x10ffff)
 		return 0;
-	int n = 0;
+	int at = UT_rtf_append_text(dest, capacity, 0, "\\u");
 	if (wc <= 0xffff)
 	{
 		const int tmp = static_cast<int>(static_cast<signed short>(static_cast<unsigned short>(wc)));
-		n = std::snprintf(dest, static_cast<size_t>(capacity), "\\u%d?", tmp);
+		at = UT_rtf_append_int(dest, capacity, at, tmp);
+		at = UT_rtf_append_text(dest, capacity, at, "?");
 	}
 	else
 	{
@@ -336,14 +372,17 @@ inline int UT_rtf_unicode_escape (UT_UCS4Char wc, char * dest, int capacity)
 			static_cast<unsigned short>(0xD800 + (value >> 10))));
 		const int low = static_cast<int>(static_cast<signed short>(
 			static_cast<unsigned short>(0xDC00 + (value & 0x3FF))));
-		n = std::snprintf(dest, static_cast<size_t>(capacity), "\\u%d?\\u%d?", high, low);
+		at = UT_rtf_append_int(dest, capacity, at, high);
+		at = UT_rtf_append_text(dest, capacity, at, "?\\u");
+		at = UT_rtf_append_int(dest, capacity, at, low);
+		at = UT_rtf_append_text(dest, capacity, at, "?");
 	}
-	if (n <= 0 || n >= capacity)
+	if (at < 0)
 	{
 		dest[0] = 0;
 		return 0;
 	}
-	return n;
+	return at;
 }
 
 // A scaled RTF image is a fraction of the goal in twips, or of the pixel
