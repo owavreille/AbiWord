@@ -24,6 +24,7 @@
 #include <windows.h>
 
 #include "ut_string.h"
+#include "ut_unicode.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 
@@ -112,11 +113,7 @@ BOOL AP_Win32Dialog_HdrFtr::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 	if (hSpin)
 	{
 		SendMessageW(hSpin, UDM_SETRANGE32, 0, 32767);
-		int restartVal = getRestartValue();
-		if (restartVal < 0)
-			restartVal = 0;
-		else if (restartVal > 32767)
-			restartVal = 32767;
+		const int restartVal = UT_spin_floor(getRestartValue(), 32767);
 		SendMessageW(hSpin, UDM_SETPOS, 0, MAKELPARAM(static_cast<WORD>(restartVal), 0));
 	}
 

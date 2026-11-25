@@ -34,6 +34,7 @@
 // AbiWord includes
 #include "pd_Document.h"
 #include "ut_std_string.h"
+#include "ut_unicode.h"
 
 
 /**
@@ -97,11 +98,7 @@ void ODi_Table_ListenerState::startElement (const gchar* pName,
     }
     else if(!strcmp(pName,"table:covered-table-cell")){
         const gchar* pRepeated = UT_getAttribute("table:number-columns-repeated", ppAtts);
-        UT_sint32 repeated = !pRepeated ? 1 : atoi(pRepeated);
-        if (repeated < 1)
-            repeated = 1;
-        else if (repeated > 1024)
-            repeated = 1024;
+        const UT_sint32 repeated = UT_repeated_count(pRepeated, 1024);
         m_col += repeated;
     }
 
@@ -376,16 +373,7 @@ void ODi_Table_ListenerState::_parseColumnStart (const gchar** ppAtts,
         UT_sint32 i=0;
         
         pNumberColumnsRepeated = UT_getAttribute("table:number-columns-repeated", ppAtts);
-        if (pNumberColumnsRepeated != nullptr) {
-            nColsRepeated = atoi(pNumberColumnsRepeated);
-            UT_ASSERT(nColsRepeated > 0);
-            if (nColsRepeated < 1)
-                nColsRepeated = 1;
-            else if (nColsRepeated > 1024)
-                nColsRepeated = 1024;
-        } else {
-            nColsRepeated = 1;
-        }
+        nColsRepeated = UT_repeated_count(pNumberColumnsRepeated, 1024);
         m_numColumns += nColsRepeated;
 
         pStyleName = UT_getAttribute("table:style-name", ppAtts);
@@ -447,12 +435,7 @@ void ODi_Table_ListenerState::_parseCellStart (const gchar** ppAtts,
         UT_sint32 colSpan;
         UT_sint32 rowSpan;
         pVal = UT_getAttribute("table:number-columns-repeated", ppAtts);
-        UT_sint32 colsRepeated = !pVal ? 1 : atoi(pVal);
-        if (colsRepeated < 1) {
-            colsRepeated = 1;
-        } else if (colsRepeated > 1000) {
-            colsRepeated = 1000;
-        }
+        UT_sint32 colsRepeated = UT_repeated_count(pVal, 1000);
         if (m_numColumns > 0) {
             UT_sint32 remaining = m_numColumns - m_col;
             if (remaining < 1) {

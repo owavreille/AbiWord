@@ -39,6 +39,7 @@
 #include "ODi_TableOfContent_ListenerState.h"
 #include "ODi_Abi_Data.h"
 #include <cstdio>
+#include "ut_unicode.h"
 #include "ut_growbuf.h"
 #include "pf_Frag.h"
 #include "ie_exp_RTF.h"
@@ -1072,7 +1073,7 @@ void ODi_TextContent_ListenerState::endElement (const gchar* pName,
         _flush ();
         bool pushedFmt = false;
         if (!m_spanPushedStack.empty()) {
-            pushedFmt = m_spanPushedStack.top();
+            pushedFmt = UT_end_flushes(m_spanPushedStack.top());
             m_spanPushedStack.pop();
         }
         if (pushedFmt) {

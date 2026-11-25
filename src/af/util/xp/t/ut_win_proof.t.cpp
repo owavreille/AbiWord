@@ -15,6 +15,7 @@
 #include "ut_bytebuf.h"
 #include "ut_mbtowc.h"
 #include "ut_units.h"
+#include "ut_string_class.h"
 
 #define TFSUITE "core.af.util.winproof"
 
@@ -298,6 +299,151 @@ TFTEST_MAIN("An RTF character above 255 is a unicode escape and a pixel image is
 	TFPASS(UT_rtf_scaled_inches(200, 720, 96, true) == 1.0);
 	TFPASS(UT_rtf_scaled_inches(100, 0, 96, false) == 1.0);
 	TFPASS(UT_rtf_scaled_inches(50, 0, 96, false) == 0.5);
+}
+
+TFTEST_MAIN("A zoom thumb stays in range and the end of a scroll is ignored")
+{
+	TFPASS(UT_clamp_span(0, 20, 500) == 20);
+	TFPASS(UT_clamp_span(100, 20, 500) == 100);
+	TFPASS(UT_clamp_span(600, 20, 500) == 500);
+	TFPASS(UT_zoom_thumb_scroll(4, 4, 5));
+	TFPASS(UT_zoom_thumb_scroll(5, 4, 5));
+	TFPASS(!UT_zoom_thumb_scroll(8, 4, 5));
+}
+
+TFTEST_MAIN("A table stays inside its cap and a restart stays in the spin")
+{
+	TFPASS(UT_table_axis(0, 64) == 1);
+	TFPASS(UT_table_axis(64, 64) == 64);
+	TFPASS(UT_table_axis(65, 64) == 64);
+	TFPASS(UT_table_axis(0, 500) == 1);
+	TFPASS(UT_table_axis(501, 500) == 500);
+	TFPASS(UT_spin_floor(-1, 32767) == 0);
+	TFPASS(UT_spin_floor(12, 32767) == 12);
+	TFPASS(UT_spin_floor(32768, 32767) == 32767);
+}
+
+TFTEST_MAIN("A normal weight is regular, scripts exclude each other and capitals are uppercase")
+{
+	TFPASS(UT_font_weight_is_normal(nullptr));
+	TFPASS(UT_font_weight_is_normal(""));
+	TFPASS(UT_font_weight_is_normal("Normal"));
+	TFPASS(!UT_font_weight_is_normal("bold"));
+
+	bool super = true;
+	bool sub = true;
+	UT_font_choose_script(super, sub, true);
+	TFPASS(super && !sub);
+	super = true;
+	sub = true;
+	UT_font_choose_script(super, sub, false);
+	TFPASS(!super && sub);
+	super = false;
+	sub = true;
+	UT_font_choose_script(super, sub, true);
+	TFPASS(!super && sub);
+
+	TFPASS(UT_text_is_uppercase("Uppercase"));
+	TFPASS(!UT_text_is_uppercase("none"));
+	TFPASS(strcmp(UT_text_transform(true), "uppercase") == 0);
+	TFPASS(strcmp(UT_text_transform(false), "none") == 0);
+	TFPASS(UT_font_style_chosen(0, 1));
+	TFPASS(!UT_font_style_chosen(1, 1));
+}
+
+TFTEST_MAIN("An unopened property page is skipped and an image size keeps its unit")
+{
+	TFPASS(!UT_page_was_opened(false));
+	TFPASS(UT_page_was_opened(true));
+	TFPASS(!UT_page_can_read(true, false));
+	TFPASS(!UT_page_can_read(false, true));
+	TFPASS(UT_page_can_read(true, true));
+
+	TFPASS(!UT_text_has("12", "cm"));
+	TFPASS(UT_text_has("12cm", "cm"));
+	TFPASS(UT_text_has("12in", "in"));
+	TFPASS(!UT_text_has("12in", "cm"));
+}
+
+TFTEST_MAIN("A vertical merge stops, DOCX language prefers val and highlight none is transparent")
+{
+	TFPASS(UT_vmerge_remainder(1) == 0);
+	TFPASS(UT_vmerge_remainder(2) == 0);
+	TFPASS(UT_vmerge_remainder(4) == 2);
+
+	TFPASS(strcmp(UT_docx_lang("fr-FR", "ja-JP", "ar-SA"), "fr-FR") == 0);
+	TFPASS(strcmp(UT_docx_lang(nullptr, "ja-JP", "ar-SA"), "ja-JP") == 0);
+	TFPASS(strcmp(UT_docx_lang(nullptr, nullptr, "ar-SA"), "ar-SA") == 0);
+	TFPASS(UT_docx_lang(nullptr, nullptr, nullptr) == nullptr);
+
+	TFPASS(strcmp(UT_docx_highlight("none"), "transparent") == 0);
+	TFPASS(strcmp(UT_docx_highlight("darkYellow"), "olive") == 0);
+	TFPASS(strcmp(UT_docx_highlight("yellow"), "yellow") == 0);
+	TFPASS(UT_docx_highlight(nullptr) == nullptr);
+
+	TFPASS(UT_end_flushes(true));
+	TFPASS(!UT_end_flushes(false));
+	TFPASS(!UT_list_has_props(0));
+	TFPASS(UT_list_has_props(2));
+}
+
+TFTEST_MAIN("A repeated column is capped, a math name needs a prefix and a tab stop needs a slash")
+{
+	TFPASS(UT_repeated_count(nullptr, 1024) == 1);
+	TFPASS(UT_repeated_count("0", 1024) == 1);
+	TFPASS(UT_repeated_count("-3", 1024) == 1);
+	TFPASS(UT_repeated_count("3", 1024) == 3);
+	TFPASS(UT_repeated_count("2000", 1024) == 1024);
+	TFPASS(UT_repeated_count("2000", 1000) == 1000);
+
+	const UT_UCS4Char plain[] = { 'm', 'i' };
+	const UT_UCS4Char prefixed[] = { 'm', 'a', 't', 'h', ':', 'm', 'i' };
+	TFPASS(UT_math_name_needs_prefix(plain, 2));
+	TFPASS(!UT_math_name_needs_prefix(prefixed, 7));
+
+	bool hasType = true;
+	bool hasLeader = true;
+	UT_tabstop_bounds(4, 3, hasType, hasLeader);
+	TFPASS(!hasType && !hasLeader);
+	UT_tabstop_bounds(5, 3, hasType, hasLeader);
+	TFPASS(hasType && !hasLeader);
+	UT_tabstop_bounds(6, 3, hasType, hasLeader);
+	TFPASS(hasType && hasLeader);
+	UT_tabstop_bounds(6, -1, hasType, hasLeader);
+	TFPASS(!hasType && !hasLeader);
+}
+
+TFTEST_MAIN("CDATA splits a math end, an ODF href keeps the file and UTF-8 math is counted in bytes")
+{
+	unsigned char dest[64];
+	const unsigned char src[] = { 'a', ']', ']', '>', 'b', ']', ']' };
+	const int wrote = UT_cdata_escape(src, 7, dest, 64);
+	TFPASS(wrote == 19);
+	TFPASS(memcmp(dest, "a]]]]><![CDATA[>b]]", 19) == 0);
+	TFPASS(UT_cdata_escape(src, 0, dest, 64) == 0);
+	TFPASS(UT_cdata_escape(src, 7, dest, 4) == -1);
+
+	const UT_OdfHref object = UT_odf_href("./ObjectReplacements/Object 1");
+	TFPASS(object.dirLen == 18);
+	TFPASS(memcmp("./ObjectReplacements/Object 1" + object.dirAt, "ObjectReplacements", 18) == 0);
+	TFPASS(object.fileLen == 8);
+	TFPASS(memcmp("./ObjectReplacements/Object 1" + object.fileAt, "Object 1", 8) == 0);
+	const UT_OdfHref file = UT_odf_href("content.xml");
+	TFPASS(file.dirLen == 0);
+	TFPASS(file.fileLen == 11);
+	const UT_OdfHref nested = UT_odf_href("././Pictures/a.png");
+	TFPASS(nested.dirLen == 8);
+	TFPASS(memcmp("././Pictures/a.png" + nested.dirAt, "Pictures", 8) == 0);
+	TFPASS(memcmp("././Pictures/a.png" + nested.fileAt, "a.png", 5) == 0);
+	const UT_OdfHref empty = UT_odf_href("");
+	TFPASS(empty.dirLen == 0 && empty.fileLen == 0);
+
+	const UT_UTF8String accent("\xc3\xa9");
+	const UT_UTF8String emoji("\xf0\x9f\x98\x80");
+	TFPASS(accent.size() == 1);
+	TFPASS(accent.byteLength() == 2);
+	TFPASS(emoji.size() == 1);
+	TFPASS(emoji.byteLength() == 4);
 }
 
 TFTEST_MAIN("ShellExecute failure is a result at or below 32")

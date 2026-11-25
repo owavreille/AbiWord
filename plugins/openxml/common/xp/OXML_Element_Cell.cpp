@@ -20,6 +20,7 @@
  */
 
 #include "ut_types.h"
+#include "ut_unicode.h"
 #include "ut_std_string.h"
 #include "ut_string.h"
 #include "pd_Document.h"
@@ -263,7 +264,7 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 	if(vspan > 1)
 	{
 		//add the remaining part of the cell as a missing cell
-		OXML_SharedElement_Cell missingCell(new OXML_Element_Cell("", m_table, m_iLeft, m_iRight, -1, vspan - 2)); //vertically continued cell
+		OXML_SharedElement_Cell missingCell(new OXML_Element_Cell("", m_table, m_iLeft, m_iRight, -1, UT_vmerge_remainder(vspan))); //vertically continued cell
 		const gchar* propVal = nullptr;
 		if (getProperty("bot-style", propVal) == UT_OK && propVal)
 			missingCell->setProperty("bot-style", propVal);

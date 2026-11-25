@@ -2789,3 +2789,58 @@ TFTEST_MAIN("RTF export writes an emoji as a unicode pair")
 	TFPASS(rtf.find("\\u-8704") != std::string::npos);
 	TFPASS(rtf.find("\\'3f") != std::string::npos);
 }
+
+TFTEST_MAIN("ABW import keeps a margin note")
+{
+	const char * abw =
+		"<?xml version=\"1.0\"?>\n"
+		"<abiword version=\"1.0\">\n"
+		"<section><p><c>corps</c></p></section>\n"
+		"<margin><p><c>note</c></p></margin>\n"
+		"</abiword>\n";
+	PD_Document * doc = import_bytes(abw, ".abw");
+	if (!TFPASS(doc != nullptr))
+		return;
+	TFPASS(first_strux(doc, PTX_SectionMarginnote) != 0);
+	const std::string text = document_text(doc);
+	doc->unref();
+	TFPASS(text.find("corps") != std::string::npos);
+	TFPASS(text.find("note") != std::string::npos);
+}
+
+TFTEST_MAIN("ABW export splits a math CDATA end")
+{
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+	const char payload[] = "a]]>b]]";
+	UT_ByteBufPtr bytes(new UT_ByteBuf);
+	bytes->append(reinterpret_cast<const UT_Byte *>(payload), static_cast<UT_uint32>(sizeof payload - 1));
+	const PP_PropertyVector atts = {"dataid", "eq1"};
+	if (!TFPASS(doc->createDataItem("eq1", false, bytes, "application/mathml+xml", nullptr)) ||
+		!TFPASS(doc->insertObject(first_block_content(doc), PTO_Math, atts, PP_NOPROPS)))
+	{
+		doc->unref();
+		return;
+	}
+	const std::string path = UT_createTmpFile("fmtmath", ".abw");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+	const std::string saved = file_contents(path);
+	std::remove(path.c_str());
+	TFPASS(saved.find("a]]]]><![CDATA[>b]]") != std::string::npos);
+	TFPASS(saved.find("application/mathml+xml") != std::string::npos);
+}

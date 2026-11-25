@@ -24,6 +24,7 @@
 
 #include "ut_types.h"
 #include "ut_string.h"
+#include "ut_unicode.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_Win32OS.h"
@@ -163,21 +164,13 @@ void AP_Win32Dialog_InsertTable::getCtrlValues(void)
 		
 	if (getDlgItemText(AP_RID_DIALOG_INSERTTABLE_VAL_COLUMN, str))
 	{
-		int cols = _wtoi(str.c_str());
-		if (cols < 1)
-			cols = 1;
-		else if (cols > 64)
-			cols = 64;
+		const int cols = UT_table_axis(_wtoi(str.c_str()), 64);
 		m_numCols = static_cast<UT_uint32>(cols);
 	}
 	
 	if (getDlgItemText(AP_RID_DIALOG_INSERTTABLE_VAL_ROW, str))
 	{
-		int rows = _wtoi(str.c_str());
-		if (rows < 1)
-			rows = 1;
-		else if (rows > 500)
-			rows = 500;
+		const int rows = UT_table_axis(_wtoi(str.c_str()), 500);
 		m_numRows = static_cast<UT_uint32>(rows);
 	}
 		

@@ -28,6 +28,7 @@
 #include "ut_std_string.h"
 #include "ut_types.h"
 #include "ut_bytebuf.h"
+#include "ut_unicode.h"
 #include "ut_base64.h"
 #include "ut_debugmsg.h"
 #include "ut_uuid.h"
@@ -1338,27 +1339,17 @@ void s_AbiWord_1_Listener::_handleDataItems(void)
 	    {
 		   bbEncoded->truncate(0);
 		   bbEncoded->append(reinterpret_cast<const UT_Byte*>("<![CDATA["), 9);
-		   UT_uint32 off = 0;
-		   UT_uint32 len = pByteBuf->getLength();
+		   const UT_uint32 len = pByteBuf->getLength();
 		   const UT_Byte * buf = pByteBuf->getPointer(0);
-		   while (off + 2 < len) {
-		      if (buf[off] == ']' && buf[off+1] == ']' && buf[off+2] == '>') {
-			 if (off > 0) {
-			    bbEncoded->append(buf, off);
-			 }
-			 bbEncoded->append(reinterpret_cast<const UT_Byte*>("]]]]><![CDATA[>"), 15);
-			 buf += off + 3;
-			 len -= off + 3;
-			 off = 0;
-			 continue;
-		      }
-		      off++;
-		   }
-		   if (len > 0) {
-		      bbEncoded->append(buf, len);
-		   }
+		   const UT_uint32 cap = len * 5 + 1;
+		   UT_Byte * escaped = new UT_Byte[cap];
+		   const int wrote = UT_cdata_escape(reinterpret_cast<const unsigned char *>(buf), len,
+				reinterpret_cast<unsigned char *>(escaped), cap);
+		   if (wrote > 0)
+		      bbEncoded->append(escaped, static_cast<UT_uint32>(wrote));
+		   delete [] escaped;
 		   bbEncoded->append(reinterpret_cast<const UT_Byte*>("]]>\n"), 4);
-		   status = true;
+		   status = wrote >= 0;
 		   encoded = false;
 		}
 	   	else

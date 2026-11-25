@@ -20,6 +20,7 @@
 #include <windows.h>
 
 #include "ut_string.h"
+#include "ut_unicode.h"
 #include "ut_types.h"
 #include "ut_assert.h"
 #include "ut_Win32LocaleString.h"
@@ -205,7 +206,7 @@ void AP_Win32Dialog_MetaData_General::_onInitDialog()
 */
 void AP_Win32Dialog_MetaData_General::_onOK()
 {	
-	if (!m_bInitialized || !getHandle())
+	if (!UT_page_can_read(m_bInitialized, getHandle() != nullptr))
 		return;
 	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_TITLE, m_sTitle);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_SUBJECT, m_sSubject);
@@ -219,7 +220,7 @@ void AP_Win32Dialog_MetaData_General::_onOK()
 */
 void AP_Win32Dialog_MetaData_General::transferData()
 {	
-	if (!m_bInitialized)
+	if (!UT_page_was_opened(m_bInitialized))
 		return;
 	getContainer()->setTitle(m_sTitle.c_str());
 	getContainer()->setSubject(m_sSubject.c_str());
@@ -283,7 +284,7 @@ void AP_Win32Dialog_MetaData_Summary::_onInitDialog()
 */
 void AP_Win32Dialog_MetaData_Summary::_onOK()
 {	
-	if (!m_bInitialized || !getHandle())
+	if (!UT_page_can_read(m_bInitialized, getHandle() != nullptr))
 		return;
 	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_CATEGORY, m_sCategory);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_KEYWORDS, m_sKeywords);
@@ -296,7 +297,7 @@ void AP_Win32Dialog_MetaData_Summary::_onOK()
 */
 void AP_Win32Dialog_MetaData_Summary::transferData()
 {		
-	if (!m_bInitialized)
+	if (!UT_page_was_opened(m_bInitialized))
 		return;
 	getContainer()->setCategory(m_sCategory.c_str());
 	getContainer()->setKeywords(m_sKeywords.c_str());
@@ -358,7 +359,7 @@ void AP_Win32Dialog_MetaData_Permissions::_onInitDialog()
 */
 void AP_Win32Dialog_MetaData_Permissions::_onOK()
 {
-	if (!m_bInitialized || !getHandle())
+	if (!UT_page_can_read(m_bInitialized, getHandle() != nullptr))
 		return;
 	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_SOURCE, m_sSource);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_RELATION, m_sRelation);
@@ -371,7 +372,7 @@ void AP_Win32Dialog_MetaData_Permissions::_onOK()
 */
 void AP_Win32Dialog_MetaData_Permissions::transferData()
 {			
-	if (!m_bInitialized)
+	if (!UT_page_was_opened(m_bInitialized))
 		return;
 	getContainer()->setSource(m_sSource.c_str());
 	getContainer()->setRelation(m_sRelation.c_str());

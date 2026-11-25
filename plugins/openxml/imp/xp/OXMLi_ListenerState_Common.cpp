@@ -39,6 +39,7 @@
 #include "OXML_FontManager.h"
 
 // AbiWord includes
+#include "ut_unicode.h"
 #include "ut_units.h"
 #include "ut_misc.h"
 #include "ut_debugmsg.h"
@@ -562,10 +563,12 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 			} else if (nameMatches(rqst->pName, NS_W_KEY, "highlight")) {
 				const gchar * val = attrMatches(NS_W_KEY, "val", rqst->ppAtts);
 				UT_return_if_fail( this->_error_if_fail(val != nullptr) );
-				if (!strcmp(val, "none")) {
-					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("bgcolor", "transparent")));
+				const char * highlight = UT_docx_highlight(val);
+				if (highlight && UT_ascii_eq(highlight, "transparent")) {
+					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("bgcolor", highlight)));
 				} else {
-					if (!strcmp(val, "darkYellow")) val = "olive"; //the only value not supported by CSS (equivalent to Olive)
+					if (highlight)
+						val = highlight;
 					std::string hex = "";
 					for (size_t i = 0, len = strlen(val); i < len; i++) {
 						hex += static_cast<char>(tolower(static_cast<unsigned char>(val[i])));
@@ -642,17 +645,10 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 					if ( 0 != strcmp(previousVal, "-none-"))
 						val = previousVal;
 				}
-				if (val != nullptr)
+				const gchar * lang = UT_docx_lang(val, eastAsia, bidi);
+				if (lang != nullptr)
 				{
-					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", val) ));
-				}
-				else if (eastAsia != nullptr)
-				{
-					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", eastAsia) ));
-				}
-				else if (bidi != nullptr)
-				{
-					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", bidi) ));
+					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", lang) ));
 				}
 
 			} else if (nameMatches(rqst->pName, NS_W_KEY, "noProof")) {
@@ -1063,7 +1059,7 @@ void OXMLi_ListenerState_Common::endElement (OXMLi_EndElementRequest * rqst)
 			   nameMatches(rqst->pName, NS_W_KEY, "commentReference")) {
 		bool shouldFlush = false;
 		if (!m_pushedInlineStack.empty()) {
-			shouldFlush = m_pushedInlineStack.top();
+			shouldFlush = UT_end_flushes(m_pushedInlineStack.top());
 			m_pushedInlineStack.pop();
 		}
 		if (shouldFlush) {

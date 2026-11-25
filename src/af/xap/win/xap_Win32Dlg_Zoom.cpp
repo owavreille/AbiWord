@@ -20,6 +20,7 @@
 #include <windows.h>
 
 #include "ut_string.h"
+#include "ut_unicode.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 
@@ -102,13 +103,10 @@ BOOL XAP_Win32Dialog_Zoom::_onDlgMessage(HWND /*hWnd*/,UINT msg,WPARAM wParam,LP
 	case WM_VSCROLL:
 	{
 		WORD code = LOWORD(wParam);
-		if (code == SB_THUMBPOSITION || code == SB_THUMBTRACK)
+		if (UT_zoom_thumb_scroll(code, SB_THUMBPOSITION, SB_THUMBTRACK))
 		{
-			int pos = static_cast<int>(HIWORD(wParam));
-			if (pos < XAP_DLG_ZOOM_MINIMUM_ZOOM)
-				pos = XAP_DLG_ZOOM_MINIMUM_ZOOM;
-			else if (pos > XAP_DLG_ZOOM_MAXIMUM_ZOOM)
-				pos = XAP_DLG_ZOOM_MAXIMUM_ZOOM;
+			const int pos = UT_clamp_span(static_cast<int>(HIWORD(wParam)),
+				XAP_DLG_ZOOM_MINIMUM_ZOOM, XAP_DLG_ZOOM_MAXIMUM_ZOOM);
 			_updatePreviewZoomPercent(static_cast<UT_uint32>(pos));
 		}
 		return 1;
@@ -147,11 +145,8 @@ BOOL XAP_Win32Dialog_Zoom::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*
 	enableControl(XAP_RID_DIALOG_ZOOM_SPIN_PCT, m_bEditPctEnabled);
 	
 	HWND spin = GetDlgItem(hWnd, XAP_RID_DIALOG_ZOOM_SPIN_PCT);
-	int value = static_cast<int>(m_zoomPercent);
-	if (value < XAP_DLG_ZOOM_MINIMUM_ZOOM)
-		value = XAP_DLG_ZOOM_MINIMUM_ZOOM;
-	else if (value > XAP_DLG_ZOOM_MAXIMUM_ZOOM)
-		value = XAP_DLG_ZOOM_MAXIMUM_ZOOM;
+	const int value = UT_clamp_span(static_cast<int>(m_zoomPercent),
+		XAP_DLG_ZOOM_MINIMUM_ZOOM, XAP_DLG_ZOOM_MAXIMUM_ZOOM);
 	// Ascending range: the up arrow raises the position. The control
 	// starts at 0, which is below the minimum, so the first click
 	// replaces the shown percentage with 20. Park it on that number.
@@ -254,11 +249,8 @@ BOOL XAP_Win32Dialog_Zoom::_onDeltaPos(NM_UPDOWN * pnmud)
 	// iDelta is the control's own step: positive raises the number.
 	// Read the field so a typed percentage is not replaced by the old position.
 	int shown = getControlInt(XAP_RID_DIALOG_ZOOM_EDIT_PCT);
-	int next = shown + pnmud->iDelta;
-	if (next < XAP_DLG_ZOOM_MINIMUM_ZOOM)
-		next = XAP_DLG_ZOOM_MINIMUM_ZOOM;
-	else if (next > XAP_DLG_ZOOM_MAXIMUM_ZOOM)
-		next = XAP_DLG_ZOOM_MAXIMUM_ZOOM;
+	const int next = UT_clamp_span(shown + pnmud->iDelta,
+		XAP_DLG_ZOOM_MINIMUM_ZOOM, XAP_DLG_ZOOM_MAXIMUM_ZOOM);
 
 	pnmud->iDelta = next - pnmud->iPos;
 	m_zoomPercent = static_cast<UT_uint32>(next);
@@ -267,11 +259,8 @@ BOOL XAP_Win32Dialog_Zoom::_onDeltaPos(NM_UPDOWN * pnmud)
 
 BOOL XAP_Win32Dialog_Zoom::_getValueFromEditPct(int * pNewValue)
 {
-	int newValue = getControlInt(XAP_RID_DIALOG_ZOOM_EDIT_PCT);
-
-	// valid number, but out of range clip to MIN or MAX range;
-	if (newValue < XAP_DLG_ZOOM_MINIMUM_ZOOM) newValue = XAP_DLG_ZOOM_MINIMUM_ZOOM;
-	if (newValue > XAP_DLG_ZOOM_MAXIMUM_ZOOM) newValue = XAP_DLG_ZOOM_MAXIMUM_ZOOM;
+	const int newValue = UT_clamp_span(getControlInt(XAP_RID_DIALOG_ZOOM_EDIT_PCT),
+		XAP_DLG_ZOOM_MINIMUM_ZOOM, XAP_DLG_ZOOM_MAXIMUM_ZOOM);
 
 	*pNewValue = newValue;
 	return TRUE;

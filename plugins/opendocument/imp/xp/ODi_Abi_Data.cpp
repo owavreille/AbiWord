@@ -23,6 +23,7 @@
 #include "ODi_Abi_Data.h"
 
 // AbiWord includes
+#include "ut_unicode.h"
 #include "pd_Document.h"
 #include "pt_Types.h"
 #include "ie_impGraphic.h"
@@ -316,28 +317,12 @@ UT_Error ODi_Abi_Data::_loadStream (GsfInfile* oo,
 void ODi_Abi_Data::_splitDirectoryAndFileName(const gchar* pHRef, UT_String& dirName, UT_String& fileName) const {
     dirName.clear();
     fileName.clear();
-    if (!pHRef || !*pHRef) {
+    const UT_OdfHref part = UT_odf_href(pHRef);
+    if (!pHRef || !*pHRef)
         return;
-    }
-
     UT_String href = pHRef;
-    size_t iStart = 0;
-    size_t len = href.length();
-    while (len - iStart >= 2 && href[iStart] == '.' && href[iStart + 1] == '/') {
-        iStart += 2;
-    }
-
-    size_t slashPos = iStart;
-    while (slashPos < len && href[slashPos] != '/') {
-        slashPos++;
-    }
-
-    if (slashPos == len) {
-        fileName = href.substr(iStart, len - iStart);
-    } else {
-        dirName = href.substr(iStart, slashPos - iStart);
-        if (slashPos + 1 < len) {
-            fileName = href.substr(slashPos + 1, len - (slashPos + 1));
-        }
-    }
+    if (part.dirLen > 0)
+        dirName = href.substr(part.dirAt, part.dirLen);
+    if (part.fileLen > 0)
+        fileName = href.substr(part.fileAt, part.fileLen);
 }

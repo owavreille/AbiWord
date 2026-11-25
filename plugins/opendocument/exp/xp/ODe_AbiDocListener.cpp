@@ -32,6 +32,7 @@
 #include "ODe_Main_Listener.h"
 
 // Abiword includes
+#include "ut_unicode.h"
 #include "pd_Document.h"
 #include "pd_DocumentRDF.h"
 #include "px_ChangeRecord.h"
@@ -1440,17 +1441,7 @@ void ODe_AbiDocListener::_insertMath(PT_AttrPropIndex api) {
                 UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
                 continue;
             }
-            bool hasPrefix = false;
-            for (UT_uint32 j = nameStart; j < len; j++) {
-                UT_UCS4Char ch = buf[j];
-                if (ch == ':') {
-                    hasPrefix = true;
-                    break;
-                }
-                if (ch == '>' || ch == '/' || ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
-                    break;
-                }
-            }
+            const bool hasPrefix = !UT_math_name_needs_prefix(buf.ucs4_str() + nameStart, len - nameStart);
             if (isClose) {
                 output += hasPrefix ? "</" : "</math:";
                 i++; // skip the '/'

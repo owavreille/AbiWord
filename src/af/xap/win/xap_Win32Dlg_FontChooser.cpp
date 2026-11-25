@@ -23,6 +23,7 @@
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_string.h"
+#include "ut_unicode.h"
 #include "ut_misc.h"
 #include "ut_Win32LocaleString.h"
 
@@ -93,7 +94,7 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
 	m_bWin32Hidden     = m_bHidden;
 	m_bWin32SuperScript = m_bSuperScript;
 	m_bWin32SubScript = m_bSubScript;
-	m_bWin32AllCaps = (g_ascii_strcasecmp(m_sTextTransform.c_str(), "uppercase") == 0);
+	m_bWin32AllCaps = UT_text_is_uppercase(m_sTextTransform.c_str());
 	
 
 	/*
@@ -216,12 +217,12 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
 			/* nothing changed */			
 		}
 
-		if ((cf.Flags & CF_NOSTYLESEL) == 0)
+		if (UT_font_style_chosen(cf.Flags, CF_NOSTYLESEL))
 		{
 			bool bIsBold = ((cf.nFontType & BOLD_FONTTYPE) != 0);
 			bool bWasBold = (g_ascii_strcasecmp(m_sFontWeight.c_str(),"bold") == 0);
 			bool bIsNormal = ((cf.nFontType & REGULAR_FONTTYPE) != 0);
-			bool bWasNormal = (m_sFontWeight.empty() || (g_ascii_strcasecmp(m_sFontWeight.c_str(),"normal") == 0));
+			bool bWasNormal = UT_font_weight_is_normal(m_sFontWeight.c_str());
 			if ((bIsBold != bWasBold) || (bIsNormal != bWasNormal))
 			{
 				m_bChangedFontWeight = true;
@@ -277,11 +278,11 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
 		if(m_bChangedSubScript)
 			setSubScript(m_bWin32SubScript);
 
-		bool bWasAllCaps = (g_ascii_strcasecmp(m_sTextTransform.c_str(), "uppercase") == 0);
+		bool bWasAllCaps = UT_text_is_uppercase(m_sTextTransform.c_str());
 		if (m_bWin32AllCaps != bWasAllCaps)
 		{
 			m_bChangedTextTransform = true;
-			m_sTextTransform = m_bWin32AllCaps ? "uppercase" : "none";
+			m_sTextTransform = UT_text_transform(m_bWin32AllCaps);
 		}
 	}
 
@@ -448,23 +449,17 @@ BOOL XAP_Win32Dialog_FontChooser::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*
 			return 1;
 
 		case XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT:		
-			m_bWin32SuperScript = (IsDlgButtonChecked(hWnd,XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT)==BST_CHECKED);		
-			/* It makes no sense to have subscript and superscript at the same time, Word behaves this way also*/
-			if (m_bWin32SuperScript)
-			{
-				m_bWin32SubScript = false;
+			m_bWin32SuperScript = (IsDlgButtonChecked(hWnd,XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT)==BST_CHECKED);
+			UT_font_choose_script(m_bWin32SuperScript, m_bWin32SubScript, true);
+			if (!m_bWin32SubScript)
 				CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT, BST_UNCHECKED);
-			}
 			return 1;
 		
 		case XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT:
 			m_bWin32SubScript = (IsDlgButtonChecked(hWnd,XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT)==BST_CHECKED);
-			/* It makes no sense to have subscript and superscript at the same time, Word behaves this way also*/
-			if (m_bWin32SubScript)
-			{
-				m_bWin32SuperScript = false;
+			UT_font_choose_script(m_bWin32SuperScript, m_bWin32SubScript, false);
+			if (!m_bWin32SuperScript)
 				CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT, BST_UNCHECKED);
-			}
 			return 1;
 
 		case XAP_RID_DIALOG_FONT_CHK_ALLCAPS:

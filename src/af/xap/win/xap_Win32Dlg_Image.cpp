@@ -21,6 +21,7 @@
 #include <stdio.h>
 
 #include "ut_string.h"
+#include "ut_unicode.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 
@@ -309,7 +310,7 @@ BOOL XAP_Win32Dialog_Image::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 			UT_Win32LocaleString str, units;
 			getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_WIDTH, str);
 			units.fromASCII(UT_dimensionName(getPreferedUnits()));
-			if (!wcsstr(str.c_str(), units.c_str()))
+			if (!UT_text_has(str.c_str(), units.c_str()))
 				str.appendLocale(units.c_str());
 			setWidth(str.utf8_str().utf8_str());
 		}
@@ -318,7 +319,7 @@ BOOL XAP_Win32Dialog_Image::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 			UT_Win32LocaleString str, units;
 			getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_HEIGHT, str);
 			units.fromASCII(UT_dimensionName(getPreferedUnits()));
-			if (!wcsstr(str.c_str(), units.c_str()))
+			if (!UT_text_has(str.c_str(), units.c_str()))
 				str.appendLocale(units.c_str());
 			setHeight(str.utf8_str().utf8_str());
 		}

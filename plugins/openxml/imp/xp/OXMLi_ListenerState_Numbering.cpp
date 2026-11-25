@@ -21,6 +21,7 @@
  */
 
 // Class definition include
+#include "ut_unicode.h"
 #include "OXMLi_ListenerState_Numbering.h"
 
 // Internal includes
@@ -211,10 +212,10 @@ void OXMLi_ListenerState_Numbering::endElement (OXMLi_EndElementRequest * rqst)
 		if(m_currentList)
 		{
 			PP_PropertyVector attrs = dummy->getAttributes();
-			if (!attrs.empty())
+			if (UT_list_has_props(static_cast<int>(attrs.size())))
 				m_currentList->appendAttributes(attrs);
 			PP_PropertyVector props = dummy->getProperties();
-			if (!props.empty())
+			if (UT_list_has_props(static_cast<int>(props.size())))
 				m_currentList->appendProperties(props);
 		}
 		rqst->stck->pop(); //remove the dummy element

@@ -26,6 +26,7 @@
 
 // Abiword includes
 #include "ut_std_string.h"
+#include "ut_unicode.h"
 #include "OXML_Section.h"
 #include "OXML_Document.h"
 #include <cstdlib>
@@ -1660,8 +1661,11 @@ UT_Error IE_Exp_OpenXML::setTabstops(int target, const gchar* tabstops)
 
 		if(typePos != std::string::npos)
 		{
-			std::string tabStopType = (typePos + 1 < token.length()) ? token.substr(typePos + 1, 1) : "";
-			std::string type = (typePos + 2 <= token.length()) ? token.substr(typePos + 2) : "";
+			bool hasType = false;
+			bool hasLeader = false;
+			UT_tabstop_bounds(static_cast<int>(token.length()), static_cast<int>(typePos), hasType, hasLeader);
+			std::string tabStopType = hasType ? token.substr(typePos + 1, 1) : "";
+			std::string type = hasLeader ? token.substr(typePos + 2) : "";
 			token = token.substr(0, typePos);
 
 			const gchar * posTwips = convertToPositiveTwips(token.c_str());
