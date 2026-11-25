@@ -315,21 +315,24 @@ static int toolbarIconPx(HWND hwnd)
 static HFONT toolbarUIFont(int dpiOverride = 0)
 {
 	static HFONT font = nullptr;
+	static HFONT retired = nullptr;
 	static int dpi = -1;
 	int now = (dpiOverride >= 96) ? dpiOverride : toolbarIconDpi(nullptr);
 	if (font && dpi == now)
 		return font;
 
 	NONCLIENTMETRICSW metrics;
-	memset(&metrics, 0, sizeof(metrics));
-	metrics.cbSize = sizeof(metrics);
 	HFONT created = nullptr;
-	if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
+	if (UT_Win32GetNonClientMetrics(&metrics, now))
 		created = CreateFontIndirectW(&metrics.lfMessageFont);
 	if (!created)
 		created = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 	if (created)
 	{
+		const HFONT stock = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+		if (retired && retired != stock)
+			DeleteObject(retired);
+		retired = (font && font != stock) ? font : nullptr;
 		font = created;
 		dpi = now;
 	}
@@ -1068,7 +1071,7 @@ bool EV_Win32Toolbar::synthesize(void)
 						else
 							SendMessageW(hwndEdit, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)0);
 						HFONT hComboFont = (id == AP_TOOLBAR_ID_FMT_FONT)
-							? toolbarUIFont()
+							? toolbarUIFont(toolbarIconDpi(m_hwnd))
 							: (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 						SendMessageW(hwndCombo, WM_SETFONT, (WPARAM)hComboFont, MAKELPARAM(TRUE, 0));
 						if (id == AP_TOOLBAR_ID_FMT_FONT)
@@ -1324,7 +1327,7 @@ void EV_Win32Toolbar::_placeControls(void)
 		HWND hwndCtrl = _getControlWindow(id);
 		if (!hwndCtrl)
 			continue;
-		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(), TRUE);
+		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(toolbarIconDpi(m_hwnd)), TRUE);
 		if (id == AP_TOOLBAR_ID_FMT_FONT)
 		{
 			int item = (22 * toolbarIconDpi(m_hwnd) + 48) / 96;
@@ -2422,7 +2425,7 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 
 			if (popup)
 			{
-				HFONT font = toolbarUIFont();
+				HFONT font = toolbarUIFont(toolbarIconDpi(hwnd));
 				HFONT old = static_cast<HFONT>(SelectObject(hdc, font));
 				s_paintFooter(hdc, clearRc, popup->clearText, popup->hot == HOT_CLEAR);
 				s_paintFooter(hdc, moreRc, popup->moreText, popup->hot == HOT_MORE);

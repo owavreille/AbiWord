@@ -915,7 +915,7 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
 					
 
 	// Convert the color format to a count of bits. 
-   	cClrBits = (WORD)(bmp.bmPlanes * bmp.bmBitsPixel); 
+   	cClrBits = (WORD)(bmp.bmPlanes * bmp.bmBitsPixel);
     
 	if (cClrBits == 1)
 		cClrBits = 1;
@@ -929,6 +929,10 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
 		cClrBits = 24;
 	else
 		cClrBits = 32;
+
+	UT_uint32 imageBytes = 0;
+	if (!UT_dib_storage_bytes(bmp.bmWidth, bmp.bmHeight, cClrBits, imageBytes))
+		return nullptr;
 
 	// A 24-bit or 32-bit DIB has no color table. Shifting by 32 is
 	// undefined and would ask for a multi-gigabyte palette.
@@ -946,8 +950,8 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
 	pbmi->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
 	pbmi->bmiHeader.biWidth = bmp.bmWidth;
 	pbmi->bmiHeader.biHeight = bmp.bmHeight;
-	pbmi->bmiHeader.biPlanes = bmp.bmPlanes;
-	pbmi->bmiHeader.biBitCount = bmp.bmBitsPixel;
+	pbmi->bmiHeader.biPlanes = 1;
+	pbmi->bmiHeader.biBitCount = cClrBits;
 	pbmi->bmiHeader.biClrUsed = paletteEntries; 
 	
 	// If the bitmap is not compressed, set the BI_RGB flag. 
@@ -957,8 +961,7 @@ PBITMAPINFO CreateBitmapInfoStruct(HBITMAP hBmp)
 	// indices and store the result in biSizeImage. 
 	// For Windows NT/2000, the width must be DWORD aligned unless 
 	// the bitmap is RLE compressed.
-	pbmi->bmiHeader.biSizeImage = ((pbmi->bmiHeader.biWidth * cClrBits +31) & ~31) /8
-	                          * pbmi->bmiHeader.biHeight; 
+	pbmi->bmiHeader.biSizeImage = imageBytes; 
 	// Set biClrImportant to 0, indicating that all of the 
 	// device colors are important. 
 	pbmi->bmiHeader.biClrImportant = 0; 

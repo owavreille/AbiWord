@@ -74,6 +74,25 @@ TFTEST_MAIN("clipboard DIB flattens alpha on white and refuses a huge side")
 	TFPASS(dib[40] == 255 && dib[41] == 0 && dib[42] == 0);
 	TFPASS(dib[44] == 255 && dib[45] == 255 && dib[46] == 255);
 
+	// Half-transparent BGRA (10, 20, 30, 128) flattens on white to (132, 137, 142).
+	const UT_Byte half[] = { 10, 20, 30, 128 };
+	src.rows = half;
+	src.width = 1;
+	src.height = 1;
+	src.bpp = 4;
+	src.topDown = true;
+	TFPASS(UT_pack_dib24(src, out));
+	TFPASS(out.getLength() == 44);
+	dib = out.getPointer(0);
+	TFPASS(dib[40] == 132 && dib[41] == 137 && dib[42] == 142);
+
+	const UT_Byte plain[] = { 1, 2, 3 };
+	src.rows = plain;
+	src.bpp = 3;
+	TFPASS(UT_pack_dib24(src, out));
+	dib = out.getPointer(0);
+	TFPASS(dib[40] == 1 && dib[41] == 2 && dib[42] == 3);
+
 	src.width = UT_DIB_MAX_SIDE + 1;
 	TFPASS(!UT_pack_dib24(src, out));
 	TFPASS(out.getLength() == 0);
@@ -88,6 +107,22 @@ TFTEST_MAIN("clipboard DIB flattens alpha on white and refuses a huge side")
 
 	TFPASS(UT_image_page_y(5000) == 5000);
 	TFPASS(UT_image_page_y(0) == 0);
+
+	UT_uint32 bytes = 1;
+	TFPASS(UT_dib_storage_bytes(8, 1, 24, bytes) && bytes == 24);
+	TFPASS(UT_dib_storage_bytes(1, 1, 32, bytes) && bytes == 4);
+	TFPASS(!UT_dib_storage_bytes(UT_DIB_MAX_SIDE + 1, 1, 24, bytes));
+	TFPASS(!UT_dib_storage_bytes(8, 1, 12, bytes));
+	TFPASS(bytes == 0);
+}
+
+TFTEST_MAIN("DPI scale matches MulDiv")
+{
+	TFPASS(UT_scale_by_dpi(-13, 96, 192) == -26);
+	TFPASS(UT_scale_by_dpi(10, 96, 144) == 15);
+	TFPASS(UT_scale_by_dpi(-11, 96, 144) == -17);
+	TFPASS(UT_scale_by_dpi(12, 96, 96) == 12);
+	TFPASS(UT_scale_by_dpi(12, 0, 192) == 12);
 }
 
 TFTEST_MAIN("ShellExecute failure is a result at or below 32")

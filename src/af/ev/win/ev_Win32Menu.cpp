@@ -403,16 +403,9 @@ EV_Win32Menu::EV_Win32Menu(XAP_Win32App * pWin32App,
 	m_iDIR(0)
 {
 		    
-	NONCLIENTMETRICSW ncm;
-	memset(&ncm, 0, sizeof(ncm));
-	ncm.cbSize = sizeof(ncm);
 	m_bTrack = false;
-
-	// The A metrics pass the face name through the ANSI code page.
-	// A failed call leaves the structure empty, so it must not become a font.
 	m_hFont = nullptr;
-	if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(ncm), &ncm, 0))
-		m_hFont = CreateFontIndirectW(&ncm.lfMenuFont);	
+	m_fontDpi = 0;
 
 	m_nBitmapCX = BITMAP_WITDH + 2;
 	m_nBitmapCY = BITMAP_HEIGHT + 2;
@@ -422,6 +415,32 @@ EV_Win32Menu::EV_Win32Menu(XAP_Win32App * pWin32App,
 	UT_Language l;
 	if(l.getDirFromCode(m_pMenuLabelSet->getLanguage().c_str()) == UTLANG_RTL)
 		m_iDIR = DT_RTLREADING;
+
+	HDC screen = GetDC(nullptr);
+	int dpi = 96;
+	if (screen)
+	{
+		dpi = GetDeviceCaps(screen, LOGPIXELSX);
+		ReleaseDC(nullptr, screen);
+	}
+	refreshForDpi(dpi);
+}
+
+void EV_Win32Menu::refreshForDpi(int dpi)
+{
+	if (dpi < 96)
+		dpi = 96;
+	if (m_hFont && m_fontDpi == dpi)
+		return;
+	if (m_hFont)
+	{
+		DeleteObject(m_hFont);
+		m_hFont = nullptr;
+	}
+	NONCLIENTMETRICSW ncm;
+	if (UT_Win32GetNonClientMetrics(&ncm, dpi))
+		m_hFont = CreateFontIndirectW(&ncm.lfMenuFont);
+	m_fontDpi = m_hFont ? dpi : 0;
 }
 
 void	EV_Win32Menu::destroy()

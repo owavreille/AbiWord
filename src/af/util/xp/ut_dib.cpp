@@ -124,3 +124,19 @@ bool UT_dib_pixels_fit(UT_uint32 size, UT_uint32 headerBytes,
 	pixelOffset += extra;
 	return true;
 }
+
+bool UT_dib_storage_bytes(UT_sint32 width, UT_sint32 height, UT_uint32 bitCount, UT_uint32 & bytes)
+{
+	bytes = 0;
+	if (width <= 0 || height <= 0 || width > UT_DIB_MAX_SIDE || height > UT_DIB_MAX_SIDE)
+		return false;
+	if (bitCount != 1 && bitCount != 4 && bitCount != 8
+		&& bitCount != 16 && bitCount != 24 && bitCount != 32)
+		return false;
+	const UT_uint64 stride = (((static_cast<UT_uint64>(width) * bitCount) + 31) / 32) * 4;
+	const UT_uint64 total = stride * static_cast<UT_uint64>(height);
+	if (total == 0 || total > 0x7fffffffu)
+		return false;
+	bytes = static_cast<UT_uint32>(total);
+	return true;
+}

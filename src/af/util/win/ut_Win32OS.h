@@ -69,6 +69,10 @@ void UT_Win32NoteThemeChanged(void);
 void UT_Win32ApplyCaptionTheme(HWND hwnd);
 // DarkMode_Explorer, or an empty theme in light mode so the rebar drops its edge.
 void UT_Win32ApplyWindowTheme(HWND hwnd);
+// NONCLIENTMETRICS for one window DPI. SystemParametersInfo itself is not
+// per-monitor; the fonts are scaled when ForDpi is absent.
+// https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-systemparametersinfofordpi
+bool UT_Win32GetNonClientMetrics(NONCLIENTMETRICSW * metrics, int dpi);
 // Recreate the status font from the current NONCLIENTMETRICS and DPI.
 void UT_Win32RefreshStatusFont(HWND bar);
 #endif /* UT_Win32OS_H */

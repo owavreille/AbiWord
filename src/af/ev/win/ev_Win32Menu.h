@@ -71,6 +71,7 @@ public:
 	void				onMeasureItem(HWND hwnd, WPARAM wParam, LPARAM lParam);
 	LPARAM				onMenuChar(HWND hwnd, WPARAM wParam, LPARAM lParam);
 	void				setTrackMenu(bool bTrack){m_bTrack=bTrack;};
+	void				refreshForDpi(int dpi);
 
 protected:
 
@@ -84,6 +85,7 @@ protected:
 	HMENU						m_myMenu;
 	UINT						m_nBitmapCX, m_nBitmapCY;
 	HFONT						m_hFont;
+	int							m_fontDpi;
 	UT_Vector					m_vecItems;
 	bool						m_bTrack;
 	UINT                        m_iDIR;

@@ -2522,3 +2522,127 @@ TFTEST_MAIN("DOC export keeps footnotes, annotations and a second section")
 	package_close(input, ole);
 	std::remove(path.c_str());
 }
+
+TFTEST_MAIN("DOC export keeps TOC and frame text and drops a margin note")
+{
+	if (!exporter_known(".doc"))
+		return;
+
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+	if (!TFPASS(doc->insertSpan(first_block_content(doc), std::string("CorpsToc"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionTOC)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(document_end(doc), std::string("EntreeToc"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndTOC)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionFrame)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(document_end(doc), std::string("CadreTexte"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndFrame)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionMarginnote)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(document_end(doc), std::string("NoteMargeSeule"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndMarginnote)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmttoc", ".doc");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * ole = package_open(path, input, gsf_infile_msole_new);
+	if (!TFPASS(ole != nullptr))
+	{
+		package_close(input, ole);
+		std::remove(path.c_str());
+		return;
+	}
+
+	const std::string word = ole_read(ole, "WordDocument");
+	const unsigned ccp_text = word.size() >= 0x50 ? le32(word, 0x4C) : 0;
+	const unsigned ccp_ftn = word.size() >= 0x54 ? le32(word, 0x50) : 0;
+	const unsigned ccp_hdd = word.size() >= 0x58 ? le32(word, 0x54) : 0;
+	const unsigned ccp_atn = word.size() >= 0x60 ? le32(word, 0x5C) : 0;
+	const unsigned ccp_edn = word.size() >= 0x64 ? le32(word, 0x60) : 0;
+	const unsigned fc_min = word.size() >= 0x20 ? le32(word, 0x18) : 0;
+	const unsigned fc_mac = word.size() >= 0x20 ? le32(word, 0x1C) : 0;
+	const std::string main = (word.size() >= fc_min + ccp_text * 2)
+		? word.substr(fc_min, ccp_text * 2) : std::string();
+
+	TFPASS(main.find(utf16_ascii("CorpsToc")) != std::string::npos);
+	TFPASS(main.find(utf16_ascii("EntreeToc")) != std::string::npos);
+	TFPASS(main.find(utf16_ascii("CadreTexte")) != std::string::npos);
+	TFPASS(word.find(utf16_ascii("NoteMargeSeule")) == std::string::npos);
+	TFPASS(main.find(std::string("\x02\x00", 2)) == std::string::npos);
+	TFPASS(main.find(std::string("\x05\x00", 2)) == std::string::npos);
+	TFPASS(ccp_text > 0 && ccp_ftn == 0 && ccp_hdd == 0 && ccp_atn == 0 && ccp_edn == 0);
+	TFPASS(fc_mac > fc_min && (fc_mac - fc_min) / 2 == ccp_text);
+
+	package_close(input, ole);
+	std::remove(path.c_str());
+}
+
+TFTEST_MAIN("HTML export escapes markup in the body")
+{
+	if (!exporter_known(".html"))
+		return;
+
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+	if (!TFPASS(doc->insertSpan(first_block_content(doc), std::string("Prix<10>&C"))))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmthtml", ".html");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	gchar * contents = nullptr;
+	gsize length = 0;
+	GError * error = nullptr;
+	const bool loaded = g_file_get_contents(path.c_str(), &contents, &length, &error);
+	if (error)
+	{
+		g_error_free(error);
+		error = nullptr;
+	}
+	const std::string html = loaded ? std::string(contents, length) : std::string();
+	g_free(contents);
+	std::remove(path.c_str());
+
+	TFPASS(html.find("Prix&lt;10&gt;&amp;C") != std::string::npos);
+	TFPASS(html.find("Prix<10>") == std::string::npos);
+}

@@ -64,3 +64,21 @@ inline UT_sint32 UT_image_page_y (UT_sint32 yDest)
 {
 	return yDest;
 }
+
+// Same rounding as MulDiv: add half the divisor, then divide toward zero.
+// A dpi of zero, or an overflow, leaves the value unchanged.
+inline int UT_scale_by_dpi (int value, int fromDpi, int toDpi)
+{
+	if (fromDpi <= 0 || toDpi <= 0 || fromDpi == toDpi)
+		return value;
+	const long long divisor = fromDpi;
+	long long scaled = static_cast<long long>(value) * static_cast<long long>(toDpi);
+	if (scaled >= 0)
+		scaled += divisor / 2;
+	else
+		scaled -= divisor / 2;
+	scaled /= divisor;
+	if (scaled > 2147483647LL || scaled < -2147483647LL)
+		return value;
+	return static_cast<int>(scaled);
+}

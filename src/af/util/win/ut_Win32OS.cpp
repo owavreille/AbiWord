@@ -26,6 +26,7 @@
 #include "ut_assert.h"
 #include "ut_locale.h"
 #include "ut_iconv.h"
+#include "ut_unicode.h"
 #include "ut_Win32OS.h"
 
 /*!
@@ -514,12 +515,101 @@ void UT_Win32ApplyWindowTheme(HWND hwnd)
 	}
 }
 
+static int s_systemDpi(void)
+{
+	typedef UINT (WINAPI *GetDpiForSystemFn)(void);
+	static GetDpiForSystemFn getDpi = nullptr;
+	static bool resolved = false;
+	if (!resolved)
+	{
+		resolved = true;
+		HMODULE user32 = GetModuleHandleW(L"user32.dll");
+		if (user32)
+			getDpi = reinterpret_cast<GetDpiForSystemFn>(
+				reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForSystem")));
+	}
+	if (getDpi)
+	{
+		const UINT dpi = getDpi();
+		if (dpi >= 96)
+			return static_cast<int>(dpi);
+	}
+	HDC dc = GetDC(nullptr);
+	int dpi = dc ? GetDeviceCaps(dc, LOGPIXELSX) : 96;
+	if (dc)
+		ReleaseDC(nullptr, dc);
+	return dpi >= 96 ? dpi : 96;
+}
+
+static void s_scaleLogFont(LOGFONTW * font, int fromDpi, int toDpi)
+{
+	if (!font)
+		return;
+	font->lfHeight = UT_scale_by_dpi(font->lfHeight, fromDpi, toDpi);
+	if (font->lfWidth)
+		font->lfWidth = UT_scale_by_dpi(font->lfWidth, fromDpi, toDpi);
+}
+
+bool UT_Win32GetNonClientMetrics(NONCLIENTMETRICSW * metrics, int dpi)
+{
+	if (!metrics)
+		return false;
+	const UINT full = sizeof(*metrics);
+	memset(metrics, 0, full);
+	metrics->cbSize = full;
+
+	typedef BOOL (WINAPI *ForDpiFn)(UINT, UINT, PVOID, UINT, UINT);
+	static ForDpiFn forDpi = nullptr;
+	static bool resolved = false;
+	if (!resolved)
+	{
+		resolved = true;
+		HMODULE user32 = GetModuleHandleW(L"user32.dll");
+		if (!user32)
+			user32 = LoadLibraryW(L"user32.dll");
+		if (user32)
+			forDpi = reinterpret_cast<ForDpiFn>(
+				reinterpret_cast<void *>(GetProcAddress(user32, "SystemParametersInfoForDpi")));
+	}
+
+	bool matched = false;
+	if (dpi >= 96 && forDpi && forDpi(SPI_GETNONCLIENTMETRICS, full, metrics, 0, static_cast<UINT>(dpi)))
+		matched = true;
+	if (!matched)
+	{
+		memset(metrics, 0, full);
+		metrics->cbSize = full;
+		if (!SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, full, metrics, 0))
+			return false;
+		if (dpi >= 96)
+		{
+			const int system = s_systemDpi();
+			s_scaleLogFont(&metrics->lfCaptionFont, system, dpi);
+			s_scaleLogFont(&metrics->lfSmCaptionFont, system, dpi);
+			s_scaleLogFont(&metrics->lfMenuFont, system, dpi);
+			s_scaleLogFont(&metrics->lfStatusFont, system, dpi);
+			s_scaleLogFont(&metrics->lfMessageFont, system, dpi);
+		}
+	}
+	return true;
+}
+
+static void s_retireFont(HFONT & current, HFONT & retired, HFONT created)
+{
+	const HFONT stock = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+	if (retired && retired != stock)
+		DeleteObject(retired);
+	retired = (current && current != stock) ? current : nullptr;
+	current = created ? created : stock;
+}
+
 void UT_Win32RefreshStatusFont(HWND bar)
 {
 	if (!bar)
 		return;
 
 	static HFONT font = nullptr;
+	static HFONT retired = nullptr;
 	static int dpi = -1;
 	HDC dc = GetDC(bar);
 	int now = 96;
@@ -533,23 +623,21 @@ void UT_Win32RefreshStatusFont(HWND bar)
 	if (!font || dpi != now)
 	{
 		NONCLIENTMETRICSW metrics;
-		memset(&metrics, 0, sizeof(metrics));
-		metrics.cbSize = sizeof(metrics);
 		HFONT created = nullptr;
-		if (SystemParametersInfoW(SPI_GETNONCLIENTMETRICS, sizeof(metrics), &metrics, 0))
+		if (UT_Win32GetNonClientMetrics(&metrics, now))
 			created = CreateFontIndirectW(&metrics.lfStatusFont);
 		if (!created)
 		{
-			int height = -((12 * now + 48) / 96);
+			const int height = -UT_scale_by_dpi(12, 96, now);
 			created = CreateFontW(height, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE,
 				DEFAULT_CHARSET, OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS,
 				CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_DONTCARE, L"Segoe UI");
 		}
 		if (created)
 		{
-			// The previous font stays alive. Another status bar may still
-			// have it selected until its own refresh runs.
-			font = created;
+			// The font that was current is still selected in this bar until
+			// WM_SETFONT below. Delete only the one retired on the last change.
+			s_retireFont(font, retired, created);
 			dpi = now;
 		}
 	}

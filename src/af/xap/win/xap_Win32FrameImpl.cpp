@@ -569,6 +569,17 @@ void XAP_Win32FrameImpl::_refreshChrome(void)
 		UT_Win32ApplyWindowTheme(m_hwndRebar);
 	if (m_hwndStatusBar)
 		UT_Win32RefreshStatusFont(m_hwndStatusBar);
+	if (m_pWin32Menu && m_hwndFrame)
+	{
+		HDC dc = GetDC(m_hwndFrame);
+		int dpi = 96;
+		if (dc)
+		{
+			dpi = GetDeviceCaps(dc, LOGPIXELSX);
+			ReleaseDC(m_hwndFrame, dc);
+		}
+		m_pWin32Menu->refreshForDpi(dpi);
+	}
 
 	UT_uint32 bars = m_vecToolbars.getItemCount();
 	for (UT_uint32 i = 0; i < bars; ++i)
@@ -601,6 +612,17 @@ bool XAP_Win32FrameImpl::_runModalContextMenu(AV_View * pView, const char * szMe
 
 	m_pWin32Popup = new EV_Win32MenuPopup(static_cast<XAP_Win32App*>(XAP_App::getApp()),szMenuName,m_szMenuLabelSetName);
 	m_pWin32Popup->setTrackMenu(true);
+	if (m_hwndFrame)
+	{
+		HDC dc = GetDC(m_hwndFrame);
+		int dpi = 96;
+		if (dc)
+		{
+			dpi = GetDeviceCaps(dc, LOGPIXELSX);
+			ReleaseDC(m_hwndFrame, dc);
+		}
+		m_pWin32Popup->refreshForDpi(dpi);
+	}
 
 	if (m_pWin32Popup && m_pWin32Popup->synthesizeMenuPopup(getFrame()))
 	{

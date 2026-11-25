@@ -37,3 +37,8 @@ ABI_EXPORT bool UT_pack_dib24(const UT_ImagePixels & src, UT_ByteBuf & out);
 ABI_EXPORT bool UT_dib_pixels_fit(UT_uint32 size, UT_uint32 headerBytes,
 	UT_sint32 width, UT_sint32 height, UT_uint32 bitCount,
 	UT_uint32 compression, UT_uint32 clrUsed, UT_uint32 & pixelOffset);
+
+// DWORD-aligned byte count of a BI_RGB bitmap. A side above
+// UT_DIB_MAX_SIDE, an unknown depth, or a product past 2 GiB is refused.
+ABI_EXPORT bool UT_dib_storage_bytes(UT_sint32 width, UT_sint32 height,
+	UT_uint32 bitCount, UT_uint32 & bytes);
