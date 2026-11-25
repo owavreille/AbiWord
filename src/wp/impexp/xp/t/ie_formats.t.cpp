@@ -1919,9 +1919,13 @@ TFTEST_MAIN("DOC export keeps a table grid and the document fonts")
 	const unsigned fcMac = word.size() >= 0x20 ? le32(word, 0x1C) : 0;
 	const std::string main = (fcMac > fcMin && fcMac <= word.size()) ? word.substr(fcMin, fcMac - fcMin) : std::string();
 	TFPASS(main.find(utf16_ascii("CelluleA")) != std::string::npos);
-	TFPASS(main.find(std::string("\x07\x00", 2)) != std::string::npos);
+	TFPASS(main.find(utf16_ascii("CelluleA") + std::string("\x07\x00", 2)) != std::string::npos);
 	TFPASS(fontTable.find(utf16_ascii("Courier New")) != std::string::npos);
-	TFPASS(word.find(std::string("\x08\xD6", 2)) != std::string::npos);
+	const std::string::size_type tdef = word.find(std::string("\x08\xD6", 2));
+	TFPASS(tdef != std::string::npos && tdef + 4 <= word.size());
+	// MS-DOC 2.9.299 TDefTableOperand: cb = 1 + (1 + (n+1)*2 + n*20) = 48 for 2 columns.
+	if (tdef != std::string::npos && tdef + 4 <= word.size())
+		TFPASSEQ(le16(word, static_cast<unsigned>(tdef + 2)), 48u);
 	TFPASS(word.find(std::string("\x4F\x4A", 2)) != std::string::npos);
 	const unsigned fontAt = word.size() >= 0x9A + 16 * 8 ? le32(word, 0x9A + 15 * 8) : 0;
 	const unsigned fontLen = word.size() >= 0x9A + 16 * 8 ? le32(word, 0x9A + 15 * 8 + 4) : 0;

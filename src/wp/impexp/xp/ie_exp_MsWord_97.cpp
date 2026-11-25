@@ -437,6 +437,7 @@ struct TableCell
 	int right = 0;
 	int top = 0;
 	int bot = 0;
+	const PP_AttrProp * ap = nullptr;
 	std::vector<Paragraph> paragraphs;
 };
 
@@ -589,7 +590,7 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 	}
 	if (in_paragraph)
 		paragraphs.push_back(current);
-	if (paragraphs.empty())
+	if (paragraphs.empty() || paragraphs.back().end_mark == 0x0007)
 		paragraphs.push_back(Paragraph());
 	return paragraphs;
 }
@@ -759,14 +760,45 @@ static std::string in_table_grpprl(const std::string & grp)
 	return marked;
 }
 
-static std::vector<unsigned> table_column_widths(const PP_AttrProp * ap, unsigned columns)
+static unsigned document_content_width_twips(PD_Document * doc)
+{
+	unsigned page_w = 12240;
+	unsigned margin_left = 1440;
+	unsigned margin_right = 1440;
+	if (doc)
+	{
+		const double w_in = doc->m_docPageSize.Width(DIM_IN);
+		if (w_in > 0.0)
+			page_w = static_cast<unsigned>(w_in * 1440.0 + 0.5);
+		pt_PieceTable * table = doc->getPieceTable();
+		for (pf_Frag * frag = table ? table->getFragments().getFirst() : nullptr; frag; frag = frag->getNext())
+		{
+			if (frag->getType() == pf_Frag::PFT_Strux &&
+			    static_cast<pf_Frag_Strux *>(frag)->getStruxType() == PTX_Section)
+			{
+				const PP_AttrProp * ap = nullptr;
+				if (doc->getAttrProp(frag->getIndexAP(), &ap) && ap)
+				{
+					margin_left = twips_property(ap, "page-margin-left", margin_left);
+					margin_right = twips_property(ap, "page-margin-right", margin_right);
+				}
+				break;
+			}
+		}
+	}
+	if (page_w > margin_left + margin_right + 720)
+		return page_w - margin_left - margin_right;
+	return 9360;
+}
+
+static std::vector<unsigned> table_column_widths(PD_Document * doc, const PP_AttrProp * ap, unsigned columns)
 {
 	std::vector<unsigned> widths;
 	const gchar * props = nullptr;
 	if (ap && ap->getProperty("table-column-props", props) && props)
 	{
 		const char * p = props;
-		while (*p && widths.size() < 39)
+		while (*p && widths.size() < 63)
 		{
 			while (*p == '/' || *p == ' ' || *p == '\t')
 				++p;
@@ -782,51 +814,141 @@ static std::vector<unsigned> table_column_widths(const PP_AttrProp * ap, unsigne
 			p = end;
 		}
 	}
-	const unsigned fill = widths.empty() ? 1440u : widths.back();
-	while (widths.size() < columns && widths.size() < 39)
+	if (columns < 1)
+		columns = 1;
+	if (columns > 63)
+		columns = 63;
+	const unsigned content_w = document_content_width_twips(doc);
+	const unsigned fill = widths.empty()
+		? (content_w / columns > 240 ? content_w / columns : 240u)
+		: widths.back();
+	while (widths.size() < columns)
 		widths.push_back(fill);
-	if (columns > 0 && widths.size() > columns)
+	if (widths.size() > columns)
 		widths.resize(columns);
 	return widths;
 }
 
-static std::string row_mark_grpprl(const std::vector<unsigned> & widths)
+struct Brc80
+{
+	unsigned char dptLineWidth;
+	unsigned char brcType;
+	unsigned char ico;
+	unsigned char dptSpace;
+};
+
+static Brc80 cell_border_brc80(const PP_AttrProp * cell_ap, const PP_AttrProp * table_ap,
+	const char * style_prop, const char * thick_prop)
+{
+	Brc80 brc = { 4, 1, 0, 0 }; // default: 0.5pt single solid auto-color
+	const gchar * style = nullptr;
+	if (cell_ap && cell_ap->getProperty(style_prop, style) && style && *style)
+	{
+		if (!strcmp(style, "0") || !strcmp(style, "none"))
+		{
+			brc.dptLineWidth = 0;
+			brc.brcType = 0;
+			return brc;
+		}
+		if (!strcmp(style, "2") || !strcmp(style, "dotted"))
+			brc.brcType = 6;
+		else if (!strcmp(style, "3") || !strcmp(style, "dashed"))
+			brc.brcType = 7;
+	}
+	else if (table_ap && table_ap->getProperty("table-line-thickness", style) && style && !strcmp(style, "0"))
+	{
+		brc.dptLineWidth = 0;
+		brc.brcType = 0;
+		return brc;
+	}
+	const gchar * thick = nullptr;
+	if (cell_ap && cell_ap->getProperty(thick_prop, thick) && thick && *thick)
+	{
+		const double pt = UT_convertToPoints(thick);
+		if (pt <= 0.0)
+		{
+			brc.dptLineWidth = 0;
+			brc.brcType = 0;
+		}
+		else
+		{
+			unsigned eighth = static_cast<unsigned>(pt * 8.0 + 0.5);
+			if (eighth < 2)
+				eighth = 2;
+			if (eighth > 96)
+				eighth = 96;
+			brc.dptLineWidth = static_cast<unsigned char>(eighth);
+		}
+	}
+	return brc;
+}
+
+struct RowCellSpec
+{
+	int cell_index;
+	int left_x;
+	int right_x;
+	unsigned tcgrf;
+	const PP_AttrProp * ap;
+};
+
+static std::string row_mark_grpprl(const std::vector<RowCellSpec> & row_cells, const PP_AttrProp * table_ap)
 {
 	std::string grp;
-	append_sprm(grp, 0x2416, 1, 1);
-	append_sprm(grp, 0x2417, 1, 1); // sprmPFTtp, the row mark
-	append_sprm(grp, 0x9602, 108, 2); // sprmTDxaGapHalf
-	const unsigned n = static_cast<unsigned>(widths.size());
-	if (n < 1 || n > 39)
+	append_sprm(grp, 0x2416, 1, 1); // sprmPFInTable
+	append_sprm(grp, 0x2417, 1, 1); // sprmPFTtp (table row terminating mark)
+	append_sprm(grp, 0x9602, 108, 2); // sprmTDxaGapHalf (5.4pt cell padding)
+	const unsigned n = static_cast<unsigned>(row_cells.size());
+	if (n < 1 || n > 63)
 		return grp;
+
+	// MS-DOC 2.9.299 TDefTableOperand:
+	//   cb (2 bytes) = byte size of remainder incremented by 1
+	//   NumberOfColumns (1 byte)
+	//   rgdxaCenter ((n + 1) * 2 bytes)
+	//   rgTc80 (n * 20 bytes: tcgrf(2) + wUnused(2) + 4 * BRC80(4))
+	// Omit rgTc80 only if > 19 columns would overflow a 512-byte PapxFkp page.
+	const bool include_tc80 = (1 + (n + 1) * 2 + n * 20) <= 440;
 	std::string operand;
 	operand.push_back(static_cast<char>(n));
-	int x = 0;
 	auto put16 = [&operand](int value)
 	{
 		const unsigned u = static_cast<unsigned>(value) & 0xFFFFu;
 		operand.push_back(static_cast<char>(u & 0xff));
 		operand.push_back(static_cast<char>((u >> 8) & 0xff));
 	};
-	put16(0);
+	int cursor = row_cells[0].left_x;
+	put16(cursor);
 	for (unsigned i = 0; i < n; ++i)
 	{
-		x += static_cast<int>(widths[i]);
-		put16(x);
+		int right_x = row_cells[i].right_x;
+		if (right_x < cursor + 120)
+			right_x = cursor + 120;
+		cursor = right_x;
+		put16(cursor);
 	}
-	for (unsigned i = 0; i < n; ++i)
+	if (include_tc80)
 	{
-		operand.push_back(0);
-		operand.push_back(0);
-		for (int border = 0; border < 4; ++border)
+		auto put_brc = [&operand](const Brc80 & b)
 		{
-			operand.push_back(0x08);
-			operand.push_back(0x01);
+			operand.push_back(static_cast<char>(b.dptLineWidth));
+			operand.push_back(static_cast<char>(b.brcType));
+			operand.push_back(static_cast<char>(b.ico));
+			operand.push_back(static_cast<char>(b.dptSpace));
+		};
+		for (unsigned i = 0; i < n; ++i)
+		{
+			put16(static_cast<int>(row_cells[i].tcgrf)); // tcgrf (2 bytes)
+			put16(0);                                     // wUnused (2 bytes)
+			put_brc(cell_border_brc80(row_cells[i].ap, table_ap, "top-style", "top-thickness"));
+			put_brc(cell_border_brc80(row_cells[i].ap, table_ap, "left-style", "left-thickness"));
+			put_brc(cell_border_brc80(row_cells[i].ap, table_ap, "bot-style", "bot-thickness"));
+			put_brc(cell_border_brc80(row_cells[i].ap, table_ap, "right-style", "right-thickness"));
 		}
 	}
 	grp.push_back(0x08);
 	grp.push_back(static_cast<char>(0xD6)); // sprmTDefTable
-	const unsigned cb = static_cast<unsigned>(operand.size());
+	const unsigned cb = static_cast<unsigned>(operand.size()) + 1;
 	grp.push_back(static_cast<char>(cb & 0xff));
 	grp.push_back(static_cast<char>((cb >> 8) & 0xff));
 	grp += operand;
@@ -841,7 +963,7 @@ static Paragraph mark_paragraph(uint16_t mark, const std::string & pap)
 	return paragraph;
 }
 
-static std::vector<Paragraph> build_table(OpenTable & table)
+static std::vector<Paragraph> build_table(PD_Document * doc, OpenTable & table)
 {
 	std::vector<Paragraph> out;
 	close_table_paragraph(table);
@@ -850,6 +972,7 @@ static std::vector<Paragraph> build_table(OpenTable & table)
 
 	bool grid = false;
 	int columns = 0;
+	int num_rows = 0;
 	for (size_t i = 0; i < table.cells.size(); ++i)
 	{
 		const TableCell & cell = table.cells[i];
@@ -857,107 +980,121 @@ static std::vector<Paragraph> build_table(OpenTable & table)
 			grid = true;
 		if (cell.right > columns)
 			columns = cell.right;
+		if (cell.bot > num_rows)
+			num_rows = cell.bot;
 	}
 	if (!grid)
+	{
 		columns = static_cast<int>(table.cells.size());
+		num_rows = 1;
+	}
 	if (columns < 1)
 		columns = 1;
-	if (columns > 39)
-		columns = 39;
+	if (columns > 63)
+		columns = 63;
+	if (num_rows < 1)
+		num_rows = 1;
 
-	std::vector<std::vector<int>> rows;
-	if (!grid)
+	const std::vector<unsigned> widths = table_column_widths(doc, table.ap, static_cast<unsigned>(columns));
+	int left_pos = 0;
+	const gchar * left_str = nullptr;
+	if (table.ap && table.ap->getProperty("table-column-leftpos", left_str) && left_str)
+		parse_signed_twips(left_str, left_pos);
+	std::vector<int> col_x(static_cast<size_t>(columns) + 1, left_pos);
+	for (int c = 0; c < columns; ++c)
+		col_x[static_cast<size_t>(c) + 1] = col_x[static_cast<size_t>(c)] + static_cast<int>(widths[static_cast<size_t>(c)]);
+
+	for (int r = 0; r < num_rows; ++r)
 	{
-		std::vector<int> row;
-		for (int i = 0; i < columns && i < static_cast<int>(table.cells.size()); ++i)
-			row.push_back(i);
-		rows.push_back(row);
-	}
-	else
-	{
-		std::vector<int> tops;
-		for (size_t i = 0; i < table.cells.size(); ++i)
+		std::vector<RowCellSpec> row_cells;
+		if (!grid)
 		{
-			const int top = table.cells[i].top;
-			bool seen = false;
-			for (size_t t = 0; t < tops.size(); ++t)
-				if (tops[t] == top)
-					seen = true;
-			if (!seen)
-				tops.push_back(top);
-		}
-		for (size_t a = 1; a < tops.size(); ++a)
-		{
-			const int key = tops[a];
-			size_t b = a;
-			while (b > 0 && tops[b - 1] > key)
+			for (int c = 0; c < columns && c < static_cast<int>(table.cells.size()); ++c)
 			{
-				tops[b] = tops[b - 1];
-				--b;
+				RowCellSpec spec = { c, col_x[static_cast<size_t>(c)], col_x[static_cast<size_t>(c) + 1], 0, table.cells[static_cast<size_t>(c)].ap };
+				row_cells.push_back(spec);
 			}
-			tops[b] = key;
 		}
-		for (size_t t = 0; t < tops.size(); ++t)
+		else
 		{
-			std::vector<int> row;
+			// Find every cell covering row r (including vertically merged continuations).
+			std::vector<int> covering;
 			for (size_t i = 0; i < table.cells.size(); ++i)
-				if (table.cells[i].top == tops[t])
-					row.push_back(static_cast<int>(i));
-			for (size_t a = 1; a < row.size(); ++a)
 			{
-				const int key = row[a];
+				const TableCell & cell = table.cells[i];
+				const int top = cell.top;
+				const int bot = (cell.bot > top) ? cell.bot : (top + 1);
+				if (top <= r && r < bot)
+					covering.push_back(static_cast<int>(i));
+			}
+			for (size_t a = 1; a < covering.size(); ++a)
+			{
+				const int key = covering[a];
 				size_t b = a;
-				while (b > 0 && table.cells[static_cast<size_t>(row[b - 1])].left > table.cells[static_cast<size_t>(key)].left)
+				while (b > 0 && table.cells[static_cast<size_t>(covering[b - 1])].left > table.cells[static_cast<size_t>(key)].left)
 				{
-					row[b] = row[b - 1];
+					covering[b] = covering[b - 1];
 					--b;
 				}
-				row[b] = key;
+				covering[b] = key;
 			}
-			rows.push_back(row);
-		}
-	}
+			if (covering.empty())
+				continue;
 
-	const std::vector<unsigned> widths = table_column_widths(table.ap, static_cast<unsigned>(columns));
-	const std::string row_pap = row_mark_grpprl(widths);
-	for (size_t r = 0; r < rows.size(); ++r)
-	{
-		for (int c = 0; c < columns; ++c)
-		{
-			int found = -1;
-			if (!grid)
+			int cur_col = 0;
+			for (size_t i = 0; i < covering.size() && row_cells.size() < 63; ++i)
 			{
-				if (c < static_cast<int>(rows[r].size()))
-					found = rows[r][static_cast<size_t>(c)];
-			}
-			else
-			{
-				for (size_t i = 0; i < rows[r].size(); ++i)
+				const int idx = covering[i];
+				const TableCell & cell = table.cells[static_cast<size_t>(idx)];
+				int c_left = cell.left < 0 ? 0 : (cell.left >= columns ? columns - 1 : cell.left);
+				int c_right = (cell.right > c_left) ? cell.right : (c_left + 1);
+				if (c_right > columns)
+					c_right = columns;
+				while (cur_col < c_left && row_cells.size() < 63)
 				{
-					const TableCell & cell = table.cells[static_cast<size_t>(rows[r][i])];
-					if (cell.left == c)
-						found = rows[r][i];
+					RowCellSpec gap = { -1, col_x[static_cast<size_t>(cur_col)], col_x[static_cast<size_t>(cur_col) + 1], 0, nullptr };
+					row_cells.push_back(gap);
+					++cur_col;
 				}
+				if (row_cells.size() >= 63)
+					break;
+				unsigned tcgrf = 0;
+				const int bot = (cell.bot > cell.top) ? cell.bot : (cell.top + 1);
+				if (bot - cell.top > 1)
+				{
+					tcgrf |= 0x0020u; // fVertMerge
+					if (r == cell.top)
+						tcgrf |= 0x0040u; // fVertRestart
+				}
+				RowCellSpec spec = { (r == cell.top) ? idx : -1, col_x[static_cast<size_t>(c_left)], col_x[static_cast<size_t>(c_right)], tcgrf, cell.ap };
+				row_cells.push_back(spec);
+				cur_col = c_right;
 			}
-			if (found >= 0)
+		}
+
+		if (row_cells.empty())
+			continue;
+
+		for (size_t i = 0; i < row_cells.size(); ++i)
+		{
+			const int idx = row_cells[i].cell_index;
+			if (idx >= 0 && !table.cells[static_cast<size_t>(idx)].paragraphs.empty())
 			{
-				const std::vector<Paragraph> & paras = table.cells[static_cast<size_t>(found)].paragraphs;
-				if (paras.empty())
-					out.push_back(mark_paragraph(0x000D, in_table_grpprl(std::string())));
+				const std::vector<Paragraph> & paras = table.cells[static_cast<size_t>(idx)].paragraphs;
 				for (size_t p = 0; p < paras.size(); ++p)
 				{
 					Paragraph paragraph = paras[p];
 					paragraph.pap_grpprl = in_table_grpprl(paragraph.pap_grpprl);
+					paragraph.end_mark = (p + 1 == paras.size()) ? 0x0007 : 0x000D;
 					out.push_back(paragraph);
 				}
 			}
 			else
 			{
-				out.push_back(mark_paragraph(0x000D, in_table_grpprl(std::string())));
+				out.push_back(mark_paragraph(0x0007, in_table_grpprl(std::string())));
 			}
-			out.push_back(mark_paragraph(0x0007, in_table_grpprl(std::string())));
 		}
-		out.push_back(mark_paragraph(0x0007, row_pap));
+		out.push_back(mark_paragraph(0x0007, row_mark_grpprl(row_cells, table.ap)));
 	}
 	return out;
 }
@@ -995,7 +1132,7 @@ static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts
 				--table.depth;
 			if (table.depth == 0)
 			{
-				const std::vector<Paragraph> built = build_table(table);
+				const std::vector<Paragraph> built = build_table(doc, table);
 				dest.insert(dest.end(), built.begin(), built.end());
 				table = OpenTable();
 			}
@@ -1013,8 +1150,26 @@ static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts
 			cell.right = property_int(ap, "right-attach");
 			cell.top = property_int(ap, "top-attach");
 			cell.bot = property_int(ap, "bot-attach");
+			cell.ap = ap;
 			table.cells.push_back(cell);
 			table.current = static_cast<int>(table.cells.size() - 1);
+			return true;
+		}
+		if (kind == PTX_SectionFrame)
+		{
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(frag->getIndexAP(), &ap);
+			if (!table.in_paragraph)
+			{
+				if (table.current < 0)
+				{
+					table.cells.push_back(TableCell());
+					table.current = static_cast<int>(table.cells.size() - 1);
+				}
+				table.paragraph = Paragraph();
+				table.in_paragraph = true;
+			}
+			append_image(doc, table.paragraph, ap, pics);
 			return true;
 		}
 		if (kind == PTX_EndCell)
