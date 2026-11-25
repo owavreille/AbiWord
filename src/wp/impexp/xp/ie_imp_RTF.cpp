@@ -8916,7 +8916,7 @@ bool IE_Imp_RTF::HandleTableListOverride(void)
 			}
 		}
 	}
-	if (pLOver->m_pList != nullptr)
+	if (pLOver->hasList())
 	{
 		m_vecWord97ListOverride.push_back(pLOver.release());
 	}

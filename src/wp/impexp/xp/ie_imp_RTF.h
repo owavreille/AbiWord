@@ -382,6 +382,7 @@ public:
 	std::unique_ptr<RTFProps_bParaProps> m_pbParaProps;
 	std::unique_ptr<RTFProps_bCharProps> m_pbCharProps;
 	bool setList(void);
+	bool hasList() const { return m_pList != nullptr; }
 	bool isTab(UT_uint32 iLevel);
 	std::vector<UT_sint32>* getTabStopVect(UT_uint32 iLevel);
 	std::vector<eTabType>* getTabTypeVect(UT_uint32 iLevel);
