@@ -281,6 +281,14 @@ bool pt_PieceTable::_createStrux(PTStruxType pts,
 		pfs = new pf_Frag_Strux_SectionEndTOC(this, indexAP);
 		break;
 
+	case PTX_SectionMarginnote:
+		pfs = new pf_Frag_Strux_SectionMarginnote(this, indexAP);
+		break;
+
+	case PTX_EndMarginnote:
+		pfs = new pf_Frag_Strux_SectionEndMarginnote(this, indexAP);
+		break;
+
 	default:
 		UT_ASSERT_HARMLESS(UT_NOT_IMPLEMENTED);
 		break;
@@ -455,7 +463,10 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 	if((pfsContainer->getStruxType() == PTX_SectionTOC) && (pts != PTX_EndTOC))
 	{
 		bFoundContainer = _getStruxFromPosition(pfsContainer->getPos(),&pfsContainer);
-		dpos--;
+		if (!bFoundContainer || !pfsContainer)
+			return false;
+		if (dpos > 0)
+			dpos--;
 	}
 	if(isEndFootnote(pfsContainer))
 	{
@@ -618,7 +629,9 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 	{
 		// Inserting a sectionFrame screws up dos. It goes just before the next
 		// block strux found.
-		dpos = pfsNew->getPrev()->getPos() + pfsNew->getPrev()->getLength();
+		pf_Frag * prev = pfsNew->getPrev();
+		if (prev)
+			dpos = prev->getPos() + prev->getLength();
 	}
 	PX_ChangeRecord_Strux * pcrs
 		= new PX_ChangeRecord_Strux(PX_ChangeRecord::PXT_InsertStrux,

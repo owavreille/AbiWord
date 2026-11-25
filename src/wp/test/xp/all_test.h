@@ -51,6 +51,8 @@
 #undef TFSUITE
 #include "src/af/util/xp/t/ut_go_file.t.cpp"
 #undef TFSUITE
+#include "src/af/util/xp/t/ut_win_proof.t.cpp"
+#undef TFSUITE
 #include "src/af/util/xp/t/ut_path.t.cpp"
 #undef TFSUITE
 #include "src/text/fmt/xp/t/fl_AutoNum.t.cpp"

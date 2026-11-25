@@ -92,9 +92,12 @@ IE_Exp_HTML_NavigationHelper::IE_Exp_HTML_NavigationHelper(
   m_minTOCIndex(0),
   m_baseName(UT_go_basename_from_uri(baseName.utf8_str()))
 {
-    UT_ASSERT(m_baseName);
+    if (!m_baseName)
+        m_baseName = g_strdup("document.html");
 
-    m_suffix = strchr(m_baseName, '.');
+    const char * dot = m_baseName ? strchr(m_baseName, '.') : nullptr;
+    if (dot)
+        m_suffix = dot;
     m_minTOCLevel = 10;
     for (int i = 0; i < getNumTOCEntries(); i++)
     {

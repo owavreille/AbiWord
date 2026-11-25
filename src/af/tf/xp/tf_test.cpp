@@ -171,6 +171,7 @@ int TF_Test::run(const char * const *prefixes, const char *suite)
         {
             printf("%s: Testing \"%s\" in %s:\n", cur->m_suite, cur->descr,
                    cur->idstr);
+            fflush(stdout);
             cur->main();
 
             new_valgrind_errs = memerrs();

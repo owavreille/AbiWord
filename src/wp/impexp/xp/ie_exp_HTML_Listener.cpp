@@ -881,16 +881,19 @@ void IE_Exp_HTML_Listener::_openSpan(PT_AttrPropIndex api)
 	const gchar * szP_BgColor = nullptr;
 	const gchar * szP_Display = nullptr;
 
-	pAP->getProperty("font-weight", szP_FontWeight);
-	pAP->getProperty("font-style", szP_FontStyle);
-	pAP->getProperty("font-size", szP_FontSize);
-	pAP->getProperty("font-family", szP_FontFamily);
-	pAP->getProperty("text-decoration", szP_TextDecoration);
-	pAP->getProperty("text-position", szP_TextPosition);
-	pAP->getProperty("text-transform", szP_TextTransform);
-	pAP->getProperty("color", szP_Color);
-	pAP->getProperty("bgcolor", szP_BgColor);
-	pAP->getProperty("display", szP_Display);
+	if (pAP)
+	{
+		pAP->getProperty("font-weight", szP_FontWeight);
+		pAP->getProperty("font-style", szP_FontStyle);
+		pAP->getProperty("font-size", szP_FontSize);
+		pAP->getProperty("font-family", szP_FontFamily);
+		pAP->getProperty("text-decoration", szP_TextDecoration);
+		pAP->getProperty("text-position", szP_TextPosition);
+		pAP->getProperty("text-transform", szP_TextTransform);
+		pAP->getProperty("color", szP_Color);
+		pAP->getProperty("bgcolor", szP_BgColor);
+		pAP->getProperty("display", szP_Display);
+	}
 
 	UT_UTF8String style;
 	UT_UTF8String tmp;
@@ -1159,10 +1162,13 @@ void IE_Exp_HTML_Listener::_openSection(PT_AttrPropIndex api, bool recursiveCall
 	const char* pszRightMargin = nullptr;
 	const char* pszTopMargin = nullptr;
 	const char* pszBottomMargin = nullptr;
-	pAP->getProperty("page-margin-left", (const gchar *&)pszLeftMargin);
-	pAP->getProperty("page-margin-right", (const gchar *&)pszRightMargin);
-	pAP->getProperty("page-margin-top", (const gchar *&)pszTopMargin);
-	pAP->getProperty("page-margin-bottom", (const gchar *&)pszBottomMargin);
+	if (pAP)
+	{
+		pAP->getProperty("page-margin-left", (const gchar *&)pszLeftMargin);
+		pAP->getProperty("page-margin-right", (const gchar *&)pszRightMargin);
+		pAP->getProperty("page-margin-top", (const gchar *&)pszTopMargin);
+		pAP->getProperty("page-margin-bottom", (const gchar *&)pszBottomMargin);
+	}
 	
 	if(pszLeftMargin && pszLeftMargin[0])
 	{
@@ -2333,8 +2339,8 @@ void IE_Exp_HTML_Listener::_openFrame(PT_AttrPropIndex api, const PX_ChangeRecor
         pAP = nullptr;
     }
     
-    const gchar *szType;
-    if (pAP->getProperty("frame-type", szType))
+    const gchar *szType = nullptr;
+    if (pAP && pAP->getProperty("frame-type", szType) && szType)
     {
         if (!strcmp(szType, "textbox"))
         {
@@ -2457,7 +2463,7 @@ void IE_Exp_HTML_Listener::_insertTOC(PT_AttrPropIndex api)
 
     // determine the style of the TOC heading
     UT_UTF8String headingStyle;
-    ok = pAP->getProperty("toc-heading-style", pValue);
+    ok = pAP && pAP->getProperty("toc-heading-style", pValue);
     if (ok && pValue)
     {
         headingStyle = pValue;
@@ -2472,7 +2478,7 @@ void IE_Exp_HTML_Listener::_insertTOC(PT_AttrPropIndex api)
 
     std::string szTOCHeading;
     pValue = nullptr;
-    ok = pAP->getProperty("toc-heading", pValue);
+    ok = pAP && pAP->getProperty("toc-heading", pValue);
     if (ok && pValue) {
         szTOCHeading = pValue;
     } else {
@@ -2806,7 +2812,8 @@ void IE_Exp_HTML_Listener::_handleImage(PT_AttrPropIndex api,
 
     const gchar * szTitle = nullptr;
     UT_UTF8String title;
-    pAP->getAttribute("title", szTitle);
+    if (pAP)
+        pAP->getAttribute("title", szTitle);
     if (szTitle) {
         title = szTitle;
         title.escapeXML();
@@ -2814,7 +2821,8 @@ void IE_Exp_HTML_Listener::_handleImage(PT_AttrPropIndex api,
 
     const gchar * szAlt = nullptr;
     UT_UTF8String alt;
-    pAP->getAttribute("alt", szAlt);
+    if (pAP)
+        pAP->getAttribute("alt", szAlt);
     if (szAlt) {
         alt = szAlt;
         alt.escapeXML();
@@ -2829,7 +2837,7 @@ void IE_Exp_HTML_Listener::_handleImage(PT_AttrPropIndex api,
         imageName = m_pDataExporter->saveData(szDataId, extension.c_str());
     }
     UT_UTF8String align = "";
-    if (bIsPositioned) {
+    if (bIsPositioned && pAP) {
         const gchar * szXPos = nullptr;
         UT_sint32 ixPos = 0;
         if (pAP->getProperty("xpos", szXPos)) {
@@ -3011,7 +3019,8 @@ void IE_Exp_HTML_Listener::_makeStylesheet(PT_AttrPropIndex api)
 	for (unsigned short int propIdx = 0; propIdx < 8; propIdx += 2) {
 		szValue = PP_evalProperty(marginProps[propIdx], nullptr, nullptr, pAP,
 								 m_pDocument, true);
-		bodyStyle += UT_UTF8String_sprintf("%s : %s;\n", 
+		if (szValue)
+			bodyStyle += UT_UTF8String_sprintf("%s : %s;\n",
 										 marginProps[propIdx + 1], szValue);
 	}
 
