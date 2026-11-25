@@ -30,6 +30,7 @@
 #include "ut_debugmsg.h"
 #include "ut_string_class.h"
 #include "ut_Win32LocaleString.h"
+#include "ut_unicode.h"
 
 #include "xap_App.h"
 #include "xap_Strings.h"
@@ -530,8 +531,7 @@ void XAP_Win32Dialog_FileOpenSaveAs::runModal(XAP_Frame * pFrame)
 			if (sniffer)
 			{
 				const std::string want = sniffer->getPreferredSuffix().utf8_str();
-				if (!path.empty() && !want.empty() &&
-					(suffix.empty() || g_ascii_strcasecmp(suffix.c_str(), want.c_str())))
+				if (!path.empty() && UT_save_suffix_mismatch(suffix.c_str(), want.c_str()))
 				{
 					const std::string origPath = path;
 					UT_addOrReplacePathSuffix(path, want.c_str());

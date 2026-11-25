@@ -25,6 +25,7 @@
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_Win32OS.h"
+#include "ut_unicode.h"
 
 #include "xap_App.h"
 #include "xap_Win32App.h"
@@ -607,7 +608,7 @@ BOOL AP_Win32Dialog_Paragraph::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lPara
 			_setSpinItemValue(i,buf);	\
 			m_bEditChanged = false;	\
 		}								\
-		_doSpin(i, -static_cast<UT_sint32>(pnmud->iDelta));	\
+		_doSpin(i, UT_updown_step(static_cast<UT_sint32>(pnmud->iDelta)));	\
 		break;							\
 
 BOOL AP_Win32Dialog_Paragraph::_onDeltaPos(NM_UPDOWN * pnmud)

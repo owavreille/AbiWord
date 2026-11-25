@@ -30,6 +30,9 @@
 #include "ie_imp.h"
 #include "ut_path.h"
 #include "ut_string_class.h"
+#include "ut_unicode.h"
+#include "pf_Frag_Object.h"
+#include "pp_AttrProp.h"
 #include "xap_ModuleManager.h"
 
 #define TFSUITE "core.wp.impexp.formats"
@@ -1344,6 +1347,72 @@ static bool markup_has_text(const std::string & xml)
 	return false;
 }
 
+static PD_Document * import_bytes(const std::string & bytes, const char * extension)
+{
+	const std::string path = UT_createTmpFile("imp", extension);
+	if (path.empty())
+		return nullptr;
+	FILE * out = std::fopen(path.c_str(), "wb");
+	if (!out)
+	{
+		std::remove(path.c_str());
+		return nullptr;
+	}
+	const size_t wrote = std::fwrite(bytes.data(), 1, bytes.size(), out);
+	std::fclose(out);
+	if (wrote != bytes.size())
+	{
+		std::remove(path.c_str());
+		return nullptr;
+	}
+	PD_Document * doc = new PD_Document();
+	const UT_Error err = doc->readFromFile(path.c_str(), IEFT_Unknown, nullptr);
+	std::remove(path.c_str());
+	if (!UT_IS_IE_SUCCESS(err))
+	{
+		doc->unref();
+		return nullptr;
+	}
+	return doc;
+}
+
+static std::string first_href(PD_Document * doc)
+{
+	pt_PieceTable * table = doc ? doc->getPieceTable() : nullptr;
+	if (!table)
+		return std::string();
+	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
+	{
+		if (frag->getType() != pf_Frag::PFT_Object)
+			continue;
+		pf_Frag_Object * object = static_cast<pf_Frag_Object *>(frag);
+		if (object->getObjectType() != PTO_Hyperlink)
+			continue;
+		const PP_AttrProp * props = nullptr;
+		const gchar * href = nullptr;
+		if (doc->getAttrProp(object->getIndexAP(), &props) && props &&
+			props->getAttribute("xlink:href", href) && href)
+			return href;
+	}
+	return std::string();
+}
+
+static std::string file_contents(const std::string & path)
+{
+	gchar * contents = nullptr;
+	gsize length = 0;
+	GError * error = nullptr;
+	if (!g_file_get_contents(path.c_str(), &contents, &length, &error))
+	{
+		if (error)
+			g_error_free(error);
+		return std::string();
+	}
+	std::string text(contents, length);
+	g_free(contents);
+	return text;
+}
+
 static bool fo_min_height_non_negative(const std::string & xml)
 {
 	const std::string key = "fo:min-height=\"";
@@ -2645,4 +2714,75 @@ TFTEST_MAIN("HTML export escapes markup in the body")
 
 	TFPASS(html.find("Prix&lt;10&gt;&amp;C") != std::string::npos);
 	TFPASS(html.find("Prix<10>") == std::string::npos);
+}
+
+TFTEST_MAIN("RTF import keeps unicode, an escaped brace and a spaced hyperlink")
+{
+	PD_Document * accent = import_bytes("{\\rtf1\\ansi\\uc1 \\u233?\\par}", ".rtf");
+	if (TFPASS(accent != nullptr))
+	{
+		TFPASS(document_text(accent).find("\xc3\xa9") != std::string::npos);
+		accent->unref();
+	}
+
+	PD_Document * emoji = import_bytes("{\\rtf1\\ansi\\uc1 \\u-10179?\\u-8704?\\par}", ".rtf");
+	if (TFPASS(emoji != nullptr))
+	{
+		TFPASS(document_text(emoji).find("\xf0\x9f\x98\x80") != std::string::npos);
+		emoji->unref();
+	}
+
+	PD_Document * skipped = import_bytes("{\\rtf1\\ansi{\\nonshppict \\{hidden}kept\\par}", ".rtf");
+	if (TFPASS(skipped != nullptr))
+	{
+		const std::string text = document_text(skipped);
+		TFPASS(text.find("kept") != std::string::npos);
+		TFPASS(text.find("hidden") == std::string::npos);
+		skipped->unref();
+	}
+
+	PD_Document * link = import_bytes(
+		"{\\rtf1\\ansi\\uc1{\\field{\\*\\fldinst HYPERLINK \"http://exemple.fr/caf\\u233? au lait\"}{\\fldrslt lien}}\\par}",
+		".rtf");
+	if (TFPASS(link != nullptr))
+	{
+		TFPASS(first_href(link) == "http://exemple.fr/caf\xc3\xa9 au lait");
+		link->unref();
+	}
+}
+
+TFTEST_MAIN("RTF export writes an emoji as a unicode pair")
+{
+	if (!exporter_known(".rtf"))
+		return;
+
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_UCS4Char chars[] = { 0xE9, 0x1F600 };
+	if (!TFPASS(doc->insertSpan(first_block_content(doc), chars, 2)))
+	{
+		doc->unref();
+		return;
+	}
+	const std::string path = UT_createTmpFile("fmtrtf", ".rtf");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+	const std::string rtf = file_contents(path);
+	std::remove(path.c_str());
+	TFPASS(rtf.find("\\'e9") != std::string::npos);
+	TFPASS(rtf.find("\\u-10179?\\u-8704?") != std::string::npos);
 }

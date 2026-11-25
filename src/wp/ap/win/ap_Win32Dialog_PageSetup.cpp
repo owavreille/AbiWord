@@ -28,6 +28,7 @@
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_Win32OS.h"
+#include "ut_unicode.h"
 #include "ut_Xpm2Bmp.h"
 
 #include "xap_App.h"
@@ -224,7 +225,7 @@ INT_PTR CALLBACK AP_Win32Dialog_PageSetup_Page::s_pageWndProc(HWND hWnd, UINT ms
 
 		if ( lpnmud->hdr.code == UDN_DELTAPOS )
 		{
-			pThis->doSpinControl(lpnmud->hdr.idFrom, -static_cast<UT_sint32>(lpnmud->iDelta));
+			pThis->doSpinControl(lpnmud->hdr.idFrom, UT_updown_step(static_cast<UT_sint32>(lpnmud->iDelta)));
 			SetWindowLongPtrW(hWnd, DWLP_MSGRESULT, TRUE);
 			return TRUE;
 		}
@@ -276,11 +277,7 @@ void AP_Win32Dialog_PageSetup_Page::doSpinControl(UT_uint32 id, UT_sint32 delta)
 		break;
 
 	case AP_RID_DIALOG_PAGE_SETUP_SPN_SCALE:
-		updatedData = m_pParent->getPageScale() + delta;
-		if( updatedData < 1 )
-			updatedData = 1;
-		else if( updatedData > 1000 )
-			updatedData = 1000;
+		updatedData = UT_page_scale_step(m_pParent->getPageScale(), delta);
 		m_pParent->setPageScale( updatedData );
 		SetDlgItemText( getHandle(),
 	                    AP_RID_DIALOG_PAGE_SETUP_EBX_SCALE,
@@ -750,7 +747,7 @@ INT_PTR CALLBACK AP_Win32Dialog_PageSetup_Margin::s_pageWndProc(HWND hWnd, UINT 
 
 		if ( lpnmud->hdr.code == UDN_DELTAPOS )
 		{
-			pThis->doSpinControl(lpnmud->hdr.idFrom, -static_cast<UT_sint32>(lpnmud->iDelta));
+			pThis->doSpinControl(lpnmud->hdr.idFrom, UT_updown_step(static_cast<UT_sint32>(lpnmud->iDelta)));
 			SetWindowLongPtrW(hWnd, DWLP_MSGRESULT, TRUE);
 			return TRUE;
 		}

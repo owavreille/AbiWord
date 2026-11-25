@@ -22,6 +22,7 @@
 #include "ut_types.h"
 #include "ut_string.h"
 #include "ap_Dialog_PageSetup.h"
+#include "ut_unicode.h"
 
 AP_Dialog_PageSetup::AP_Dialog_PageSetup (XAP_DialogFactory * pDlgFactory,
 					  XAP_Dialog_Id id)
@@ -58,9 +59,6 @@ bool AP_Dialog_PageSetup::validatePageSettings(void) const
   (m_MarginHeader + fudge > m_MarginTop)) 
 */
 
-	if ( (m_MarginLeft + m_MarginRight >= m_PageSize.Width(m_MarginUnits)) ||
-		 (m_MarginTop + m_MarginBottom >= m_PageSize.Height(m_MarginUnits)) )
-		return false;
-
-	return true;
+	return UT_page_margins_fit(m_MarginLeft, m_MarginRight, m_MarginTop, m_MarginBottom,
+			m_PageSize.Width(m_MarginUnits), m_PageSize.Height(m_MarginUnits));
 }

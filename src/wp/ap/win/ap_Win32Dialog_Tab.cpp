@@ -22,6 +22,7 @@
 #include "ut_string.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
+#include "ut_unicode.h"
 
 #include "xap_App.h"
 #include "xap_Win32App.h"
@@ -195,7 +196,7 @@ BOOL AP_Win32Dialog_Tab::_onDeltaPos(NM_UPDOWN * pnmud)
 	UT_DEBUGMSG(("onDeltaPos: [idFrom %d][iPos %d][iDelta %d]\n",
 				 pnmud->hdr.idFrom,pnmud->iPos,pnmud->iDelta));
 
-	_doSpin(id_SPIN_DEFAULT_TAB_STOP, -static_cast<UT_sint32>(pnmud->iDelta));
+	_doSpin(id_SPIN_DEFAULT_TAB_STOP, UT_updown_step(static_cast<UT_sint32>(pnmud->iDelta)));
 				
 	return TRUE;
 }

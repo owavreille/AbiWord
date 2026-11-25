@@ -31,6 +31,7 @@
 #include <string>
 
 #include "ut_locale.h"
+#include "ut_unicode.h"
 #include "ut_std_string.h"
 
 #include "ie_imp_RTF.h"
@@ -211,11 +212,11 @@ bool IE_Imp_RTF::InsertImage (const FG_ConstGraphicPtr& pFG, const char * image_
 			resize1 = true;
 			if ((imgProps.wGoal != 0) && (imgProps.hGoal != 0)) {
 				// want image scaled against the w&h specified, not the image's natural size
-				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0f) * (imgProps.wGoal/ 1440.0f));
-				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0f) * (imgProps.hGoal/ 1440.0f));
+				wInch = UT_rtf_scaled_inches(imgProps.scaleX, imgProps.wGoal, imgProps.width, true);
+				hInch = UT_rtf_scaled_inches(imgProps.scaleY, imgProps.hGoal, imgProps.height, true);
 			} else {
-				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0) * (static_cast<double>(imgProps.width) / 96.0));
-				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0) * (static_cast<double>(imgProps.height) / 96.0));
+				wInch = UT_rtf_scaled_inches(imgProps.scaleX, imgProps.wGoal, imgProps.width, false);
+				hInch = UT_rtf_scaled_inches(imgProps.scaleY, imgProps.hGoal, imgProps.height, false);
 			}
 			break;
 		default:
@@ -338,11 +339,11 @@ bool IE_Imp_RTF::InsertImage (const FG_ConstGraphicPtr& pFG, const char * image_
 			resize = true;
 			if ((imgProps.wGoal != 0) && (imgProps.hGoal != 0)) {
 				// want image scaled against the w&h specified, not the image's natural size
-				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0f) * imgProps.wGoal/ 1440.0f);
-				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0f) * imgProps.hGoal/ 1440.0f);
+				wInch = UT_rtf_scaled_inches(imgProps.scaleX, imgProps.wGoal, imgProps.width, true);
+				hInch = UT_rtf_scaled_inches(imgProps.scaleY, imgProps.hGoal, imgProps.height, true);
 			} else {
-				wInch = ((static_cast<double>(imgProps.scaleX) / 100.0) * (static_cast<double>(imgProps.width) / 96.0));
-				hInch = ((static_cast<double>(imgProps.scaleY) / 100.0) * (static_cast<double>(imgProps.height) / 96.0));
+				wInch = UT_rtf_scaled_inches(imgProps.scaleX, imgProps.wGoal, imgProps.width, false);
+				hInch = UT_rtf_scaled_inches(imgProps.scaleY, imgProps.hGoal, imgProps.height, false);
 			}
 			break;
 		default:

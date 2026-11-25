@@ -23,6 +23,7 @@
 
 #pragma once
 #include "ut_types.h"
+#include <cstdio>
 
 /** contain various unicode function. Just a namespace */
 class ABI_EXPORT UT_Unicode
@@ -206,4 +207,152 @@ inline int UT_ruler_drag_slack (bool draggingMargin, int width)
 	if (!draggingMargin || width <= 0)
 		return 0;
 	return width * 2;
+}
+
+// Windows reports a positive iDelta for the up arrow. The spin value moves
+// the other way, so the applied step is the negation of that report.
+inline int UT_updown_step (int reportedDelta)
+{
+	return -reportedDelta;
+}
+
+// A page scale is a percentage. The spin cannot leave the range 1..1000.
+inline int UT_page_scale_step (int current, int delta)
+{
+	int next = current + delta;
+	if (next < 1)
+		return 1;
+	if (next > 1000)
+		return 1000;
+	return next;
+}
+
+// The fraction is the distance from the start to the value, over the span.
+// An empty span, or a value outside it, stays on 0 or 1.
+inline double UT_progress_fraction (int start, int end, int value)
+{
+	const double denom = static_cast<double>(end) - static_cast<double>(start);
+	if (denom <= 0.0001)
+		return 0.0;
+	double frac = (static_cast<double>(value) - static_cast<double>(start)) / denom;
+	if (frac < 0.0)
+		return 0.0;
+	if (frac > 1.0)
+		return 1.0;
+	return frac;
+}
+
+inline bool UT_progress_changed (int previous, int value)
+{
+	return previous != value;
+}
+
+// A rooted Windows path starts with a slash or a drive letter. Anything else
+// is relative to the AbiWord directory.
+inline bool UT_win_path_is_rooted (const char * value)
+{
+	if (!value || !value[0])
+		return false;
+	if (value[0] == '/' || value[0] == '\\')
+		return true;
+	const unsigned char c = static_cast<unsigned char>(value[0]);
+	const bool letter = (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z');
+	return letter && value[1] == ':';
+}
+
+// Save As rewrites the name when the chosen exporter wants another suffix.
+// The comparison ignores ASCII case. An empty wanted suffix leaves the name.
+inline bool UT_save_suffix_mismatch (const char * suffix, const char * wanted)
+{
+	if (!wanted || !wanted[0])
+		return false;
+	if (!suffix || !suffix[0])
+		return true;
+	while (*suffix && *wanted)
+	{
+		unsigned char a = static_cast<unsigned char>(*suffix);
+		unsigned char b = static_cast<unsigned char>(*wanted);
+		if (a >= 'A' && a <= 'Z')
+			a = static_cast<unsigned char>(a - 'A' + 'a');
+		if (b >= 'A' && b <= 'Z')
+			b = static_cast<unsigned char>(b - 'A' + 'a');
+		if (a != b)
+			return true;
+		++suffix;
+		++wanted;
+	}
+	return *suffix != *wanted;
+}
+
+// A list box only fills the hyperlink field for a selection or a double click.
+inline bool UT_is_list_choice (int notifyCode, int selectionChange, int doubleClick)
+{
+	return notifyCode == selectionChange || notifyCode == doubleClick;
+}
+
+// Choosing a first-line or hanging indent on a zero value starts at half an
+// inch. A value already set is kept, and the dialog does not overwrite it.
+inline double UT_special_indent_inches (double current, bool & useDefault)
+{
+	if (current == 0.0)
+	{
+		useDefault = true;
+		return 0.5;
+	}
+	useDefault = false;
+	return current;
+}
+
+// Margins that meet or pass the page edge do not fit.
+inline bool UT_page_margins_fit (double left, double right, double top, double bottom,
+		double width, double height)
+{
+	if (left + right >= width)
+		return false;
+	if (top + bottom >= height)
+		return false;
+	return true;
+}
+
+// An RTF character above U+00FF is \uN? with a signed 16-bit N. A value past
+// the BMP is a surrogate pair. One ANSI byte has no unicode escape.
+inline int UT_rtf_unicode_escape (UT_UCS4Char wc, char * dest, int capacity)
+{
+	if (!dest || capacity < 8)
+		return 0;
+	dest[0] = 0;
+	if (wc <= 0x00ff || wc > 0x10ffff)
+		return 0;
+	int n = 0;
+	if (wc <= 0xffff)
+	{
+		const int tmp = static_cast<int>(static_cast<signed short>(static_cast<unsigned short>(wc)));
+		n = std::snprintf(dest, static_cast<size_t>(capacity), "\\u%d?", tmp);
+	}
+	else
+	{
+		const UT_UCS4Char value = wc - 0x10000;
+		const int high = static_cast<int>(static_cast<signed short>(
+			static_cast<unsigned short>(0xD800 + (value >> 10))));
+		const int low = static_cast<int>(static_cast<signed short>(
+			static_cast<unsigned short>(0xDC00 + (value & 0x3FF))));
+		n = std::snprintf(dest, static_cast<size_t>(capacity), "\\u%d?\\u%d?", high, low);
+	}
+	if (n <= 0 || n >= capacity)
+	{
+		dest[0] = 0;
+		return 0;
+	}
+	return n;
+}
+
+// A scaled RTF image is a fraction of the goal in twips, or of the pixel
+// size at 96 DPI when the goal is absent. scalePercent is 100 for the
+// natural size.
+inline double UT_rtf_scaled_inches (int scalePercent, int goalTwips, int pixels, bool useGoal)
+{
+	const double scale = static_cast<double>(scalePercent) / 100.0;
+	if (useGoal)
+		return scale * (static_cast<double>(goalTwips) / 1440.0);
+	return scale * (static_cast<double>(pixels) / 96.0);
 }

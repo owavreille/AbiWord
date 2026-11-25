@@ -31,6 +31,7 @@
 #include "ut_growbuf.h"
 #include "ut_debugmsg.h"
 #include "ut_units.h"
+#include "ut_unicode.h"
 
 #include "xap_App.h"
 #include "xap_Dialog_Id.h"
@@ -924,7 +925,7 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 						UT_convertInchesToDimension(m_iMaxWidth, m_dim) - rightIndent)
   		{
   			_setSpinItemValue(id_SPIN_LEFT_INDENT,
-  									(const gchar *)UT_formatDimensionString(m_dim, UT_convertInchesToDimension(m_iMaxWidth, m_dim) - rightIndent),
+  									(const gchar *)UT_indent_room_string(m_dim, m_iMaxWidth, rightIndent),
   									op_SYNC);
   		}
 	}
@@ -950,7 +951,7 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 						UT_convertInchesToDimension(m_iMaxWidth, m_dim) - leftIndent)
   		{
   			_setSpinItemValue(id_SPIN_RIGHT_INDENT,
-  									(const gchar *)UT_formatDimensionString(m_dim, UT_convertInchesToDimension(m_iMaxWidth, m_dim) - leftIndent),
+  									(const gchar *)UT_indent_room_string(m_dim, m_iMaxWidth, leftIndent),
   									op_SYNC);
   		}
 	}
@@ -976,14 +977,7 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 			case indent_HANGING:
 				// only change to default if existing value is zero
 				dDefault = UT_convertDimensionless(_getSpinItemValue(id_SPIN_SPECIAL_INDENT));
-				if (dDefault == 0)
-				{
-					dDefault = 0.5;
-				}
-				else
-				{
-					bDefault = false;
-				}
+				dDefault = UT_special_indent_inches(dDefault, bDefault);
 				break;
 
 			default:
@@ -1049,7 +1043,7 @@ void AP_Dialog_Paragraph::_syncControls(tControl changed, bool /*bAll  = false *
 			UT_convertInchesToDimension(m_iMaxWidth, m_dim) - rightIndent)
   		{
   			_setSpinItemValue(id_SPIN_SPECIAL_INDENT,
-  									(const gchar *)UT_formatDimensionString(m_dim, UT_convertInchesToDimension(m_iMaxWidth, m_dim) - rightIndent),
+  									(const gchar *)UT_indent_room_string(m_dim, m_iMaxWidth, rightIndent),
   									op_SYNC);
   		}
 	}

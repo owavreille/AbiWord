@@ -47,6 +47,7 @@
 #include "gr_Graphics.h"
 #include "ut_rand.h"
 #include "ut_std_string.h"
+#include "ut_unicode.h"
 #include "pl_ListenerCoupleCloser.h"
 
 #include "wv.h" //for wvLIDToCodePageConverter
@@ -75,7 +76,7 @@ IE_Exp_RTF::IE_Exp_RTF(PD_Document * pDocument)
 	m_bLastWasKeyword = false;
 	m_atticFormat = false;
 	m_CharRTL = UT_BIDI_UNSET;
-	m_conv = UT_iconv_open("UCS-4", "utf-8");
+	m_conv = UT_iconv_open(UCS_INTERNAL, "utf-8");
 }
 
 IE_Exp_RTF::IE_Exp_RTF(PD_Document * pDocument,bool atticFormat)
@@ -88,7 +89,7 @@ IE_Exp_RTF::IE_Exp_RTF(PD_Document * pDocument,bool atticFormat)
 	m_bLastWasKeyword = false;
 	m_atticFormat = atticFormat;
 	m_CharRTL = UT_BIDI_UNSET;
-	m_conv = UT_iconv_open("UCS-4", "utf-8");
+	m_conv = UT_iconv_open(UCS_INTERNAL, "utf-8");
 }
 
 IE_Exp_RTF::~IE_Exp_RTF()
@@ -657,16 +658,9 @@ void IE_Exp_RTF::_rtf_chardata(const char * pbuf, UT_uint32 buflen)
 				continue;
 			}
 			if (wc > 0x00ff) {
-				if (wc <= 0xffff) {
-					signed short tmp = static_cast<signed short>(static_cast<unsigned short>(wc));
-					write(UT_UTF8String_sprintf("\\u%d?", tmp).utf8_str());
-				}
-				else if (wc <= 0x10ffff) {
-					const UT_UCS4Char value = wc - 0x10000;
-					const signed short high = static_cast<signed short>(0xD800 + (value >> 10));
-					const signed short low = static_cast<signed short>(0xDC00 + (value & 0x3FF));
-					write(UT_UTF8String_sprintf("\\u%d?\\u%d?", high, low).utf8_str());
-				}
+				char escaped[64];
+				if (UT_rtf_unicode_escape(wc, escaped, static_cast<int>(sizeof escaped)) > 0)
+					write(escaped);
 			}
 			else {
 				_rtf_nonascii_hex2(wc);

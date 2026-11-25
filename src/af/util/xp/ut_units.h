@@ -84,3 +84,11 @@ ABI_EXPORT double UT_getDimensionResolution (UT_Dimension dim);
 ABI_EXPORT double UT_convertFraction(const char * sz);
 
 G_END_DECLS
+
+// The other indent is already in the dialog's unit. Subtract it from the
+// page width converted once, then format that remainder. Converting the
+// remainder again would shrink a centimetre value a second time.
+inline const char * UT_indent_room_string (UT_Dimension dim, double maxInches, double otherIndent)
+{
+	return UT_formatDimensionString(dim, UT_convertInchesToDimension(maxInches, dim) - otherIndent);
+}

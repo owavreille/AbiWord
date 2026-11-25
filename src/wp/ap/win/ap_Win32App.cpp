@@ -61,7 +61,6 @@
 #include "ap_Convert.h"
 #include "ap_Win32Frame.h"
 #include "ap_Win32App.h"
-#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include "spell_manager.h"
@@ -84,6 +83,7 @@
 
 #include "fp_Run.h"
 #include "ut_path.h"
+#include "ut_unicode.h"
 #include "ut_Win32OS.h"
 #include "ut_Win32Idle.h"
 #include "ut_Language.h"
@@ -427,8 +427,7 @@ bool AP_Win32App::getPrefsValueDirectory(bool bAppSpecific,
 	if (!m_prefs->getPrefsValue(szKey, value) || value.empty())
 		return false;
 
-	if ((value[0] == '/') || (value[0] == '\\') ||
-		(value.size() >= 2 && isalpha(static_cast<unsigned char>(value[0])) && value[1] == ':')) {
+	if (UT_win_path_is_rooted(value.c_str())) {
 		return true;
 	}
 

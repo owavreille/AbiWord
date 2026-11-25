@@ -14,6 +14,7 @@
 #include "ut_go_file.h"
 #include "ut_bytebuf.h"
 #include "ut_mbtowc.h"
+#include "ut_units.h"
 
 #define TFSUITE "core.af.util.winproof"
 
@@ -213,6 +214,90 @@ TFTEST_MAIN("A margin drag may leave the ruler and a cell stops at the table edg
 	TFPASS(UT_cell_inside_row_span(2, 3, 2, 4));
 	TFPASS(!UT_cell_inside_row_span(1, 3, 2, 4));
 	TFPASS(!UT_cell_inside_row_span(2, 5, 2, 4));
+}
+
+TFTEST_MAIN("A page scale stays in range and an up arrow steps down")
+{
+	TFPASS(UT_updown_step(1) == -1);
+	TFPASS(UT_updown_step(-3) == 3);
+	TFPASS(UT_page_scale_step(100, 1) == 101);
+	TFPASS(UT_page_scale_step(1, -5) == 1);
+	TFPASS(UT_page_scale_step(1000, 5) == 1000);
+	TFPASS(UT_page_scale_step(0, 0) == 1);
+}
+
+TFTEST_MAIN("A progress fraction stays between zero and one")
+{
+	TFPASS(UT_progress_fraction(0, 100, 25) == 0.25);
+	TFPASS(UT_progress_fraction(10, 20, 10) == 0.0);
+	TFPASS(UT_progress_fraction(10, 20, 25) == 1.0);
+	TFPASS(UT_progress_fraction(10, 20, 5) == 0.0);
+	TFPASS(UT_progress_fraction(5, 5, 9) == 0.0);
+	TFPASS(!UT_progress_changed(3, 3));
+	TFPASS(UT_progress_changed(3, 4));
+}
+
+TFTEST_MAIN("Save As replaces another suffix and a drive path is rooted")
+{
+	TFPASS(!UT_save_suffix_mismatch(".doc", ".doc"));
+	TFPASS(!UT_save_suffix_mismatch(".DOC", ".doc"));
+	TFPASS(UT_save_suffix_mismatch(".rtf", ".doc"));
+	TFPASS(UT_save_suffix_mismatch("", ".doc"));
+	TFPASS(UT_save_suffix_mismatch(nullptr, ".doc"));
+	TFPASS(!UT_save_suffix_mismatch(".rtf", ""));
+	TFPASS(!UT_save_suffix_mismatch(".rtf", nullptr));
+
+	TFPASS(!UT_win_path_is_rooted(nullptr));
+	TFPASS(!UT_win_path_is_rooted(""));
+	TFPASS(!UT_win_path_is_rooted("notes.abw"));
+	TFPASS(UT_win_path_is_rooted("/tmp/notes.abw"));
+	TFPASS(UT_win_path_is_rooted("\\\\server\\share"));
+	TFPASS(UT_win_path_is_rooted("C:\\docs"));
+	TFPASS(UT_win_path_is_rooted("c:/docs"));
+	TFPASS(!UT_win_path_is_rooted("1:\\no"));
+}
+
+TFTEST_MAIN("A list notice is a selection or a double click")
+{
+	TFPASS(UT_is_list_choice(1, 1, 2));
+	TFPASS(UT_is_list_choice(2, 1, 2));
+	TFPASS(!UT_is_list_choice(0, 1, 2));
+	TFPASS(!UT_is_list_choice(3, 1, 2));
+}
+
+TFTEST_MAIN("A zero special indent is half an inch and margins must fit")
+{
+	bool useDefault = false;
+	TFPASS(UT_special_indent_inches(0.0, useDefault) == 0.5);
+	TFPASS(useDefault);
+	TFPASS(UT_special_indent_inches(1.25, useDefault) == 1.25);
+	TFPASS(!useDefault);
+
+	const char * room = UT_indent_room_string(DIM_CM, 8.0, 2.54);
+	TFPASS(room && strcmp(room, "17.78cm") == 0);
+
+	TFPASS(UT_page_margins_fit(1.0, 1.0, 1.0, 1.0, 8.5, 11.0));
+	TFPASS(!UT_page_margins_fit(5.0, 4.0, 1.0, 1.0, 8.5, 11.0));
+	TFPASS(!UT_page_margins_fit(1.0, 1.0, 6.0, 6.0, 8.5, 11.0));
+	TFPASS(!UT_page_margins_fit(4.0, 4.0, 1.0, 1.0, 8.0, 11.0));
+}
+
+TFTEST_MAIN("An RTF character above 255 is a unicode escape and a pixel image is inches")
+{
+	char escaped[64];
+	TFPASS(UT_rtf_unicode_escape(0xE9, escaped, 64) == 0);
+	TFPASS(UT_rtf_unicode_escape(0x100, escaped, 64) > 0);
+	TFPASS(strcmp(escaped, "\\u256?") == 0);
+	TFPASS(UT_rtf_unicode_escape(0x1F600, escaped, 64) > 0);
+	TFPASS(strcmp(escaped, "\\u-10179?\\u-8704?") == 0);
+	TFPASS(UT_rtf_unicode_escape(0x10FFFF, escaped, 64) > 0);
+	TFPASS(strcmp(escaped, "\\u-9217?\\u-8193?") == 0);
+	TFPASS(UT_rtf_unicode_escape(0x110000, escaped, 64) == 0);
+
+	TFPASS(UT_rtf_scaled_inches(100, 1440, 96, true) == 1.0);
+	TFPASS(UT_rtf_scaled_inches(200, 720, 96, true) == 1.0);
+	TFPASS(UT_rtf_scaled_inches(100, 0, 96, false) == 1.0);
+	TFPASS(UT_rtf_scaled_inches(50, 0, 96, false) == 0.5);
 }
 
 TFTEST_MAIN("ShellExecute failure is a result at or below 32")

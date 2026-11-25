@@ -23,6 +23,7 @@
 #include "ut_string.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
+#include "ut_unicode.h"
 
 #include "xap_App.h"
 #include "xap_Win32App.h"
@@ -145,7 +146,7 @@ BOOL AP_Win32Dialog_InsertHyperlink::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
 		return 1;
 
 	case AP_RID_DIALOG_INSERTHYPERLINK_LBX_LINK:
-		if (wNotifyCode == LBN_SELCHANGE || wNotifyCode == LBN_DBLCLK)
+		if (UT_is_list_choice(wNotifyCode, LBN_SELCHANGE, LBN_DBLCLK))
 		{
 			UT_sint32 result = getListSelectedIndex( wId );
 			if( result != LB_ERR )
