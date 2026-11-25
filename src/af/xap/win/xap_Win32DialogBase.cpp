@@ -568,6 +568,8 @@ extern bool helpLocalizeAndOpenURL(const char* pathBeforeLang, const char* pathA
 
 BOOL XAP_Win32DialogBase::_callHelp()
 {
+	UT_return_val_if_fail(m_pDlg, FALSE);
+
 	if ( m_pDlg->getHelpUrl().size () > 0 )
     {
 		helpLocalizeAndOpenURL ("help", m_pDlg->getHelpUrl().c_str(), "http://www.abisource.com/help/" );

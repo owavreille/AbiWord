@@ -94,7 +94,11 @@ void XAP_Win32Dialog_Insert_Symbol::runModeless(XAP_Frame * pFrame)
 void XAP_Win32Dialog_Insert_Symbol::destroy(void)
 {
 	modeless_cleanup();
+	DELETEP(m_DrawSymbolSample);
+	DELETEP(m_pSamplePreviewWidget);
+	DELETEP(m_pSymbolPreviewWidget);
 	DestroyWindow(m_hDlg);
+	m_hDlg = nullptr;
 }
 
 void XAP_Win32Dialog_Insert_Symbol::activate(void)
@@ -154,6 +158,10 @@ BOOL XAP_Win32Dialog_Insert_Symbol::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, 
 	// attach a new graphics context to the drawing area
 	UT_DebugOnly<XAP_Win32App *> app = static_cast<XAP_Win32App *> (m_pApp);
 	UT_ASSERT(app);
+
+	DELETEP(m_DrawSymbolSample);
+	DELETEP(m_pSamplePreviewWidget);
+	DELETEP(m_pSymbolPreviewWidget);
 
 	HWND hwndChild = GetDlgItem(hWnd, XAP_RID_DIALOG_INSERTSYMBOL_SYMBOLS);
 

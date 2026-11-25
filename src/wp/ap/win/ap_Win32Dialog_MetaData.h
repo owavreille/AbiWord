@@ -84,6 +84,7 @@ private:
 	UT_String					m_sPublisher;
 	UT_String					m_sCoAuthor;
 	AP_Win32Dialog_MetaData*	m_pData;
+	bool						m_bInitialized;
 
 };
 
@@ -107,6 +108,7 @@ private:
 	UT_String					m_sKeywords;
 	UT_String					m_sLanguages;
 	UT_String					m_sDescription;
+	bool						m_bInitialized;
 
 };
 
@@ -130,6 +132,7 @@ private:
 	UT_String					m_sRelation;
 	UT_String					m_sCoverage;
 	UT_String					m_sRights;
+	bool						m_bInitialized;
 };
 
 #endif /* AP_WIN32DIALOG_METADATA_H */

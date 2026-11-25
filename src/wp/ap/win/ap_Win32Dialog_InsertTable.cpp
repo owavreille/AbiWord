@@ -68,6 +68,7 @@ AP_Win32Dialog_InsertTable::~AP_Win32Dialog_InsertTable()
 
  void AP_Win32Dialog_InsertTable::runModal(XAP_Frame *pFrame)
  {
+    setDialog(this);
     createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_INSERT_TABLE));
  }
 
@@ -103,9 +104,9 @@ BOOL AP_Win32Dialog_InsertTable::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPA
 	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_INSERTTABLE_SPIN_SIZE),UDM_SETRANGE,(WPARAM)0,(LPARAM)MAKELONG((short)9999,(short)1));
 	
 	// Limit to four chars
-	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_INSERTTABLE_TEXT_COLUMN),EM_LIMITTEXT,(WPARAM)5,(WPARAM)0);
-	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_INSERTTABLE_TEXT_ROW),EM_LIMITTEXT,(WPARAM)5,(WPARAM)0);
-	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_INSERTTABLE_TEXT_SIZE),EM_LIMITTEXT,(WPARAM)5,(WPARAM)0);
+	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_INSERTTABLE_VAL_COLUMN),EM_LIMITTEXT,(WPARAM)5,(LPARAM)0);
+	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_INSERTTABLE_VAL_ROW),EM_LIMITTEXT,(WPARAM)5,(LPARAM)0);
+	SendMessageW(GetDlgItem(hWnd,AP_RID_DIALOG_INSERTTABLE_VAL_SIZE),EM_LIMITTEXT,(WPARAM)5,(LPARAM)0);
 
 	CheckRadioButton(hWnd, AP_RID_DIALOG_INSERTTABLE_RADIO_AUTO,
 		AP_RID_DIALOG_INSERTTABLE_RADIO_FIXED, AP_RID_DIALOG_INSERTTABLE_RADIO_AUTO);
@@ -161,10 +162,24 @@ void AP_Win32Dialog_InsertTable::getCtrlValues(void)
 	UT_Win32LocaleString str;
 		
 	if (getDlgItemText(AP_RID_DIALOG_INSERTTABLE_VAL_COLUMN, str))
-		m_numCols = _wtoi(str.c_str ());
+	{
+		int cols = _wtoi(str.c_str());
+		if (cols < 1)
+			cols = 1;
+		else if (cols > 64)
+			cols = 64;
+		m_numCols = static_cast<UT_uint32>(cols);
+	}
 	
 	if (getDlgItemText(AP_RID_DIALOG_INSERTTABLE_VAL_ROW, str))
-		m_numRows = _wtoi(str.c_str ());
+	{
+		int rows = _wtoi(str.c_str());
+		if (rows < 1)
+			rows = 1;
+		else if (rows > 500)
+			rows = 500;
+		m_numRows = static_cast<UT_uint32>(rows);
+	}
 		
 	if (getDlgItemText(AP_RID_DIALOG_INSERTTABLE_VAL_SIZE, str))
 		setColumnWidth((float) atofw(str.c_str ()));

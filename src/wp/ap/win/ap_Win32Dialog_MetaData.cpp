@@ -150,6 +150,8 @@ void AP_Win32Dialog_MetaData::runModal(XAP_Frame * pFrame)
 	
 */
 AP_Win32Dialog_MetaData_General::AP_Win32Dialog_MetaData_General()
+	: m_pData(nullptr),
+	  m_bInitialized(false)
 {
 	setDialogProc(s_pageWndProc);
 }
@@ -194,6 +196,7 @@ void AP_Win32Dialog_MetaData_General::_onInitDialog()
 	setDlgItemText(hParent, IDCANCEL, pSS->getValue(XAP_STRING_ID_DLG_Cancel));				
 	
 	XAP_Win32DialogHelper::s_centerDialog(hParent);							
+	m_bInitialized = true;
 }
 
 
@@ -202,6 +205,8 @@ void AP_Win32Dialog_MetaData_General::_onInitDialog()
 */
 void AP_Win32Dialog_MetaData_General::_onOK()
 {	
+	if (!m_bInitialized || !getHandle())
+		return;
 	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_TITLE, m_sTitle);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_SUBJECT, m_sSubject);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_GENERAL_EDIT_AUTHOR, m_sAuthor);
@@ -214,6 +219,8 @@ void AP_Win32Dialog_MetaData_General::_onOK()
 */
 void AP_Win32Dialog_MetaData_General::transferData()
 {	
+	if (!m_bInitialized)
+		return;
 	getContainer()->setTitle(m_sTitle.c_str());
 	getContainer()->setSubject(m_sSubject.c_str());
 	getContainer()->setAuthor(m_sAuthor.c_str());
@@ -229,6 +236,8 @@ void AP_Win32Dialog_MetaData_General::transferData()
 */
 
 AP_Win32Dialog_MetaData_Summary::AP_Win32Dialog_MetaData_Summary()
+	: m_pData(nullptr),
+	  m_bInitialized(false)
 {
 	
 }
@@ -264,7 +273,7 @@ void AP_Win32Dialog_MetaData_Summary::_onInitDialog()
 	SetDlgItemTextW(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_KEYWORDS,		fromUTF8toWinLocale(getContainer()->getKeywords().c_str()));									
 	SetDlgItemTextW(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_LANGUAGE,		fromUTF8toWinLocale(getContainer()->getLanguages().c_str()));									
 	SetDlgItemTextW(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_DESCRIPTION,	fromUTF8toWinLocale(getContainer()->getDescription().c_str()));									
-
+	m_bInitialized = true;
 }
 
 
@@ -274,6 +283,8 @@ void AP_Win32Dialog_MetaData_Summary::_onInitDialog()
 */
 void AP_Win32Dialog_MetaData_Summary::_onOK()
 {	
+	if (!m_bInitialized || !getHandle())
+		return;
 	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_CATEGORY, m_sCategory);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_KEYWORDS, m_sKeywords);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_SUMMARY_EDIT_LANGUAGE, m_sLanguages);
@@ -285,6 +296,8 @@ void AP_Win32Dialog_MetaData_Summary::_onOK()
 */
 void AP_Win32Dialog_MetaData_Summary::transferData()
 {		
+	if (!m_bInitialized)
+		return;
 	getContainer()->setCategory(m_sCategory.c_str());
 	getContainer()->setKeywords(m_sKeywords.c_str());
 	getContainer()->setLanguages(m_sLanguages.c_str());
@@ -298,6 +311,8 @@ void AP_Win32Dialog_MetaData_Summary::transferData()
 */
 
 AP_Win32Dialog_MetaData_Permissions::AP_Win32Dialog_MetaData_Permissions()
+	: m_pData(nullptr),
+	  m_bInitialized(false)
 {
 	
 }
@@ -333,7 +348,7 @@ void AP_Win32Dialog_MetaData_Permissions::_onInitDialog()
 	SetDlgItemTextW(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_RELATION,	fromUTF8toWinLocale(getContainer()->getRelation().c_str()));											
 	SetDlgItemTextW(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_COVERAGE,	fromUTF8toWinLocale(getContainer()->getCoverage().c_str()));											
 	SetDlgItemTextW(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_RIGHTS,		fromUTF8toWinLocale(getContainer()->getRights().c_str()));									
-
+	m_bInitialized = true;
 }
 
 	
@@ -343,6 +358,8 @@ void AP_Win32Dialog_MetaData_Permissions::_onInitDialog()
 */
 void AP_Win32Dialog_MetaData_Permissions::_onOK()
 {
+	if (!m_bInitialized || !getHandle())
+		return;
 	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_SOURCE, m_sSource);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_RELATION, m_sRelation);
 	s_metaText(getHandle(), AP_RID_DIALOG_META_PERMISSIONS_EDIT_COVERAGE, m_sCoverage);
@@ -354,6 +371,8 @@ void AP_Win32Dialog_MetaData_Permissions::_onOK()
 */
 void AP_Win32Dialog_MetaData_Permissions::transferData()
 {			
+	if (!m_bInitialized)
+		return;
 	getContainer()->setSource(m_sSource.c_str());
 	getContainer()->setRelation(m_sRelation.c_str());
 	getContainer()->setCoverage(m_sCoverage.c_str());

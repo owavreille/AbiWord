@@ -619,20 +619,23 @@ bool IE_Exp_OpenXML_Listener::populateStrux(pf_Frag_Strux* sdh, const PX_ChangeR
 				}
 			}
 
-			if(!m_cellStack.empty())
+			bool isNoteOrComment = section && (section->getTarget() == TARGET_FOOTNOTE ||
+											   section->getTarget() == TARGET_ENDNOTE ||
+											   section->getTarget() == TARGET_COMMENT);
+			if(!isNoteOrComment && !m_cellStack.empty())
 			{
 				auto cell = m_cellStack.top();
 				return cell->appendElement(shared_paragraph) == UT_OK;
 			}
-			else if(bInTextbox)
+			else if(!isNoteOrComment && bInTextbox)
 				return textbox->appendElement(shared_paragraph) == UT_OK;
 
 			return section->appendElement(shared_paragraph) == UT_OK;
 		}
 		case PTX_SectionHdrFtr:
         {
-			section = new OXML_Section(getNextId());
-			OXML_SharedSection shared_section(static_cast<OXML_Section*>(section));
+			OXML_SharedSection shared_section(new OXML_Section(getNextId()));
+			OXML_Section * hdrFtrSection = shared_section.get();
 
 			if(bHaveProp && pAP)
 			{
@@ -647,7 +650,7 @@ bool IE_Exp_OpenXML_Listener::populateStrux(pf_Frag_Strux* sdh, const PX_ChangeR
 					{
 						//TODO: Take the debug message out when we are done
 						UT_DEBUGMSG(("Header/Footer Property: %s=%s\n", szName, szValue));
-						if(section->setProperty(szName, szValue) != UT_OK)
+						if(hdrFtrSection->setProperty(szName, szValue) != UT_OK)
 							return false;
 					}
 				}
@@ -660,68 +663,36 @@ bool IE_Exp_OpenXML_Listener::populateStrux(pf_Frag_Strux* sdh, const PX_ChangeR
 					{
 						//TODO: Take the debug message out when we are done
 						UT_DEBUGMSG(("Header/Footer Attribute: %s=%s\n", szName, szValue));
-						if(section->setAttribute(szName, szValue) != UT_OK)
+						if(hdrFtrSection->setAttribute(szName, szValue) != UT_OK)
 							return false;
 					}
 				}
 
 				if(pAP->getAttribute("type", szValue))
 				{
-					if(!strcmp(szValue, "header"))
+					bool isHeader = false;
+					bool isFooter = false;
+					const char* hdrFtrType = nullptr;
+					if(!strcmp(szValue, "header")) { isHeader = true; hdrFtrType = "default"; }
+					else if(!strcmp(szValue, "header-first")) { isHeader = true; hdrFtrType = "first"; }
+					else if(!strcmp(szValue, "header-last")) { isHeader = true; hdrFtrType = "last"; }
+					else if(!strcmp(szValue, "header-even")) { isHeader = true; hdrFtrType = "even"; }
+					else if(!strcmp(szValue, "footer")) { isFooter = true; hdrFtrType = "default"; }
+					else if(!strcmp(szValue, "footer-first")) { isFooter = true; hdrFtrType = "first"; }
+					else if(!strcmp(szValue, "footer-last")) { isFooter = true; hdrFtrType = "last"; }
+					else if(!strcmp(szValue, "footer-even")) { isFooter = true; hdrFtrType = "even"; }
+
+					if(isHeader || isFooter)
 					{
-						section->setTarget(TARGET_HEADER);
-						if(section->setAttribute("type", "default") != UT_OK)
+						hdrFtrSection->setTarget(isHeader ? TARGET_HEADER : TARGET_FOOTER);
+						if(hdrFtrSection->setAttribute("type", hdrFtrType) != UT_OK)
 							return false;
-						return document->addHeader(shared_section) == UT_OK;
-					}
-					else if(!strcmp(szValue, "header-first"))
-					{
-						section->setTarget(TARGET_HEADER);
-						if(section->setAttribute("type", "first") != UT_OK)
+						UT_Error res = isHeader ? document->addHeader(shared_section)
+												: document->addFooter(shared_section);
+						if(res != UT_OK)
 							return false;
-						return document->addHeader(shared_section) == UT_OK;
-					}
-					else if(!strcmp(szValue, "header-last"))
-					{
-						section->setTarget(TARGET_HEADER);
-						if(section->setAttribute("type", "last") != UT_OK)
-							return false;
-						return document->addHeader(shared_section) == UT_OK;
-					}
-					else if(!strcmp(szValue, "header-even"))
-					{
-						section->setTarget(TARGET_HEADER);
-						if(section->setAttribute("type", "even") != UT_OK)
-							return false;
-						return document->addHeader(shared_section) == UT_OK;
-					}
-					else if(!strcmp(szValue, "footer"))
-					{
-						section->setTarget(TARGET_FOOTER);
-						if(section->setAttribute("type", "default") != UT_OK)
-							return false;
-						return document->addFooter(shared_section) == UT_OK;
-					}
-					else if(!strcmp(szValue, "footer-first"))
-					{
-						section->setTarget(TARGET_FOOTER);
-						if(section->setAttribute("type", "first") != UT_OK)
-							return false;
-						return document->addFooter(shared_section) == UT_OK;
-					}
-					else if(!strcmp(szValue, "footer-last"))
-					{
-						section->setTarget(TARGET_FOOTER);
-						if(section->setAttribute("type", "last") != UT_OK)
-							return false;
-						return document->addFooter(shared_section) == UT_OK;
-					}
-					else if(!strcmp(szValue, "footer-even"))
-					{
-						section->setTarget(TARGET_FOOTER);
-						if(section->setAttribute("type", "even") != UT_OK)
-							return false;
-						return document->addFooter(shared_section) == UT_OK;
+						section = hdrFtrSection;
+						return true;
 					}
 				}
 			}

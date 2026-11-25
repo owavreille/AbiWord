@@ -67,6 +67,7 @@ XAP_Win32Dialog_Language::~XAP_Win32Dialog_Language(void)
 void XAP_Win32Dialog_Language::runModal(XAP_Frame * pFrame)
 {
 	UT_ASSERT(m_id == XAP_DIALOG_ID_LANGUAGE);
+	setDialog(this);
     createModal(pFrame, MAKEINTRESOURCEW(XAP_RID_DIALOG_LANGUAGE));    
 }
 
@@ -160,7 +161,7 @@ void XAP_Win32Dialog_Language::_setLanguageAndExit(UINT nLang)
 	_setLanguage(m_ppLanguages[nLang]);
 	m_bChangedLanguage = true;
 	m_answer = a_OK;
-	EndDialog(m_hWnd,0);
+	EndDialog(m_hDlg,0);
 }
 
 BOOL XAP_Win32Dialog_Language::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*lParam*/)

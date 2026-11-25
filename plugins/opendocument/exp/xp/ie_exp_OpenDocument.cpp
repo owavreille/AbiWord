@@ -50,6 +50,8 @@
 
 #ifdef _WIN32
 #include <io.h>
+#else
+#include <unistd.h>
 #endif
 #include <glib.h>
 #include <glib/gstdio.h>
@@ -151,40 +153,70 @@ UT_Error IE_Exp_OpenDocument::copyToBuffer(PD_DocumentRange * pDocRange, const U
     IE_Exp * pNewExp = nullptr; 
     char *szTempFileName = nullptr;
     GError *err = nullptr;
-    g_file_open_tmp ("XXXXXX", &szTempFileName, &err);
-    GsfOutput * outBuf =  gsf_output_stdio_new (szTempFileName,&err);
+    int fd = g_file_open_tmp ("XXXXXX", &szTempFileName, &err);
+    g_clear_error(&err);
+    if (fd < 0 || szTempFileName == nullptr)
+    {
+        if (fd >= 0)
+            close(fd);
+        g_free(szTempFileName);
+        delete pRangeListener;
+        UNREFP(outDoc);
+        return UT_SAVE_EXPORTERROR;
+    }
+    close(fd);
+
     IEFileType ftODT = IE_Exp::fileTypeForMimetype("application/vnd.oasis.opendocument.text");
-    UT_Error aerr = IE_Exp::constructExporter(outDoc,outBuf,
-					     ftODT,&pNewExp);
+    UT_Error aerr = IE_Exp::constructExporter(outDoc, szTempFileName,
+                                              ftODT, &pNewExp);
     if(pNewExp == nullptr)
     {
-         return aerr;
+        delete pRangeListener;
+        UNREFP(outDoc);
+        g_unlink(szTempFileName);
+        g_free(szTempFileName);
+        return aerr;
     }
     aerr = pNewExp->writeFile(szTempFileName);
     if(aerr != UT_OK)
     {
-	delete pNewExp;
-	delete pRangeListener;
-	UNREFP( outDoc);
-	g_remove(szTempFileName);
-	g_free (szTempFileName);
-	return aerr;
+        delete pNewExp;
+        delete pRangeListener;
+        UNREFP(outDoc);
+        g_unlink(szTempFileName);
+        g_free(szTempFileName);
+        return aerr;
     }
     //
     // File is closed at the end of the export. Open it again.
     //
 
-    GsfInput *  fData = gsf_input_stdio_new(szTempFileName,&err);
-    UT_DebugOnly<UT_sint32> siz = gsf_input_size(fData);
-    const UT_Byte * pData = gsf_input_read(fData,gsf_input_size(fData),nullptr);
-    UT_DEBUGMSG(("Writing %d bytes to clipboard \n", (UT_sint32)siz));
-    bufODT->append( pData, gsf_input_size(fData));
-    
+    GsfInput * fData = gsf_input_stdio_new(szTempFileName, &err);
+    g_clear_error(&err);
+    if (fData)
+    {
+        gsf_off_t siz = gsf_input_size(fData);
+        if (siz > 0)
+        {
+            const UT_Byte * pData = gsf_input_read(fData, siz, nullptr);
+            if (pData)
+            {
+                UT_DEBUGMSG(("Writing %d bytes to clipboard \n", (UT_sint32)siz));
+                bufODT->append(pData, static_cast<UT_uint32>(siz));
+            }
+        }
+        g_object_unref(G_OBJECT(fData));
+    }
+    else
+    {
+        aerr = UT_SAVE_EXPORTERROR;
+    }
+
     delete pNewExp;
     delete pRangeListener;
-    UNREFP( outDoc);
-    g_remove(szTempFileName);
-    g_free (szTempFileName);
+    UNREFP(outDoc);
+    g_unlink(szTempFileName);
+    g_free(szTempFileName);
     return aerr;
 }
 

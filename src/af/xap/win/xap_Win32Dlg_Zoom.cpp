@@ -100,8 +100,19 @@ BOOL XAP_Win32Dialog_Zoom::_onDlgMessage(HWND /*hWnd*/,UINT msg,WPARAM wParam,LP
 	{
 		
 	case WM_VSCROLL:
-		_updatePreviewZoomPercent((UT_uint32)HIWORD(wParam));
+	{
+		WORD code = LOWORD(wParam);
+		if (code == SB_THUMBPOSITION || code == SB_THUMBTRACK)
+		{
+			int pos = static_cast<int>(HIWORD(wParam));
+			if (pos < XAP_DLG_ZOOM_MINIMUM_ZOOM)
+				pos = XAP_DLG_ZOOM_MINIMUM_ZOOM;
+			else if (pos > XAP_DLG_ZOOM_MAXIMUM_ZOOM)
+				pos = XAP_DLG_ZOOM_MAXIMUM_ZOOM;
+			_updatePreviewZoomPercent(static_cast<UT_uint32>(pos));
+		}
 		return 1;
+	}
 
 	default:
 		return 0;
@@ -132,7 +143,8 @@ BOOL XAP_Win32Dialog_Zoom::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*
 	checkButton(XAP_RID_DIALOG_ZOOM_RADIO_200 + m_zoomType);
 	setControlInt(XAP_RID_DIALOG_ZOOM_EDIT_PCT, (UINT) m_zoomPercent);
 	m_bEditPctEnabled = ((XAP_RID_DIALOG_ZOOM_RADIO_200 + m_zoomType) == XAP_RID_DIALOG_ZOOM_RADIO_PCT);
-	enableControl(XAP_RID_DIALOG_ZOOM_EDIT_PCT ,m_bEditPctEnabled);
+	enableControl(XAP_RID_DIALOG_ZOOM_EDIT_PCT, m_bEditPctEnabled);
+	enableControl(XAP_RID_DIALOG_ZOOM_SPIN_PCT, m_bEditPctEnabled);
 	
 	HWND spin = GetDlgItem(hWnd, XAP_RID_DIALOG_ZOOM_SPIN_PCT);
 	int value = static_cast<int>(m_zoomPercent);
@@ -160,7 +172,8 @@ BOOL XAP_Win32Dialog_Zoom::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam*
 	UT_sint32 newValue;
 
 	m_bEditPctEnabled = (isChecked(XAP_RID_DIALOG_ZOOM_RADIO_PCT)==BST_CHECKED);
-	enableControl(XAP_RID_DIALOG_ZOOM_EDIT_PCT,m_bEditPctEnabled);
+	enableControl(XAP_RID_DIALOG_ZOOM_EDIT_PCT, m_bEditPctEnabled);
+	enableControl(XAP_RID_DIALOG_ZOOM_SPIN_PCT, m_bEditPctEnabled);
 	
 	switch (wId)
 	{

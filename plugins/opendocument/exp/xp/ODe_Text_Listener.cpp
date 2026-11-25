@@ -71,6 +71,7 @@ ODe_Text_Listener::ODe_Text_Listener(ODe_Styles& rStyles,
                         m_pPendingTextboxBuffer(nullptr),
                         m_openedODParagraph(false),
                         m_openedODSpan(false),
+                        m_openedHyperlink(false),
                         m_isFirstCharOnParagraph(true),
                         m_openedODTextboxFrame(false),
                         m_openedODNote(false),
@@ -117,6 +118,7 @@ ODe_Text_Listener::ODe_Text_Listener(ODe_Styles& rStyles,
                         m_pPendingTextboxBuffer(nullptr),
                         m_openedODParagraph(false),
                         m_openedODSpan(false),
+                        m_openedHyperlink(false),
                         m_isFirstCharOnParagraph(true),
                         m_openedODTextboxFrame(false),
                         m_openedODNote(false),
@@ -950,7 +952,7 @@ void ODe_Text_Listener::openHyperlink(const PP_AttrProp* pAP) {
         UT_UTF8String uri = pValue;
         uri.escapeXML();
 
-        if (uri.length() > 0)
+        if (uri.length() > 0 && m_pParagraphContent)
         {
             UT_UTF8String output = "<text:a ";
             if (bHaveTitle)
@@ -965,6 +967,7 @@ void ODe_Text_Listener::openHyperlink(const PP_AttrProp* pAP) {
             output+=uri;
             output+="\">";
             ODe_writeUTF8String(m_pParagraphContent, output);
+            m_openedHyperlink = true;
         }
     }
 }
@@ -973,8 +976,13 @@ void ODe_Text_Listener::openHyperlink(const PP_AttrProp* pAP) {
  * 
  */
 void ODe_Text_Listener::closeHyperlink() {
-    UT_UTF8String output = "</text:a>";
-    ODe_writeUTF8String(m_pParagraphContent, output);
+    if (m_openedHyperlink) {
+        if (m_pParagraphContent) {
+            UT_UTF8String output = "</text:a>";
+            ODe_writeUTF8String(m_pParagraphContent, output);
+        }
+        m_openedHyperlink = false;
+    }
 }
 
 void ODe_Text_Listener::openRDFAnchor(const PP_AttrProp* pAP)

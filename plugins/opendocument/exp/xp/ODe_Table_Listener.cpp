@@ -228,12 +228,16 @@ void ODe_Table_Listener::closeTable(ODe_ListenerAction& rAction) {
     output.clear();
     _printSpacesOffset(output);
     
-    for (i=0; i<m_numColumns; i++) {
-        m_pColumns[i].write(m_pTextOutput, output);
+    if (m_pColumns) {
+        for (i=0; i<m_numColumns; i++) {
+            m_pColumns[i].write(m_pTextOutput, output);
+        }
     }
     
-    for (i=0; i<m_numRows; i++) {
-        m_pRows[i].write(m_pTextOutput, output);
+    if (m_pRows) {
+        for (i=0; i<m_numRows; i++) {
+            m_pRows[i].write(m_pTextOutput, output);
+        }
     }
 
 
@@ -367,8 +371,8 @@ void ODe_Table_Listener::_buildTable() {
         pCell = m_cells.getNthItem(i);
 
         UT_continue_if_fail(pCell)
-        UT_continue_if_fail(pCell->m_topAttach < m_numRows);
-        UT_continue_if_fail(pCell->m_leftAttach < m_numColumns);
+        UT_continue_if_fail(pCell->m_topAttach >= 0 && pCell->m_topAttach < m_numRows);
+        UT_continue_if_fail(pCell->m_leftAttach >= 0 && pCell->m_leftAttach < m_numColumns);
         
         m_pRows[pCell->m_topAttach].m_ppCells[pCell->m_leftAttach] = pCell;
     }

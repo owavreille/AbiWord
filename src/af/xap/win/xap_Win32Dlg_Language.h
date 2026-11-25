@@ -45,7 +45,6 @@ protected:
 	BOOL					_onInitDialog(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 	BOOL					_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam) override;
 	HIMAGELIST				m_hNormIml;
-	HWND					m_hWnd;
 
 };
 

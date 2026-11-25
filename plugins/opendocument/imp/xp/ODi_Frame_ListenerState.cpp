@@ -218,7 +218,7 @@ void ODi_Frame_ListenerState::endElement (const gchar* pName,
 	    if(convertMathMLtoLaTeX(PMathml, PLatex) && convertLaTeXtoEqn(PLatex,Pitex))
  	    {
 		// Conversion of MathML to LaTeX and the Equation Form suceeds
-		latexBuf->ins(0, reinterpret_cast<const UT_Byte *>(Pitex.utf8_str()), static_cast<UT_uint32>(Pitex.size()));
+		latexBuf->ins(0, reinterpret_cast<const UT_Byte *>(Pitex.utf8_str()), static_cast<UT_uint32>(Pitex.byteLength()));
 		m_pAbiDocument->createDataItem(lID.c_str(), false, latexBuf, "", nullptr);
     	    }
 

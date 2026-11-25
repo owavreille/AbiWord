@@ -67,6 +67,7 @@ private:
 	bool m_fldChar;
 	std::stack<OXMLi_RevisionMark> m_revisions;
 	std::stack<OXMLi_ContentControl> m_controls;
+	std::stack<bool> m_pushedInlineStack;
 	int m_nextRevision;
 	int m_nextControl;
 

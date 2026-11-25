@@ -45,7 +45,8 @@ ODe_Note_Listener::ODe_Note_Listener(ODe_Styles& rStyles,
                                      m_rStyles(rStyles),
                                      m_rAutomatiStyles(rAutomatiStyles),
                                      m_pTextOutput(pTextOutput),
-                                     m_rAuxiliaryData(rAuxiliaryData)
+                                     m_rAuxiliaryData(rAuxiliaryData),
+                                     m_openedNote(false)
 {
 }
 
@@ -146,6 +147,7 @@ void ODe_Note_Listener::_openNote(const gchar* pNoteClass,
     output += "</text:note-citation><text:note-body>";                                    
     
     ODe_writeUTF8String(m_pTextOutput, output);
+    m_openedNote = true;
     
     m_rAuxiliaryData.m_noteCount++;
 }
@@ -155,6 +157,9 @@ void ODe_Note_Listener::_openNote(const gchar* pNoteClass,
  * 
  */
 void ODe_Note_Listener::_closeNote(ODe_ListenerAction& rAction) {
-    ODe_writeUTF8String(m_pTextOutput, "</text:note-body></text:note>");
+    if (m_openedNote) {
+        ODe_writeUTF8String(m_pTextOutput, "</text:note-body></text:note>");
+        m_openedNote = false;
+    }
     rAction.popListenerImpl();
 }

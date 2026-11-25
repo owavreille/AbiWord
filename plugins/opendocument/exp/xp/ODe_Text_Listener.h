@@ -156,6 +156,7 @@ private:
 
     bool m_openedODParagraph;
     bool m_openedODSpan;
+    bool m_openedHyperlink;
     bool m_isFirstCharOnParagraph;
     bool m_openedODTextboxFrame;
     bool m_openedODNote;

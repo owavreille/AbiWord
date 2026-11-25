@@ -770,8 +770,7 @@ bool s_AbiWord_1_Listener::populate(fl_ContainerLayout* /*sfh*/,
 		// Reinstate it to fix bug - 11629 blank lines lose their
 		// properties on export.
 		// Might be related to things like #13708
-		if(m_bOpenChar)
-			_closeTag();
+		_closeSpan();
 		_openTag("c",true,pcr->getIndexAP(),0);
 		_closeTag();
 #endif
@@ -966,6 +965,7 @@ bool s_AbiWord_1_Listener::populateStrux(pf_Frag_Strux* /*sdh*/,
             _closeHyperlink();
 			_closeAnnotation();
 			_closeBlock();
+			m_pie->endElement();
 			return true;
 		}
 	case PTX_EndFrame:
@@ -1341,19 +1341,22 @@ void s_AbiWord_1_Listener::_handleDataItems(void)
 		   UT_uint32 off = 0;
 		   UT_uint32 len = pByteBuf->getLength();
 		   const UT_Byte * buf = pByteBuf->getPointer(0);
-		   while (off < len) {
+		   while (off + 2 < len) {
 		      if (buf[off] == ']' && buf[off+1] == ']' && buf[off+2] == '>') {
-			 bbEncoded->append(buf, off-1);
-			 bbEncoded->append(reinterpret_cast<const UT_Byte*>("]]&gt;"), 6);
-			 off += 3;
-			 len -= off;
-			 buf = pByteBuf->getPointer(off);
+			 if (off > 0) {
+			    bbEncoded->append(buf, off);
+			 }
+			 bbEncoded->append(reinterpret_cast<const UT_Byte*>("]]]]><![CDATA[>"), 15);
+			 buf += off + 3;
+			 len -= off + 3;
 			 off = 0;
 			 continue;
 		      }
 		      off++;
 		   }
-		   bbEncoded->append(buf, len);
+		   if (len > 0) {
+		      bbEncoded->append(buf, len);
+		   }
 		   bbEncoded->append(reinterpret_cast<const UT_Byte*>("]]>\n"), 4);
 		   status = true;
 		   encoded = false;

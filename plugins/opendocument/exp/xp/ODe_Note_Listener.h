@@ -71,6 +71,7 @@ private:
     ODe_AutomaticStyles& m_rAutomatiStyles;
     GsfOutput* m_pTextOutput;
     ODe_AuxiliaryData& m_rAuxiliaryData;
+    bool m_openedNote;
 
 };
 

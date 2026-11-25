@@ -54,6 +54,10 @@ XAP_Win32Dialog_FontChooser::XAP_Win32Dialog_FontChooser(XAP_DialogFactory * pDl
 	: XAP_Dialog_FontChooser(pDlgFactory,id),
 	  m_pPreviewWidget(nullptr),
 	  m_bWin32Overline(false),
+	  m_bWin32Hidden(false),
+	  m_bWin32SuperScript(false),
+	  m_bWin32SubScript(false),
+	  m_bWin32AllCaps(false),
 	  m_iColorIndx(0),
 	  m_iColorCount(0)
 {
@@ -89,6 +93,7 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
 	m_bWin32Hidden     = m_bHidden;
 	m_bWin32SuperScript = m_bSuperScript;
 	m_bWin32SubScript = m_bSubScript;
+	m_bWin32AllCaps = (g_ascii_strcasecmp(m_sTextTransform.c_str(), "uppercase") == 0);
 	
 
 	/*
@@ -211,28 +216,31 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
 			/* nothing changed */			
 		}
 
-		bool bIsBold = ((cf.nFontType & BOLD_FONTTYPE) != 0);
-		bool bWasBold = (g_ascii_strcasecmp(m_sFontWeight.c_str(),"bold") == 0);
-		bool bIsNormal = ((cf.nFontType & REGULAR_FONTTYPE) != 0);
-		bool bWasNormal = (m_sFontWeight.empty() || (g_ascii_strcasecmp(m_sFontWeight.c_str(),"normal") != 0));
-		if ((bIsBold != bWasBold) || (bIsNormal != bWasNormal))
+		if ((cf.Flags & CF_NOSTYLESEL) == 0)
 		{
-			m_bChangedFontWeight = true;
-			if( bIsBold )
-				m_sFontWeight = "bold";
-			else
-				m_sFontWeight = "normal";
-		}
+			bool bIsBold = ((cf.nFontType & BOLD_FONTTYPE) != 0);
+			bool bWasBold = (g_ascii_strcasecmp(m_sFontWeight.c_str(),"bold") == 0);
+			bool bIsNormal = ((cf.nFontType & REGULAR_FONTTYPE) != 0);
+			bool bWasNormal = (m_sFontWeight.empty() || (g_ascii_strcasecmp(m_sFontWeight.c_str(),"normal") == 0));
+			if ((bIsBold != bWasBold) || (bIsNormal != bWasNormal))
+			{
+				m_bChangedFontWeight = true;
+				if( bIsBold )
+					m_sFontWeight = "bold";
+				else
+					m_sFontWeight = "normal";
+			}
 
-		bool bIsItalic = ((cf.nFontType & ITALIC_FONTTYPE) != 0);
-		bool bWasItalic = (g_ascii_strcasecmp(m_sFontStyle.c_str(),"italic") == 0);
-		if (bIsItalic != bWasItalic)
-		{
-			m_bChangedFontStyle = true;
-			if( bIsItalic )
-				m_sFontStyle = "italic";
-			else
-				m_sFontStyle = "normal";
+			bool bIsItalic = ((cf.nFontType & ITALIC_FONTTYPE) != 0);
+			bool bWasItalic = (g_ascii_strcasecmp(m_sFontStyle.c_str(),"italic") == 0);
+			if (bIsItalic != bWasItalic)
+			{
+				m_bChangedFontStyle = true;
+				if( bIsItalic )
+					m_sFontStyle = "italic";
+				else
+					m_sFontStyle = "normal";
+			}
 		}
 
 		char bufColor[10];
@@ -267,7 +275,14 @@ void XAP_Win32Dialog_FontChooser::runModal(XAP_Frame * pFrame)
 			setSuperScript(m_bWin32SuperScript);
 			
 		if(m_bChangedSubScript)
-			setSubScript(m_bWin32SubScript);			
+			setSubScript(m_bWin32SubScript);
+
+		bool bWasAllCaps = (g_ascii_strcasecmp(m_sTextTransform.c_str(), "uppercase") == 0);
+		if (m_bWin32AllCaps != bWasAllCaps)
+		{
+			m_bChangedTextTransform = true;
+			m_sTextTransform = m_bWin32AllCaps ? "uppercase" : "none";
+		}
 	}
 
 	UT_DEBUGMSG(("FontChooserEnd: Family[%s%s] Size[%s%s] Weight[%s%s] Style[%s%s] Color[%s%s] Underline[%d%s] StrikeOut[%d%s]\n",
@@ -359,7 +374,14 @@ BOOL XAP_Win32Dialog_FontChooser::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LP
 		CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT, BST_CHECKED );		
 		
 	if( m_bWin32SubScript)
-		CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT, BST_CHECKED );				
+		CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT, BST_CHECKED );
+
+	if (m_bWin32AllCaps)
+		CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_ALLCAPS, BST_CHECKED);
+
+	// Small Caps is not supported by XAP_Dialog_FontChooser; hide the dead control.
+	ShowWindow(GetDlgItem(hWnd, XAP_RID_DIALOG_FONT_CHK_SMALLCAPS), SW_HIDE);
+	EnableWindow(GetDlgItem(hWnd, XAP_RID_DIALOG_FONT_CHK_SMALLCAPS), FALSE);
 		
 	// use the owner-draw-control dialog-item (aka window) specified in the
 	// dialog resource file as a parent to the window/widget that we create
@@ -428,13 +450,25 @@ BOOL XAP_Win32Dialog_FontChooser::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*
 		case XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT:		
 			m_bWin32SuperScript = (IsDlgButtonChecked(hWnd,XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT)==BST_CHECKED);		
 			/* It makes no sense to have subscript and superscript at the same time, Word behaves this way also*/
-			if (m_bWin32SuperScript) CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT, BST_UNCHECKED);		
+			if (m_bWin32SuperScript)
+			{
+				m_bWin32SubScript = false;
+				CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT, BST_UNCHECKED);
+			}
 			return 1;
 		
 		case XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT:
 			m_bWin32SubScript = (IsDlgButtonChecked(hWnd,XAP_RID_DIALOG_FONT_CHK_SUBSCRIPT)==BST_CHECKED);
 			/* It makes no sense to have subscript and superscript at the same time, Word behaves this way also*/
-			if (m_bWin32SubScript) CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT, BST_UNCHECKED);
+			if (m_bWin32SubScript)
+			{
+				m_bWin32SuperScript = false;
+				CheckDlgButton(hWnd, XAP_RID_DIALOG_FONT_CHK_SUPERSCRIPT, BST_UNCHECKED);
+			}
+			return 1;
+
+		case XAP_RID_DIALOG_FONT_CHK_ALLCAPS:
+			m_bWin32AllCaps = (IsDlgButtonChecked(hWnd, XAP_RID_DIALOG_FONT_CHK_ALLCAPS) == BST_CHECKED);
 			return 1;
 
 		case 1139: // this is hardcoded in the dlg

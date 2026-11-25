@@ -108,6 +108,18 @@ BOOL AP_Win32Dialog_HdrFtr::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 	_win32Dialog.checkButton(AP_RID_DIALOG_HDRFTR_CHK_FTRLAST,   getValue(FtrLast));
 	_win32Dialog.setControlInt(AP_RID_DIALOG_HDRFTR_EBX_SECTION, getRestartValue());
 
+	HWND hSpin = GetDlgItem(hWnd, AP_RID_DIALOG_HDRFTR_SPN_SECTION);
+	if (hSpin)
+	{
+		SendMessageW(hSpin, UDM_SETRANGE32, 0, 32767);
+		int restartVal = getRestartValue();
+		if (restartVal < 0)
+			restartVal = 0;
+		else if (restartVal > 32767)
+			restartVal = 32767;
+		SendMessageW(hSpin, UDM_SETPOS, 0, MAKELPARAM(static_cast<WORD>(restartVal), 0));
+	}
+
 	bool bRestart = isRestart();
 	_win32Dialog.checkButton(AP_RID_DIALOG_HDRFTR_CHK_SECTION, bRestart);
 	_win32Dialog.enableControl(AP_RID_DIALOG_HDRFTR_LBL_SECTION, bRestart);

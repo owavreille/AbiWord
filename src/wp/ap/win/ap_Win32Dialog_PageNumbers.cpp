@@ -75,6 +75,7 @@ void AP_Win32Dialog_PageNumbers::runModal(XAP_Frame* pFrame)
 	XAP_Win32App * pWin32App = static_cast<XAP_Win32App *>(m_pApp);
  
  	XAP_Win32LabelledSeparator_RegisterClass(pWin32App);
+	setDialog(this);
 	createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_PAGENUMBERS));
 }
 

@@ -94,18 +94,36 @@ UT_Error OXML_Element_Row::serializeChildren(IE_Exp_OpenXML* exporter)
 	}
 
 	//right most vertically merged cells
-	for (; left < numCols; left++) {
-		OXML_SharedElement_Cell temp(new OXML_Element_Cell("", table, left, left + 1, -1, 0));
-		temp->setRow(this);
-		OXML_SharedElement shared_paragraph(new OXML_Element_Paragraph(""));
+	while (left < numCols) {
+		bool foundMissing = false;
+		for (auto it = m_missingCells.begin(); it != m_missingCells.end(); ++it)
+		{
+			auto pCell = *it;
+			if (pCell->getLeft() == left)
+			{
+				left = pCell->getRight();
+				ret = pCell->serialize(exporter);
+				if (ret != UT_OK)
+					return ret;
+				foundMissing = true;
+				break;
+			}
+		}
+		if (!foundMissing)
+		{
+			OXML_SharedElement_Cell temp(new OXML_Element_Cell("", table, left, left + 1, -1, 0));
+			temp->setRow(this);
+			OXML_SharedElement shared_paragraph(new OXML_Element_Paragraph(""));
 
-		ret = temp->appendElement(shared_paragraph);
-		if(ret != UT_OK)
-			return ret;
+			ret = temp->appendElement(shared_paragraph);
+			if(ret != UT_OK)
+				return ret;
 
-		ret = temp->serialize(exporter);
-		if(ret != UT_OK)
-			return ret;
+			ret = temp->serialize(exporter);
+			if(ret != UT_OK)
+				return ret;
+			left++;
+		}
 	}
 
 	return ret;

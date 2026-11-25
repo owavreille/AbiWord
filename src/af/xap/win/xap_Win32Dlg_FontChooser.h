@@ -52,6 +52,7 @@ protected:
 	bool                    m_bWin32Hidden;
 	bool					m_bWin32SuperScript;
 	bool					m_bWin32SubScript;
+	bool					m_bWin32AllCaps;
 
 	int                     m_iColorIndx;
 	int                     m_iColorCount;

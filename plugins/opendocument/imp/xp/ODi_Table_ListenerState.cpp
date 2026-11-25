@@ -49,7 +49,11 @@ ODi_Table_ListenerState::ODi_Table_ListenerState (PD_Document* pDocument,
                                  m_pStyles(pStyles),
                                  m_row(0),
                                  m_col(0),
+                                 m_numColumns(0),
                                  m_rowsLeftToRepeat(0),
+                                 m_cellRepeatCount(0),
+                                 m_cellRepeatColSpan(1),
+                                 m_cellRepeatRowSpan(1),
                                  m_gotAllColumnWidths(true)
 {
     if (m_rElementStack.hasElement("office:document-content")) {
@@ -143,8 +147,28 @@ void ODi_Table_ListenerState::endElement (const gchar* pName,
       UT_DEBUGMSG(("ODi endCell \n"));
         if (m_onFirstPass) {
             // Do nothing.
-        } else{
+        } else {
             m_pAbiDocument->appendStrux(PTX_EndCell, PP_NOPROPS);
+            for (UT_sint32 r = 1; r < m_cellRepeatCount; r++) {
+                m_col += m_cellRepeatColSpan;
+                std::string props = UT_std_string_sprintf(
+                    "top-attach: %d; bot-attach: %d; left-attach: %d; right-attach: %d",
+                    m_row - 1, m_row + (m_cellRepeatRowSpan - 1),
+                    m_col - 1, m_col + (m_cellRepeatColSpan - 1));
+                props += m_cellRepeatStyleProps;
+
+                PP_PropertyVector cell_props;
+                cell_props.push_back("props");
+                cell_props.push_back(props);
+                if (!m_cellRepeatDataID.empty()) {
+                    cell_props.push_back("strux-image-dataid");
+                    cell_props.push_back(m_cellRepeatDataID);
+                }
+                m_pAbiDocument->appendStrux(PTX_SectionCell, cell_props);
+                m_pAbiDocument->appendStrux(PTX_Block, PP_NOPROPS);
+                m_pAbiDocument->appendStrux(PTX_EndCell, PP_NOPROPS);
+            }
+            m_cellRepeatCount = 0;
         }
     }
     
@@ -351,6 +375,19 @@ void ODi_Table_ListenerState::_parseColumnStart (const gchar** ppAtts,
         int nColsRepeated= 0;
         UT_sint32 i=0;
         
+        pNumberColumnsRepeated = UT_getAttribute("table:number-columns-repeated", ppAtts);
+        if (pNumberColumnsRepeated != nullptr) {
+            nColsRepeated = atoi(pNumberColumnsRepeated);
+            UT_ASSERT(nColsRepeated > 0);
+            if (nColsRepeated < 1)
+                nColsRepeated = 1;
+            else if (nColsRepeated > 1024)
+                nColsRepeated = 1024;
+        } else {
+            nColsRepeated = 1;
+        }
+        m_numColumns += nColsRepeated;
+
         pStyleName = UT_getAttribute("table:style-name", ppAtts);
         if (pStyleName != nullptr) {
             pStyle = m_pStyles->getTableColumnStyle(pStyleName,
@@ -363,19 +400,6 @@ void ODi_Table_ListenerState::_parseColumnStart (const gchar** ppAtts,
             } 
             else if (pStyle) 
             {
-                pNumberColumnsRepeated = UT_getAttribute("table:number-columns-repeated", ppAtts);
-                if (pNumberColumnsRepeated != nullptr) {
-                    nColsRepeated = atoi(pNumberColumnsRepeated);
-                    UT_ASSERT(nColsRepeated > 0);
-                    if (nColsRepeated < 1)
-                        nColsRepeated = 1;
-                    else if (nColsRepeated > 1024)
-                        nColsRepeated = 1024;
-                } 
-                else 
-                {
-                    nColsRepeated = 1;
-                }
                 if(!pStyle->getColumnWidth()->empty())
                 {
                     for (i=0; i<nColsRepeated; i++) 
@@ -422,6 +446,24 @@ void ODi_Table_ListenerState::_parseCellStart (const gchar** ppAtts,
         const ODi_Style_Style* pStyle = nullptr;
         UT_sint32 colSpan;
         UT_sint32 rowSpan;
+        pVal = UT_getAttribute("table:number-columns-repeated", ppAtts);
+        UT_sint32 colsRepeated = !pVal ? 1 : atoi(pVal);
+        if (colsRepeated < 1) {
+            colsRepeated = 1;
+        } else if (colsRepeated > 1000) {
+            colsRepeated = 1000;
+        }
+        if (m_numColumns > 0) {
+            UT_sint32 remaining = m_numColumns - m_col;
+            if (remaining < 1) {
+                remaining = 1;
+            }
+            if (colsRepeated > remaining) {
+                colsRepeated = remaining;
+            }
+        }
+        m_cellRepeatCount = colsRepeated;
+
         m_col++;
         std::string dataID;
         
@@ -443,11 +485,13 @@ void ODi_Table_ListenerState::_parseCellStart (const gchar** ppAtts,
         } else {
             rowSpan = 1;
         }
-        
+        m_cellRepeatColSpan = colSpan;
+        m_cellRepeatRowSpan = rowSpan;
 
         props = UT_std_string_sprintf(
             "top-attach: %d; bot-attach: %d; left-attach: %d; right-attach: %d",
             m_row-1, m_row+(rowSpan-1), m_col-1, m_col + (colSpan-1));
+        size_t attachPropsLen = props.size();
 
         pVal = UT_getAttribute("table:style-name", ppAtts);
         if (pVal) {
@@ -565,6 +609,9 @@ void ODi_Table_ListenerState::_parseCellStart (const gchar** ppAtts,
                     props += "; vert-align:100";
             }
         }
+
+        m_cellRepeatStyleProps = props.substr(attachPropsLen);
+        m_cellRepeatDataID = dataID;
 
         PP_PropertyVector cell_props;
         if( xmlid )

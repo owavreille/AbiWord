@@ -68,6 +68,7 @@ void AP_Win32Dialog_Stylist::runModal(XAP_Frame * pFrame)
 	UT_return_if_fail(m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_STYLIST));
 	m_bIsModal = true;
 
+	setDialog(this);
     createModal (pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_STYLIST));
 }
 
@@ -77,6 +78,7 @@ void AP_Win32Dialog_Stylist::runModeless(XAP_Frame * pFrame)
 	UT_DebugOnly<int> iResult;
 	m_bIsModal = false;
 	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_STYLIST));
+	setDialog(this);
 	createModeless (pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_STYLIST));
 
 	// Save dialog the ID number and pointer to the widget
@@ -117,7 +119,9 @@ void  AP_Win32Dialog_Stylist::setStyleInGUI(void)
 	if(isStyleTreeChanged())
 		_fillTree();
 
-	getStyleTree()->findStyle(sCurStyle,row,col);
+	Stylist_tree * pStyleTree = getStyleTree();
+	if (!pStyleTree || !pStyleTree->findStyle(sCurStyle, row, col))
+		return;
 	UT_DEBUGMSG(("After findStyle row %d col %d col \n",row,col));
 	std::string sPathFull = UT_std_string_sprintf("%d:%d",row,col);
 	std::string sPathRow = UT_std_string_sprintf("%d",row);
@@ -196,13 +200,18 @@ BOOL AP_Win32Dialog_Stylist::_onCommand(HWND /*hWnd*/, WPARAM wParam, LPARAM /*l
 
 	switch (wId)
 	{
-		case IDOK: {
-			setStyleValid(true);
+		case IDOK:
 			if (_styleClicked())
+			{
+				setStyleValid(true);
 				Apply();
 			}
+			else
+			{
+				setStyleValid(false);
+			}
 			destroy();
-			return 0;
+			return 1;
 
 		case IDCANCEL:						// also AP_RID_DIALOG_STYLIST_BTN_CLOSE
 //			m_answer = a_CANCEL;
@@ -233,11 +242,15 @@ void AP_Win32Dialog_Stylist::_fillTree(void)
 		updateDialog();
 		pStyleTree = getStyleTree();
 	}
+	if(!pStyleTree)
+		return;
 	if(pStyleTree->getNumRows() == 0)
 	{
 		updateDialog();
 		pStyleTree = getStyleTree();
 	}
+	if(!pStyleTree)
+		return;
 	UT_DEBUGMSG(("Number of rows of styles in document %d \n",pStyleTree->getNumRows()));
 
 	HWND hTree = GetDlgItem(m_hDlg, AP_RID_DIALOG_STYLIST_TREE_STYLIST);
@@ -388,7 +401,11 @@ BOOL AP_Win32Dialog_Stylist::_styleClicked(void)
 
 	std::string sStyle;
 
-	getStyleTree()->getStyleAtRowCol(sStyle,row,col);
+	Stylist_tree * pStyleTree = getStyleTree();
+	if (!pStyleTree)
+		return FALSE;
+
+	pStyleTree->getStyleAtRowCol(sStyle,row,col);
 	
 	UT_DEBUGMSG(("StyleClicked row %d col %d style %s \n",row,col,sStyle.utf8_str()));
 	setCurStyle(sStyle);

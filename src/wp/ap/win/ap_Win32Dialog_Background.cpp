@@ -72,7 +72,7 @@ UINT_PTR CALLBACK AP_Win32Dialog_Background::s_hookProc(HWND hdlg,UINT uiMsg,WPA
 		pThis = (AP_Win32Dialog_Background *)GetWindowLongPtrW(hdlg, DWLP_USER);
 	}
 
-	if (uiMsg==WM_HELP)
+	if (uiMsg == WM_HELP && pThis)
 	{
 		pThis->_callHelp();
 		return 1;

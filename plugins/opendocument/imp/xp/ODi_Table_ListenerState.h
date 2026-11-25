@@ -90,8 +90,14 @@ private:
 
     UT_sint16 m_row;
     UT_sint16 m_col;
+    UT_sint32 m_numColumns;
 
     UT_sint32 m_rowsLeftToRepeat;
+    UT_sint32 m_cellRepeatCount;
+    UT_sint32 m_cellRepeatColSpan;
+    UT_sint32 m_cellRepeatRowSpan;
+    std::string m_cellRepeatStyleProps;
+    std::string m_cellRepeatDataID;
 
     std::string m_columnWidths;
     std::string m_rowHeights;

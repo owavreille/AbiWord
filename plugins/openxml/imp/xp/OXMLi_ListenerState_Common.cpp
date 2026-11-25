@@ -562,16 +562,20 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 			} else if (nameMatches(rqst->pName, NS_W_KEY, "highlight")) {
 				const gchar * val = attrMatches(NS_W_KEY, "val", rqst->ppAtts);
 				UT_return_if_fail( this->_error_if_fail(val != nullptr) );
-				if (!strcmp(val, "darkYellow")) val = "olive"; //the only value not supported by CSS (equivalent to Olive)
-				else if (!strcmp(val, "none")) val = "black"; //bypass inherited color value when "none"
-				std::string hex = "";
-				for (UT_uint32 i = 0; i <= strlen(val); i++) {
-					hex += tolower(val[i]);
+				if (!strcmp(val, "none")) {
+					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("bgcolor", "transparent")));
+				} else {
+					if (!strcmp(val, "darkYellow")) val = "olive"; //the only value not supported by CSS (equivalent to Olive)
+					std::string hex = "";
+					for (size_t i = 0, len = strlen(val); i < len; i++) {
+						hex += static_cast<char>(tolower(static_cast<unsigned char>(val[i])));
+					}
+					UT_HashColor conv;
+					const gchar * colorVal = conv.setColor(hex.c_str());
+					if (colorVal != nullptr) {
+						UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("bgcolor", colorVal)));
+					}
 				}
-				UT_HashColor conv;
-				val = conv.setColor(hex.c_str());
-				UT_return_if_fail( this->_error_if_fail( nullptr != val ) );
-				UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("bgcolor", val)));
 
 			} else if (nameMatches(rqst->pName, NS_W_KEY, "strike") || 
 					   nameMatches(rqst->pName, NS_W_KEY, "dstrike")) {
@@ -640,9 +644,9 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 				}
 				if ( val != nullptr)
 					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", val) ));
-				if ( eastAsia != nullptr)
+				else if ( eastAsia != nullptr)
 					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", eastAsia) ));
-				if ( bidi != nullptr)
+				else if ( bidi != nullptr)
 					UT_return_if_fail( this->_error_if_fail( UT_OK == run->setProperty("lang", bidi) ));
 
 			} else if (nameMatches(rqst->pName, NS_W_KEY, "noProof")) {
@@ -776,25 +780,32 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "footnoteReference")) {
 		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
+		bool pushed = false;
 		if(id)
 		{
 			OXML_SharedElement footnote(new OXML_Element_Field(id, fd_Field::FD_Footnote_Ref, ""));
 			rqst->stck->push(footnote);
+			pushed = true;
 		}
+		m_pushedInlineStack.push(pushed);
 		rqst->handled = true;
 
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "endnoteReference")) {
 		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
+		bool pushed = false;
 		if(id)
 		{
 			OXML_SharedElement endnote(new OXML_Element_Field(id, fd_Field::FD_Endnote_Ref, ""));
 			rqst->stck->push(endnote);
+			pushed = true;
 		}
+		m_pushedInlineStack.push(pushed);
 		rqst->handled = true;		
 
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "hyperlink")) {
 		const gchar * id = attrMatches(NS_R_KEY, "id", rqst->ppAtts);
 		const gchar * anchor = attrMatches(NS_W_KEY, "anchor", rqst->ppAtts);
+		bool pushed = false;
 		if(id)
 		{
 			OXMLi_PackageManager * mgr = OXMLi_PackageManager::getInstance();
@@ -803,6 +814,7 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 			hyperlink->setHyperlinkTarget(target);				
 			OXML_SharedElement elem(hyperlink);
 			rqst->stck->push(elem);
+			pushed = true;
 		}
 		else if(anchor)
 		{
@@ -812,12 +824,15 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 			hyperlink->setHyperlinkTarget(bookmarkAnchor);				
 			OXML_SharedElement elem(hyperlink);
 			rqst->stck->push(elem);
+			pushed = true;
 		}
+		m_pushedInlineStack.push(pushed);
 		rqst->handled = true;
 
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "bookmarkStart")) {
 		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
 		const gchar * name = attrMatches(NS_W_KEY, "name", rqst->ppAtts);
+		bool pushed = false;
 		if(id && name)
 		{
 			std::string bookmarkId(id);
@@ -827,35 +842,47 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 			bookmark->setName(bookmarkName);		
 			OXML_SharedElement elem(bookmark);
 			rqst->stck->push(elem);
+			pushed = true;
 			OXML_Document* pDoc = OXML_Document::getInstance();
 			if(!pDoc->setBookmarkName(bookmarkId, bookmarkName))
+			{
+				m_pushedInlineStack.push(pushed);
 				return;
+			}
 		}
+		m_pushedInlineStack.push(pushed);
 		rqst->handled = true;
 
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "commentRangeStart")
 		|| nameMatches(rqst->pName, NS_W_KEY, "commentReference")) {
 		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
+		bool pushed = false;
 		if (id)
 		{
 			OXML_Element_Comment* comment = new OXML_Element_Comment(id);
 			comment->setType(nameMatches(rqst->pName, NS_W_KEY, "commentRangeStart") ? "start" : "reference");
 			OXML_SharedElement elem(comment);
 			rqst->stck->push(elem);
+			pushed = true;
 		}
+		m_pushedInlineStack.push(pushed);
 		rqst->handled = true;
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "commentRangeEnd")) {
 		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
+		bool pushed = false;
 		if (id)
 		{
 			OXML_Element_Comment* comment = new OXML_Element_Comment(id);
 			comment->setType("end");
 			OXML_SharedElement elem(comment);
 			rqst->stck->push(elem);
+			pushed = true;
 		}
+		m_pushedInlineStack.push(pushed);
 		rqst->handled = true;
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "bookmarkEnd")) {
 		const gchar * id = attrMatches(NS_W_KEY, "id", rqst->ppAtts);
+		bool pushed = false;
 		if(id)
 		{
 			std::string bookmarkId(id);
@@ -865,7 +892,9 @@ void OXMLi_ListenerState_Common::startElement (OXMLi_StartElementRequest * rqst)
 			bookmark->setName(pDoc->getBookmarkName(bookmarkId));
 			OXML_SharedElement elem(bookmark);
 			rqst->stck->push(elem);
+			pushed = true;
 		}
+		m_pushedInlineStack.push(pushed);
 		rqst->handled = true;
 
 /******* END OF SECTION FORMATTING ********/
@@ -1019,18 +1048,21 @@ void OXMLi_ListenerState_Common::endElement (OXMLi_EndElementRequest * rqst)
 		UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );
 		rqst->handled = true;
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "footnoteReference") || 
-			   nameMatches(rqst->pName, NS_W_KEY, "endnoteReference")) {
-		UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );
-		rqst->handled = true;
-	} else if (nameMatches(rqst->pName, NS_W_KEY, "hyperlink")) {
-		UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );
-		rqst->handled = true;
-	} else if (nameMatches(rqst->pName, NS_W_KEY, "bookmarkStart") ||
-				nameMatches(rqst->pName, NS_W_KEY, "bookmarkEnd") ||
-				nameMatches(rqst->pName, NS_W_KEY, "commentRangeStart") ||
-				nameMatches(rqst->pName, NS_W_KEY, "commentRangeEnd") ||
-				nameMatches(rqst->pName, NS_W_KEY, "commentReference")) {
-		UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );
+			   nameMatches(rqst->pName, NS_W_KEY, "endnoteReference") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "hyperlink") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "bookmarkStart") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "bookmarkEnd") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "commentRangeStart") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "commentRangeEnd") ||
+			   nameMatches(rqst->pName, NS_W_KEY, "commentReference")) {
+		bool shouldFlush = false;
+		if (!m_pushedInlineStack.empty()) {
+			shouldFlush = m_pushedInlineStack.top();
+			m_pushedInlineStack.pop();
+		}
+		if (shouldFlush) {
+			UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );
+		}
 		rqst->handled = true;		
 	} else if (nameMatches(rqst->pName, NS_W_KEY, "pageBreakBefore")) {
 		UT_return_if_fail( this->_error_if_fail( UT_OK == _flushTopLevel(rqst->stck, rqst->sect_stck) ) );

@@ -51,14 +51,11 @@ ODi_Abi_Data::ODi_Abi_Data(PD_Document* pDocument, GsfInfile* pGsfInfile) :
 bool ODi_Abi_Data::addImageDataItem(UT_String& rDataId, const gchar** ppAtts) {
     
     const gchar* pHRef = UT_getAttribute ("xlink:href", ppAtts);
-    UT_return_val_if_fail(pHRef,false);
-
-    // If we have a string smaller then this we are in trouble. File corrupted?
-    UT_return_val_if_fail((strlen(pHRef) >= 10 /*10 == strlen("Pictures/a")*/), false);
+    UT_return_val_if_fail(pHRef && *pHRef, false);
 
     UT_Error error = UT_OK;
     UT_ByteBufPtr img_buf(new UT_ByteBuf);
-    GsfInfile* pPictures_dir;
+    GsfInfile* pPictures_dir = nullptr;
     FG_ConstGraphicPtr pFG;
     UT_ConstByteBufPtr pPictData;
     UT_uint32 imageID;
@@ -77,28 +74,26 @@ bool ODi_Abi_Data::addImageDataItem(UT_String& rDataId, const gchar** ppAtts) {
         return true;
     }
     
-    
     // Get a new, unique, ID.
     imageID = m_pAbiDocument->getUID(UT_UniqueId::Image);
     UT_String_sprintf(rDataId, "%d", imageID);
-    
-    // Add this id to the list
-    UT_DebugOnly<href_id_map_t::iterator> iter = m_href_to_id
-		.insert(m_href_to_id.begin(),
-			href_id_map_t::value_type(pHRef, 
-						  rDataId.c_str()));
-    UT_ASSERT((href_id_map_t::iterator)iter != m_href_to_id.end());
 
     _splitDirectoryAndFileName(pHRef, dirName, fileName);
 
-    pPictures_dir =
-        GSF_INFILE(gsf_infile_child_by_name(m_pGsfInfile, dirName.c_str()));
+    if (fileName.empty()) {
+        return false;
+    }
 
-    UT_return_val_if_fail(pPictures_dir, false);
-
-    // Loads img_buf
-    error = _loadStream(pPictures_dir, fileName.c_str(), img_buf);
-    g_object_unref (G_OBJECT (pPictures_dir));
+    if (dirName.empty()) {
+        error = _loadStream(m_pGsfInfile, fileName.c_str(), img_buf);
+    } else {
+        pPictures_dir =
+            GSF_INFILE(gsf_infile_child_by_name(m_pGsfInfile, dirName.c_str()));
+        UT_return_val_if_fail(pPictures_dir, false);
+        // Loads img_buf
+        error = _loadStream(pPictures_dir, fileName.c_str(), img_buf);
+        g_object_unref (G_OBJECT (pPictures_dir));
+    }
 
     if (error != UT_OK) {
         return false;
@@ -134,7 +129,10 @@ bool ODi_Abi_Data::addImageDataItem(UT_String& rDataId, const gchar** ppAtts) {
             
         UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
         return false;
-    }    
+    }
+
+    // Add this id to the cache only after createDataItem() succeeds.
+    m_href_to_id[pHRef] = rDataId.c_str();
 
     return true;
 }
@@ -150,13 +148,10 @@ bool ODi_Abi_Data::addImageDataItem(UT_String& rDataId, const gchar** ppAtts) {
 bool ODi_Abi_Data::addObjectDataItem(UT_String& rDataId, const gchar** ppAtts, int& pto_Type) {
     
     const gchar* pHRef = UT_getAttribute ("xlink:href", ppAtts);
-    UT_return_val_if_fail(pHRef,false);
-
-    // If we have a string smaller then this we are in trouble. File corrupted?
-    UT_return_val_if_fail((strlen(pHRef) >= 9 /*9 == strlen("Object a/")*/), false);
+    UT_return_val_if_fail(pHRef && *pHRef, false);
 
     UT_Error error = UT_OK;
-    GsfInfile* pObjects_dir;
+    GsfInfile* pObjects_dir = nullptr;
     UT_uint32 objectID;
 
     // The subdirectory that holds the picture. e.g: "ObjectReplacements" or "Pictures"
@@ -170,6 +165,7 @@ bool ODi_Abi_Data::addObjectDataItem(UT_String& rDataId, const gchar** ppAtts, i
         // This object was already added.
         // Use the existing data item id.
         rDataId = it->second;
+        pto_Type = PTO_Math;
         return true;
     }
 
@@ -180,28 +176,36 @@ bool ODi_Abi_Data::addObjectDataItem(UT_String& rDataId, const gchar** ppAtts, i
     std::string rLatexId;
     rLatexId.assign("LatexMath");
     rLatexId.append((rDataId.substr(9,rDataId.length()-8)).c_str());
-    // Add this id to the list
-    UT_DebugOnly<href_id_map_t::iterator> iter = m_href_to_id
-		.insert(m_href_to_id.begin(),
-			href_id_map_t::value_type(pHRef, 
-						  rDataId.c_str()));
-    UT_ASSERT((href_id_map_t::iterator)iter != m_href_to_id.end());
 
     _splitDirectoryAndFileName(pHRef, dirName, fileName);
 
-    if (fileName.empty ())
-      fileName = "content.xml";
-
-    pObjects_dir =
-        GSF_INFILE(gsf_infile_child_by_name(m_pGsfInfile, dirName.c_str()));
-
-
-    UT_return_val_if_fail(pObjects_dir, false);
-
     // Loads object_buf
     UT_ByteBufPtr object_buf(new UT_ByteBuf);
-    error = _loadStream(pObjects_dir, fileName.c_str(), object_buf);
-    g_object_unref (G_OBJECT (pObjects_dir));
+    if (dirName.empty()) {
+        if (fileName.empty()) {
+            return false;
+        }
+        GsfInput* pChild = gsf_infile_child_by_name(m_pGsfInfile, fileName.c_str());
+        if (!pChild) {
+            return false;
+        }
+        if (GSF_IS_INFILE(pChild)) {
+            error = _loadStream(GSF_INFILE(pChild), "content.xml", object_buf);
+            g_object_unref(G_OBJECT(pChild));
+        } else {
+            g_object_unref(G_OBJECT(pChild));
+            error = _loadStream(m_pGsfInfile, fileName.c_str(), object_buf);
+        }
+    } else {
+        if (fileName.empty()) {
+            fileName = "content.xml";
+        }
+        pObjects_dir =
+            GSF_INFILE(gsf_infile_child_by_name(m_pGsfInfile, dirName.c_str()));
+        UT_return_val_if_fail(pObjects_dir, false);
+        error = _loadStream(pObjects_dir, fileName.c_str(), object_buf);
+        g_object_unref (G_OBJECT (pObjects_dir));
+    }
 
     if (error != UT_OK) {
         return false;
@@ -252,7 +256,7 @@ bool ODi_Abi_Data::addObjectDataItem(UT_String& rDataId, const gchar** ppAtts, i
     {
         
 	// Conversion of MathML to LaTeX and the Equation Form suceeds
-	latexBuf->ins(0, reinterpret_cast<const UT_Byte *>(Pbitex.utf8_str()), static_cast<UT_uint32>(Pbitex.size()));
+	latexBuf->ins(0, reinterpret_cast<const UT_Byte *>(Pbitex.utf8_str()), static_cast<UT_uint32>(Pbitex.byteLength()));
 	if(!m_pAbiDocument->createDataItem(rLatexId.c_str(), false, latexBuf, "", nullptr))
 	{
 	    UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
@@ -260,6 +264,8 @@ bool ODi_Abi_Data::addObjectDataItem(UT_String& rDataId, const gchar** ppAtts, i
 	}
     }
 
+    // Add this id to the cache only after createDataItem() succeeds.
+    m_href_to_id[pHRef] = rDataId.c_str();
     pto_Type = PTO_Math;
     return true;
 }
@@ -308,40 +314,30 @@ UT_Error ODi_Abi_Data::_loadStream (GsfInfile* oo,
  * subdirectory name ("ObjectReplacements") and file name ("Object 1").
  */
 void ODi_Abi_Data::_splitDirectoryAndFileName(const gchar* pHRef, UT_String& dirName, UT_String& fileName) const {
+    dirName.clear();
+    fileName.clear();
+    if (!pHRef || !*pHRef) {
+        return;
+    }
+
     UT_String href = pHRef;
+    size_t iStart = 0;
+    size_t len = href.length();
+    while (len - iStart >= 2 && href[iStart] == '.' && href[iStart + 1] == '/') {
+        iStart += 2;
+    }
 
-    int iStart;
-    // Get the directory name
-    UT_String str = href.substr(0, 2);
-    if (str == "./") {
-        iStart = 2;
+    size_t slashPos = iStart;
+    while (slashPos < len && href[slashPos] != '/') {
+        slashPos++;
+    }
+
+    if (slashPos == len) {
+        fileName = href.substr(iStart, len - iStart);
     } else {
-        iStart = 0;
-    }
-
-    int nChars = 0;
-    int len = href.length();
-    for (int i = iStart; i < len; i++) {
-        if (href[i] == '/') {
-            break;
-        } else {
-            nChars++;
+        dirName = href.substr(iStart, slashPos - iStart);
+        if (slashPos + 1 < len) {
+            fileName = href.substr(slashPos + 1, len - (slashPos + 1));
         }
-    }
-
-    dirName = href.substr(iStart, nChars);
-
-    if (nChars == len - 1)
-    {
-        fileName = "";
-    }
-    else
-    {
-        UT_ASSERT (nChars > 0 && nChars < len);
-        // Get the file name
-        iStart = iStart + nChars + 1;
-        nChars = len - iStart;
-        UT_ASSERT (nChars); // The file name must have at least one char.
-        fileName = href.substr(iStart, nChars);
     }
 }

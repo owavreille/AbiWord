@@ -991,6 +991,12 @@ void IE_Imp_AbiWord_1::startElement(const gchar *name,
 		X_CheckError(appendStrux(PTX_SectionFrame, atts));
 		return;
 
+	case TT_MARGINNOTE:
+		m_parseState = _PS_Sec;
+		m_bWroteSection = true;
+		X_CheckError(appendStrux(PTX_SectionMarginnote, atts));
+		return;
+
 	case TT_OTHER:
 	default:
 		UT_DEBUGMSG(("Unknown tag [%s]\n",name));
@@ -1058,6 +1064,12 @@ void IE_Imp_AbiWord_1::endElement(const gchar *name)
 		m_bWroteSection = true;
 		X_CheckError(appendStrux(PTX_EndTOC, PP_NOPROPS));
 		UT_DEBUGMSG(("Finished Append End TOC strux \n"));
+		return;
+
+	case TT_MARGINNOTE:
+		X_VerifyParseState(_PS_Sec);
+		m_bWroteSection = true;
+		X_CheckError(appendStrux(PTX_EndMarginnote, PP_NOPROPS));
 		return;
 
 	case TT_TABLE:

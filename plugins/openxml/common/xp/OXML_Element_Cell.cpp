@@ -263,7 +263,14 @@ UT_Error OXML_Element_Cell::serializeProperties(IE_Exp_OpenXML* exporter)
 	if(vspan > 1)
 	{
 		//add the remaining part of the cell as a missing cell
-		OXML_SharedElement_Cell missingCell(new OXML_Element_Cell("", m_table, m_iLeft, m_iRight, -1, 1)); //vertically continued cell
+		OXML_SharedElement_Cell missingCell(new OXML_Element_Cell("", m_table, m_iLeft, m_iRight, -1, vspan - 2)); //vertically continued cell
+		const gchar* propVal = nullptr;
+		if (getProperty("bot-style", propVal) == UT_OK && propVal)
+			missingCell->setProperty("bot-style", propVal);
+		if (getProperty("bot-color", propVal) == UT_OK && propVal)
+			missingCell->setProperty("bot-color", propVal);
+		if (getProperty("bot-thickness", propVal) == UT_OK && propVal)
+			missingCell->setProperty("bot-thickness", propVal);
 		OXML_SharedElement dummy(new OXML_Element_Paragraph(""));
 		missingCell->appendElement(dummy); //cells can't be empty!
 		m_table->addMissingCell(m_row->getRowNumber()+1, missingCell);

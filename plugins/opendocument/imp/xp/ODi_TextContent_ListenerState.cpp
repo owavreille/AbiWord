@@ -221,6 +221,9 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
             // be at level 1.
             pOutlineLevel = "1";
         }
+        UT_uint8 savedListLevel = m_listLevel;
+        ODi_Style_List* savedListStyle = m_pCurrentListStyle;
+
         std::string sHeadingListName = "BaseHeading";
         m_listLevel = atoi(pOutlineLevel);
         m_pCurrentListStyle =  m_pStyles->getList( sHeadingListName.c_str());
@@ -263,7 +266,8 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
         m_alreadyDefinedAbiParagraphForList = false;
         _startParagraphElement(pName, ppAtts, rAction);
         m_bHeadingList = false;
-        m_pCurrentListStyle = nullptr;
+        m_listLevel = savedListLevel;
+        m_pCurrentListStyle = savedListStyle;
     } else if (!strcmp(pName, "text:s")) {
         // A number of consecutive white-space characters.
         
@@ -335,10 +339,10 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
 
         const gchar* pStyleName = UT_getAttribute("text:style-name", ppAtts);
         const ODi_Style_Style* pStyle;
+        bool pushedFmt = false;
         
         if (!pStyleName) {
-            // I haven't seen default styles for "text" family.
-            UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+            // Bare <text:span> without style-name is valid in ODF; ignore formatting.
             
         } else {
             pStyle = m_pStyles->getTextStyle(pStyleName, m_bOnContentStream);
@@ -360,6 +364,7 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
                 }
                 
                 _pushInlineFmt(ppStyAttr);
+                pushedFmt = true;
                 UT_DebugOnly<bool> ok;
                 ok = m_pAbiDocument->appendFmt(m_vecInlineFmt);
                 UT_ASSERT(ok);
@@ -368,6 +373,7 @@ void ODi_TextContent_ListenerState::startElement (const gchar* pName,
                 // We just ignore this <text:span>.
             }
         }
+        m_spanPushedStack.push(pushedFmt);
 
     } else if (!strcmp(pName, "text:meta")) {
 
@@ -1064,8 +1070,15 @@ void ODi_TextContent_ListenerState::endElement (const gchar* pName,
     } else if (!strcmp(pName, "text:span")) {
         
         _flush ();
-        _popInlineFmt();
-        m_pAbiDocument->appendFmt(m_vecInlineFmt);
+        bool pushedFmt = false;
+        if (!m_spanPushedStack.empty()) {
+            pushedFmt = m_spanPushedStack.top();
+            m_spanPushedStack.pop();
+        }
+        if (pushedFmt) {
+            _popInlineFmt();
+            m_pAbiDocument->appendFmt(m_vecInlineFmt);
+        }
 
     } else if (!strcmp(pName, "text:meta")) {
 

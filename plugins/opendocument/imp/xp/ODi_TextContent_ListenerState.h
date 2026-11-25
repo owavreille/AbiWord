@@ -150,6 +150,7 @@ private:
 
     PP_PropertyVector m_vecInlineFmt;
     std::stack<UT_uint32> m_stackFmtStartIndex;
+    std::stack<bool> m_spanPushedStack;
 
     UT_sint8 m_elementParsingLevel;
 

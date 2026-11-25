@@ -1660,34 +1660,38 @@ UT_Error IE_Exp_OpenXML::setTabstops(int target, const gchar* tabstops)
 
 		if(typePos != std::string::npos)
 		{
-			std::string tabStopType = token.substr(typePos+1, 1);
-			std::string type = token.substr(typePos+2, token.length()-1);		
+			std::string tabStopType = (typePos + 1 < token.length()) ? token.substr(typePos + 1, 1) : "";
+			std::string type = (typePos + 2 <= token.length()) ? token.substr(typePos + 2) : "";
 			token = token.substr(0, typePos);
 
-			if(strstr(tabStopType.c_str(), "L"))
-				tabs += "<w:tab w:val=\"left\" ";
-			else if(strstr(tabStopType.c_str(), "R"))
-				tabs += "<w:tab w:val=\"right\" ";
-			else if(strstr(tabStopType.c_str(), "C"))
-				tabs += "<w:tab w:val=\"center\" ";
-			else if(strstr(tabStopType.c_str(), "D"))
-				tabs += "<w:tab w:val=\"decimal\" ";
-			else if(strstr(tabStopType.c_str(), "B"))
-				tabs += "<w:tab w:val=\"bar\" ";
-			else
-				tabs += "<w:tab w:val=\"clear\" ";
+			const gchar * posTwips = convertToPositiveTwips(token.c_str());
+			if (posTwips)
+			{
+				if(strstr(tabStopType.c_str(), "L"))
+					tabs += "<w:tab w:val=\"left\" ";
+				else if(strstr(tabStopType.c_str(), "R"))
+					tabs += "<w:tab w:val=\"right\" ";
+				else if(strstr(tabStopType.c_str(), "C"))
+					tabs += "<w:tab w:val=\"center\" ";
+				else if(strstr(tabStopType.c_str(), "D"))
+					tabs += "<w:tab w:val=\"decimal\" ";
+				else if(strstr(tabStopType.c_str(), "B"))
+					tabs += "<w:tab w:val=\"bar\" ";
+				else
+					tabs += "<w:tab w:val=\"clear\" ";
 
 
-			if(strstr(type.c_str(), "3"))
-				tabs += "w:leader=\"underscore\" ";
-			else if(strstr(type.c_str(), "1"))
-				tabs += "w:leader=\"dot\" ";
-			else if(strstr(type.c_str(), "2"))
-				tabs += "w:leader=\"hyphen\" ";
-		
-			tabs += "w:pos=\"";
-			tabs += convertToPositiveTwips(token.c_str());
-			tabs += "\"/>";	
+				if(strstr(type.c_str(), "3"))
+					tabs += "w:leader=\"underscore\" ";
+				else if(strstr(type.c_str(), "1"))
+					tabs += "w:leader=\"dot\" ";
+				else if(strstr(type.c_str(), "2"))
+					tabs += "w:leader=\"hyphen\" ";
+			
+				tabs += "w:pos=\"";
+				tabs += posTwips;
+				tabs += "\"/>";	
+			}
 		}
 	
 		prev = pos;	
@@ -3428,21 +3432,25 @@ UT_Error IE_Exp_OpenXML::finishSettings()
 					 gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(settingsStream))))
 	{
 		gsf_output_close(settingsFile);
+		g_object_unref(G_OBJECT(settingsFile));
 		return UT_SAVE_EXPORTERROR;
 	}
 	
 	if(!gsf_output_close(settingsStream))
 	{
 		gsf_output_close(settingsFile);
+		g_object_unref(G_OBJECT(settingsFile));
 		return UT_SAVE_EXPORTERROR;		
 	}
 
 	if(!gsf_output_close(settingsFile))
 	{
+		g_object_unref(G_OBJECT(settingsFile));
 		UT_DEBUGMSG(("FRT: ERROR, setting.xml file couldn't be closed\n"));	
 		return UT_SAVE_EXPORTERROR;		
 	}
 
+	g_object_unref(G_OBJECT(settingsFile));
 	return UT_OK;
 }
 
@@ -3475,20 +3483,24 @@ UT_Error IE_Exp_OpenXML::finishHeaders()
 						 gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(it->second))))
 		{
 			gsf_output_close(headerFile);
+			g_object_unref(G_OBJECT(headerFile));
 			return UT_SAVE_EXPORTERROR;
 		}
 	
 		if(!gsf_output_close(it->second))
 		{
 			gsf_output_close(headerFile);
+			g_object_unref(G_OBJECT(headerFile));
 			return UT_SAVE_EXPORTERROR;		
 		}
 
 		if(!gsf_output_close(headerFile))
 		{
+			g_object_unref(G_OBJECT(headerFile));
 			UT_DEBUGMSG(("FRT: ERROR, header file couldn't be closed\n"));	
 			return UT_SAVE_EXPORTERROR;		
 		}
+		g_object_unref(G_OBJECT(headerFile));
 	}
 	
 	return UT_OK;
@@ -3523,20 +3535,24 @@ UT_Error IE_Exp_OpenXML::finishFooters()
 						 gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(it->second))))
 		{
 			gsf_output_close(footerFile);
+			g_object_unref(G_OBJECT(footerFile));
 			return UT_SAVE_EXPORTERROR;
 		}
 	
 		if(!gsf_output_close(it->second))
 		{
 			gsf_output_close(footerFile);
+			g_object_unref(G_OBJECT(footerFile));
 			return UT_SAVE_EXPORTERROR;		
 		}
 
 		if(!gsf_output_close(footerFile))
 		{
+			g_object_unref(G_OBJECT(footerFile));
 			UT_DEBUGMSG(("FRT: ERROR, footer file couldn't be closed\n"));	
 			return UT_SAVE_EXPORTERROR;		
 		}
+		g_object_unref(G_OBJECT(footerFile));
 	}
 	
 	return UT_OK;
@@ -3596,20 +3612,24 @@ UT_Error IE_Exp_OpenXML::finishFootnotes()
 					 gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(footnoteStream))))
 	{
 		gsf_output_close(footnoteFile);
+		g_object_unref(G_OBJECT(footnoteFile));
 		return UT_SAVE_EXPORTERROR;		
 	}
 
 	if(!gsf_output_close(footnoteStream))
 	{
 		gsf_output_close(footnoteFile);
+		g_object_unref(G_OBJECT(footnoteFile));
 		return UT_SAVE_EXPORTERROR;		
 	}
 
 	if(!gsf_output_close(footnoteFile))
 	{
+		g_object_unref(G_OBJECT(footnoteFile));
 		UT_DEBUGMSG(("FRT: ERROR, footnotes.xml file couldn't be closed\n"));	
 		return UT_SAVE_EXPORTERROR;		
 	}
+	g_object_unref(G_OBJECT(footnoteFile));
 	return UT_OK;
 }
 
@@ -3667,20 +3687,24 @@ UT_Error IE_Exp_OpenXML::finishEndnotes()
 					 gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(endnoteStream))))
 	{
 		gsf_output_close(endnoteFile);
+		g_object_unref(G_OBJECT(endnoteFile));
 		return UT_SAVE_EXPORTERROR;		
 	}
 
 	if(!gsf_output_close(endnoteStream))
 	{
 		gsf_output_close(endnoteFile);
+		g_object_unref(G_OBJECT(endnoteFile));
 		return UT_SAVE_EXPORTERROR;		
 	}
 
 	if(!gsf_output_close(endnoteFile))
 	{
+		g_object_unref(G_OBJECT(endnoteFile));
 		UT_DEBUGMSG(("FRT: ERROR, endnotes.xml file couldn't be closed\n"));	
 		return UT_SAVE_EXPORTERROR;		
 	}
+	g_object_unref(G_OBJECT(endnoteFile));
 	return UT_OK;
 }
 
@@ -3693,6 +3717,7 @@ UT_Error IE_Exp_OpenXML::startComments()
 	if (err != UT_OK)
 	{
 		gsf_output_close(commentStream);
+		g_object_unref(G_OBJECT(commentStream));
 		commentStream = nullptr;
 		return err;
 	}
@@ -3716,9 +3741,13 @@ UT_Error IE_Exp_OpenXML::finishComments()
 			gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(commentStream))))
 	{
 		gsf_output_close(commentFile);
+		g_object_unref(G_OBJECT(commentFile));
 		return UT_SAVE_EXPORTERROR;
 	}
-	if (!gsf_output_close(commentStream) || !gsf_output_close(commentFile))
+	bool closedCommentStream = gsf_output_close(commentStream) != 0;
+	bool closedCommentFile = gsf_output_close(commentFile) != 0;
+	g_object_unref(G_OBJECT(commentFile));
+	if (!closedCommentStream || !closedCommentFile)
 		return UT_SAVE_EXPORTERROR;
 
 	GsfOutput* extra = gsf_output_memory_new();
@@ -3726,9 +3755,15 @@ UT_Error IE_Exp_OpenXML::finishComments()
 	if (!extra || !extraFile)
 	{
 		if (extra)
+		{
 			gsf_output_close(extra);
+			g_object_unref(G_OBJECT(extra));
+		}
 		if (extraFile)
+		{
 			gsf_output_close(extraFile);
+			g_object_unref(G_OBJECT(extraFile));
+		}
 		return UT_SAVE_EXPORTERROR;
 	}
 	err = writeXmlHeader(extra);
@@ -3736,6 +3771,8 @@ UT_Error IE_Exp_OpenXML::finishComments()
 	{
 		gsf_output_close(extra);
 		gsf_output_close(extraFile);
+		g_object_unref(G_OBJECT(extra));
+		g_object_unref(G_OBJECT(extraFile));
 		return err;
 	}
 	std::string body = "<w15:commentsEx xmlns:w15=\"http://schemas.microsoft.com/office/word/2012/wordml\">";
@@ -3745,6 +3782,8 @@ UT_Error IE_Exp_OpenXML::finishComments()
 		&& gsf_output_write(extraFile, gsf_output_size(extra), gsf_output_memory_get_bytes(GSF_OUTPUT_MEMORY(extra)));
 	bool closedExtra = gsf_output_close(extra) != 0;
 	bool closedFile = gsf_output_close(extraFile) != 0;
+	g_object_unref(G_OBJECT(extra));
+	g_object_unref(G_OBJECT(extraFile));
 	if (!wrote || !closedExtra || !closedFile)
 		return UT_SAVE_EXPORTERROR;
 	return UT_OK;

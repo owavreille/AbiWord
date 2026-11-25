@@ -1387,15 +1387,75 @@ void ODe_AbiDocListener::_insertMath(PT_AttrPropIndex api) {
         return;
     }
 
-    for (UT_uint32 i = 0; i < buf.length(); i++) {
+    UT_uint32 len = buf.length();
+    for (UT_uint32 i = 0; i < len; i++) {
         if (buf[i] == '<') {
-            if (((i + 1) < buf.length()) && (buf[i+1] == '/')) {
-                output += "</math:";
-                i++; // skip the '/'
-            } else if ((i + 1) < buf.length()) {
-                output += "<math:";
-            } else {
+            if (i + 1 < len && buf[i + 1] == '?') {
+                // Skip XML declaration / processing instruction <?...?>
+                i += 2;
+                while (i + 1 < len && !(buf[i] == '?' && buf[i + 1] == '>')) {
+                    i++;
+                }
+                if (i + 1 < len) {
+                    i++; // loop i++ skips '>'
+                }
+                continue;
+            }
+            if (i + 1 < len && buf[i + 1] == '!') {
+                if (i + 3 < len && buf[i + 2] == '-' && buf[i + 3] == '-') {
+                    // Skip XML comment <!-- ... -->
+                    i += 4;
+                    while (i + 2 < len && !(buf[i] == '-' && buf[i + 1] == '-' && buf[i + 2] == '>')) {
+                        i++;
+                    }
+                    if (i + 2 < len) {
+                        i += 2;
+                    }
+                    continue;
+                } else if (i + 8 < len && buf[i + 2] == '[' && buf[i + 3] == 'C' && buf[i + 4] == 'D' &&
+                           buf[i + 5] == 'A' && buf[i + 6] == 'T' && buf[i + 7] == 'A' && buf[i + 8] == '[') {
+                    // Preserve CDATA start without prefixing
+                    output += '<';
+                    continue;
+                } else {
+                    // Skip <!DOCTYPE ...>
+                    int bracketDepth = 0;
+                    i += 2;
+                    while (i < len) {
+                        if (buf[i] == '[') {
+                            bracketDepth++;
+                        } else if (buf[i] == ']' && bracketDepth > 0) {
+                            bracketDepth--;
+                        } else if (buf[i] == '>' && bracketDepth == 0) {
+                            break;
+                        }
+                        i++;
+                    }
+                    continue;
+                }
+            }
+            bool isClose = (i + 1 < len && buf[i + 1] == '/');
+            UT_uint32 nameStart = isClose ? i + 2 : i + 1;
+            if (nameStart >= len) {
                 UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+                continue;
+            }
+            bool hasPrefix = false;
+            for (UT_uint32 j = nameStart; j < len; j++) {
+                UT_UCS4Char ch = buf[j];
+                if (ch == ':') {
+                    hasPrefix = true;
+                    break;
+                }
+                if (ch == '>' || ch == '/' || ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n') {
+                    break;
+                }
+            }
+            if (isClose) {
+                output += hasPrefix ? "</" : "</math:";
+                i++; // skip the '/'
+            } else {
+                output += hasPrefix ? "<" : "<math:";
             }
         } else {
             output += buf[i];

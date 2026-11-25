@@ -61,6 +61,7 @@ void AP_Win32Dialog_Insert_DateTime::runModal(XAP_Frame * pFrame)
     // raise the dialog
     
     UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_INSERT_DATETIME));
+    setDialog(this);
     createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_DATETIME));
 }
 

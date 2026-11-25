@@ -303,6 +303,26 @@ BOOL XAP_Win32Dialog_Image::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 		getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_CROP_RIGHT, number);
 		setCropRight(atoi(number.utf8_str().utf8_str()));
 
+		HWND hFocus = GetFocus();
+		if (hFocus == GetDlgItem(hWnd, XAP_RID_DIALOG_IMAGE_EBX_WIDTH))
+		{
+			UT_Win32LocaleString str, units;
+			getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_WIDTH, str);
+			units.fromASCII(UT_dimensionName(getPreferedUnits()));
+			if (!wcsstr(str.c_str(), units.c_str()))
+				str.appendLocale(units.c_str());
+			setWidth(str.utf8_str().utf8_str());
+		}
+		else if (hFocus == GetDlgItem(hWnd, XAP_RID_DIALOG_IMAGE_EBX_HEIGHT))
+		{
+			UT_Win32LocaleString str, units;
+			getDlgItemText(XAP_RID_DIALOG_IMAGE_EBX_HEIGHT, str);
+			units.fromASCII(UT_dimensionName(getPreferedUnits()));
+			if (!wcsstr(str.c_str(), units.c_str()))
+				str.appendLocale(units.c_str());
+			setHeight(str.utf8_str().utf8_str());
+		}
+
 		setAnswer( a_OK );
 		EndDialog(hWnd,0);
 		return 1;

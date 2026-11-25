@@ -179,14 +179,17 @@ void OXMLi_ListenerState_Numbering::endElement (OXMLi_EndElementRequest * rqst)
 	}
 	else if(nameMatches(rqst->pName, NS_W_KEY, "lvl"))
 	{
-		OXML_Document * doc = OXML_Document::getInstance();		
-		if(!doc)
+		if (m_currentList)
 		{
-			doc = OXML_Document::getNewInstance();
-		}			
-		OXML_SharedList sharedList(m_currentList);
-		doc->addList(sharedList);
-		m_currentList = nullptr;
+			OXML_Document * doc = OXML_Document::getInstance();		
+			if(!doc)
+			{
+				doc = OXML_Document::getNewInstance();
+			}			
+			OXML_SharedList sharedList(m_currentList);
+			doc->addList(sharedList);
+			m_currentList = nullptr;
+		}
 		rqst->handled = true;
 	}
 	else if(nameMatches(rqst->pName, NS_W_KEY, "num"))
@@ -207,8 +210,12 @@ void OXMLi_ListenerState_Numbering::endElement (OXMLi_EndElementRequest * rqst)
 		
 		if(m_currentList)
 		{
-			m_currentList->setAttributes(dummy->getAttributes());
-			m_currentList->setProperties(dummy->getProperties());
+			PP_PropertyVector attrs = dummy->getAttributes();
+			if (!attrs.empty())
+				m_currentList->appendAttributes(attrs);
+			PP_PropertyVector props = dummy->getProperties();
+			if (!props.empty())
+				m_currentList->appendProperties(props);
 		}
 		rqst->stck->pop(); //remove the dummy element
 		rqst->handled = true;

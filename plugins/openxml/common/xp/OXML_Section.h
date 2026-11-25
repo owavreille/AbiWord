@@ -105,6 +105,8 @@ public:
 	UT_Error addToPTAsAnnotation(PD_Document * pDocument);
 
 	void setTarget(int target);
+	int getTarget() const
+		{ return m_target; }
 	bool hasFirstPageHdrFtr() const;
 	bool hasEvenPageHdrFtr() const;
 	void setHandledHdrFtr(bool val)

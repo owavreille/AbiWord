@@ -60,6 +60,7 @@ void AP_Win32Dialog_Field::runModal(XAP_Frame * pFrame)
 	// raise the dialog
 	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_FIELD));
 	
+	setDialog(this);
 	createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_FIELD));	
 }
 
