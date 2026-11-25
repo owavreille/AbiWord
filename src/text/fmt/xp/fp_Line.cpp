@@ -2649,24 +2649,13 @@ inline void fp_Line::_calculateWidthOfRun(	UT_sint32 &iX,
 
 					case FL_TAB_DECIMAL:
 					{
-						UT_UCS4Char *pDecimalStr =nullptr;
 						UT_uint32	runLen = 0;
 
-#if 1
-// localeconv is ANSI C and C++, but in case we might run into trouble
-// this will make it easire to undo temporarily (we need to do this though)
 						// find what char represents a decimal point
 						lconv *loc = localeconv();
-						if ( ! UT_UCS4_cloneString_char(&pDecimalStr, loc->decimal_point) )
-						{
-							// Out of memory. Now what?
-						}
-#else
-						if ( ! UT_UCS_cloneString_char(&pDecimalStr, '.') )
-						{
-							// Out of memory. Now what?
-						}
-#endif
+						const UT_UCS4Char cDecimal = (loc && loc->decimal_point && loc->decimal_point[0])
+							? static_cast<UT_UCS4Char>(static_cast<unsigned char>(loc->decimal_point[0]))
+							: static_cast<UT_UCS4Char>('.');
 						iScanWidth = 0;
 						for ( UT_uint32 j = iIndx+1; j < iCountRuns; j++ )
 						{
@@ -2681,7 +2670,7 @@ inline void fp_Line::_calculateWidthOfRun(	UT_sint32 &iX,
 							bool foundDecimal = false;
 							if(pScanRun->getType() == FPRUN_TEXT)
 							{
-								UT_sint32 decimalBlockOffset = (static_cast<fp_TextRun *>(pScanRun))->findCharacter(0, pDecimalStr[0]);
+								UT_sint32 decimalBlockOffset = (static_cast<fp_TextRun *>(pScanRun))->findCharacter(0, cDecimal);
 								if(decimalBlockOffset != -1)
 								{
 									foundDecimal = true;
@@ -2715,7 +2704,6 @@ inline void fp_Line::_calculateWidthOfRun(	UT_sint32 &iX,
 							iX = iPos - eWorkingDirection * iScanWidth;
 							iWidth = abs(iX - iXprev);
 						}
-						FREEP(pDecimalStr);
 						break;
 					}
 

@@ -28,6 +28,7 @@
 #include "ut_misc.h"
 #include "ut_vector.h"
 #include <vector>
+#include <map>
 //#include "ap_Win32FrameImpl.h"
 
 class AV_View;
@@ -87,6 +88,7 @@ protected:
 	bool						m_bTrack;
 	UINT                        m_iDIR;
 	std::vector <HBITMAP>		m_vechBitmaps;
+	std::map<XAP_Menu_Id, HBITMAP> m_mapMenuBitmaps;
 
 };
 

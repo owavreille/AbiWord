@@ -507,7 +507,10 @@ GR_Graphics *   GR_Win32USPGraphics::graphicsAllocator(GR_AllocInfo& info)
 	if(pG->m_bConstructorSucceeded)
 		return pG;
 	else
+	{
+		delete pG;
 		return nullptr;
+	}
 }
 
 UT_uint32 GR_Win32USPGraphics::getFontHeight(GR_Font * fnt)

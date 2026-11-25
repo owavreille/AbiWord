@@ -29,6 +29,7 @@
  * ccpHdd stays 0 when there is none, as LibreOffice writes it.
  */
 
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -179,45 +180,40 @@ static void append_sprm(std::string & grpprl, unsigned opcode, unsigned operand,
 		grpprl.push_back(static_cast<char>((operand >> (8 * i)) & 0xff));
 }
 
-static bool property_is(const PP_AttrProp * ap, const char * name, const char * wanted)
-{
-	const gchar * value = nullptr;
-	return ap && ap->getProperty(name, value) && value && !strcmp(value, wanted);
-}
-
 static const gchar * block_property(PD_Document * doc, const PP_AttrProp * ap, const char * name);
 
 static std::string character_grpprl(PD_Document * doc, FontCatalog & fonts, const PP_AttrProp * span, const PP_AttrProp * block)
 {
 	std::string grpprl;
-	const PP_AttrProp * ap = span ? span : block;
-	if (ap)
+	auto resolve = [doc, span, block](const char * name) -> const gchar * {
+		const gchar * v = block_property(doc, span, name);
+		if (!v || !*v)
+			v = block_property(doc, block, name);
+		return (v && *v) ? v : nullptr;
+	};
+	if (const gchar * weight = resolve("font-weight"))
 	{
-		const gchar * weight = nullptr;
-		if (ap->getProperty("font-weight", weight) && weight)
-		{
-			const int numeric = atoi(weight);
-			if (!strcmp(weight, "bold") || numeric >= 700)
-				append_sprm(grpprl, 0x0835, 1, 1);
-		}
-		if (property_is(ap, "font-style", "italic"))
-			append_sprm(grpprl, 0x0836, 1, 1);
-		const gchar * decoration = nullptr;
-		if (ap->getProperty("text-decoration", decoration) && decoration &&
-			strstr(decoration, "underline"))
-			append_sprm(grpprl, 0x2A3E, 1, 1);
-		const gchar * size = nullptr;
-		if (ap->getProperty("font-size", size) && size && *size)
-		{
-			const double points = UT_convertToPoints(size);
-			if (points > 0.0 && points < 1000.0)
-				append_sprm(grpprl, 0x4A43, static_cast<unsigned>(points * 2.0 + 0.5), 2);
-		}
+		const int numeric = atoi(weight);
+		if (!strcmp(weight, "bold") || numeric >= 700)
+			append_sprm(grpprl, 0x0835, 1, 1);
 	}
-	const gchar * family = block_property(doc, span, "font-family");
-	if (!family || !*family)
-		family = block_property(doc, block, "font-family");
-	if (family && *family)
+	if (const gchar * style = resolve("font-style"))
+	{
+		if (!strcmp(style, "italic"))
+			append_sprm(grpprl, 0x0836, 1, 1);
+	}
+	if (const gchar * decoration = resolve("text-decoration"))
+	{
+		if (strstr(decoration, "underline"))
+			append_sprm(grpprl, 0x2A3E, 1, 1);
+	}
+	if (const gchar * size = resolve("font-size"))
+	{
+		const double points = UT_convertToPoints(size);
+		if (points > 0.0 && points < 1000.0)
+			append_sprm(grpprl, 0x4A43, static_cast<unsigned>(points * 2.0 + 0.5), 2);
+	}
+	if (const gchar * family = resolve("font-family"))
 	{
 		const unsigned font = fonts.index_of(family);
 		append_sprm(grpprl, 0x4A4F, font, 2); // sprmCRgFtc0
@@ -444,6 +440,7 @@ struct TableCell
 struct OpenTable
 {
 	int depth = 0;
+	int frame_depth = 0;
 	const PP_AttrProp * ap = nullptr;
 	std::vector<TableCell> cells;
 	int current = -1;
@@ -452,10 +449,10 @@ struct OpenTable
 };
 
 static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts,
-	pf_Frag * frag, std::vector<Picture> & pics,
+	unsigned content_w, pf_Frag * frag, std::vector<Picture> & pics,
 	bool & in_paragraph, Paragraph & current, std::vector<Paragraph> & dest);
 
-static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts)
+static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts, unsigned content_w)
 {
 	std::vector<Paragraph> paragraphs;
 	Paragraph current;
@@ -471,7 +468,7 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
 	{
 		if (accept && !frame_depth &&
-			feed_table(open_table, doc, fonts, frag, pics, in_paragraph, current, paragraphs))
+			feed_table(open_table, doc, fonts, content_w, frag, pics, in_paragraph, current, paragraphs))
 			continue;
 		if (frag->getType() == pf_Frag::PFT_Strux)
 		{
@@ -760,16 +757,30 @@ static std::string in_table_grpprl(const std::string & grp)
 	return marked;
 }
 
-static unsigned document_content_width_twips(PD_Document * doc)
+struct PageLayout
 {
 	unsigned page_w = 12240;
+	unsigned page_h = 15840;
 	unsigned margin_left = 1440;
 	unsigned margin_right = 1440;
+	unsigned margin_top = 1440;
+	unsigned margin_bottom = 1440;
+	unsigned margin_header = 720;
+	unsigned margin_footer = 720;
+	unsigned content_w = 9360;
+};
+
+static PageLayout read_page_layout(PD_Document * doc)
+{
+	PageLayout layout;
 	if (doc)
 	{
 		const double w_in = doc->m_docPageSize.Width(DIM_IN);
+		const double h_in = doc->m_docPageSize.Height(DIM_IN);
 		if (w_in > 0.0)
-			page_w = static_cast<unsigned>(w_in * 1440.0 + 0.5);
+			layout.page_w = static_cast<unsigned>(w_in * 1440.0 + 0.5);
+		if (h_in > 0.0)
+			layout.page_h = static_cast<unsigned>(h_in * 1440.0 + 0.5);
 		pt_PieceTable * table = doc->getPieceTable();
 		for (pf_Frag * frag = table ? table->getFragments().getFirst() : nullptr; frag; frag = frag->getNext())
 		{
@@ -779,19 +790,23 @@ static unsigned document_content_width_twips(PD_Document * doc)
 				const PP_AttrProp * ap = nullptr;
 				if (doc->getAttrProp(frag->getIndexAP(), &ap) && ap)
 				{
-					margin_left = twips_property(ap, "page-margin-left", margin_left);
-					margin_right = twips_property(ap, "page-margin-right", margin_right);
+					layout.margin_left = twips_property(ap, "page-margin-left", layout.margin_left);
+					layout.margin_right = twips_property(ap, "page-margin-right", layout.margin_right);
+					layout.margin_top = twips_property(ap, "page-margin-top", layout.margin_top);
+					layout.margin_bottom = twips_property(ap, "page-margin-bottom", layout.margin_bottom);
+					layout.margin_header = twips_property(ap, "page-margin-header", layout.margin_header);
+					layout.margin_footer = twips_property(ap, "page-margin-footer", layout.margin_footer);
 				}
 				break;
 			}
 		}
 	}
-	if (page_w > margin_left + margin_right + 720)
-		return page_w - margin_left - margin_right;
-	return 9360;
+	if (layout.page_w > layout.margin_left + layout.margin_right + 720)
+		layout.content_w = layout.page_w - layout.margin_left - layout.margin_right;
+	return layout;
 }
 
-static std::vector<unsigned> table_column_widths(PD_Document * doc, const PP_AttrProp * ap, unsigned columns)
+static std::vector<unsigned> table_column_widths(unsigned content_w, const PP_AttrProp * ap, unsigned columns)
 {
 	std::vector<unsigned> widths;
 	const gchar * props = nullptr;
@@ -818,7 +833,6 @@ static std::vector<unsigned> table_column_widths(PD_Document * doc, const PP_Att
 		columns = 1;
 	if (columns > 63)
 		columns = 63;
-	const unsigned content_w = document_content_width_twips(doc);
 	const unsigned fill = widths.empty()
 		? (content_w / columns > 240 ? content_w / columns : 240u)
 		: widths.back();
@@ -963,7 +977,7 @@ static Paragraph mark_paragraph(uint16_t mark, const std::string & pap)
 	return paragraph;
 }
 
-static std::vector<Paragraph> build_table(PD_Document * doc, OpenTable & table)
+static std::vector<Paragraph> build_table(unsigned content_w, OpenTable & table)
 {
 	std::vector<Paragraph> out;
 	close_table_paragraph(table);
@@ -995,7 +1009,7 @@ static std::vector<Paragraph> build_table(PD_Document * doc, OpenTable & table)
 	if (num_rows < 1)
 		num_rows = 1;
 
-	const std::vector<unsigned> widths = table_column_widths(doc, table.ap, static_cast<unsigned>(columns));
+	const std::vector<unsigned> widths = table_column_widths(content_w, table.ap, static_cast<unsigned>(columns));
 	int left_pos = 0;
 	const gchar * left_str = nullptr;
 	if (table.ap && table.ap->getProperty("table-column-leftpos", left_str) && left_str)
@@ -1100,7 +1114,7 @@ static std::vector<Paragraph> build_table(PD_Document * doc, OpenTable & table)
 }
 
 static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts,
-	pf_Frag * frag, std::vector<Picture> & pics,
+	unsigned content_w, pf_Frag * frag, std::vector<Picture> & pics,
 	bool & in_paragraph, Paragraph & current, std::vector<Paragraph> & dest)
 {
 	if (frag->getType() == pf_Frag::PFT_Strux)
@@ -1132,7 +1146,7 @@ static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts
 				--table.depth;
 			if (table.depth == 0)
 			{
-				const std::vector<Paragraph> built = build_table(doc, table);
+				const std::vector<Paragraph> built = build_table(content_w, table);
 				dest.insert(dest.end(), built.begin(), built.end());
 				table = OpenTable();
 			}
@@ -1140,6 +1154,14 @@ static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts
 		}
 		if (table.depth > 1)
 			return true;
+		if (table.frame_depth > 0)
+		{
+			if (kind == PTX_SectionFrame)
+				++table.frame_depth;
+			else if (kind == PTX_EndFrame)
+				--table.frame_depth;
+			return true;
+		}
 		if (kind == PTX_SectionCell)
 		{
 			close_table_paragraph(table);
@@ -1170,6 +1192,7 @@ static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts
 				table.in_paragraph = true;
 			}
 			append_image(doc, table.paragraph, ap, pics);
+			table.frame_depth = 1;
 			return true;
 		}
 		if (kind == PTX_EndCell)
@@ -1198,7 +1221,7 @@ static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts
 	}
 	if (table.depth == 0)
 		return false;
-	if (table.depth > 1)
+	if (table.depth > 1 || table.frame_depth > 0)
 		return true;
 	if (!table.in_paragraph)
 	{
@@ -1231,7 +1254,7 @@ static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts
 	return true;
 }
 
-static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts)
+static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts, unsigned content_w)
 {
 	Headers out;
 	pt_PieceTable * table = doc->getPieceTable();
@@ -1249,7 +1272,7 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics, F
 	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
 	{
 		if (in_story && skip_depth == 0 &&
-			feed_table(open_table, doc, fonts, frag, pics, in_paragraph, current, out.stories[current_id].paragraphs))
+			feed_table(open_table, doc, fonts, content_w, frag, pics, in_paragraph, current, out.stories[current_id].paragraphs))
 			continue;
 		if (frag->getType() == pf_Frag::PFT_Strux)
 		{
@@ -1479,22 +1502,6 @@ static void append_paragraphs(const std::vector<Paragraph> & paragraphs,
 	}
 }
 
-static bool chpx_fits(const std::vector<ChRun> & runs, size_t from, size_t until)
-{
-	const unsigned count = static_cast<unsigned>(until - from);
-	unsigned grp = 0;
-	for (size_t i = from; i < until; ++i)
-	{
-		if (runs[i].grpprl.empty())
-			continue;
-		unsigned size = static_cast<unsigned>(1 + runs[i].grpprl.size());
-		if (size & 1)
-			++size;
-		grp += size;
-	}
-	return (count + 1) * 4 + count + grp + 2 <= PAGE;
-}
-
 static Buf make_chpx(const std::vector<ChRun> & runs, size_t from, size_t until, unsigned limit)
 {
 	Buf page(PAGE, 0);
@@ -1547,14 +1554,30 @@ static std::vector<FkpPage> pack_chpx(const std::vector<ChRun> & runs, unsigned 
 	size_t i = 0;
 	while (i < runs.size())
 	{
-		size_t best = i + 1;
-		for (size_t j = i + 1; j <= runs.size(); ++j)
+		size_t best = i;
+		unsigned grp = 0;
+		for (size_t j = i; j < runs.size(); ++j)
 		{
-			if (chpx_fits(runs, i, j))
-				best = j;
+			unsigned add = 0;
+			if (!runs[j].grpprl.empty())
+			{
+				add = static_cast<unsigned>(1 + runs[j].grpprl.size());
+				if (add & 1)
+					++add;
+			}
+			const unsigned count = static_cast<unsigned>(j - i + 1);
+			if ((count + 1) * 4 + count + grp + add + 2 <= PAGE)
+			{
+				grp += add;
+				best = j + 1;
+			}
 			else
+			{
 				break;
+			}
 		}
+		if (best == i)
+			best = i + 1;
 		const unsigned limit = best < runs.size() ? runs[best].fc : fc_end;
 		FkpPage page;
 		page.start = runs[i].fc;
@@ -1581,25 +1604,6 @@ static unsigned papx_record_size(const std::string & grp)
 {
 	const unsigned total = 2 + static_cast<unsigned>(grp.size());
 	return (total & 1) ? (1 + total) : (2 + total);
-}
-
-static bool papx_fits(const std::vector<std::string> & pap_grpprls, size_t from, size_t until)
-{
-	const unsigned count = static_cast<unsigned>(until - from);
-	if (count == 0 || count > PAPX_MAX)
-		return false;
-	unsigned at = (count + 1) * 4 + count * 13;
-	if (at & 1)
-		++at;
-	std::set<std::string> unique;
-	unsigned data_bytes = 0;
-	for (size_t i = from; i < until; ++i)
-	{
-		const std::string grp = effective_pap_grpprl(pap_grpprls[i]);
-		if (unique.insert(grp).second)
-			data_bytes += papx_record_size(grp);
-	}
-	return at + data_bytes <= 510;
 }
 
 // MS-DOC 2.9.174 PapxInFkp: each unique GrpPrlAndIstd is stored from the
@@ -1665,14 +1669,36 @@ static std::vector<FkpPage> pack_papx(const std::vector<unsigned> & bounds,
 	const size_t last = bounds.size() - 1;
 	while (i < last)
 	{
-		size_t best = i + 1;
-		for (size_t j = i + 1; j <= last; ++j)
+		size_t best = i;
+		std::set<std::string> unique;
+		unsigned data_bytes = 0;
+		for (size_t j = i; j < last; ++j)
 		{
-			if (papx_fits(pap_grpprls, i, j))
-				best = j;
-			else
+			const unsigned count = static_cast<unsigned>(j - i + 1);
+			if (count > PAPX_MAX)
 				break;
+			unsigned at = (count + 1) * 4 + count * 13;
+			if (at & 1)
+				++at;
+			const std::string grp = effective_pap_grpprl(pap_grpprls[j]);
+			const bool is_new = unique.find(grp) == unique.end();
+			const unsigned add = is_new ? papx_record_size(grp) : 0;
+			if (at + data_bytes + add <= 510)
+			{
+				if (is_new)
+				{
+					unique.insert(grp);
+					data_bytes += add;
+				}
+				best = j + 1;
+			}
+			else
+			{
+				break;
+			}
 		}
+		if (best == i)
+			best = i + 1;
 		FkpPage page;
 		page.start = bounds[i];
 		page.limit = bounds[best];
@@ -1797,7 +1823,7 @@ static unsigned clamp_u16(unsigned value)
 
 static unsigned hundredths_mm(unsigned twips)
 {
-	unsigned value = (twips * 5 + 36) / 72;
+	unsigned value = static_cast<unsigned>((static_cast<uint64_t>(twips) * 127 + 36) / 72);
 	if (!value)
 		value = 1;
 	return clamp_u16(value);
@@ -1955,55 +1981,19 @@ static unsigned header_flags(const std::vector<Paragraph> slot_text[6])
 	return flags;
 }
 
-static Buf section_properties(PD_Document * doc, unsigned hf_flags)
+static Buf section_properties(const PageLayout & layout, unsigned hf_flags)
 {
-	unsigned page_w = 12240;
-	unsigned page_h = 15840;
-	unsigned margin_left = 1440;
-	unsigned margin_right = 1440;
-	unsigned margin_top = 1440;
-	unsigned margin_bottom = 1440;
-	unsigned margin_header = 720;
-	unsigned margin_footer = 720;
-	if (doc)
-	{
-		const double w_in = doc->m_docPageSize.Width(DIM_IN);
-		const double h_in = doc->m_docPageSize.Height(DIM_IN);
-		if (w_in > 0.0)
-			page_w = static_cast<unsigned>(w_in * 1440.0 + 0.5);
-		if (h_in > 0.0)
-			page_h = static_cast<unsigned>(h_in * 1440.0 + 0.5);
-		pt_PieceTable * table = doc->getPieceTable();
-		for (pf_Frag * frag = table ? table->getFragments().getFirst() : nullptr; frag; frag = frag->getNext())
-		{
-			if (frag->getType() == pf_Frag::PFT_Strux &&
-			    static_cast<pf_Frag_Strux *>(frag)->getStruxType() == PTX_Section)
-			{
-				const PP_AttrProp * ap = nullptr;
-				if (doc->getAttrProp(frag->getIndexAP(), &ap) && ap)
-				{
-					margin_left = twips_property(ap, "page-margin-left", margin_left);
-					margin_right = twips_property(ap, "page-margin-right", margin_right);
-					margin_top = twips_property(ap, "page-margin-top", margin_top);
-					margin_bottom = twips_property(ap, "page-margin-bottom", margin_bottom);
-					margin_header = twips_property(ap, "page-margin-header", margin_header);
-					margin_footer = twips_property(ap, "page-margin-footer", margin_footer);
-				}
-				break;
-			}
-		}
-	}
 	// Sepx. Every section must state its page size and its four margins.
 	const unsigned sprm[][2] = {
-		{ 0xB01F, page_w },
-		{ 0xB020, page_h },
-		{ 0xB021, margin_left },
-		{ 0xB022, margin_right },
-		{ 0x9023, margin_top },
-		{ 0x9024, margin_bottom },
+		{ 0xB01F, layout.page_w },
+		{ 0xB020, layout.page_h },
+		{ 0xB021, layout.margin_left },
+		{ 0xB022, layout.margin_right },
+		{ 0x9023, layout.margin_top },
+		{ 0x9024, layout.margin_bottom },
 		{ 0xB025, 0 },
-		{ 0xB017, margin_header },
-		{ 0xB018, margin_footer }
+		{ 0xB017, layout.margin_header },
+		{ 0xB018, layout.margin_footer }
 	};
 	Buf grp;
 	for (unsigned i = 0; i < sizeof(sprm) / sizeof(sprm[0]); ++i)
@@ -2360,10 +2350,11 @@ GsfOutput * IE_Exp_MsWord_97::_openFile(const char * /*szFilename*/)
 
 UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 {
+	const PageLayout layout = read_page_layout(getDoc());
 	std::vector<Picture> pictures;
 	FontCatalog fonts;
-	std::vector<Paragraph> paragraphs = collect_paragraphs(getDoc(), pictures, fonts);
-	Headers headers = collect_headers(getDoc(), pictures, fonts);
+	std::vector<Paragraph> paragraphs = collect_paragraphs(getDoc(), pictures, fonts, layout.content_w);
+	Headers headers = collect_headers(getDoc(), pictures, fonts, layout.content_w);
 	const Buf data = layout_pictures(pictures);
 	seal_pictures(paragraphs, pictures);
 	for (std::map<std::string, Story>::iterator it = headers.stories.begin(); it != headers.stories.end(); ++it)
@@ -2474,7 +2465,7 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned stsh_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), stsh.begin(), stsh.end());
 
-	const Buf sepx = section_properties(getDoc(), hf_flags);
+	const Buf sepx = section_properties(layout, hf_flags);
 	const unsigned sepx_at = static_cast<unsigned>(word.size());
 	word.insert(word.end(), sepx.begin(), sepx.end());
 

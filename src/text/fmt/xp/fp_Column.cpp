@@ -738,12 +738,20 @@ void fp_VerticalContainer::getScreenOffsets(const fp_ContainerObject* pContainer
  */
 void fp_VerticalContainer::removeAll(void)
 {
-        UT_sint32 iCount = countCons();
-	UT_sint32 i = 0;
-	for(i=0; i< iCount; i++)
-        {
-	     deleteNthCon(0);
+	const UT_sint32 iCount = countCons();
+	for (UT_sint32 i = 0; i < iCount; i++)
+	{
+		fp_Container * pCon = static_cast<fp_Container *>(getNthCon(i));
+		if (pCon)
+		{
+			if (pCon->getContainer() == this)
+			{
+				pCon->setContainer(nullptr);
+			}
+			pCon->unref();
+		}
 	}
+	clearCons();
 }
 /*!
  Remove line from container
@@ -1622,8 +1630,20 @@ void fp_VerticalContainer::bumpContainers(fp_ContainerObject* pLastContainerToKe
 	}
 	else
 	{
+		// Avoid O(k * m) repeated insertConAt(..., 0) shifts on pNextContainer:
+		// save its existing items, clear the vector, append bumped items in
+		// forward order, then re-append the existing items in O(k + m).
+		UT_GenericVector<fp_ContainerObject *> vecExisting;
+		const UT_sint32 iExisting = pNextContainer->countCons();
+		for (i = 0; i < iExisting; i++)
+		{
+			vecExisting.addItem(pNextContainer->getNthCon(i));
+		}
+		pNextContainer->clearCons();
+
 		bool bTOC = false;
-		for (i=countCons() - 1; i >= ndx; i--)
+		const UT_sint32 iTotal = countCons();
+		for (i = ndx; i < iTotal; i++)
 		{
 			bTOC = false;
 			if(i >= countCons())
@@ -1664,7 +1684,7 @@ void fp_VerticalContainer::bumpContainers(fp_ContainerObject* pLastContainerToKe
 			    pLine =  static_cast<fp_Line *>(pContainer);
 			    iOldMaxWidth = pLine->getMaxWidth();
 			}
-			pNextContainer->insertContainer(pContainer);
+			pNextContainer->addContainer(pContainer);
 			//
 			// Max Line widths can change after a bump. If so
 			// we must reformat from the start of the line
@@ -1678,6 +1698,16 @@ void fp_VerticalContainer::bumpContainers(fp_ContainerObject* pLastContainerToKe
 			{
 				//UT_sint32 iTOC = pNextContainer->findCon(pContainer);
 				xxx_UT_DEBUGMSG(("TOC insert at location %d in next Container \n",iTOC));
+			}
+		}
+
+		for (i = 0; i < vecExisting.getItemCount(); i++)
+		{
+			fp_ContainerObject * pOld = vecExisting.getNthItem(i);
+			if (pOld)
+			{
+				pNextContainer->addCon(pOld);
+				pOld->unref(); // restore refcount incremented by addCon
 			}
 		}
 	}

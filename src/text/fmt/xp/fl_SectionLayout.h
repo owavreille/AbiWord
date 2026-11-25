@@ -195,6 +195,7 @@ public:
 protected:
 
 	void				_purgeLayout();
+	void				_clearFormatLayout();
 
 	SectionType			m_iType;
 

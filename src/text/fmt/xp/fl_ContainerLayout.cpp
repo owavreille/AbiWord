@@ -63,7 +63,9 @@ fl_ContainerLayout::fl_ContainerLayout(fl_ContainerLayout* pMyLayout, pf_Frag_St
 	  m_pFirstContainer(nullptr),
 	  m_pLastContainer(nullptr),
 	  m_eHidden(FP_VISIBLE),
-	  m_iFoldedLevel(0)
+	  m_iFoldedLevel(0),
+	  m_iFoldedID(0),
+	  m_bInFormatQueue(false)
 {
 //	UT_ASSERT(pMyLayout != nullptr);
 	setAttrPropIndex(indexAP);

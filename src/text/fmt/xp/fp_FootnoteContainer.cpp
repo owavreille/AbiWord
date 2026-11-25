@@ -576,9 +576,9 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 
 	UT_DEBUGMSG(("Annotation: Drawing PDA->xoff %d, pDA->yoff  %ld \n",pDA->xoff,pDA->yoff));
 
-	GR_Graphics * pG = getGraphics();
+	GR_Graphics * pDrawG = pDA->pG ? pDA->pG : getGraphics();
 	UT_sint32 boxX = 0, boxY = 0, boxW = 0, boxH = 0, closeX = 0, closeY = 0, close = 0;
-	annotationCallout(this, pG, boxX, boxY, boxW, boxH, closeX, closeY, close);
+	annotationCallout(this, pDrawG, boxX, boxY, boxW, boxH, closeX, closeY, close);
 	const UT_sint32 screenX = pDA->xoff - getX();
 	const UT_sint32 screenY = pDA->yoff - getY();
 	UT_RGBColor border(196, 148, 48);
@@ -587,10 +587,10 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 	if (pView && getPage() && pAnchor)
 		border = pView->getColorAnnotation(getPage(), pAnchor->getPID());
 	UT_RGBColor fill(annotationMix(border.m_red), annotationMix(border.m_grn), annotationMix(border.m_blu));
-	const bool onScreen = pG && pG->queryProperties(GR_Graphics::DGP_SCREEN);
-	if (pG && getHeight() > 0)
+	const bool onScreen = pDrawG && pDrawG->queryProperties(GR_Graphics::DGP_SCREEN);
+	if (pDrawG && getHeight() > 0)
 	{
-		GR_Painter painter(pG);
+		GR_Painter painter(pDrawG);
 		painter.fillRect(fill, screenX + boxX, screenY + boxY, boxW, boxH);
 	}
 
@@ -607,14 +607,14 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 		da.yoff = pDA->yoff + pContainer->getY();
 		pContainer->draw(&da);
 	}
-	if (pG)
+	if (pDrawG)
 	{
 		const UT_sint32 left = screenX + boxX;
 		const UT_sint32 top = screenY + boxY;
 		const UT_sint32 right = left + boxW;
 		const UT_sint32 bottom = top + boxH;
-		const UT_sint32 pad = pG->tlu(6);
-		const UT_sint32 headerH = pG->tlu(22);
+		const UT_sint32 pad = pDrawG->tlu(6);
+		const UT_sint32 headerH = pDrawG->tlu(22);
 
 		std::string heading;
 		if (pAL2->getAuthor())
@@ -627,7 +627,6 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 		}
 		if (!heading.empty())
 		{
-			GR_Graphics * pDrawG = pDA->pG ? pDA->pG : pG;
 			GR_Font * pFont = pDrawG->findFont("sans-serif", "normal", "", "bold", "", "8pt", nullptr);
 			if (!pFont && onScreen)
 				pFont = pDrawG->getGUIFont();
@@ -664,9 +663,9 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 				painter.drawChars(text.ucs4_str(), 0, drawLen, headingX, top + pDrawG->tlu(4));
 			}
 		}
-		GR_Painter painter(pG);
-		pG->setLineWidth(pG->tlu(1));
-		pG->setColor(border);
+		GR_Painter painter(pDrawG);
+		pDrawG->setLineWidth(pDrawG->tlu(1));
+		pDrawG->setColor(border);
 		painter.drawLine(left, top, right, top);
 		painter.drawLine(left, bottom, right, bottom);
 		painter.drawLine(left, top, left, bottom);
@@ -675,55 +674,62 @@ void fp_AnnotationContainer::draw(dg_DrawArgs* pDA)
 			painter.drawLine(left + pad / 2, top + headerH, right - pad / 2, top + headerH);
 		if (pAnchor && pAnchor->getLine() && pAnchor->getLine()->getPage() == getPage())
 		{
-			UT_sint32 anchorX = 0;
-			UT_sint32 anchorY = 0;
-			pAnchor->getLine()->getScreenOffsets(pAnchor, anchorX, anchorY);
-			anchorX += pAnchor->getWidth() / 2;
-			anchorY += pAnchor->getLine()->getAscent() / 2;
-			const UT_sint32 fromX = (anchorX < left + boxW / 2) ? left : right;
-			UT_sint32 fromY = anchorY;
-			if (fromY < top + pad)
-				fromY = top + pad;
-			else if (fromY > bottom - pad)
-				fromY = bottom - pad;
-			painter.drawLine(fromX, fromY, anchorX, anchorY);
-			const double dx = static_cast<double>(fromX - anchorX);
-			const double dy = static_cast<double>(fromY - anchorY);
-			const double length = sqrt(dx * dx + dy * dy);
-			if (length > 1.0)
+			fp_Line * pAnchorLine = pAnchor->getLine();
+			fp_Container * pAnchorCol = pAnchorLine->getColumn();
+			if (pAnchorCol)
 			{
-				const double scale = static_cast<double>(pG->tlu(7)) / length;
-				const double px = -dy * scale / 2.0;
-				const double py = dx * scale / 2.0;
-				UT_Point tip[3];
-				tip[0].x = anchorX;
-				tip[0].y = anchorY;
-				tip[1].x = anchorX + static_cast<UT_sint32>(dx * scale + px);
-				tip[1].y = anchorY + static_cast<UT_sint32>(dy * scale + py);
-				tip[2].x = anchorX + static_cast<UT_sint32>(dx * scale - px);
-				tip[2].y = anchorY + static_cast<UT_sint32>(dy * scale - py);
-				painter.polygon(border, tip, 3);
+				UT_sint32 anchorX = screenX + pAnchorLine->getX() + pAnchor->getX() + pAnchor->getWidth() / 2;
+				UT_sint32 anchorY = screenY + pAnchorLine->getY() + pAnchorLine->getAscent() / 2;
+				for (fp_Container * pC = pAnchorLine->getContainer(); pC; pC = pC->getContainer())
+				{
+					anchorX += pC->getX();
+					anchorY += pC->getY();
+				}
+				const UT_sint32 fromX = (anchorX < left + boxW / 2) ? left : right;
+				UT_sint32 fromY = anchorY;
+				if (fromY < top + pad)
+					fromY = top + pad;
+				else if (fromY > bottom - pad)
+					fromY = bottom - pad;
+				painter.drawLine(fromX, fromY, anchorX, anchorY);
+				const double dx = static_cast<double>(fromX - anchorX);
+				const double dy = static_cast<double>(fromY - anchorY);
+				const double length = sqrt(dx * dx + dy * dy);
+				if (length > 1.0)
+				{
+					const double scale = static_cast<double>(pDrawG->tlu(7)) / length;
+					const double px = -dy * scale / 2.0;
+					const double py = dx * scale / 2.0;
+					UT_Point tip[3];
+					tip[0].x = anchorX;
+					tip[0].y = anchorY;
+					tip[1].x = anchorX + static_cast<UT_sint32>(dx * scale + px);
+					tip[1].y = anchorY + static_cast<UT_sint32>(dy * scale + py);
+					tip[2].x = anchorX + static_cast<UT_sint32>(dx * scale - px);
+					tip[2].y = anchorY + static_cast<UT_sint32>(dy * scale - py);
+					painter.polygon(border, tip, 3);
+				}
 			}
 		}
 		if (onScreen)
 		{
 			const UT_sint32 markX = screenX + closeX;
 			const UT_sint32 markY = screenY + closeY;
-			const UT_sint32 crossInset = pG->tlu(4);
+			const UT_sint32 crossInset = pDrawG->tlu(4);
 			painter.fillRect(UT_RGBColor(255, 255, 255), markX, markY, close, close);
-			pG->setLineWidth(pG->tlu(1));
-			pG->setColor(border);
+			pDrawG->setLineWidth(pDrawG->tlu(1));
+			pDrawG->setColor(border);
 			painter.drawLine(markX, markY, markX + close, markY);
 			painter.drawLine(markX, markY + close, markX + close, markY + close);
 			painter.drawLine(markX, markY, markX, markY + close);
 			painter.drawLine(markX + close, markY, markX + close, markY + close);
-			pG->setLineWidth(pG->tlu(2));
-			pG->setColor(UT_RGBColor(90, 60, 20));
+			pDrawG->setLineWidth(pDrawG->tlu(2));
+			pDrawG->setColor(UT_RGBColor(90, 60, 20));
 			painter.drawLine(markX + crossInset, markY + crossInset,
 				markX + close - crossInset, markY + close - crossInset);
 			painter.drawLine(markX + close - crossInset, markY + crossInset,
 				markX + crossInset, markY + close - crossInset);
-			pG->setLineWidth(pG->tlu(1));
+			pDrawG->setLineWidth(pDrawG->tlu(1));
 		}
 	}
 	_drawBoundaries(pDA);

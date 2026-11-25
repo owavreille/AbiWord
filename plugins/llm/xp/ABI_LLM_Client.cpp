@@ -91,7 +91,7 @@ std::string json_unescape(const std::string & raw)
 		{
 			if (pending)
 			{
-				append_utf8(out, pending);
+				append_utf8(out, 0xFFFD);
 				pending = 0;
 			}
 			out.push_back(c);
@@ -128,7 +128,7 @@ std::string json_unescape(const std::string & raw)
 		default:
 			if (pending)
 			{
-				append_utf8(out, pending);
+				append_utf8(out, 0xFFFD);
 				pending = 0;
 			}
 			out.push_back(e);
@@ -143,7 +143,7 @@ std::string json_unescape(const std::string & raw)
 				pending = 0;
 				continue;
 			}
-			append_utf8(out, pending);
+			append_utf8(out, 0xFFFD);
 			pending = 0;
 		}
 		if (code >= 0xD800 && code <= 0xDBFF)
@@ -151,29 +151,37 @@ std::string json_unescape(const std::string & raw)
 			pending = code;
 			continue;
 		}
+		if (code >= 0xDC00 && code <= 0xDFFF)
+			code = 0xFFFD;
 		append_utf8(out, code);
 	}
 	if (pending)
-		append_utf8(out, pending);
+		append_utf8(out, 0xFFFD);
 	return out;
 }
 
-std::string last_string_value(const std::string & json, const char * key)
+std::string extract_string_values(const std::string & json, const char * key, bool concatenate)
 {
 	const std::string needle = std::string("\"") + key + "\"";
-	std::string last;
-	for (std::size_t at = json.find(needle); at != std::string::npos; at = json.find(needle, at + needle.size()))
+	std::string result;
+	for (std::size_t at = json.find(needle); at != std::string::npos; )
 	{
 		std::size_t i = at + needle.size();
 		while (i < json.size() && (json[i] == ' ' || json[i] == '\t' || json[i] == '\r' || json[i] == '\n'))
 			++i;
 		if (i >= json.size() || json[i] != ':')
+		{
+			at = json.find(needle, at + needle.size());
 			continue;
+		}
 		++i;
 		while (i < json.size() && (json[i] == ' ' || json[i] == '\t' || json[i] == '\r' || json[i] == '\n'))
 			++i;
 		if (i >= json.size() || json[i] != '"')
+		{
+			at = json.find(needle, at + needle.size());
 			continue;
+		}
 		++i;
 		std::string raw;
 		while (i < json.size())
@@ -190,9 +198,23 @@ std::string last_string_value(const std::string & json, const char * key)
 			raw.push_back(json[i]);
 			++i;
 		}
-		last = json_unescape(raw);
+		if (concatenate)
+			result += json_unescape(raw);
+		else
+			result = json_unescape(raw);
+		at = (i < json.size()) ? json.find(needle, i + 1) : std::string::npos;
 	}
-	return last;
+	return result;
+}
+
+std::string last_string_value(const std::string & json, const char * key)
+{
+	return extract_string_values(json, key, false);
+}
+
+std::string all_string_values(const std::string & json, const char * key)
+{
+	return extract_string_values(json, key, true);
 }
 
 std::string provider_key(std::string provider)
@@ -335,7 +357,7 @@ ABI_LLM_Result abi_llm_interpret(long status, const std::string & response)
 	result.ok = false;
 	std::string text = last_string_value(response, "content");
 	if (text.empty())
-		text = last_string_value(response, "text");
+		text = all_string_values(response, "text");
 	if (status >= 400 || text.empty())
 	{
 		std::string message = last_string_value(response, "message");
@@ -418,6 +440,7 @@ ABI_LLM_Result abi_llm_complete(const ABI_LLM_Settings & incoming, const std::st
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, "AbiWord-LLM");
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 120L);
 	curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 15L);
+	curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
 	curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 0L);
 #ifdef CURLOPT_PROTOCOLS_STR
 	curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");

@@ -166,7 +166,6 @@ ODe_Text_Listener::~ODe_Text_Listener() {
         region += "\">";
         if (it->second == '-') {
             UT_UTF8String body = m_revisionText[it->first];
-            body.escapeXML();
             region += "<text:deletion><office:change-info><dc:creator>AbiWord</dc:creator><dc:date>1970-01-01T00:00:00</dc:date></office:change-info><text:p>";
             region += body;
             region += "</text:p></text:deletion>";

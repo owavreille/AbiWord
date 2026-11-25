@@ -112,13 +112,31 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	UT_ByteBufPtr pBB(new UT_ByteBuf(g_pngSidebar_sizeof));
 	pBB->ins(0,g_pngSidebar,g_pngSidebar_sizeof);
 
-	UT_sint32 iImageWidth;
-	UT_sint32 iImageHeight;
+	UT_sint32 iImageWidth = 0;
+	UT_sint32 iImageHeight = 0;
 		
 	UT_PNG_getDimensions(pBB, iImageWidth, iImageHeight);
+
+	HDC screen = GetDC(nullptr);
+	const int dpiY = screen ? GetDeviceCaps(screen, LOGPIXELSY) : 96;
+	if (screen)
+		ReleaseDC(nullptr, screen);
+	const int scale = dpiY > 0 ? dpiY : 96;
+
+	const int aboutW     = MulDiv(ABOUT_WIDTH, scale, 96);
+	const int aboutH     = MulDiv(ABOUT_HEIGHT, scale, 96);
+	const int btnW       = MulDiv(BUTTON_WIDTH, scale, 96);
+	const int btnH       = MulDiv(BUTTON_HEIGHT, scale, 96);
+	const int btnGap     = MulDiv(BUTTON_GAP, scale, 96);
+	const int headingH   = MulDiv(HEADING_HEIGHT, scale, 96);
+	const int versionH   = MulDiv(VERSION_HEIGHT, scale, 96);
+	const int copyrightH = MulDiv(COPYRIGHT_HEIGHT, scale, 96);
+	const int gplH       = MulDiv(GPL_HEIGHT, scale, 96);
+	const int sidebarW   = MulDiv(iImageWidth, scale, 96);
+	const int sidebarH   = MulDiv(iImageHeight, scale, 96);
 	
 	m_pGrImageSidebar = new GR_Win32Image(nullptr);
-	m_pGrImageSidebar->convertFromBuffer(pBB, "image/png", iImageWidth, iImageHeight);
+	m_pGrImageSidebar->convertFromBuffer(pBB, "image/png", sidebarW, sidebarH);
 
 	const wchar_t * pClassName = L"AbiSource_About";
 	
@@ -178,10 +196,10 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	HWND hwndAbout = UT_CreateWindowEx(	0L, pClassName,
 										buf,
 										WS_OVERLAPPED,
-										rcScreen.left + (iScreenWidth - ABOUT_WIDTH) / 2,
-										rcScreen.top + (iScreenHeight - ABOUT_HEIGHT) /2,
-										ABOUT_WIDTH,
-										ABOUT_HEIGHT,
+										rcScreen.left + (iScreenWidth - aboutW) / 2,
+										rcScreen.top + (iScreenHeight - aboutH) / 2,
+										aboutW,
+										aboutH,
 										hWndFrame,
 										nullptr,
 										pWin32App->getInstance(),
@@ -189,6 +207,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	if (!hwndAbout)
 	{
 		UnregisterClassW(pClassName, pWin32App->getInstance());
+		pWin32App->enableAllTopLevelWindows(true);
 		::MessageBeep(MB_ICONEXCLAMATION);
 		return;
 	}
@@ -197,9 +216,9 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 
 	RECT rcClient = {};
 	// GetClientRect leaves the rectangle untouched on failure.
-	// ABOUT_WIDTH and ABOUT_HEIGHT are the window size used to create it.
-	int iWidth = ABOUT_WIDTH;
-	int iHeight = ABOUT_HEIGHT;
+	// aboutW and aboutH are the window size used to create it.
+	int iWidth = aboutW;
+	int iHeight = aboutH;
 	if (GetClientRect(hwndAbout, &rcClient) && rcClient.right > 0 && rcClient.bottom > 0)
 	{
 		iWidth = rcClient.right;
@@ -210,10 +229,10 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	HWND hwndOK = CreateWindowW(L"BUTTON",
 							   str.c_str(),
 							   WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-							   iWidth - BUTTON_WIDTH - BUTTON_GAP,
-							   iHeight - BUTTON_HEIGHT - BUTTON_GAP,
-							   BUTTON_WIDTH,
-							   BUTTON_HEIGHT,
+							   iWidth - btnW - btnGap,
+							   iHeight - btnH - btnGap,
+							   btnW,
+							   btnH,
 							   hwndAbout,
 							   (HMENU) IDOK,
 							   pWin32App->getInstance(),
@@ -222,10 +241,10 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	HWND hwndURL = CreateWindowW(L"BUTTON",
 								L"www.abisource.com",
 								WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-								iWidth - BUTTON_WIDTH - BUTTON_GAP - 2*BUTTON_WIDTH - BUTTON_GAP,
-								iHeight - BUTTON_HEIGHT - BUTTON_GAP,
-								BUTTON_WIDTH*2,
-								BUTTON_HEIGHT,
+								iWidth - btnW - btnGap - 2*btnW - btnGap,
+								iHeight - btnH - btnGap,
+								btnW*2,
+								btnH,
 								hwndAbout,
 								(HMENU) ID_BUTTON_URL,
 								pWin32App->getInstance(),
@@ -235,10 +254,10 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	HWND hwndStatic_Heading = CreateWindowW(L"STATIC",
 										   str.c_str(),
 										   WS_CHILD | WS_VISIBLE | SS_CENTER,
-										   iImageWidth,
-										   BUTTON_GAP,
-										   iWidth - iImageWidth,
-										   HEADING_HEIGHT,
+										   sidebarW,
+										   btnGap,
+										   iWidth - sidebarW,
+										   headingH,
 										   hwndAbout,
 										   (HMENU) 3001,
 										   pWin32App->getInstance(),
@@ -252,10 +271,10 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	HWND hwndStatic_Version = CreateWindowW(L"STATIC",
 										   str.c_str(),
 										   WS_CHILD | WS_VISIBLE | SS_CENTER,
-										   iImageWidth + BUTTON_GAP,
-										   BUTTON_GAP + HEADING_HEIGHT + BUTTON_GAP,
-										   iWidth - 2*BUTTON_GAP - iImageWidth,
-										   VERSION_HEIGHT,
+										   sidebarW + btnGap,
+										   btnGap + headingH + btnGap,
+										   iWidth - 2*btnGap - sidebarW,
+										   versionH,
 										   hwndAbout,
 										   (HMENU) 3002,
 										   pWin32App->getInstance(),
@@ -266,10 +285,10 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	HWND hwndStatic_Copyright = CreateWindowW(L"STATIC",
 											 str.c_str(),
 											 WS_CHILD | WS_VISIBLE | SS_LEFT,
-											 iImageWidth + BUTTON_GAP,
-											 BUTTON_GAP + HEADING_HEIGHT + BUTTON_GAP + VERSION_HEIGHT + 1*BUTTON_GAP,
-											 iWidth - 2*BUTTON_GAP - iImageWidth,
-											 COPYRIGHT_HEIGHT,
+											 sidebarW + btnGap,
+											 btnGap + headingH + btnGap + versionH + btnGap,
+											 iWidth - 2*btnGap - sidebarW,
+											 copyrightH,
 											 hwndAbout,
 											 (HMENU) 3003,
 											 pWin32App->getInstance(),
@@ -278,14 +297,15 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 
     str.fromASCII (XAP_App::getApp()->getApplicationName());
 	strbis.fromASCII (XAP_ABOUT_GPL_LONG);
-	swprintf(buf, strbis.c_str(), str.c_str());
+	_snwprintf(buf, G_N_ELEMENTS(buf), strbis.c_str(), str.c_str());
+	buf[G_N_ELEMENTS(buf) - 1] = 0;
 	HWND hwndStatic_GPL = CreateWindowW(L"STATIC",
 									   buf,
 									   WS_CHILD | WS_VISIBLE | SS_LEFT,
-									   iImageWidth + BUTTON_GAP,
-									   BUTTON_GAP + HEADING_HEIGHT + BUTTON_GAP + VERSION_HEIGHT + 1*BUTTON_GAP + VERSION_HEIGHT + BUTTON_GAP,
-									   iWidth - 2*BUTTON_GAP - iImageWidth,
-									   GPL_HEIGHT,
+									   sidebarW + btnGap,
+									   btnGap + headingH + btnGap + versionH + btnGap + copyrightH + btnGap,
+									   iWidth - 2*btnGap - sidebarW,
+									   gplH,
 									   hwndAbout,
 									   (HMENU) 3004,
 									   pWin32App->getInstance(),
@@ -294,19 +314,21 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 
 	HWND hwndStatic_USP_Version = nullptr;
 
-	if(pWin32App->getLastFocussedFrame()->getCurrentView()->getGraphics()->getClassId()==GRID_WIN32_UNISCRIBE)
+	XAP_Frame * pLastFrame = pWin32App->getLastFocussedFrame();
+	AV_View * pLastView = pLastFrame ? pLastFrame->getCurrentView() : nullptr;
+	GR_Graphics * pLastG = pLastView ? pLastView->getGraphics() : nullptr;
+	if (pLastG && pLastG->getClassId() == GRID_WIN32_UNISCRIBE)
 	{
-		GR_Win32USPGraphics * pUSP = static_cast<GR_Win32USPGraphics*>(
-												  pWin32App->getLastFocussedFrame()->getCurrentView()->getGraphics());
+		GR_Win32USPGraphics * pUSP = static_cast<GR_Win32USPGraphics*>(pLastG);
 
 		str.fromASCII (pUSP->getUSPVersion());
 		hwndStatic_USP_Version = CreateWindowW(L"STATIC",
 												   str.c_str(),
 												   WS_CHILD | WS_VISIBLE | SS_LEFT,
-												   BUTTON_GAP/2,
- 				   								   iHeight - 3*BUTTON_HEIGHT/4,
-												   iImageWidth - BUTTON_GAP/2,
-												   3*BUTTON_HEIGHT/4,
+												   btnGap/2,
+ 				   								   iHeight - 3*btnH/4,
+												   sidebarW - btnGap/2,
+												   3*btnH/4,
 												   hwndAbout,
 												   (HMENU) 3005,
 												   pWin32App->getInstance(),
@@ -323,12 +345,6 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 
 	// These heights are cell sizes at 96 DPI. A positive lfHeight is pixels
 	// in MM_TEXT, so it has to follow LOGPIXELSY.
-	HDC screen = GetDC(nullptr);
-	const int dpiY = screen ? GetDeviceCaps(screen, LOGPIXELSY) : 96;
-	if (screen)
-		ReleaseDC(nullptr, screen);
-	const int scale = dpiY > 0 ? dpiY : 96;
-
 	lf.lfHeight = MulDiv(13, scale, 96);
 	lf.lfWeight = 0;
 	HFONT hfontPrimary = CreateFontIndirectW(&lf);
@@ -386,14 +402,14 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 		}
 	}
 
+	pWin32App->enableAllTopLevelWindows(true);
+
 	DestroyWindow(hwndAbout);
 	DeleteObject(hfontHeading);
 	DeleteObject(hfontPrimary);
 	DeleteObject(hfontSmall);
 
 	UnregisterClassW(pClassName, pWin32App->getInstance());
-
-	pWin32App->enableAllTopLevelWindows(true);
 
 	if (GetWindow(hWndFrame, GW_HWNDFIRST) != hWndFrame)
 	{

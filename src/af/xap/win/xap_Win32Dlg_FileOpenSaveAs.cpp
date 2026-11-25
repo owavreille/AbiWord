@@ -66,12 +66,14 @@ XAP_Dialog * XAP_Win32Dialog_FileOpenSaveAs::static_constructor(XAP_DialogFactor
 XAP_Win32Dialog_FileOpenSaveAs::XAP_Win32Dialog_FileOpenSaveAs(XAP_DialogFactory * pDlgFactory,
 															 XAP_Dialog_Id id)
 	: XAP_Dialog_FileOpenSaveAs(pDlgFactory,id)
+	, m_pPreviewImage(nullptr)
 {
 	m_szDefaultExtension[0] = 0;
 }
 
 XAP_Win32Dialog_FileOpenSaveAs::~XAP_Win32Dialog_FileOpenSaveAs(void)
 {
+	_clearPreviewCache();
 }
 
 /*****************************************************************/
@@ -611,7 +613,7 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg,
 
 	case WM_PAINT:
 		if (pThis && bPreviewImage)
-			pThis->_previewPicture(hDlg);
+			pThis->_paintCachedPreview(hDlg);
 		return false;
 
 	case WM_NOTIFY:
@@ -623,6 +625,8 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg,
 		{
 		case CDN_FOLDERCHANGE:
 			UT_DEBUGMSG(("Folder Changed File Name Cleared\n"));
+			if (pThis)
+				pThis->_clearPreviewCache();
 			SetDlgItemTextW( GetParent(hDlg), edt1,	nullptr );
 			SetDlgItemTextW( hDlg, XAP_RID_DIALOG_INSERT_PICTURE_TEXT_HEIGHT, nullptr );
 			SetDlgItemTextW( hDlg, XAP_RID_DIALOG_INSERT_PICTURE_TEXT_WIDTH, nullptr );
@@ -657,6 +661,7 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg,
 								 SW_HIDE );
 					ShowWindow( GetDlgItem(hDlg,XAP_RID_DIALOG_INSERT_PICTURE_TEXT_WIDTH),
 								 SW_HIDE );
+					pThis->_clearPreviewCache();
 					return pThis->_initPreviewDlg(hDlg);
 				}	
 			} 
@@ -668,7 +673,13 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg,
 		if (!pThis)
 			return false;
 		SetWindowLongPtrW(hDlg, GWLP_USERDATA, (LONG_PTR) pThis);
+		pThis->_clearPreviewCache();
 		return pThis->_initPreviewDlg(hDlg);
+
+	case WM_DESTROY:
+		if (pThis)
+			pThis->_clearPreviewCache();
+		return false;
 
 	default:
 		return false;
@@ -676,6 +687,49 @@ UINT_PTR CALLBACK XAP_Win32Dialog_FileOpenSaveAs::s_hookInsertPicProc(HWND hDlg,
 	}
 	// Default Dialog handles all other issues
 	return false;
+}
+
+void XAP_Win32Dialog_FileOpenSaveAs::_clearPreviewCache(void)
+{
+	DELETEP(m_pPreviewImage);
+	m_sPreviewPath.clear();
+}
+
+void XAP_Win32Dialog_FileOpenSaveAs::_paintCachedPreview(HWND hDlg)
+{
+	if (!m_pPreviewImage)
+		return;
+
+	HWND hThumbnail = GetDlgItem(hDlg, XAP_RID_DIALOG_INSERT_PICTURE_IMAGE_PREVIEW);
+	RECT r;
+	memset(&r, 0, sizeof(r));
+	if (!hThumbnail || !GetClientRect(hThumbnail, &r))
+		return;
+	const int clientW = r.right - r.left;
+	const int clientH = r.bottom - r.top;
+	if (clientW <= 0 || clientH <= 0)
+		return;
+
+	// BeginPaint belongs to this window's WM_PAINT. The call arrives from
+	// CDN_SELCHANGE and from the hook dialog, so GetDC is the DC to use.
+	HDC hdc = GetDC(hThumbnail);
+	if (!hdc)
+		return;
+	FillRect(hdc, &r, GetSysColorBrush(COLOR_BTNFACE));
+
+	GR_Win32AllocInfo ai(hdc, hThumbnail);
+	GR_Win32Graphics *pGr = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
+	if (pGr)
+	{
+		const int scaledW = m_pPreviewImage->getDisplayWidth();
+		const int scaledH = m_pPreviewImage->getDisplayHeight();
+		pGr->drawImage(m_pPreviewImage,
+					   pGr->tlu((clientW - scaledW) / 2),
+					   pGr->tlu((clientH - scaledH) / 2));
+		DELETEP(pGr);
+	}
+	ReleaseDC(hThumbnail, hdc);
+	ValidateRect(hThumbnail, nullptr);
 }
 	
 UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
@@ -693,12 +747,26 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 	// A negative result means the buffer was too small and was not filled.
 	const LRESULT pathChars = SendMessageW(hFOSADlg, CDM_GETFILEPATH, MAX_DLG_INS_PICT_STRING, (LPARAM)buf);
 	if (pathChars <= 0 || pathChars > MAX_DLG_INS_PICT_STRING)
+	{
+		_clearPreviewCache();
 		return false;
+	}
 	buf[MAX_DLG_INS_PICT_STRING - 1] = 0;
 	// Attributes are a bit mask. A directory also carries archive or hidden bits.
 	const DWORD attrs = GetFileAttributesW(buf);
 	if (attrs == INVALID_FILE_ATTRIBUTES || (attrs & FILE_ATTRIBUTE_DIRECTORY))
+	{
+		_clearPreviewCache();
 		return false;
+	}
+
+	if (m_pPreviewImage && m_sPreviewPath == buf)
+	{
+		_paintCachedPreview(hDlg);
+		return true;
+	}
+
+	_clearPreviewCache();
 
     str.fromLocale (buf);
 	UT_DEBUGMSG(("File Selected is %s\n", str.utf8_str().utf8_str()));
@@ -734,6 +802,8 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 	if (iImageWidth <= 0 || iImageHeight <= 0)
 		return false;
 
+	const std::wstring selectedPath(buf);
+
 	// Update Height and Width Strings
     str.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_IP_Height_Label));
 	_snwprintf(buf, MAX_DLG_INS_PICT_STRING, L"%s %d", str.c_str(), iImageHeight);
@@ -759,36 +829,15 @@ UINT XAP_Win32Dialog_FileOpenSaveAs::_previewPicture(HWND hDlg)
 	scaled_width  = (int) (scale_factor * iImageWidth);
 	scaled_height = (int) (scale_factor * iImageHeight);
 
-	GR_Win32Image* pImage = new GR_Win32Image(nullptr);
-	pImage->convertFromBuffer(pfg->getBuffer(), pfg->getMimeType(), scaled_width, scaled_height);
-
-	// BeginPaint belongs to this window's WM_PAINT. The call arrives from
-	// CDN_SELCHANGE and from the hook dialog, so GetDC is the DC to use.
-	HDC hdc = GetDC(hThumbnail);
-	if (!hdc)
+	m_pPreviewImage = new GR_Win32Image(nullptr);
+	if (!m_pPreviewImage->convertFromBuffer(pfg->getBuffer(), pfg->getMimeType(), scaled_width, scaled_height))
 	{
-		DELETEP(pImage);
+		_clearPreviewCache();
 		return false;
 	}
-	FillRect(hdc, &r, GetSysColorBrush(COLOR_BTNFACE));
+	m_sPreviewPath = selectedPath;
 
-	GR_Win32AllocInfo ai(hdc,hThumbnail);
-	GR_Win32Graphics *pGr = (GR_Win32Graphics *)XAP_App::getApp()->newGraphics(ai);
-	if (!pGr)
-	{
-		ReleaseDC(hThumbnail, hdc);
-		DELETEP(pImage);
-		return false;
-	}
-	
-	pGr->drawImage(pImage,
-				   pGr->tlu((clientW - scaled_width ) / 2),
-				   pGr->tlu((clientH - scaled_height) / 2));
-
-	DELETEP(pImage);
-	DELETEP(pGr);
-	ReleaseDC(hThumbnail, hdc);
-	ValidateRect(hThumbnail, nullptr);
+	_paintCachedPreview(hDlg);
 
 	return true;
 }

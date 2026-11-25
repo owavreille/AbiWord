@@ -428,6 +428,16 @@ void	EV_Win32Menu::destroy()
 {		
 
 	UT_VECTOR_PURGEALL(EV_Menu_Item*,m_vecItems);
+	m_vecItems.clear();
+
+	for (std::vector<HBITMAP>::const_iterator i = m_vechBitmaps.begin();
+		 i != m_vechBitmaps.end(); ++i)
+	{
+		if (*i)
+			DeleteObject(*i);
+	}
+	m_vechBitmaps.clear();
+	m_mapMenuBitmaps.clear();
 
 	if (m_myMenu)
 	{
@@ -436,7 +446,10 @@ void	EV_Win32Menu::destroy()
 	}
 
 	if (m_hFont)
+	{
 		DeleteObject(m_hFont);
+		m_hFont = nullptr;
+	}
 	
 }
 
@@ -446,11 +459,13 @@ EV_Win32Menu::~EV_Win32Menu()
 	// TODO: this is never colld
 	
 	for (std::vector<HBITMAP>::const_iterator i = m_vechBitmaps.begin(); 
-		 i != m_vechBitmaps.end(); i++)
-	{	    
-	    DeleteObject (*i);
+		 i != m_vechBitmaps.end(); ++i)
+	{
+		if (*i)
+			DeleteObject (*i);
 	}
-		
+	m_vechBitmaps.clear();
+	m_mapMenuBitmaps.clear();
 }
 
 bool EV_Win32Menu::onCommand(AV_View * pView,
@@ -779,12 +794,25 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 				}
 				else	
 				{
-					EV_Menu_Item*	item = new EV_Menu_Item;
-					item->id = id;					
-					item->pMenu= this;													
+					EV_Menu_Item* item = nullptr;
+					for (UT_sint32 i = 0; i < m_vecItems.getItemCount(); ++i)
+					{
+						EV_Menu_Item* existing = (EV_Menu_Item*)m_vecItems.getNthItem(i);
+						if (existing && existing->id == id)
+						{
+							item = existing;
+							break;
+						}
+					}
+					if (!item)
+					{
+						item = new EV_Menu_Item;
+						item->id = id;
+						item->pMenu = this;
+						m_vecItems.addItem(item);
+					}
 					wcsncpy(item->szText, szLabelName, G_N_ELEMENTS(item->szText) - 1);
-						item->szText[G_N_ELEMENTS(item->szText) - 1] = 0;					
-					m_vecItems.addItem(item);
+					item->szText[G_N_ELEMENTS(item->szText) - 1] = 0;
 					//UT_DEBUGMSG(("Menu adding menu->%s\n",szLabelName));
 										
 					if (UT_IsWinVista()) {
@@ -911,10 +939,24 @@ HBITMAP EV_Win32Menu::_loadBitmap(XAP_Menu_Id id, int width, int height, const U
 // Sets the Bitmap in Windows Vista
 void EV_Win32Menu::_setBitmapforID (HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd)
 {
-	UT_RGBColor Color;
-	Color.m_bIsTransparent=true;
-	HBITMAP hBitmap =  EV_Win32Menu::_loadBitmap(id, BITMAP_WITDH, BITMAP_HEIGHT, Color);
-							
+	HBITMAP hBitmap = nullptr;
+	std::map<XAP_Menu_Id, HBITMAP>::const_iterator found = m_mapMenuBitmaps.find(id);
+	if (found != m_mapMenuBitmaps.end())
+	{
+		hBitmap = found->second;
+	}
+	else
+	{
+		UT_RGBColor Color;
+		Color.m_bIsTransparent = true;
+		hBitmap = EV_Win32Menu::_loadBitmap(id, BITMAP_WITDH, BITMAP_HEIGHT, Color);
+		if (hBitmap != nullptr)
+		{
+			m_vechBitmaps.push_back(hBitmap);
+			m_mapMenuBitmaps[id] = hBitmap;
+		}
+	}
+
 	if (hBitmap != nullptr) {
 		// SetMenuItemBitmaps draws a color bitmap as-is. Transparent pixels
 		// are black, so the icon sits in a black square. hbmpItem blends them.
@@ -924,7 +966,6 @@ void EV_Win32Menu::_setBitmapforID (HMENU hMenu, XAP_Menu_Id id, UINT_PTR cmd)
 		info.fMask = MIIM_BITMAP;
 		info.hbmpItem = hBitmap;
 		SetMenuItemInfoW(hMenu, cmd, FALSE, &info);
-		m_vechBitmaps.push_back (hBitmap);
 	}
 }
 

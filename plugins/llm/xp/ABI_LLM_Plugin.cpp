@@ -159,6 +159,20 @@ std::string document_text(FV_View * view)
 	return text;
 }
 
+bool has_document_text(FV_View * view)
+{
+	PD_Document * doc = view ? view->getDocument() : nullptr;
+	pt_PieceTable * table = doc ? doc->getPieceTable() : nullptr;
+	if (!table)
+		return false;
+	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
+	{
+		if (frag->getType() == pf_Frag::PFT_Text && frag->getLength() > 0)
+			return true;
+	}
+	return false;
+}
+
 void tell(XAP_Frame * frame, const std::string & message)
 {
 	if (!frame)
@@ -175,7 +189,7 @@ void insert_proposal_page(FV_View * view, const std::string & proposal)
 	PD_Document * document = view->getDocument();
 	if (!document)
 		return;
-	const bool hasExistingText = !document_text(view).empty();
+	const bool hasExistingText = has_document_text(view);
 	document->beginUserAtomicGlob();
 	view->cmdUnselectSelection();
 	PT_DocPosition docEnd = 0;
@@ -273,9 +287,9 @@ void on_timer(UT_Worker *)
 	PendingInsert * pending = g_ready.exchange(nullptr);
 	if (!pending)
 		return;
-	apply_pending(pending);
 	if (g_timer)
 		g_timer->stop();
+	apply_pending(pending);
 }
 
 void request_thread(ABI_LLM_Settings settings, std::string documentText, PendingInsert * pending)
@@ -467,9 +481,18 @@ std::string narrow(const std::wstring & text)
 
 std::string control_text(HWND dialog, int id)
 {
-	wchar_t buffer[8192];
-	const UINT length = GetDlgItemTextW(dialog, id, buffer, 8192);
-	return narrow(std::wstring(buffer, length));
+	HWND control = GetDlgItem(dialog, id);
+	if (!control)
+		return std::string();
+	const int len = GetWindowTextLengthW(control);
+	if (len <= 0)
+		return std::string();
+	std::wstring buffer(static_cast<size_t>(len) + 1, L'\0');
+	const int copied = GetWindowTextW(control, &buffer[0], len + 1);
+	if (copied <= 0)
+		return std::string();
+	buffer.resize(static_cast<size_t>(copied));
+	return narrow(buffer);
 }
 
 std::string to_crlf(const std::string & text)
@@ -949,18 +972,17 @@ int abi_plugin_unregister(XAP_ModuleInfo * info)
 	info->author = nullptr;
 	info->usage = nullptr;
 	abi_llm_stop_requested.store(true);
-	if (g_worker.joinable())
-		g_worker.join();
-	PendingInsert * leftover = g_ready.exchange(nullptr);
-	delete leftover;
 	if (g_timer)
 	{
 		g_timer->stop();
 		DELETEP(g_timer);
 	}
+	if (g_worker.joinable())
+		g_worker.join();
+	PendingInsert * leftover = g_ready.exchange(nullptr);
+	delete leftover;
 	g_busy.store(false);
 	remove_from_menus();
-	curl_global_cleanup();
 	return 1;
 }
 

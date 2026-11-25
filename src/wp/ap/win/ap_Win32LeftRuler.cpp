@@ -50,12 +50,16 @@ AP_Win32LeftRuler::AP_Win32LeftRuler(XAP_Frame * pFrame)
 
 AP_Win32LeftRuler::~AP_Win32LeftRuler(void)
 {
+	if (m_hwndLeftRuler && IsWindow(m_hwndLeftRuler))
+		SWL(m_hwndLeftRuler, nullptr);
+
 	DELETEP(m_pG);
 
 	if (m_hwndLeftRuler)
 	{
 		if (IsWindow(m_hwndLeftRuler))
 			DestroyWindow(m_hwndLeftRuler);
+		m_hwndLeftRuler = nullptr;
 	}
 }
 
@@ -247,9 +251,13 @@ LRESULT CALLBACK AP_Win32LeftRuler::_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPAR
 
 	case WM_SETCURSOR:
 		{
-			pG->handleSetCursorMessage();
+			if (pG)
+			{
+				pG->handleSetCursorMessage();
+				return 1;
+			}
+			break;
 		}
-		return 0;
 	default:
 		break;
 	}

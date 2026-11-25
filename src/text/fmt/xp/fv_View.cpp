@@ -9380,7 +9380,6 @@ void FV_View::reflowWebPageToWindow(void)
 			pSL = static_cast<fl_SectionLayout *>(pSL->getNext());
 		}
 		rebuildLayout();
-		m_pLayout->formatAll();
 		changed = true;
 		XAP_Frame * pFrame = static_cast<XAP_Frame *>(getParentData());
 		if (pFrame)
@@ -9405,7 +9404,6 @@ void FV_View::setViewMode (ViewMode vm)
 	if(bPrevWeb)
 	{
 		rebuildLayout();
-		m_pLayout->formatAll();
 		_generalUpdate();
 	}
 	else

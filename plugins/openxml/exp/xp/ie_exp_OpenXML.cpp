@@ -54,6 +54,7 @@ UT_Error writeZipXml(GsfOutfile* dir, const char* name, const std::string& body)
 	xml += body;
 	gboolean wrote = gsf_output_write(file, xml.size(), reinterpret_cast<const guint8*>(xml.data()));
 	gboolean closed = gsf_output_close(file);
+	g_object_unref(file);
 	if (!wrote || !closed)
 		return UT_SAVE_EXPORTERROR;
 	return UT_OK;
@@ -85,6 +86,7 @@ IE_Exp_OpenXML::IE_Exp_OpenXML (PD_Document * pDocument)
 	endnoteStream(nullptr),
 	commentStream(nullptr),
 	isOverline(false),
+	m_inDelText(false),
 	m_pendingTarget(TARGET_DOCUMENT),
 	m_capturePPr(false),
 	m_captureRPr(false),
@@ -271,6 +273,7 @@ UT_Error IE_Exp_OpenXML::finishDocument()
 	if (error != UT_OK)
 	{
 		gsf_output_close(GSF_OUTPUT(props));
+		g_object_unref(props);
 		return error;
 	}
 	error = writeZipXml(props, "app.xml",
@@ -279,7 +282,9 @@ UT_Error IE_Exp_OpenXML::finishDocument()
 		"<Application>AbiWord</Application>"
 		"<AppVersion>3.1</AppVersion>"
 		"</Properties>");
-	if (!gsf_output_close(GSF_OUTPUT(props)) || error != UT_OK)
+	gboolean propsClosed = gsf_output_close(GSF_OUTPUT(props));
+	g_object_unref(props);
+	if (!propsClosed || error != UT_OK)
 		return error == UT_OK ? UT_SAVE_EXPORTERROR : error;
 
 	if(!gsf_output_close(GSF_OUTPUT(root)))
@@ -398,16 +403,19 @@ UT_Error IE_Exp_OpenXML::finishContentControl(int target)
 
 UT_Error IE_Exp_OpenXML::startDelText(int target)
 {
+	m_inDelText = true;
 	return writeTargetStream(target, "<w:delText xml:space=\"preserve\">");
 }
 
 UT_Error IE_Exp_OpenXML::finishDelText(int target)
 {
+	m_inDelText = false;
 	return writeTargetStream(target, "</w:delText>");
 }
 
 UT_Error IE_Exp_OpenXML::startText(int target)
 {
+	m_inDelText = false;
 	if(isOverline)
 	{
 		return writeTargetStream(target, "<w:fldChar w:fldCharType=\"begin\"/></w:r><w:r><w:instrText xml:space=\"preserve\"> EQ \\x \\to(");
@@ -442,15 +450,21 @@ UT_Error IE_Exp_OpenXML::writeText(int target, const UT_UCS4Char* text, bool lis
 			continue;
 		}
 
-		if (!isOverline && (*pText == '\t' || *pText == '\n'))
+		if (!isOverline && (*pText == '\t' || *pText == '\n' || *pText == UCS_FF))
 		{
 			sEscText.escapeXML();
 			out += sEscText.utf8_str();
 			sEscText.clear();
+			const char* closeTag = m_inDelText ? "</w:delText>" : "</w:t>";
+			const char* openTag = m_inDelText ? "<w:delText xml:space=\"preserve\">" : "<w:t xml:space=\"preserve\">";
+			out += closeTag;
 			if (*pText == '\t')
-				out += "</w:t><w:tab/><w:t xml:space=\"preserve\">";
+				out += "<w:tab/>";
+			else if (*pText == UCS_FF)
+				out += "<w:br w:type=\"page\"/>";
 			else
-				out += "</w:t><w:br/><w:t xml:space=\"preserve\">";
+				out += "<w:br/>";
+			out += openTag;
 			continue;
 		}
 
@@ -533,6 +547,7 @@ UT_Error IE_Exp_OpenXML::startRun(int target)
 UT_Error IE_Exp_OpenXML::finishRun(int target)
 {
 	isOverline = false;
+	m_inDelText = false;
 	return writeTargetStream(target, "</w:r>");
 }
 

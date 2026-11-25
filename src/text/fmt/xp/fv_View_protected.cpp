@@ -2596,83 +2596,95 @@ fp_Page* FV_View::_getPageForXY(UT_sint32 xPos, UT_sint32 yPos, UT_sint32& xClic
 	if (!pPage)
 		return nullptr;
 
-	if (xClick <= (signed)getWidthPagesInRow(pPage))  //So we can't select the next row by clicking outside 
+	// First, find the row the page is in. Always run this loop even if
+	// xClick is to the right of the row so clicking to the right of page 2+
+	// stays on that row instead of jumping back to page 1.
+	UT_uint32 iNumHorizPages = getNumHorizPages();
+	if (iNumHorizPages < 1)
+		iNumHorizPages = 1;
+
+	while (pPage)
 	{
-		while (pPage) //First, find the row the page is in
+		UT_sint32 iPageHeight = pPage->getHeight();
+		if (yClick < iPageHeight)
 		{
-			UT_uint32 iNumHorizPages = getNumHorizPages();
-			if (iNumHorizPages < 1)
-				iNumHorizPages = 1;
-			UT_sint32 iPageHeight = pPage->getHeight();
-			
-			if (yClick < iPageHeight)
-			{
-				//Found the first page in the row
-				break;
-			}
-			// A zero or negative stride never reaches the next row and the
-			// click never returns.
-			const UT_sint32 step = iPageHeight + getPageViewSep();
-			if (step <= 0)
-				break;
-			yClick -= step;
-			
-			//Loop because we're jumping entire rows
-			for (unsigned int i = 0; i < iNumHorizPages; i++)
-			{
-				if (pPage->getNext())
-				{
-					pPage = pPage->getNext();
-				}
-			}
+			// Found the first page in the row
+			break;
 		}
-		
-		while (pPage) //Now, find the page in the row.
+		// A zero or negative stride never reaches the next row and the
+		// click never returns.
+		const UT_sint32 step = iPageHeight + getPageViewSep();
+		if (step <= 0)
+			break;
+
+		// Advance by one row of pages; if there is no next row, stay on
+		// this row and clamp yClick to the bottom of the page instead of
+		// wrapping around to the top.
+		fp_Page* pNextRow = pPage;
+		for (unsigned int i = 0; i < iNumHorizPages && pNextRow; i++)
 		{
-			UT_sint32 iPageWidth = pPage->getWidth();
-			
-			if (xClick > iPageWidth && !rtlPages()) // Left to right
+			pNextRow = pNextRow->getNext();
+		}
+		if (!pNextRow)
+		{
+			yClick = iPageHeight > 0 ? iPageHeight - 1 : 0;
+			break;
+		}
+		yClick -= step;
+		pPage = pNextRow;
+	}
+
+	// Now, find the page in the row (at most iNumHorizPages pages).
+	// If xClick is to the right of the last page in this row, stay on that
+	// row's last page rather than advancing into the next row or jumping to page 1.
+	fp_Page* pRowPage = pPage;
+	for (unsigned int col = 0; col < iNumHorizPages && pRowPage; col++)
+	{
+		UT_sint32 iPageWidth = pRowPage->getWidth();
+		fp_Page* pNextInRow = (col + 1 < iNumHorizPages) ? pRowPage->getNext() : nullptr;
+
+		if (xClick > iPageWidth && !rtlPages()) // Left to right
+		{
+			if (!pNextInRow)
 			{
-				const UT_sint32 xStep = iPageWidth + getHorizPageSpacing();
-				if (xStep <= 0)
-					break;
-				xClick -= xStep;
-			}
-			else if (xClick < static_cast<UT_sint32>(getWidthPrevPagesInRow(m_pLayout->findPage(pPage))) && rtlPages()) // Right to left
-			{
-				//Don't need to do anything.
-			}
-			else
-			{
-				if (rtlPages())
-				{
-					xClick -= getWidthPrevPagesInRow(m_pLayout->findPage(pPage));
-				}
-				
-				//Found the page. Huzzah!
-				xxx_UT_DEBUGMSG(("     yClick %d \t     xClick %d\tPage %d\n", yClick, xClick, m_pLayout->findPage(pPage)));
-				xxx_UT_DEBUGMSG(("iPageHeight %d \t iPageWidth %d | %d\n", pPage->getHeight(), iPageWidth, getWidthPagesInRow(pPage)));
+				pPage = pRowPage;
 				break;
 			}
-			pPage = pPage->getNext();
+			const UT_sint32 xStep = iPageWidth + getHorizPageSpacing();
+			if (xStep <= 0)
+			{
+				pPage = pRowPage;
+				break;
+			}
+			xClick -= xStep;
+			pRowPage = pNextInRow;
+			pPage = pRowPage;
+		}
+		else if (xClick < static_cast<UT_sint32>(getWidthPrevPagesInRow(m_pLayout->findPage(pRowPage))) && rtlPages()) // Right to left
+		{
+			if (!pNextInRow)
+			{
+				pPage = pRowPage;
+				break;
+			}
+			pRowPage = pNextInRow;
+			pPage = pRowPage;
+		}
+		else
+		{
+			if (rtlPages())
+			{
+				xClick -= getWidthPrevPagesInRow(m_pLayout->findPage(pRowPage));
+			}
+
+			// Found the page. Huzzah!
+			pPage = pRowPage;
+			xxx_UT_DEBUGMSG(("     yClick %d \t     xClick %d\tPage %d\n", yClick, xClick, m_pLayout->findPage(pPage)));
+			xxx_UT_DEBUGMSG(("iPageHeight %d \t iPageWidth %d | %d\n", pPage->getHeight(), iPageWidth, getWidthPagesInRow(pPage)));
+			break;
 		}
 	}
 
-	if (!pPage)
-	{
-		// we're below the last page
-		pPage = m_pLayout->getLastPage();
-		if(pPage == nullptr)
-	    {
-			pPage = m_pLayout->getFirstPage();
-		}
-		if(pPage == nullptr)
-		{
-			return pPage;
-		}
-		UT_sint32 iPageHeight = pPage->getHeight();
-		yClick += iPageHeight + getPageViewSep();
-	}
 	return pPage;
 }
 

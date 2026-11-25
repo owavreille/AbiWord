@@ -132,6 +132,8 @@ public:
 	FPVisibility            isHidden() const {return m_eHidden;}
 	void                    setVisibility(FPVisibility eVis) {m_eHidden = eVis;}
 	bool                    isOnScreen() const;
+	bool                    isInFormatQueue(void) const { return m_bInFormatQueue; }
+	void                    setInFormatQueue(bool b) { m_bInFormatQueue = b; }
 
 // Frames stuff
 	UT_sint32               getNumFrames(void) const;
@@ -191,6 +193,7 @@ private:
 	UT_GenericVector<fl_FrameLayout *> m_vecFrames;
     UT_sint32                   m_iFoldedLevel;
     UT_uint32                   m_iFoldedID;
+	bool                        m_bInFormatQueue;
 };
 
 #endif /* CONTAINERLAYOUT_H */

@@ -35,8 +35,10 @@ public:
 	virtual bool		convertToBuffer(UT_ConstByteBufPtr& ppBB) const override;
 	virtual bool		convertFromBuffer(const UT_ConstByteBufPtr& pBB, const std::string& mimetype, UT_sint32 iDisplayWidth, UT_sint32 iDisplayHeight) override;
 
-	void				setDIB(BITMAPINFO *pDIB) { m_pDIB = pDIB; if (m_pDIB) setDisplaySize(m_pDIB->bmiHeader.biWidth,m_pDIB->bmiHeader.biHeight); }
+	void				setDIB(BITMAPINFO *pDIB);
 	inline BITMAPINFO*	getDIB(void) const { return m_pDIB; }
+	HBITMAP				getPremultipliedBitmap(HDC hdc);
+	void				clearPremultipliedBitmap(void);
 
 	virtual GR_Image *  createImageSegment(GR_Graphics * pG, const UT_Rect & rec) override;
 	virtual bool hasAlpha (void) const override;
@@ -50,6 +52,7 @@ private:
 	bool				_convertFromJPEG(const UT_ConstByteBufPtr& pBB, UT_sint32 iDisplayWidth, UT_sint32 iDisplayHeight);
 
 	bool				m_bHasAlpha;
+	HBITMAP				m_hPremulBitmap;
 };
 
 #endif /* GR_WIN32IMAGE_H */

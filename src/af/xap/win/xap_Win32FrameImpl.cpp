@@ -426,7 +426,9 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 	// Register drag and drop data and files
 	m_dropTarget.setFrame(getFrame());
 	RegisterDragDrop(m_hwndFrame, &m_dropTarget);
-	_refreshChrome();
+	UT_Win32ApplyCaptionTheme(m_hwndFrame);
+	if (m_hwndFrame && GetClientRect(m_hwndFrame, &r) && r.right > 0 && r.bottom > 0)
+		_layoutRebar(r.right - r.left, r.bottom - r.top);
 
 	return;
 }
@@ -739,21 +741,17 @@ void XAP_Win32FrameImpl::_setCursor(GR_Graphics::Cursor /*cursor*/)
 UT_RGBColor XAP_Win32FrameImpl::getColorSelBackground () const
 {
 	DWORD dwResult = GetSysColor(COLOR_HIGHLIGHT);
-	static UT_RGBColor clr((unsigned char)GetRValue(dwResult),
-						   (unsigned char)GetGValue(dwResult),
-						   (unsigned char)GetBValue(dwResult));
-
-	return clr;
+	return UT_RGBColor((unsigned char)GetRValue(dwResult),
+					   (unsigned char)GetGValue(dwResult),
+					   (unsigned char)GetBValue(dwResult));
 }
 
 UT_RGBColor XAP_Win32FrameImpl::getColorSelForeground () const
 {
 	DWORD dwResult = GetSysColor(COLOR_HIGHLIGHTTEXT);
-	static UT_RGBColor clr((unsigned char)GetRValue(dwResult),
-						   (unsigned char)GetGValue(dwResult),
-						   (unsigned char)GetBValue(dwResult));
-
-	return clr;
+	return UT_RGBColor((unsigned char)GetRValue(dwResult),
+					   (unsigned char)GetGValue(dwResult),
+					   (unsigned char)GetBValue(dwResult));
 }
 
 #define MAXAPPNAME 256
@@ -1084,8 +1082,11 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 	}
 
 	case WM_SETTINGCHANGE:
-		UT_Win32NoteThemeChanged();
-		fimpl->_refreshChrome();
+		if (lParam == 0 || _wcsicmp(reinterpret_cast<LPCWSTR>(lParam), L"ImmersiveColorSet") == 0)
+		{
+			UT_Win32NoteThemeChanged();
+			fimpl->_refreshChrome();
+		}
 		break;
 
 	case WM_SIZE:

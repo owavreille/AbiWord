@@ -146,35 +146,58 @@ void fl_SectionLayout::_purgeLayout()
 	return;
 }
 
+void fl_SectionLayout::_clearFormatLayout(void)
+{
+	const UT_sint32 count = m_vecFormatLayout.getItemCount();
+	for (UT_sint32 i = 0; i < count; i++)
+	{
+		fl_ContainerLayout * pItem = m_vecFormatLayout.getNthItem(i);
+		if (pItem)
+		{
+			pItem->setInFormatQueue(false);
+		}
+	}
+	m_vecFormatLayout.clear();
+}
+
 void fl_SectionLayout::removeFromUpdate(fl_ContainerLayout * pCL)
 {
-  while((m_vecFormatLayout.getItemCount() > 0) && (m_vecFormatLayout.findItem(pCL) >= 0))
-  {
-    UT_sint32 i = m_vecFormatLayout.findItem(pCL);
-    m_vecFormatLayout.deleteNthItem(i);
-  }
+	if (!pCL || !pCL->isInFormatQueue())
+	{
+		return;
+	}
+	UT_sint32 i = m_vecFormatLayout.findItem(pCL);
+	if (i >= 0)
+	{
+		m_vecFormatLayout.deleteNthItem(i);
+	}
+	pCL->setInFormatQueue(false);
 }
 
 
 void fl_SectionLayout::clearNeedsReformat(fl_ContainerLayout * pCL)
 {
-       UT_sint32 i = m_vecFormatLayout.findItem(pCL);
-       if(i>= 0)
-       {
-	   m_vecFormatLayout.deleteNthItem(i);
-       }
-       if(m_vecFormatLayout.getItemCount() == 0)
-       {
-	   m_bNeedsReformat = false;
-       }
+	if (pCL && pCL->isInFormatQueue())
+	{
+		UT_sint32 i = m_vecFormatLayout.findItem(pCL);
+		if (i >= 0)
+		{
+			m_vecFormatLayout.deleteNthItem(i);
+		}
+		pCL->setInFormatQueue(false);
+	}
+	if (m_vecFormatLayout.getItemCount() == 0)
+	{
+		m_bNeedsReformat = false;
+	}
 }
 
 void fl_SectionLayout::setNeedsReformat(fl_ContainerLayout * pCL, UT_uint32 /*offset*/)
 {
-        UT_sint32 i = m_vecFormatLayout.findItem(pCL);
-	if(i< 0)
+	if (pCL && !pCL->isInFormatQueue())
 	{
-	  m_vecFormatLayout.addItem(pCL);
+		pCL->setInFormatQueue(true);
+		m_vecFormatLayout.addItem(pCL);
 	}
 	m_bNeedsReformat = true;
 	xxx_UT_DEBUGMSG(("SetNeedsReformat in %s from %s number to format %d\n",getContainerString(),pCL->getContainerString(),m_vecFormatLayout.getItemCount()));
@@ -1839,21 +1862,25 @@ void fl_DocSectionLayout::updateLayout(bool bDoFull)
 	xxx_UT_DEBUGMSG(("Doing DocSection Update layout (section %p)\n",this));
 	if (!bDoFull)
 	{
-		UT_sint32 i = 0;
-		UT_sint32 j = 0;
-		UT_sint32 count = m_vecFormatLayout.getItemCount();
-		for (i = 0; i < count; i++)
+		UT_GenericVector<fl_ContainerLayout *> vecLocal;
+		const UT_sint32 count = m_vecFormatLayout.getItemCount();
+		for (UT_sint32 i = 0; i < count; i++)
 		{
-			if (j >= m_vecFormatLayout.getItemCount())
-				break;
-			pBL = m_vecFormatLayout.getNthItem(j);
-			j++;
-			if (!pBL)
+			fl_ContainerLayout * pItem = m_vecFormatLayout.getNthItem(i);
+			if (pItem)
 			{
-				j--;
-				m_vecFormatLayout.deleteNthItem(j);
-				continue;
+				pItem->setInFormatQueue(false);
+				vecLocal.addItem(pItem);
 			}
+		}
+		m_vecFormatLayout.clear();
+
+		const UT_sint32 localCount = vecLocal.getItemCount();
+		for (UT_sint32 i = 0; i < localCount; i++)
+		{
+			pBL = vecLocal.getNthItem(i);
+			if (!pBL)
+				continue;
 			eHidden = pBL->isHidden();
 			bHidden = ((eHidden == FP_HIDDEN_TEXT && !bShowHidden)
 				   || eHidden == FP_HIDDEN_REVISION
@@ -1878,25 +1905,10 @@ void fl_DocSectionLayout::updateLayout(bool bDoFull)
 				{
 					pBL->updateLayout(false);
 				}
-				if (!bSkipped && !pBL->needsReformat())
+				if ((bSkipped || pBL->needsReformat()) && !pBL->isInFormatQueue())
 				{
-					UT_sint32 k = m_vecFormatLayout.findItem(pBL);
-					if (k >= 0)
-					{
-						m_vecFormatLayout.deleteNthItem(k);
-						if (k < j)
-							j--;
-					}
-				}
-			}
-			else
-			{
-				UT_sint32 k = m_vecFormatLayout.findItem(pBL);
-				if (k >= 0)
-				{
-					m_vecFormatLayout.deleteNthItem(k);
-					if (k < j)
-						j--;
+					pBL->setInFormatQueue(true);
+					m_vecFormatLayout.addItem(pBL);
 				}
 			}
 		}
@@ -1927,7 +1939,7 @@ void fl_DocSectionLayout::updateLayout(bool bDoFull)
 
 			pBL = pBL->getNext();
 		}
-		m_vecFormatLayout.clear();
+		_clearFormatLayout();
 	}
 	if(needsSectionBreak() && !getDocument()->isDontImmediateLayout() )
 	{
@@ -4019,7 +4031,7 @@ void fl_HdrFtrSectionLayout::updateLayout(bool /*bDoFull*/)
 		bredraw = true;
 		m_bNeedsReformat = false;
 	}
-	m_vecFormatLayout.clear();
+	_clearFormatLayout();
 	while (pBL)
 	{
 		if (pBL->needsReformat())
@@ -5349,7 +5361,7 @@ void fl_HdrFtrShadow::updateLayout(bool /*bDoAll*/)
 	bool bredraw = false;
 	xxx_UT_DEBUGMSG(("Doing Update layout in shadow %x \n",this));
 	fl_ContainerLayout*	pBL = getFirstLayout();
-	m_vecFormatLayout.clear();
+	_clearFormatLayout();
 	while (pBL)
 	{
 		if (pBL->needsReformat())

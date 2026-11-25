@@ -466,33 +466,60 @@ void IE_Exp_RTF::_rtf_keyword(const char * szKey)
 /* output a non-ascii char in the RTF stream. */
 void IE_Exp_RTF::_rtf_nonascii_hex2 (UT_sint32 d)
 {
-	write("\\'");
-	write(UT_String_sprintf("%02x",d));
+	char buf[16];
+	int n = snprintf(buf, sizeof(buf), "\\'%02x", static_cast<unsigned int>(d));
+	if (n > 0 && static_cast<size_t>(n) < sizeof(buf))
+		write(buf, static_cast<UT_uint32>(n));
 	m_bLastWasKeyword = false;
 }
 
 /* write a non-ascii char into a string class pointer */
 void IE_Exp_RTF::_rtf_nonascii_hex2 (UT_sint32 d, UT_String & pStr) const
 {
-	pStr = "\\'";
-	pStr += UT_String_sprintf("%02x",d);
+	char buf[16];
+	snprintf(buf, sizeof(buf), "\\'%02x", static_cast<unsigned int>(d));
+	pStr = buf;
 }
 
 
 void IE_Exp_RTF::_rtf_keyword(const char * szKey, UT_sint32 d)
 {
-	write("\\");
-	write(szKey);
-	write(UT_String_sprintf("%d",d));
+	char buf[64];
+	int n = snprintf(buf, sizeof(buf), "\\%s%d", szKey, d);
+	if (n > 0 && static_cast<size_t>(n) < sizeof(buf))
+	{
+		write(buf, static_cast<UT_uint32>(n));
+	}
+	else
+	{
+		write("\\");
+		write(szKey);
+		char num[32];
+		int m = snprintf(num, sizeof(num), "%d", d);
+		if (m > 0 && static_cast<size_t>(m) < sizeof(num))
+			write(num, static_cast<UT_uint32>(m));
+	}
 	m_bLastWasKeyword = true;
 }
 
 
 void IE_Exp_RTF::_rtf_keyword_space(const char * szKey, UT_sint32 d)
 {
-	write("\\");
-	write(szKey);
-	write(UT_String_sprintf(" %d",d));
+	char buf[64];
+	int n = snprintf(buf, sizeof(buf), "\\%s %d", szKey, d);
+	if (n > 0 && static_cast<size_t>(n) < sizeof(buf))
+	{
+		write(buf, static_cast<UT_uint32>(n));
+	}
+	else
+	{
+		write("\\");
+		write(szKey);
+		char num[32];
+		int m = snprintf(num, sizeof(num), " %d", d);
+		if (m > 0 && static_cast<size_t>(m) < sizeof(num))
+			write(num, static_cast<UT_uint32>(m));
+	}
 	m_bLastWasKeyword = true;
 }
 
@@ -506,9 +533,21 @@ void IE_Exp_RTF::_rtf_keyword(const char * szKey, const char * val)
 
 void IE_Exp_RTF::_rtf_keyword_hex2(const char * szKey, UT_sint32 d)
 {
-	write("\\");
-	write(szKey);
-	write(UT_String_sprintf("%02x",d));
+	char buf[64];
+	int n = snprintf(buf, sizeof(buf), "\\%s%02x", szKey, static_cast<unsigned int>(d));
+	if (n > 0 && static_cast<size_t>(n) < sizeof(buf))
+	{
+		write(buf, static_cast<UT_uint32>(n));
+	}
+	else
+	{
+		write("\\");
+		write(szKey);
+		char num[32];
+		int m = snprintf(num, sizeof(num), "%02x", static_cast<unsigned int>(d));
+		if (m > 0 && static_cast<size_t>(m) < sizeof(num))
+			write(num, static_cast<UT_uint32>(m));
+	}
 	m_bLastWasKeyword = true;
 }
 
@@ -521,10 +560,7 @@ void IE_Exp_RTF::_rtf_keyword_ifnotdefault(const char * szKey, const char * szVa
 	if (d == defaultValue)
 		return;
 
-	write("\\");
-	write(szKey);
-	write(UT_String_sprintf("%d",d));
-	m_bLastWasKeyword = true;
+	_rtf_keyword(szKey, d);
 }
 
 void IE_Exp_RTF::_rtf_keyword_ifnotdefault_twips(const char * szKey, const char * szValue, UT_sint32 defaultValue)
@@ -539,10 +575,7 @@ void IE_Exp_RTF::_rtf_keyword_ifnotdefault_twips(const char * szKey, const char 
 	if (d == defaultValue)
 		return;
 
-	write("\\");
-	write(szKey);
-	write(UT_String_sprintf("%d",d));
-	m_bLastWasKeyword = true;
+	_rtf_keyword(szKey, d);
 }
 
 void IE_Exp_RTF::_rtf_semi(void)
@@ -3233,6 +3266,8 @@ bool IE_Exp_RTF::s_escapeString(UT_UTF8String &sOutStr,
 		// If an ASCII character append to output string.
 		if (sInStr[i] <= 0x7f) 
 		{
+			if (sInStr[i] == '\\' || sInStr[i] == '{' || sInStr[i] == '}')
+				sOutStr += "\\";
 			sOutStr += sInStr[i];
 			continue;
 		}

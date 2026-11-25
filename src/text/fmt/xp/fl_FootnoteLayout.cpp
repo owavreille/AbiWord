@@ -243,7 +243,7 @@ void fl_EmbedLayout::updateLayout(void)
 	{
 		format();
 	}
-	m_vecFormatLayout.clear();
+	_clearFormatLayout();
 	fl_ContainerLayout*	pBL = getFirstLayout();
 	while (pBL)
 	{

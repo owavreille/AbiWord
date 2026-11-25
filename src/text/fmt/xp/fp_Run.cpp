@@ -2352,9 +2352,7 @@ void fp_TabRun::_draw(dg_DrawArgs* pDA)
 	GR_Graphics * pG = pDA->pG;
 
 	// need to draw to the full height of line to join with line above.
-	UT_sint32 xoff= 0, yoff=0, DA_xoff = pDA->xoff;
-
-	getLine()->getScreenOffsets(this, xoff, yoff);
+	UT_sint32 DA_xoff = pDA->xoff;
 
 	// need to clear full height of line, in case we had a selection
 
@@ -2386,8 +2384,9 @@ void fp_TabRun::_draw(dg_DrawArgs* pDA)
 	UT_parseColor(PP_evalProperty("color",pSpanAP,pBlockAP, pSectionAP, pDoc, true), clrFG);
 	
 	GR_Painter painter(pG);
+	const bool bScreen = pG->queryProperties(GR_Graphics::DGP_SCREEN);
 
-	if (getGraphics()->queryProperties(GR_Graphics::DGP_SCREEN) && (isInSelectedTOC() ||
+	if (bScreen && (isInSelectedTOC() ||
 	    /* pView->getFocus()!=AV_FOCUS_NONE && */
 		 ((iSel1 <= iRunBase)	&& (iSel2 > iRunBase)))		)
 	{
@@ -2399,7 +2398,7 @@ void fp_TabRun::_draw(dg_DrawArgs* pDA)
 	else
 	{
 		Fill(pG,DA_xoff, iFillTop, getWidth(), iFillHeight2);
-        if(pView->getShowPara()){
+        if(bScreen && pView->getShowPara()){
             _drawArrow(/*pDA->xoff*/DA_xoff, iFillTop, getWidth(), iFillHeight2);
         }
 	}
@@ -2459,7 +2458,7 @@ void fp_TabRun::_draw(dg_DrawArgs* pDA)
 //
 	UT_sint32 yTopOfRun = pDA->yoff - getAscent()-1; // Hack to remove
 	                                                 //character dirt
-	drawDecors( xoff, yTopOfRun,pG);
+	drawDecors(DA_xoff, yTopOfRun, pG);
 //
 // Draw bar seperators
 //

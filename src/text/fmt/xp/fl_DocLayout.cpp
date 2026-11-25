@@ -1145,13 +1145,15 @@ void FL_DocLayout::refreshRunProperties(void)
  */
 void FL_DocLayout::setFramePageNumbers(UT_sint32 iStartPage)
 {
-      UT_sint32 iPage = 0;
-      fp_Page * pPage = nullptr;
-      for(iPage=iStartPage; iPage<countPages();iPage++)
-      {
-	  pPage = getNthPage(iPage);
-	  pPage->setPageNumberInFrames();
-      }
+	const UT_sint32 iCount = countPages();
+	for (UT_sint32 iPage = iStartPage; iPage < iCount; iPage++)
+	{
+		fp_Page * pPage = getNthPage(iPage);
+		if (pPage && (pPage->countAboveFrameContainers() > 0 || pPage->countBelowFrameContainers() > 0))
+		{
+			pPage->setPageNumberInFrames(iPage);
+		}
+	}
 }
 
 /*!
@@ -2393,9 +2395,14 @@ UT_sint32 FL_DocLayout::countPages() const
 UT_sint32 FL_DocLayout::findPage(const fp_Page * pPage) const
 {
 	UT_sint32 count = m_vecPages.getItemCount();
-	if(count < 1)
+	if (count < 1 || !pPage)
 	{
 		return -1;
+	}
+	UT_sint32 cached = pPage->getCachedPageNumber();
+	if (cached >= 0 && cached < count && m_vecPages.getNthItem(cached) == pPage)
+	{
+		return cached;
 	}
 	// Ugly. Problem: findItem expect a non-const
 	// maybe when we use std::vector instead.
@@ -2432,7 +2439,7 @@ fp_Page* FL_DocLayout::getLastPage() const
 
 void FL_DocLayout::deletePage(fp_Page* pPage, bool bDontNotify /* default false */)
 {
-	UT_sint32 ndx = m_vecPages.findItem(pPage);
+	UT_sint32 ndx = findPage(pPage);
 	UT_ASSERT(ndx >= 0);
 
 	// While the page is still in the list, ask the view to cover the
@@ -2456,6 +2463,15 @@ void FL_DocLayout::deletePage(fp_Page* pPage, bool bDontNotify /* default false 
 	pPage->setPrev(nullptr);
 	pPage->setNext(nullptr);
 	m_vecPages.deleteNthItem(ndx);
+	const UT_sint32 iPageCount = m_vecPages.getItemCount();
+	for (UT_sint32 i = ndx; i < iPageCount; i++)
+	{
+		fp_Page * pShift = m_vecPages.getNthItem(i);
+		if (pShift)
+		{
+			pShift->setCachedPageNumber(i);
+		}
+	}
 	m_iPageSequence++;
 	delete pPage;
 	if(ndx < countPages())
@@ -2499,6 +2515,7 @@ fp_Page* FL_DocLayout::addNewPage(fl_DocSectionLayout* pOwner, bool bNoUpdate)
 	}
 	pPage->setPrev(pLastPage);
 	m_vecPages.addItem(pPage);
+	pPage->setCachedPageNumber(m_vecPages.getItemCount() - 1);
 	m_iPageSequence++;
 	pOwner->addOwnedPage(pPage);
 
@@ -2961,7 +2978,6 @@ void FL_DocLayout::rebuildFromHere( fl_DocSectionLayout * pFirstDSL)
 		pDSL = pDSL->getNextDocSection();
 	}
 
-	deleteEmptyColumnsAndPages();
 	pDSL= pStart;
 	while (pDSL)
 	{

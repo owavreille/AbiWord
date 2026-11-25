@@ -245,6 +245,7 @@ private:
 	std::string m_imageRelPart;
 
 	bool isOverline;
+	bool m_inDelText;
 	std::string m_pendingInd;
 	std::string m_pendingSpacing;
 	int m_pendingTarget;

@@ -414,32 +414,42 @@ bool UT_Win32AppsUseDarkTheme(void)
 	if (cachedGeneration == s_themeGeneration)
 		return cachedDark;
 
-	bool dark = false;
-	HMODULE adv = LoadLibraryW(L"advapi32.dll");
-	if (adv)
+	typedef LSTATUS (WINAPI *OpenFn)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY);
+	typedef LSTATUS (WINAPI *QueryFn)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
+	typedef LSTATUS (WINAPI *CloseFn)(HKEY);
+	static bool s_resolved = false;
+	static OpenFn openKey = nullptr;
+	static QueryFn queryValue = nullptr;
+	static CloseFn closeKey = nullptr;
+	if (!s_resolved)
 	{
-		typedef LSTATUS (WINAPI *OpenFn)(HKEY, LPCWSTR, DWORD, REGSAM, PHKEY);
-		typedef LSTATUS (WINAPI *QueryFn)(HKEY, LPCWSTR, LPDWORD, LPDWORD, LPBYTE, LPDWORD);
-		typedef LSTATUS (WINAPI *CloseFn)(HKEY);
-		OpenFn openKey = reinterpret_cast<OpenFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegOpenKeyExW")));
-		QueryFn queryValue = reinterpret_cast<QueryFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegQueryValueExW")));
-		CloseFn closeKey = reinterpret_cast<CloseFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegCloseKey")));
-		HKEY key = nullptr;
-		if (openKey && queryValue && closeKey &&
-			openKey(HKEY_CURRENT_USER,
-				L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
-				0, KEY_READ, &key) == ERROR_SUCCESS)
+		s_resolved = true;
+		HMODULE adv = GetModuleHandleW(L"advapi32.dll");
+		if (!adv)
+			adv = LoadLibraryW(L"advapi32.dll");
+		if (adv)
 		{
-			DWORD value = 1;
-			DWORD size = sizeof(value);
-			DWORD type = 0;
-			if (queryValue(key, L"AppsUseLightTheme", nullptr, &type,
-					reinterpret_cast<LPBYTE>(&value), &size) == ERROR_SUCCESS &&
-				type == REG_DWORD)
-				dark = (value == 0);
-			closeKey(key);
+			openKey = reinterpret_cast<OpenFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegOpenKeyExW")));
+			queryValue = reinterpret_cast<QueryFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegQueryValueExW")));
+			closeKey = reinterpret_cast<CloseFn>(reinterpret_cast<void *>(GetProcAddress(adv, "RegCloseKey")));
 		}
-		FreeLibrary(adv);
+	}
+
+	bool dark = false;
+	HKEY key = nullptr;
+	if (openKey && queryValue && closeKey &&
+		openKey(HKEY_CURRENT_USER,
+			L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize",
+			0, KEY_READ, &key) == ERROR_SUCCESS)
+	{
+		DWORD value = 1;
+		DWORD size = sizeof(value);
+		DWORD type = 0;
+		if (queryValue(key, L"AppsUseLightTheme", nullptr, &type,
+				reinterpret_cast<LPBYTE>(&value), &size) == ERROR_SUCCESS &&
+			type == REG_DWORD)
+			dark = (value == 0);
+		closeKey(key);
 	}
 	cachedDark = dark;
 	cachedGeneration = s_themeGeneration;
@@ -455,12 +465,19 @@ void UT_Win32ApplyCaptionTheme(HWND hwnd)
 {
 	if (!hwnd)
 		return;
-	HMODULE dwm = LoadLibraryW(L"dwmapi.dll");
-	if (!dwm)
-		return;
 	typedef HRESULT (WINAPI *SetAttrFn)(HWND, DWORD, LPCVOID, DWORD);
-	SetAttrFn setAttr = reinterpret_cast<SetAttrFn>(
-		reinterpret_cast<void *>(GetProcAddress(dwm, "DwmSetWindowAttribute")));
+	static bool s_resolved = false;
+	static SetAttrFn setAttr = nullptr;
+	if (!s_resolved)
+	{
+		s_resolved = true;
+		HMODULE dwm = GetModuleHandleW(L"dwmapi.dll");
+		if (!dwm)
+			dwm = LoadLibraryW(L"dwmapi.dll");
+		if (dwm)
+			setAttr = reinterpret_cast<SetAttrFn>(
+				reinterpret_cast<void *>(GetProcAddress(dwm, "DwmSetWindowAttribute")));
+	}
 	if (setAttr)
 	{
 		BOOL dark = UT_Win32AppsUseDarkTheme() ? TRUE : FALSE;
@@ -469,19 +486,25 @@ void UT_Win32ApplyCaptionTheme(HWND hwnd)
 		setAttr(hwnd, 20, &dark, sizeof(dark));
 		setAttr(hwnd, 19, &dark, sizeof(dark));
 	}
-	FreeLibrary(dwm);
 }
 
 void UT_Win32ApplyWindowTheme(HWND hwnd)
 {
 	if (!hwnd)
 		return;
-	HMODULE ux = LoadLibraryW(L"uxtheme.dll");
-	if (!ux)
-		return;
 	typedef HRESULT (WINAPI *ThemeFn)(HWND, LPCWSTR, LPCWSTR);
-	ThemeFn setTheme = reinterpret_cast<ThemeFn>(
-		reinterpret_cast<void *>(GetProcAddress(ux, "SetWindowTheme")));
+	static bool s_resolved = false;
+	static ThemeFn setTheme = nullptr;
+	if (!s_resolved)
+	{
+		s_resolved = true;
+		HMODULE ux = GetModuleHandleW(L"uxtheme.dll");
+		if (!ux)
+			ux = LoadLibraryW(L"uxtheme.dll");
+		if (ux)
+			setTheme = reinterpret_cast<ThemeFn>(
+				reinterpret_cast<void *>(GetProcAddress(ux, "SetWindowTheme")));
+	}
 	if (setTheme)
 	{
 		if (UT_Win32AppsUseDarkTheme())
@@ -489,7 +512,6 @@ void UT_Win32ApplyWindowTheme(HWND hwnd)
 		else
 			setTheme(hwnd, L"", nullptr);
 	}
-	FreeLibrary(ux);
 }
 
 void UT_Win32RefreshStatusFont(HWND bar)

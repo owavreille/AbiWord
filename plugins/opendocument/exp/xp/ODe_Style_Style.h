@@ -57,6 +57,7 @@ public:
     // Read it like: "is style "T1" equivalent to style "T2"
     // It is *NOT* like: "is style A equal to style B"
     bool isEquivalentTo(const ODe_Style_Style& rStyle);
+    UT_uint64 equivalenceHash() const;
 
     bool isEmpty() const;
 

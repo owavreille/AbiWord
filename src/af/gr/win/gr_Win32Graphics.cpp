@@ -582,10 +582,15 @@ void GR_Win32Graphics::drawChar(UT_UCS4Char Char, UT_sint32 xoff, UT_sint32 yoff
 	// of the font file is defined.
 	// Reference Microsoft knowledge base:
 	// Q145754 - PRB ExtTextOutW or TextOutW Unicode Text Output Is Blank
-	LOGFONTW lf;
-	memset(&lf, 0, sizeof(lf));
-	if (GetObjectW(m_pFont->getFontHandle(), sizeof(lf), &lf) == sizeof(lf)
-		&& UT_IsWinNT() == false && lf.lfCharSet == SYMBOL_CHARSET)
+	bool bWin9xSymbol = false;
+	if (!UT_IsWinNT())
+	{
+		LOGFONTW lf;
+		memset(&lf, 0, sizeof(lf));
+		bWin9xSymbol = (GetObjectW(m_pFont->getFontHandle(), sizeof(lf), &lf) == sizeof(lf)
+			&& lf.lfCharSet == SYMBOL_CHARSET);
+	}
+	if (bWin9xSymbol)
 	{
 		// Symbol character handling for Win9x
 		char str[sizeof(UT_UCS2Char)];
@@ -676,12 +681,16 @@ void GR_Win32Graphics::drawChars(const UT_UCS4Char* pChars,
 	// of the font file is defined.
 	// Reference Microsoft knowledge base:
 	// Q145754 - PRB ExtTextOutW or TextOutW Unicode Text Output Is Blank
-	LOGFONTW lf;
-	memset(&lf, 0, sizeof(lf));
+	bool bWin9xSymbol = false;
+	if (iLength > 0 && !UT_IsWinNT())
+	{
+		LOGFONTW lf;
+		memset(&lf, 0, sizeof(lf));
+		bWin9xSymbol = (GetObjectW(hFont, sizeof(lf), &lf) == sizeof(lf)
+			&& lf.lfCharSet == SYMBOL_CHARSET);
+	}
 
-	if (iLength > 0
-		&& GetObjectW(hFont, sizeof(lf), &lf) == sizeof(lf)
-		&& UT_IsWinNT() == false && lf.lfCharSet == SYMBOL_CHARSET)
+	if (bWin9xSymbol)
 	{
 		// Symbol character handling for Win9x. cbMultiByte is the
 		// allocated byte count, not a wider guess.
@@ -1864,6 +1873,33 @@ static void s_premultiplyStraight(UT_Byte *pixels, UT_uint32 count)
 	}
 }
 
+/* Screen: blend a cached premultiplied 32-bit HBITMAP over the page. */
+static bool s_alphaBlendBitmap(HDC hdc, int xDest, int yDest, int destW, int destH,
+	HBITMAP hbmp, int srcW, int srcH, int constantAlpha)
+{
+	if (!hdc || !hbmp || destW <= 0 || destH <= 0 || srcW <= 0 || srcH <= 0)
+		return false;
+	GR_Win32AlphaBlendFn blend = s_alphaBlendFn();
+	if (!blend)
+		return false;
+
+	HDC mem = CreateCompatibleDC(hdc);
+	if (!mem)
+		return false;
+
+	HGDIOBJ prev = SelectObject(mem, hbmp);
+	BLENDFUNCTION blendfn;
+	blendfn.BlendOp = AC_SRC_OVER;
+	blendfn.BlendFlags = 0;
+	blendfn.SourceConstantAlpha = (BYTE)constantAlpha;
+	blendfn.AlphaFormat = AC_SRC_ALPHA;
+	const BOOL ok = blend(hdc, xDest, yDest, destW, destH, mem, 0, 0, srcW, srcH, blendfn);
+	if (prev)
+		SelectObject(mem, prev);
+	DeleteDC(mem);
+	return ok != FALSE;
+}
+
 /* Screen: blend the straight BGRA DIB over the page that was already painted. */
 static bool s_alphaBlendImage(HDC hdc, int xDest, int yDest, int destW, int destH,
 	const UT_Byte *src, int srcW, int srcH, int constantAlpha)
@@ -2003,8 +2039,14 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 		const int srcH = pDIB->bmiHeader.biHeight;
 		const int destW = pImg->getDisplayWidth();
 		const int destH = pImg->getDisplayHeight();
-		if (!paper && s_alphaBlendImage(m_hdc, xDest, yDest, destW, destH, pBits, srcW, srcH, 255))
-			return;
+		if (!paper)
+		{
+			HBITMAP hPremul = pWin32Img->getPremultipliedBitmap(m_hdc);
+			if (hPremul && s_alphaBlendBitmap(m_hdc, xDest, yDest, destW, destH, hPremul, srcW, srcH, 255))
+				return;
+			if (!hPremul && s_alphaBlendImage(m_hdc, xDest, yDest, destW, destH, pBits, srcW, srcH, 255))
+				return;
+		}
 		if (s_stretchAlphaOnWhite(m_hdc, xDest, yDest, destW, destH, pBits, srcW, srcH))
 			return;
 	}
@@ -2582,7 +2624,7 @@ GR_Win32Font::~GR_Win32Font()
 	  {
 		  allocFont *p = (allocFont *)m_allocFonts.getNthItem(i);
 
-		  if(m_hdc && p->hFont)
+		  if (p && p->hFont)
 		  {
 			  if (bIsDC && p->hFont == (HFONT)::GetCurrentObject(m_hdc, OBJ_FONT))
 				  SelectObject(m_hdc, GetStockObject(SYSTEM_FONT));
@@ -2939,17 +2981,42 @@ HFONT GR_Win32Font::getFontFromCache(UT_uint32 pixelsize, bool /*bIsLayout*/, UT
 
 void GR_Win32Font::insertFontInCache(UT_uint32 pixelsize, HFONT pFont) const
 {
-	// Each zoom creates another HFONT. Keep a few sizes and release the rest.
+	// Each zoom creates another HFONT. Keep a few sizes and release the rest,
+	// never evicting m_layoutFont and deselecting any evicted font from m_hdc.
+	bool bIsDC = false;
+	if (m_hdc)
+	{
+		DWORD dwObjType = GetObjectType((HGDIOBJ)m_hdc);
+		bIsDC = (dwObjType == OBJ_DC || dwObjType == OBJ_MEMDC);
+	}
+
 	while (m_allocFonts.getItemCount() >= 8)
 	{
-		allocFont *old = (allocFont *)m_allocFonts.getNthItem(0);
+		UT_sint32 evictIdx = -1;
+		for (UT_sint32 i = 0; i < m_allocFonts.getItemCount(); ++i)
+		{
+			allocFont *cand = (allocFont *)m_allocFonts.getNthItem(i);
+			if (!cand || cand->hFont != m_layoutFont)
+			{
+				evictIdx = i;
+				break;
+			}
+		}
+		if (evictIdx < 0)
+			break;
+
+		allocFont *old = (allocFont *)m_allocFonts.getNthItem(evictIdx);
 		if (old)
 		{
 			if (old->hFont)
+			{
+				if (bIsDC && old->hFont == (HFONT)::GetCurrentObject(m_hdc, OBJ_FONT))
+					SelectObject(m_hdc, GetStockObject(SYSTEM_FONT));
 				DeleteObject(old->hFont);
+			}
 			delete old;
 		}
-		m_allocFonts.deleteNthItem(0);
+		m_allocFonts.deleteNthItem(evictIdx);
 	}
 
 	allocFont *entry = new allocFont;

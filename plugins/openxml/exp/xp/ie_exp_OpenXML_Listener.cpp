@@ -87,12 +87,6 @@ bool IE_Exp_OpenXML_Listener::populate(fl_ContainerLayout* /* sfh */, const PX_C
 			PT_BufIndex buffer = pcrs->getBufIndex();
 			const UT_UCS4Char* pData = pdoc->getPointer(buffer);
 
-			if(*pData == UCS_FF)
-			{
-				paragraph->setPageBreak();
-				return true;
-			}
-
 			UT_UCS4String str(pData, pcrs->getLength());
 			OXML_Element_Text* element_text = new OXML_Element_Text(str.utf8_str(), str.length());
 			OXML_SharedElement shared_element_text(static_cast<OXML_Element*>(element_text));

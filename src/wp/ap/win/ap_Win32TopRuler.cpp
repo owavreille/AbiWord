@@ -52,13 +52,19 @@ AP_Win32TopRuler::AP_Win32TopRuler(XAP_Frame * pFrame)
 
 AP_Win32TopRuler::~AP_Win32TopRuler(void)
 {
-	reinterpret_cast<FV_View *>(getView())->setTopRuler(nullptr);
+	if (getView())
+		reinterpret_cast<FV_View *>(getView())->setTopRuler(nullptr);
+
+	if (m_hwndTopRuler && IsWindow(m_hwndTopRuler))
+		SWL(m_hwndTopRuler, nullptr);
+
 	DELETEP(m_pG);
 
 	if (m_hwndTopRuler)
 	{
 		if (IsWindow(m_hwndTopRuler))
 			DestroyWindow(m_hwndTopRuler);
+		m_hwndTopRuler = nullptr;
 	}
 }
 
@@ -285,8 +291,12 @@ LRESULT CALLBACK AP_Win32TopRuler::_TopRulerWndProc(HWND hwnd, UINT iMsg, WPARAM
 
 	case WM_SETCURSOR:
 		{
-			pG->handleSetCursorMessage();
-			return 0;
+			if (pG)
+			{
+				pG->handleSetCursorMessage();
+				return 1;
+			}
+			break;
 		}
 
 	default:

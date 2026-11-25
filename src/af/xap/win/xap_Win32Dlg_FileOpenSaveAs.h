@@ -20,10 +20,12 @@
 #ifndef XAP_WIN32DIALOG_FILEOPENSAVEAS_H
 #define XAP_WIN32DIALOG_FILEOPENSAVEAS_H
 
+#include <string>
 #include "xap_Dlg_FileOpenSaveAs.h"
 #include "xap_Win32DialogBase.h"
 
 class UT_String;
+class GR_Win32Image;
 #include "xap_Frame.h"
 
 #define DEFAULT_EXT_SIZE 15
@@ -44,12 +46,16 @@ public:
 
 protected:
 	UINT _previewPicture(HWND hwnd);
+	void _paintCachedPreview(HWND hwnd);
+	void _clearPreviewCache(void);
 	UINT _initPreviewDlg(HWND hwnd);
 
 	void _buildFilterList(UT_String& sFilter);
 private:
 	const wchar_t * _getDefaultExtension(UT_uint32 indx);
 	wchar_t m_szDefaultExtension[DEFAULT_EXT_SIZE + 1];
+	GR_Win32Image * m_pPreviewImage;
+	std::wstring m_sPreviewPath;
 
 	//
 	// This the new OPENFILENAME struct included in the most

@@ -499,6 +499,120 @@ bool ODe_Style_Style::isEquivalentTo(const ODe_Style_Style& rStyle) {
     return true;
 }
 
+namespace {
+
+inline void ode_hash_bytes(UT_uint64& h, const void* data, size_t len) {
+    const unsigned char* p = static_cast<const unsigned char*>(data);
+    for (size_t i = 0; i < len; ++i) {
+        h ^= p[i];
+        h *= 1099511628211ULL;
+    }
+    h ^= 0xFFu;
+    h *= 1099511628211ULL;
+}
+
+inline void ode_hash_str(UT_uint64& h, const UT_UTF8String& s) {
+    ode_hash_bytes(h, s.utf8_str(), s.byteLength());
+}
+
+inline void ode_hash_str(UT_uint64& h, const std::string& s) {
+    ode_hash_bytes(h, s.data(), s.size());
+}
+
+} // namespace
+
+UT_uint64 ODe_Style_Style::equivalenceHash() const {
+    UT_uint64 h = 14695981039346656037ULL;
+    ode_hash_str(h, m_family);
+    ode_hash_str(h, m_parentStyleName);
+    ode_hash_str(h, m_nextStyleName);
+    ode_hash_str(h, m_masterPageName);
+    ode_hash_str(h, m_listStyleName);
+
+    unsigned char mask = 0;
+    if (m_pSectionProps)   mask |= 0x01;
+    if (m_pParagraphProps) mask |= 0x02;
+    if (m_pTextProps)      mask |= 0x04;
+    if (m_pTableProps)     mask |= 0x08;
+    if (m_pColumnProps)    mask |= 0x10;
+    if (m_pRowProps)       mask |= 0x20;
+    if (m_pCellProps)      mask |= 0x40;
+    if (m_pGraphicProps)   mask |= 0x80;
+    ode_hash_bytes(h, &mask, 1);
+
+    if (m_pSectionProps) {
+        ode_hash_str(h, m_pSectionProps->m_columnCount);
+        ode_hash_str(h, m_pSectionProps->m_columnGap);
+    }
+    if (m_pParagraphProps) {
+        const ParagraphProps& p = *m_pParagraphProps;
+        ode_hash_str(h, p.m_textAlign);
+        ode_hash_str(h, p.m_textIndent);
+        ode_hash_str(h, p.m_lineHeight);
+        ode_hash_str(h, p.m_lineHeightAtLeast);
+        ode_hash_str(h, p.m_backgroundColor);
+        ode_hash_str(h, p.m_widows);
+        ode_hash_str(h, p.m_orphans);
+        ode_hash_str(h, p.m_marginLeft);
+        ode_hash_str(h, p.m_marginRight);
+        ode_hash_str(h, p.m_marginTop);
+        ode_hash_str(h, p.m_marginBottom);
+        ode_hash_str(h, p.m_keepWithNext);
+        ode_hash_str(h, p.m_breakBefore);
+        ode_hash_str(h, p.m_writingMode);
+        ode_hash_str(h, p.m_borderMerge);
+        ode_hash_str(h, p.m_borderLeft);
+        ode_hash_str(h, p.m_borderRight);
+        ode_hash_str(h, p.m_borderTop);
+        ode_hash_str(h, p.m_borderBottom);
+        ode_hash_str(h, p.m_botSpace);
+        ode_hash_str(h, p.m_leftSpace);
+        ode_hash_str(h, p.m_rightSpace);
+        ode_hash_str(h, p.m_topSpace);
+        ode_hash_str(h, p.m_defaultTabInterval);
+        for (size_t i = 0; i < p.m_tabStops.size(); ++i) {
+            const TabStop& t = p.m_tabStops[i];
+            ode_hash_str(h, t.m_type);
+            ode_hash_str(h, t.m_char);
+            ode_hash_str(h, t.m_position);
+            ode_hash_str(h, t.m_leaderStyle);
+            ode_hash_str(h, t.m_leaderText);
+        }
+    }
+    if (m_pTextProps) {
+        const TextProps& t = *m_pTextProps;
+        ode_hash_str(h, t.m_color);
+        ode_hash_str(h, t.m_underlineType);
+        ode_hash_str(h, t.m_lineThroughType);
+        ode_hash_str(h, t.m_textPosition);
+        ode_hash_str(h, t.m_fontName);
+        ode_hash_str(h, t.m_fontSize);
+        ode_hash_str(h, t.m_language);
+        ode_hash_str(h, t.m_country);
+        ode_hash_str(h, t.m_fontStyle);
+        ode_hash_str(h, t.m_fontWeight);
+        ode_hash_str(h, t.m_backgroundColor);
+        ode_hash_str(h, t.m_display);
+        ode_hash_str(h, t.m_transform);
+    }
+    if (m_pGraphicProps) {
+        const GraphicProps& g = *m_pGraphicProps;
+        ode_hash_str(h, g.m_backgroundColor);
+        ode_hash_str(h, g.m_borderLeft);
+        ode_hash_str(h, g.m_borderRight);
+        ode_hash_str(h, g.m_borderTop);
+        ode_hash_str(h, g.m_borderBottom);
+        ode_hash_str(h, g.m_wrap);
+        ode_hash_str(h, g.m_runThrough);
+        ode_hash_str(h, g.m_verticalPos);
+        ode_hash_str(h, g.m_verticalRel);
+        ode_hash_str(h, g.m_horizontalPos);
+        ode_hash_str(h, g.m_horizontalRel);
+        ode_hash_str(h, g.m_padding);
+    }
+    return h;
+}
+
 
 /**
  * 

@@ -101,10 +101,20 @@ XAP_Win32PreviewWidget::XAP_Win32PreviewWidget(XAP_Win32App * pWin32App, HWND hw
 
 XAP_Win32PreviewWidget::~XAP_Win32PreviewWidget(void)
 {
+	if (m_hwndPreview && IsWindow(m_hwndPreview))
+		SWL(m_hwndPreview, nullptr);
+
+	// Delete graphics while the CS_OWNDC window is still alive.
+	DELETEP(m_pGraphics);
+
 	// destroy the child window we created now so that we can unregister
 	// the window class.  (it is ok if this fails.)
 	if (m_hwndPreview)
-		DestroyWindow(m_hwndPreview);
+	{
+		if (IsWindow(m_hwndPreview))
+			DestroyWindow(m_hwndPreview);
+		m_hwndPreview = nullptr;
+	}
 	
 	m_iInstanceCount--;
 	if(m_iInstanceCount == 0)
@@ -113,8 +123,6 @@ XAP_Win32PreviewWidget::~XAP_Win32PreviewWidget(void)
 		UT_DebugOnly<bool> bResult = (UnregisterClassW(m_bufClassName,m_pWin32App->getInstance()) == TRUE);
 		UT_ASSERT_HARMLESS(bResult);
 	}
-
-	DELETEP(m_pGraphics);
 }
 
 void XAP_Win32PreviewWidget::getWindowSize(UT_uint32 * pWidth, UT_uint32 * pHeight) const

@@ -44,6 +44,7 @@
 GR_Win32Image::GR_Win32Image(const char* szName)
 :	m_pDIB(nullptr)
 ,	m_bHasAlpha(false)
+,	m_hPremulBitmap(nullptr)
 {
 	if (szName)
 	{
@@ -135,7 +136,75 @@ bool GR_Win32Image::convertFromBuffer(const UT_ConstByteBufPtr & pBB, const std:
 
 GR_Win32Image::~GR_Win32Image()
 {
+	clearPremultipliedBitmap();
 	g_free(m_pDIB);
+}
+
+void GR_Win32Image::setDIB(BITMAPINFO *pDIB)
+{
+	clearPremultipliedBitmap();
+	m_pDIB = pDIB;
+	if (m_pDIB)
+		setDisplaySize(m_pDIB->bmiHeader.biWidth, m_pDIB->bmiHeader.biHeight);
+}
+
+void GR_Win32Image::clearPremultipliedBitmap(void)
+{
+	if (m_hPremulBitmap)
+	{
+		DeleteObject(m_hPremulBitmap);
+		m_hPremulBitmap = nullptr;
+	}
+}
+
+HBITMAP GR_Win32Image::getPremultipliedBitmap(HDC hdc)
+{
+	if (m_hPremulBitmap)
+		return m_hPremulBitmap;
+
+	if (!hdc || !m_pDIB || !m_bHasAlpha || m_pDIB->bmiHeader.biBitCount != 32)
+		return nullptr;
+
+	const int srcW = m_pDIB->bmiHeader.biWidth;
+	const int srcH = m_pDIB->bmiHeader.biHeight;
+	if (srcW <= 0 || srcH <= 0)
+		return nullptr;
+
+	BITMAPINFO bi;
+	memset(&bi, 0, sizeof(bi));
+	bi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	bi.bmiHeader.biWidth = srcW;
+	bi.bmiHeader.biHeight = srcH;
+	bi.bmiHeader.biPlanes = 1;
+	bi.bmiHeader.biBitCount = 32;
+	bi.bmiHeader.biCompression = BI_RGB;
+
+	void *bits = nullptr;
+	HBITMAP hbmp = CreateDIBSection(hdc, &bi, DIB_RGB_COLORS, &bits, nullptr, 0);
+	if (!hbmp || !bits)
+	{
+		if (hbmp)
+			DeleteObject(hbmp);
+		return nullptr;
+	}
+
+	const UT_uint32 iSizeOfColorData = m_pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
+	const UT_Byte *src = reinterpret_cast<const UT_Byte *>(m_pDIB) + m_pDIB->bmiHeader.biSize + iSizeOfColorData;
+	const UT_uint32 count = static_cast<UT_uint32>(srcW) * static_cast<UT_uint32>(srcH);
+	UT_Byte *dst = static_cast<UT_Byte *>(bits);
+	for (UT_uint32 i = 0; i < count; ++i)
+	{
+		const UT_Byte a = src[3];
+		dst[0] = static_cast<UT_Byte>((src[0] * a + 127) / 255);
+		dst[1] = static_cast<UT_Byte>((src[1] * a + 127) / 255);
+		dst[2] = static_cast<UT_Byte>((src[2] * a + 127) / 255);
+		dst[3] = a;
+		src += 4;
+		dst += 4;
+	}
+
+	m_hPremulBitmap = hbmp;
+	return m_hPremulBitmap;
 }
 
 static void _png_write(png_structp png_ptr, png_bytep data, png_size_t length)
@@ -637,6 +706,7 @@ bool GR_Win32Image::_convertFromPNG(const UT_ConstByteBufPtr& pBB, UT_sint32 iDi
 	{
 		/* Free all of the memory associated with the png_ptr and info_ptr */
 		png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)nullptr);
+		clearPremultipliedBitmap();
 		FREEP(m_pDIB);
 		m_bHasAlpha = false;
 
@@ -707,6 +777,7 @@ bool GR_Win32Image::_convertFromPNG(const UT_ConstByteBufPtr& pBB, UT_sint32 iDi
 		return false;
 	}
 
+	clearPremultipliedBitmap();
 	FREEP(m_pDIB);
 	m_pDIB = (BITMAPINFO*) g_try_malloc(sizeof(BITMAPINFOHEADER) + totalImageBytes);
 	if (!m_pDIB)
@@ -781,6 +852,7 @@ bool GR_Win32Image::_convertFromJPEG(const UT_ConstByteBufPtr& pBB, UT_sint32 iD
 	if (totalImageBytes > 0x7fffffffu - sizeof(BITMAPINFOHEADER))
 		return false;
 
+	clearPremultipliedBitmap();
 	FREEP(m_pDIB);
 	m_pDIB = (BITMAPINFO*) g_try_malloc(sizeof(BITMAPINFOHEADER) + totalImageBytes);
 	if (!m_pDIB)

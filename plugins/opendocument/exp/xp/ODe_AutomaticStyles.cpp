@@ -71,7 +71,7 @@ ODe_AutomaticStyles::~ODe_AutomaticStyles() {
  * See ODe_AutomaticStyles::_storeStyle
  */
 void ODe_AutomaticStyles::storeTextStyle(ODe_Style_Style*& rpTextStyle) {
-    _storeStyle(rpTextStyle, m_textStyles, "T");
+    _storeStyle(rpTextStyle, m_textStyles, m_textStyleIndex, "T");
 }
 
 
@@ -79,7 +79,7 @@ void ODe_AutomaticStyles::storeTextStyle(ODe_Style_Style*& rpTextStyle) {
  * See ODe_AutomaticStyles::_storeStyle
  */
 void ODe_AutomaticStyles::storeParagraphStyle(ODe_Style_Style*& rpParagraphStyle) {
-    _storeStyle(rpParagraphStyle, m_paragraphStyles, "P");
+    _storeStyle(rpParagraphStyle, m_paragraphStyles, m_paragraphStyleIndex, "P");
 }
 
 
@@ -87,7 +87,7 @@ void ODe_AutomaticStyles::storeParagraphStyle(ODe_Style_Style*& rpParagraphStyle
  * See ODe_AutomaticStyles::_storeStyle
  */
 void ODe_AutomaticStyles::storeSectionStyle(ODe_Style_Style*& rpSectionStyle) {
-    _storeStyle(rpSectionStyle, m_sectionStyles, "Sect");
+    _storeStyle(rpSectionStyle, m_sectionStyles, m_sectionStyleIndex, "Sect");
 }
 
 
@@ -95,7 +95,7 @@ void ODe_AutomaticStyles::storeSectionStyle(ODe_Style_Style*& rpSectionStyle) {
  * See ODe_AutomaticStyles::_storeStyle
  */
 void ODe_AutomaticStyles::storeGraphicStyle(ODe_Style_Style*& rpGraphicStyle) {
-    _storeStyle(rpGraphicStyle, m_graphicStyles, "graphic");
+    _storeStyle(rpGraphicStyle, m_graphicStyles, m_graphicStyleIndex, "graphic");
 }
 
 
@@ -271,33 +271,27 @@ void ODe_AutomaticStyles::write(GsfOutput* pContentStream) const {
  */
 void ODe_AutomaticStyles::_storeStyle(ODe_Style_Style*& rpStyle,
                      UT_GenericStringMap<ODe_Style_Style*>& rStyles,
+                     StyleIndex& rIndex,
                      const char* pNamingPrefix) {
 
-    ODe_Style_Style* pStyle;
-    bool isDuplicated;
-    UT_uint32 i, count;
-    
-    auto pStyleVector = rStyles.enumerate();
-    count = pStyleVector->getItemCount();
-    
-    for (i=0, isDuplicated=false; i<count && isDuplicated==false; i++) {
-        
-        pStyle = pStyleVector->getNthItem(i);
-        if ( pStyle->isEquivalentTo(*rpStyle) ) {
-            isDuplicated = true; // exit the loop
-            delete rpStyle; // We don't want a duplicated style.
-            rpStyle = pStyle;
+    const UT_uint64 hash = rpStyle->equivalenceHash();
+    StyleIndex::iterator it = rIndex.find(hash);
+    if (it != rIndex.end()) {
+        for (size_t i = 0; i < it->second.size(); ++i) {
+            ODe_Style_Style* pStyle = it->second[i];
+            if (pStyle->isEquivalentTo(*rpStyle)) {
+                delete rpStyle; // We don't want a duplicated style.
+                rpStyle = pStyle;
+                return;
+            }
         }
     }
-    
-    
-    if (!isDuplicated) {
-        // Let's name and store this style.
-        UT_UTF8String styleName;
-   
-        UT_UTF8String_sprintf(styleName, "%s%d", pNamingPrefix, count+1);
-        
-        rpStyle->setStyleName(styleName);
-        rStyles.insert(styleName.utf8_str(), rpStyle);
-    }
+
+    // Let's name and store this style.
+    UT_UTF8String styleName;
+    UT_UTF8String_sprintf(styleName, "%s%d", pNamingPrefix, static_cast<int>(rStyles.size()) + 1);
+
+    rpStyle->setStyleName(styleName);
+    rStyles.insert(styleName.utf8_str(), rpStyle);
+    rIndex[hash].push_back(rpStyle);
 }

@@ -157,8 +157,10 @@ public:
 	void                redrawDamagedFrames(dg_DrawArgs* pDA);
 	bool                overlapsWrappedFrame(const fp_Line * pLine) const;
 	bool                overlapsWrappedFrame(const UT_Rect & rec) const;
-	void                setPageNumberInFrames(void);
+	void                setPageNumberInFrames(UT_sint32 iPage = -1);
 	UT_sint32           getPageNumber(void) const;
+	UT_sint32           getCachedPageNumber(void) const { return m_iPageNumber; }
+	void                setCachedPageNumber(UT_sint32 iPage) { m_iPageNumber = iPage; }
 	UT_sint32           getFieldPageNumber(void) const;
 	void                setFieldPageNumber(UT_sint32 iPageNum);
 	void                resetFieldPageNumber(void);
@@ -178,6 +180,7 @@ public:
 	void                updateColumnX();
 protected:
     void                _drawCropMarks(dg_DrawArgs*);
+	UT_sint32           _headerFooterX(const fp_Container * pContainer, const GR_Graphics * pG = nullptr) const;
 	void				_reformat(void);
 	void				_reformatColumns(void);
 	void				_reformatFootnotes(void);
@@ -213,6 +216,7 @@ private:
 	UT_Rect             m_rDamageRect;
 	UT_sint32           m_iCountWrapPasses;
 	UT_sint32           m_iFieldPageNumber;
+	UT_sint32           m_iPageNumber;
 };
 
 #endif /* PAGE_H */

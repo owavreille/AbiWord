@@ -296,6 +296,11 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 										WS_CHILD | WS_VISIBLE | SBARS_SIZEGRIP,
 										0, 0, 0, 0,
 										hwndFrame, nullptr, app->getInstance(),nullptr);
+	if (!m_hwndStatusBar)
+	{
+		delete [] pArWidths;
+		UT_return_val_if_fail (m_hwndStatusBar, nullptr);
+	}
 	UT_Win32RefreshStatusFont(m_hwndStatusBar);
 	// add progress bar and hide it 
 	//  set the color and range 
@@ -303,10 +308,11 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 			WS_CHILD,
 			0, 0, 0, 0,
 			m_hwndStatusBar, nullptr, app->getInstance(),nullptr);
-	SendMessage(m_hwndProgressBar,PBM_SETRANGE,0,MAKELONG(0,100));
-	ShowWindow(m_hwndProgressBar, SW_HIDE);
-
-	UT_return_val_if_fail (m_hwndStatusBar, nullptr);
+	if (m_hwndProgressBar)
+	{
+		SendMessage(m_hwndProgressBar,PBM_SETRANGE,0,MAKELONG(0,100));
+		ShowWindow(m_hwndProgressBar, SW_HIDE);
+	}
 
 	// route messages through our handler first (to size the status panels).
 	m_pOrgStatusbarWndProc = reinterpret_cast<WNDPROC>(SetWindowLongPtrW(

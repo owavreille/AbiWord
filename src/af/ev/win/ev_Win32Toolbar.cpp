@@ -269,18 +269,22 @@ WHICHPROC s_lpfnDefToolBar;
 static int toolbarIconDpi(HWND hwnd)
 {
 	int iconDpi = 96;
-	HMODULE user32 = GetModuleHandleW(L"user32.dll");
-	if (user32 && hwnd)
+	typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
+	static bool s_resolved = false;
+	static GetDpiForWindowFn getDpi = nullptr;
+	if (!s_resolved)
 	{
-		typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
-		GetDpiForWindowFn getDpi = reinterpret_cast<GetDpiForWindowFn>(
-			reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForWindow")));
-		if (getDpi)
-		{
-			UINT got = getDpi(hwnd);
-			if (got >= 96)
-				iconDpi = (int)got;
-		}
+		s_resolved = true;
+		HMODULE user32 = GetModuleHandleW(L"user32.dll");
+		if (user32)
+			getDpi = reinterpret_cast<GetDpiForWindowFn>(
+				reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForWindow")));
+	}
+	if (getDpi && hwnd)
+	{
+		UINT got = getDpi(hwnd);
+		if (got >= 96)
+			iconDpi = (int)got;
 	}
 	if (iconDpi == 96)
 	{
@@ -308,11 +312,11 @@ static int toolbarIconPx(HWND hwnd)
 	return iconPx;
 }
 
-static HFONT toolbarUIFont()
+static HFONT toolbarUIFont(int dpiOverride = 0)
 {
 	static HFONT font = nullptr;
 	static int dpi = -1;
-	int now = toolbarIconDpi(nullptr);
+	int now = (dpiOverride >= 96) ? dpiOverride : toolbarIconDpi(nullptr);
 	if (font && dpi == now)
 		return font;
 
@@ -425,7 +429,7 @@ LRESULT CALLBACK EV_Win32Toolbar::_ToolBarWndProc (HWND hWnd, UINT uMessage, WPA
 	return (CallWindowProcW(s_lpfnDefToolBar, hWnd, uMessage, wParam, lParam));
 }
 
-static HFONT s_fontSample(const wchar_t * face)
+static HFONT s_fontSample(const wchar_t * face, int sampleDpi)
 {
 	// Bound the cache: opening the font list once can touch hundreds of
 	// faces, and each HFONT lives until process exit without a cap.
@@ -434,15 +438,8 @@ static HFONT s_fontSample(const wchar_t * face)
 	if (!face || !face[0])
 		return nullptr;
 
-	int sampleDpi = 96;
-	HDC sampleDC = GetDC(nullptr);
-	if (sampleDC)
-	{
-		int caps = GetDeviceCaps(sampleDC, LOGPIXELSY);
-		if (caps >= 96)
-			sampleDpi = caps;
-		ReleaseDC(nullptr, sampleDC);
-	}
+	if (sampleDpi < 96)
+		sampleDpi = 96;
 
 	wchar_t dpiSuffix[16];
 	swprintf(dpiSuffix, 16, L"@%d", sampleDpi);
@@ -542,7 +539,10 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 			}
 			str.fromUTF8 (fontName);
 
-			hUIFont = toolbarUIFont();
+			int drawDpi = GetDeviceCaps(dis->hDC, LOGPIXELSY);
+			if (drawDpi < 96)
+				drawDpi = 96;
+			hUIFont = toolbarUIFont(drawDpi);
 			if(dis->itemState & ODS_COMBOBOXEDIT)
 			{
 				if (dis->itemState & ODS_SELECTED)
@@ -567,7 +567,7 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				// One HFONT per face. Creating and deleting it on every
 				// WM_DRAWITEM exhausts the GDI handle table while the
 				// dropdown is open.
-				hFont = s_fontSample(str.c_str());
+				hFont = s_fontSample(str.c_str(), drawDpi);
 				const bool documentFace = t->m_pFontCtrl &&
 					t->m_pFontCtrl->isDocumentFontRow(static_cast<UT_sint32>(dis->itemData));
 
@@ -1265,7 +1265,31 @@ bool EV_Win32Toolbar::synthesize(void)
 	UT_ASSERT(last_id > 0);
 
 	_addToRebar();	// add this bar to the rebar
-	applyChrome();
+
+	// Theme, TB_AUTOSIZE, and _placeControls() already ran above; only apply
+	// toolbar and rebar band colors now instead of repeating the full pass.
+	{
+		const bool dark = UT_Win32AppsUseDarkTheme();
+		COLORSCHEME scheme;
+		memset(&scheme, 0, sizeof(scheme));
+		scheme.dwSize = sizeof(scheme);
+		scheme.clrBtnHighlight = GetSysColor(COLOR_HIGHLIGHT);
+		scheme.clrBtnShadow = dark ? RGB(45, 45, 45) : GetSysColor(COLOR_BTNFACE);
+		SendMessageW(m_hwnd, TB_SETCOLORSCHEME, 0, (LPARAM)&scheme);
+
+		const int band = _getBandForHwnd(m_hwnd);
+		HWND rebar = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl())->getToolbarWindow();
+		if (rebar && band >= 0)
+		{
+			REBARBANDINFOW rbbi;
+			memset(&rbbi, 0, sizeof(rbbi));
+			rbbi.cbSize = sizeof(rbbi);
+			rbbi.fMask = RBBIM_COLORS;
+			rbbi.clrFore = dark ? RGB(255, 255, 255) : GetSysColor(COLOR_BTNTEXT);
+			rbbi.clrBack = dark ? RGB(32, 32, 32) : GetSysColor(COLOR_BTNFACE);
+			SendMessageW(rebar, RB_SETBANDINFO, (WPARAM)band, (LPARAM)&rbbi);
+		}
+	}
 
 	// I think that this is true due to the WS_VISIBLE flag
 	// sent to CreateWindowEx
@@ -1441,7 +1465,6 @@ void EV_Win32Toolbar::rebuildIcons(void)
 		info.cxMinChild = static_cast<UINT>(size.cx > 0 ? size.cx : iconPx);
 		SendMessageW(rebar, RB_SETBANDINFO, (WPARAM)band, (LPARAM)&info);
 	}
-	applyChrome();
 }
 
 HWND EV_Win32Toolbar::_getControlWindow(XAP_Toolbar_Id id)
@@ -1976,19 +1999,27 @@ bool EV_Win32Toolbar::repopulateStyles(void)
 	XAP_Toolbar_ControlFactory * pFactory = m_pWin32App->getControlFactory();
 	UT_return_val_if_fail(pFactory,false);
 	EV_Toolbar_Control * pControl = pFactory->getControl(this, id);
+	UT_return_val_if_fail(pControl,false);
 	AP_Win32Toolbar_StyleCombo * pStyleC = static_cast<AP_Win32Toolbar_StyleCombo *>(pControl);
 	pStyleC->repopulate();
 	
 	
 	HWND hwndCombo = _getControlWindow(id);
 	if (!hwndCombo)
+	{
+		delete pStyleC;
 		return false;
+	}
 	// GtkCombo * item = GTK_COMBO(wd->m_widget);
 //
 // Now the combo box has to be refilled from this
 //						
 	const UT_GenericVector<const char*> * v = pControl->getContents();
-	UT_return_val_if_fail(v,false);
+	if (!v)
+	{
+		delete pStyleC;
+		UT_return_val_if_fail(v,false);
+	}
 	
 //
 // Now  we must remove and delete the old data so we add the new
@@ -2068,9 +2099,9 @@ enum
 	HOT_MORE = 41
 };
 
-static int s_colorScale(int px96, int minimum, int maximum)
+static int s_colorScale(int px96, int minimum, int maximum, HWND hwnd = nullptr)
 {
-	int dpi = toolbarIconDpi(nullptr);
+	int dpi = toolbarIconDpi(hwnd);
 	int value = (px96 * dpi + 48) / 96;
 	if (value < minimum)
 		value = minimum;
@@ -2079,19 +2110,19 @@ static int s_colorScale(int px96, int minimum, int maximum)
 	return value;
 }
 
-static int s_colorCell()
+static int s_colorCell(HWND hwnd = nullptr)
 {
-	return s_colorScale(22, 18, 36);
+	return s_colorScale(22, 18, 36, hwnd);
 }
 
-static int s_colorPad()
+static int s_colorPad(HWND hwnd = nullptr)
 {
-	return s_colorScale(8, 6, 14);
+	return s_colorScale(8, 6, 14, hwnd);
 }
 
-static int s_colorFooter()
+static int s_colorFooter(HWND hwnd = nullptr)
 {
-	return s_colorScale(28, 24, 44);
+	return s_colorScale(28, 24, 44, hwnd);
 }
 
 struct AbiColorPopup
@@ -2105,20 +2136,20 @@ struct AbiColorPopup
 	wchar_t moreText[160];
 };
 
-static int s_colorClientWidth()
+static int s_colorClientWidth(HWND hwnd = nullptr)
 {
-	int w = s_colorPad() * 2 + COLOR_COLS * s_colorCell();
+	int w = s_colorPad(hwnd) * 2 + COLOR_COLS * s_colorCell(hwnd);
 	return (w < 220) ? 220 : w;
 }
 
-static int s_colorClientHeight()
+static int s_colorClientHeight(HWND hwnd = nullptr)
 {
-	return s_colorPad() + COLOR_ROWS * s_colorCell() + s_colorPad() / 2 + s_colorFooter() * 2 + s_colorPad();
+	return s_colorPad(hwnd) + COLOR_ROWS * s_colorCell(hwnd) + s_colorPad(hwnd) / 2 + s_colorFooter(hwnd) * 2 + s_colorPad(hwnd);
 }
 
-static int s_colorGridX(int width)
+static int s_colorGridX(int width, HWND hwnd = nullptr)
 {
-	return (width - COLOR_COLS * s_colorCell()) / 2;
+	return (width - COLOR_COLS * s_colorCell(hwnd)) / 2;
 }
 
 static void s_copyWide(wchar_t * dest, size_t destChars, const wchar_t * src)
@@ -2202,10 +2233,10 @@ static int s_hitColor(HWND hwnd, int x, int y)
 	memset(&rc, 0, sizeof(rc));
 	if (!hwnd || !GetClientRect(hwnd, &rc))
 		return -1;
-	int gx = s_colorGridX(rc.right - rc.left);
-	int gy = s_colorPad();
-	const int cell = s_colorCell();
-	const int footer = s_colorFooter();
+	int gx = s_colorGridX(rc.right - rc.left, hwnd);
+	int gy = s_colorPad(hwnd);
+	const int cell = s_colorCell(hwnd);
+	const int footer = s_colorFooter(hwnd);
 
 	if (x >= gx && y >= gy)
 	{
@@ -2215,7 +2246,7 @@ static int s_hitColor(HWND hwnd, int x, int y)
 			return row * COLOR_COLS + col;
 	}
 
-	int footerTop = s_colorPad() + COLOR_ROWS * cell + s_colorPad() / 2;
+	int footerTop = gy + COLOR_ROWS * cell + gy / 2;
 	if (y >= footerTop && y < footerTop + footer)
 		return HOT_CLEAR;
 	if (y >= footerTop + footer && y < footerTop + footer * 2)
@@ -2225,32 +2256,21 @@ static int s_hitColor(HWND hwnd, int x, int y)
 
 static void s_fillSwatch(HDC hdc, const RECT & cell, COLORREF color, bool hot)
 {
-	HBRUSH brush = CreateSolidBrush(color);
-	if (brush)
-	{
-		FillRect(hdc, &cell, brush);
-		DeleteObject(brush);
-	}
+	HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+	COLORREF prevColor = SetDCBrushColor(hdc, color);
+	FillRect(hdc, &cell, dcBrush);
 
 	RECT edge = cell;
 	if (hot)
 		InflateRect(&edge, 1, 1);
-	HBRUSH border = CreateSolidBrush(hot ? RGB(0, 0, 0) : RGB(90, 90, 90));
-	if (border)
-	{
-		FrameRect(hdc, &edge, border);
-		DeleteObject(border);
-	}
+	SetDCBrushColor(hdc, hot ? RGB(0, 0, 0) : RGB(90, 90, 90));
+	FrameRect(hdc, &edge, dcBrush);
+	SetDCBrushColor(hdc, prevColor);
 }
 
 static void s_paintFooter(HDC hdc, const RECT & cell, const wchar_t * text, bool hot)
 {
-	HBRUSH brush = CreateSolidBrush(hot ? GetSysColor(COLOR_HIGHLIGHT) : GetSysColor(COLOR_BTNFACE));
-	if (brush)
-	{
-		FillRect(hdc, &cell, brush);
-		DeleteObject(brush);
-	}
+	FillRect(hdc, &cell, GetSysColorBrush(hot ? COLOR_HIGHLIGHT : COLOR_BTNFACE));
 
 	SetBkMode(hdc, TRANSPARENT);
 	SetTextColor(hdc, hot ? GetSysColor(COLOR_HIGHLIGHTTEXT) : GetSysColor(COLOR_BTNTEXT));
@@ -2376,10 +2396,10 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 			}
 			FillRect(hdc, &rc, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
 
-			int gx = s_colorGridX(rc.right - rc.left);
-			int gy = s_colorPad();
-			const int cellPx = s_colorCell();
-			const int footer = s_colorFooter();
+			int gx = s_colorGridX(rc.right - rc.left, hwnd);
+			int gy = s_colorPad(hwnd);
+			const int cellPx = s_colorCell(hwnd);
+			const int footer = s_colorFooter(hwnd);
 			for (int i = 0; i < COLOR_COUNT; ++i)
 			{
 				RECT cell;
@@ -2390,7 +2410,7 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 				s_fillSwatch(hdc, cell, s_swatches[i], popup && popup->hot == i);
 			}
 
-			int footerTop = s_colorPad() + COLOR_ROWS * cellPx + s_colorPad() / 2;
+			int footerTop = gy + COLOR_ROWS * cellPx + gy / 2;
 			RECT clearRc;
 			clearRc.left = 4;
 			clearRc.right = rc.right - 4;
@@ -2479,14 +2499,27 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 	else
 		GetCursorPos(&origin);
 
-	RECT windowRc = { 0, 0, s_colorClientWidth(), s_colorClientHeight() };
+	RECT windowRc = { 0, 0, s_colorClientWidth(toolbarHwnd), s_colorClientHeight(toolbarHwnd) };
 	AdjustWindowRectEx(&windowRc, WS_POPUP | WS_BORDER, FALSE, WS_EX_TOOLWINDOW | WS_EX_TOPMOST);
 	int width = windowRc.right - windowRc.left;
 	int height = windowRc.bottom - windowRc.top;
 
 	RECT work;
 	memset(&work, 0, sizeof(work));
-	if (!SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0))
+	bool haveWork = false;
+	HMONITOR mon = MonitorFromPoint(origin, MONITOR_DEFAULTTONEAREST);
+	if (mon)
+	{
+		MONITORINFO mi;
+		memset(&mi, 0, sizeof(mi));
+		mi.cbSize = sizeof(mi);
+		if (GetMonitorInfoW(mon, &mi))
+		{
+			work = mi.rcWork;
+			haveWork = true;
+		}
+	}
+	if (!haveWork && !SystemParametersInfoW(SPI_GETWORKAREA, 0, &work, 0))
 		SetRect(&work, 0, 0, GetSystemMetrics(SM_CXSCREEN), GetSystemMetrics(SM_CYSCREEN));
 	int x = origin.x;
 	int y = origin.y;

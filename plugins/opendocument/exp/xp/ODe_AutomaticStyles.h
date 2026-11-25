@@ -23,6 +23,8 @@
 #pragma once
 
 #include <memory>
+#include <unordered_map>
+#include <vector>
 
 // AbiWord includes
 #include "ut_hash.h"
@@ -83,8 +85,11 @@ public:
     void write(GsfOutput* pContentStream) const;
 
 private:
+    typedef std::unordered_map<UT_uint64, std::vector<ODe_Style_Style*>> StyleIndex;
+
     void _storeStyle(ODe_Style_Style*& rpStyle,
                      UT_GenericStringMap<ODe_Style_Style*>& rStyles,
+                     StyleIndex& rIndex,
                      const char* pNamingPrefix);
 
     UT_GenericStringMap<ODe_Style_Style*> m_textStyles;
@@ -97,4 +102,9 @@ private:
     UT_GenericStringMap<ODe_Style_Style*> m_graphicStyles;
     UT_GenericStringMap<ODe_Style_PageLayout*> m_pageLayouts;
     UT_GenericStringMap<ODe_Style_List*> m_listStyles;
+
+    StyleIndex m_textStyleIndex;
+    StyleIndex m_paragraphStyleIndex;
+    StyleIndex m_sectionStyleIndex;
+    StyleIndex m_graphicStyleIndex;
 };
