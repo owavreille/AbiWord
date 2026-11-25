@@ -1551,6 +1551,8 @@ UT_go_url_may_open (gchar const *url)
 		".library-ms", ".searchConnector-ms", ".website",
 		".docm", ".xlsm", ".pptm", ".sh", ".desktop", ".command",
 		".app",
+		".html", ".htm", ".xhtml", ".svg", ".svgz",
+		".xml", ".xsl", ".xslt", ".mhtml", ".mht",
 		nullptr
 	};
 	gboolean allowed = TRUE;
@@ -1574,7 +1576,11 @@ UT_go_url_show (gchar const *url)
 #ifdef G_OS_WIN32
 	UT_Win32LocaleString str;
 	str.fromUTF8 (url);
-	ShellExecuteW (nullptr, L"open", str.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+	// ShellExecuteW returns a value <= 32 when the shell refused the link.
+	// https://learn.microsoft.com/en-us/windows/win32/api/shellapi/nf-shellapi-shellexecutew
+	const INT_PTR opened = (INT_PTR)ShellExecuteW(nullptr, L"open", str.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+	if (opened <= 32)
+		return g_error_new_literal(g_quark_from_static_string("abiword-url"), 1, "Could not open URL");
 	return nullptr;
 #elif TOOLKIT_COCOA
 	CFStringRef urlStr = CFStringCreateWithCString(kCFAllocatorDefault, url, kCFStringEncodingUTF8);

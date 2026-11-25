@@ -34,6 +34,8 @@
 #define	AP_CLIPBOARD_TEXTPLAIN_UCS2 		"text-ucs2"
 #define AP_CLIPBOARD_RTF 					"rtf"
 #define AP_CLIPBOARD_BMP					"bitmap"
+#define AP_CLIPBOARD_PNG					"png"
+#define AP_CLIPBOARD_DIB					"dib"
 #define AP_CLIPBOARD_UNKNOWN 				"unknown"
 
 class PD_Document;

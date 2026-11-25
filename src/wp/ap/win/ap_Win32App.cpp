@@ -98,6 +98,8 @@
 #include "ie_imp_Text.h"
 #include "ie_impGraphic.h"
 #include "fg_Graphic.h"
+#include "fv_View.h"
+#include "gr_Win32Image.h"
 #include "xav_View.h"
 #include "xad_Document.h"
 #include "ap_FrameData.h"
@@ -694,6 +696,215 @@ bool AP_Win32App::_copyFmtToClipboard(PD_DocumentRange * pDocRange, const char *
 	return true;
 }
 
+static bool s_isPng(const UT_Byte * data, UT_uint32 size)
+{
+	return data && size >= 8
+		&& data[0] == 0x89 && data[1] == 'P' && data[2] == 'N' && data[3] == 'G';
+}
+
+static bool s_isJpeg(const UT_Byte * data, UT_uint32 size)
+{
+	return data && size >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF;
+}
+
+// CF_DIB is a 24-bit bottom-up bitmap. Alpha is flattened on white so Paint
+// and Word receive a picture they can paste.
+static bool s_packClipboardDib(const BITMAPINFO * info, UT_ByteBuf & out)
+{
+	if (!info)
+		return false;
+	const BITMAPINFOHEADER & hdr = info->bmiHeader;
+	if (hdr.biSize < sizeof(BITMAPINFOHEADER) || hdr.biWidth <= 0 || hdr.biHeight == 0)
+		return false;
+	const int height = hdr.biHeight < 0 ? -hdr.biHeight : hdr.biHeight;
+	if (hdr.biWidth > 16384 || height > 16384)
+		return false;
+	const int bpp = hdr.biBitCount / 8;
+	if (bpp != 3 && bpp != 4)
+		return false;
+
+	const UT_uint32 srcRow = (UT_uint32)((hdr.biWidth * bpp + 3) & ~3);
+	const UT_uint32 dstRow = (UT_uint32)((hdr.biWidth * 3 + 3) & ~3);
+	const UT_uint64 total = (UT_uint64)sizeof(BITMAPINFOHEADER) + (UT_uint64)dstRow * (UT_uint64)height;
+	if (total == 0 || total > 0x7fffffffu)
+		return false;
+
+	BITMAPINFOHEADER outHdr = hdr;
+	outHdr.biSize = sizeof(BITMAPINFOHEADER);
+	outHdr.biWidth = hdr.biWidth;
+	outHdr.biHeight = height;
+	outHdr.biPlanes = 1;
+	outHdr.biBitCount = 24;
+	outHdr.biCompression = BI_RGB;
+	outHdr.biSizeImage = dstRow * (UT_uint32)height;
+	outHdr.biClrUsed = 0;
+	outHdr.biClrImportant = 0;
+
+	out.truncate(0);
+	if (!out.append(reinterpret_cast<const UT_Byte *>(&outHdr), sizeof(outHdr)))
+		return false;
+
+	const bool topDown = hdr.biHeight < 0;
+	const UT_Byte * src = reinterpret_cast<const UT_Byte *>(info) + hdr.biSize;
+	UT_Byte * row = new UT_Byte[dstRow];
+	bool ok = true;
+	for (int y = 0; ok && y < height; ++y)
+	{
+		const int srcY = topDown ? (height - 1 - y) : y;
+		const UT_Byte * srow = src + (size_t)srcY * srcRow;
+		memset(row, 0, dstRow);
+		for (int x = 0; x < hdr.biWidth; ++x)
+		{
+			int b = srow[x * bpp + 0];
+			int g = srow[x * bpp + 1];
+			int r = srow[x * bpp + 2];
+			if (bpp == 4)
+			{
+				const int a = srow[x * bpp + 3];
+				const int inv = 255 - a;
+				b = (b * a + 255 * inv + 127) / 255;
+				g = (g * a + 255 * inv + 127) / 255;
+				r = (r * a + 255 * inv + 127) / 255;
+			}
+			row[x * 3 + 0] = (UT_Byte)b;
+			row[x * 3 + 1] = (UT_Byte)g;
+			row[x * 3 + 2] = (UT_Byte)r;
+		}
+		ok = out.append(row, dstRow);
+	}
+	delete [] row;
+	if (!ok)
+		out.truncate(0);
+	return ok;
+}
+
+static void s_selectedImageForClipboard(XAP_Frame * frame, UT_ByteBuf & dib, UT_ConstByteBufPtr & png)
+{
+	png.reset();
+	dib.truncate(0);
+	if (!frame)
+		return;
+	FV_View * view = static_cast<FV_View *>(frame->getCurrentView());
+	if (!view || view->isSelectionEmpty())
+		return;
+
+	UT_ConstByteBufPtr bytes;
+	if (!view->saveSelectedImage(bytes) || !bytes || bytes->getLength() < 3)
+		return;
+	const UT_Byte * raw = bytes->getPointer(0);
+	const UT_uint32 size = bytes->getLength();
+	const char * mime = nullptr;
+	if (s_isPng(raw, size))
+	{
+		mime = "image/png";
+		png = bytes;
+	}
+	else if (s_isJpeg(raw, size))
+		mime = "image/jpeg";
+	if (!mime)
+		return;
+
+	GR_Win32Image image("clipboard");
+	if (!image.convertFromBuffer(bytes, mime, 0, 0) || !image.getDIB())
+		return;
+	s_packClipboardDib(image.getDIB(), dib);
+}
+
+static bool s_insertGraphic(AP_Win32App * app, const UT_Byte * data, UT_uint32 size, IEGraphicFileType kind)
+{
+	if (!app || !data || size == 0 || kind == IEGFT_Unknown)
+		return false;
+	UT_ByteBufPtr bytes(new UT_ByteBuf);
+	if (!bytes->append(data, size))
+		return false;
+	FG_ConstGraphicPtr graphic;
+	if (IE_ImpGraphic::loadGraphic(bytes, kind, graphic) != UT_OK || !graphic)
+		return false;
+	XAP_Frame * frame = app->getLastFocussedFrame();
+	FV_View * view = frame ? static_cast<FV_View *>(frame->getCurrentView()) : nullptr;
+	if (!view)
+		return false;
+	return view->cmdInsertGraphic(graphic) == UT_OK;
+}
+
+static bool s_pastePng(AP_Win32App * app, XAP_Win32Clipboard * clip)
+{
+	if (!clip || IEGFT_PNG == IEGFT_Unknown)
+		return false;
+	HANDLE hData = clip->getHandleInFormat(AP_CLIPBOARD_PNG);
+	if (!hData)
+		return false;
+	const UT_Byte * data = static_cast<const UT_Byte *>(GlobalLock(hData));
+	if (!data)
+		return false;
+	const UT_uint32 size = static_cast<UT_uint32>(GlobalSize(hData));
+	const bool ok = s_isPng(data, size) && s_insertGraphic(app, data, size, IEGFT_PNG);
+	GlobalUnlock(hData);
+	return ok;
+}
+
+static bool s_pasteDib(AP_Win32App * app, XAP_Win32Clipboard * clip)
+{
+	if (!clip || IEGFT_BMP == IEGFT_Unknown)
+		return false;
+	HANDLE hData = clip->getHandleInFormat(AP_CLIPBOARD_DIB);
+	if (!hData)
+		return false;
+	const UT_Byte * data = static_cast<const UT_Byte *>(GlobalLock(hData));
+	if (!data)
+		return false;
+	const UT_uint32 size = static_cast<UT_uint32>(GlobalSize(hData));
+	bool ok = false;
+	if (size >= sizeof(BITMAPINFOHEADER))
+	{
+		const BITMAPINFOHEADER * hdr = reinterpret_cast<const BITMAPINFOHEADER *>(data);
+		UT_uint32 pixelOffset = hdr->biSize;
+		if (hdr->biSize >= sizeof(BITMAPINFOHEADER) && hdr->biSize <= size
+			&& hdr->biWidth > 0 && hdr->biWidth <= 16384 && hdr->biHeight != 0)
+		{
+			const int height = hdr->biHeight < 0 ? -hdr->biHeight : hdr->biHeight;
+			if (height <= 16384)
+			{
+				UT_uint32 extra = 0;
+				if (hdr->biClrUsed)
+				{
+					if (hdr->biClrUsed <= 256)
+						extra = hdr->biClrUsed * (UT_uint32)sizeof(RGBQUAD);
+					else
+						pixelOffset = size + 1;
+				}
+				else if (hdr->biBitCount > 0 && hdr->biBitCount <= 8)
+					extra = (1u << hdr->biBitCount) * (UT_uint32)sizeof(RGBQUAD);
+				else if (hdr->biCompression == BI_BITFIELDS && hdr->biSize == sizeof(BITMAPINFOHEADER))
+					extra = 12;
+				if (pixelOffset <= size && extra <= size - pixelOffset)
+					pixelOffset += extra;
+				else
+					pixelOffset = size + 1;
+			}
+			else
+				pixelOffset = size + 1;
+		}
+		else
+			pixelOffset = size + 1;
+
+		if (pixelOffset <= size)
+		{
+			UT_ByteBuf bmp;
+			BITMAPFILEHEADER fh;
+			memset(&fh, 0, sizeof(fh));
+			fh.bfType = 0x4D42;
+			fh.bfOffBits = (DWORD)(sizeof(fh) + pixelOffset);
+			fh.bfSize = (DWORD)(sizeof(fh) + size);
+			if (bmp.append(reinterpret_cast<const UT_Byte *>(&fh), sizeof(fh))
+				&& bmp.append(data, size))
+				ok = s_insertGraphic(app, bmp.getPointer(0), bmp.getLength(), IEGFT_BMP);
+		}
+	}
+	GlobalUnlock(hData);
+	return ok;
+}
+
 /*!
     copy data to the clipboard; this is what gets called when the user
     presses Ctrl+C
@@ -709,6 +920,10 @@ void AP_Win32App::copyToClipboard(PD_DocumentRange * pDocRange, bool /*bUseClipb
 
 	AP_Win32FrameImpl * pFrameImp = static_cast<AP_Win32FrameImpl*>(getLastFocussedFrame()->getFrameImpl());
 	UT_return_if_fail(pFrameImp);
+
+	UT_ByteBuf imageDib;
+	UT_ConstByteBufPtr imagePng;
+	s_selectedImageForClipboard(getLastFocussedFrame(), imageDib, imagePng);
 	
 	if (!m_pClipboard->openClipboard(pFrameImp->getHwndDocument()))
 		return;
@@ -754,6 +969,13 @@ void AP_Win32App::copyToClipboard(PD_DocumentRange * pDocRange, bool /*bUseClipb
 		_indicateFmtToClipboard(AP_CLIPBOARD_TEXTPLAIN_8BIT);
 #endif
 	}
+
+	if (imageDib.getLength() > 0 && imageDib.getLength() <= 0x7fffffffu)
+		m_pClipboard->addData(AP_CLIPBOARD_DIB, const_cast<UT_Byte *>(imageDib.getPointer(0)),
+			static_cast<UT_sint32>(imageDib.getLength()));
+	if (imagePng && imagePng->getLength() > 0 && imagePng->getLength() <= 0x7fffffffu)
+		m_pClipboard->addData(AP_CLIPBOARD_PNG, const_cast<UT_Byte *>(imagePng->getPointer(0)),
+			static_cast<UT_sint32>(imagePng->getLength()));
 
 	m_pClipboard->closeClipboard();				// release clipboard lock
 }
@@ -931,12 +1153,13 @@ void AP_Win32App::pasteFromClipboard(PD_DocumentRange * pDocRange, bool /*bUseCl
 		// TODO Paste the most detailed version unless user overrides.
 		// TODO decide if we need to support .ABW on the clipboard.
 		if (!((bHonorFormatting && _pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_RTF, ".rtf", false)) ||
+			s_pastePng(this, m_pClipboard) ||
 			_pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_TEXTPLAIN_UCS2, ".txt", true) ||
+			s_pasteDib(this, m_pClipboard) ||
 			_pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_BMP, ".bmp", false) ||
 			_pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_TEXTPLAIN_8BIT, ".txt", false)))
 		{
-			// TODO figure out what to do with an image and other formats....
-			UT_DEBUGMSG(("PasteFromClipboard: TODO support this format..."));
+			UT_DEBUGMSG(("PasteFromClipboard: no supported format\n"));
 		}
 	}
 
@@ -1062,6 +1285,10 @@ bool AP_Win32App::canPasteFromClipboard(void) const
 	if (m_pClipboard->hasFormat(AP_CLIPBOARD_TEXTPLAIN_8BIT))
 		goto ReturnTrue;
 
+	if (m_pClipboard->hasFormat(AP_CLIPBOARD_PNG) && IEGFT_PNG != IEGFT_Unknown)
+		goto ReturnTrue;
+	if (m_pClipboard->hasFormat(AP_CLIPBOARD_DIB) && IEGFT_BMP != IEGFT_Unknown)
+		goto ReturnTrue;
 	// If IEGFT_BMP!=0 we have a plugin that can deal with BMP format
 	if (m_pClipboard->hasFormat(AP_CLIPBOARD_BMP) && IEGFT_BMP)
   		goto ReturnTrue;

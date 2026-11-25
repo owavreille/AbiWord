@@ -42,7 +42,12 @@ AP_Win32Clipboard::AP_Win32Clipboard(void)
 	AddFmt(AP_CLIPBOARD_TEXTPLAIN_8BIT,		CF_TEXT);
 	AddFmt(AP_CLIPBOARD_TEXTPLAIN_UCS2,		CF_UNICODETEXT);
 	AddFmt(AP_CLIPBOARD_RTF,				RegisterClipboardFormat(CF_RTF));
-	AddFmt(AP_CLIPBOARD_BMP,				CF_BITMAP);					
+	AddFmt(AP_CLIPBOARD_BMP,				CF_BITMAP);
+	// "PNG" is the format browsers and other editors put on the clipboard.
+	const UINT pngFmt = RegisterClipboardFormatW(L"PNG");
+	if (pngFmt)
+		AddFmt(AP_CLIPBOARD_PNG, pngFmt);
+	AddFmt(AP_CLIPBOARD_DIB,				CF_DIB);
 	AddFmt(AP_CLIPBOARD_UNKNOWN,			0);					// must be last
 
 	// We don't need to g_free these strings in our destructor

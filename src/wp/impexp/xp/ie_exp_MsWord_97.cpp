@@ -22,11 +22,12 @@
 /*
  * Word 97 binary document, as specified by [MS-DOC] and written by
  * LibreOffice's ww8 exporter: a FIB at the start of WordDocument, Unicode
- * text at fcMin, formatted-disk pages after the text, a Sepx for the single
- * section, and the piece table, stylesheet, section table and document
- * properties in the 1Table stream. Headers and footers, when the document
- * has them, follow the main text: six stories per MS-DOC PlcfHdd, and
- * ccpHdd stays 0 when there is none, as LibreOffice writes it.
+ * text at fcMin, formatted-disk pages after the text, one Sepx shared by
+ * every section, and the piece table, stylesheet, section table and document
+ * properties in the 1Table stream. Subdocuments follow the main text in
+ * MS-DOC order: footnotes, headers, annotations, endnotes. ccpHdd stays 0
+ * when there is no header, as LibreOffice writes it. A document with one
+ * section still has twelve header stories.
  */
 
 #include <cstdint>
@@ -179,6 +180,48 @@ static void append_sprm(std::string & grpprl, unsigned opcode, unsigned operand,
 	for (unsigned i = 0; i < width && i < 4; ++i)
 		grpprl.push_back(static_cast<char>((operand >> (8 * i)) & 0xff));
 }
+
+// sprmCFSpec marks an auto footnote (U+0002) or annotation (U+0005) reference.
+static void append_special(Paragraph & paragraph, char16_t ch)
+{
+	Run run;
+	run.text.push_back(ch);
+	append_sprm(run.grpprl, 0x0855, 1, 1);
+	paragraph.runs.push_back(run);
+}
+
+static int note_kind_of(PTStruxType kind)
+{
+	if (kind == PTX_SectionFootnote)
+		return 1;
+	if (kind == PTX_SectionEndnote)
+		return 2;
+	if (kind == PTX_SectionAnnotation)
+		return 3;
+	return 0;
+}
+
+static bool note_ends(PTStruxType kind, int note_kind)
+{
+	return (kind == PTX_EndFootnote && note_kind == 1)
+		|| (kind == PTX_EndEndnote && note_kind == 2)
+		|| (kind == PTX_EndAnnotation && note_kind == 3);
+}
+
+struct NoteStory
+{
+	int kind = 0;
+	unsigned cp = 0;
+	bool placed = false;
+	std::vector<Paragraph> text;
+};
+
+struct BodyExport
+{
+	std::vector<Paragraph> paragraphs;
+	std::vector<NoteStory> notes;
+	std::vector<unsigned> section_at;
+};
 
 static const gchar * block_property(PD_Document * doc, const PP_AttrProp * ap, const char * name);
 
@@ -403,7 +446,6 @@ static bool skipped_section(PTStruxType type)
 	case PTX_SectionMarginnote:
 	case PTX_SectionAnnotation:
 	case PTX_SectionFrame:
-	case PTX_SectionTOC:
 		return true;
 	default:
 		return false;
@@ -441,6 +483,11 @@ struct OpenTable
 {
 	int depth = 0;
 	int frame_depth = 0;
+	int note_depth = 0;
+	int note_kind = 0;
+	int note_frame = 0;
+	bool note_para = false;
+	Paragraph note_paragraph;
 	const PP_AttrProp * ap = nullptr;
 	std::vector<TableCell> cells;
 	int current = -1;
@@ -448,27 +495,49 @@ struct OpenTable
 	Paragraph paragraph;
 };
 
+struct OpenNote
+{
+	int depth = 0;
+	int kind = 0;
+	int frame = 0;
+	bool in_paragraph = false;
+	Paragraph paragraph;
+	OpenTable table;
+};
+
 static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts,
 	unsigned content_w, pf_Frag * frag, std::vector<Picture> & pics,
-	bool & in_paragraph, Paragraph & current, std::vector<Paragraph> & dest);
+	bool & in_paragraph, Paragraph & current, std::vector<Paragraph> & dest,
+	std::vector<NoteStory> * notes);
 
-static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts, unsigned content_w)
+static void feed_body_note(OpenNote & note, std::vector<NoteStory> & notes,
+	PD_Document * doc, FontCatalog & fonts, unsigned content_w,
+	pf_Frag * frag, std::vector<Picture> & pics);
+
+static BodyExport collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts, unsigned content_w)
 {
-	std::vector<Paragraph> paragraphs;
+	BodyExport out;
 	Paragraph current;
 	bool accept = true;
 	bool in_paragraph = false;
 	int frame_depth = 0;
 	int skip_depth = 0;
+	int section_count = 0;
 	OpenTable open_table;
+	OpenNote open_note;
 	pt_PieceTable * table = doc->getPieceTable();
 	if (!table)
-		return paragraphs;
+		return out;
 
 	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
 	{
+		if (open_note.depth > 0)
+		{
+			feed_body_note(open_note, out.notes, doc, fonts, content_w, frag, pics);
+			continue;
+		}
 		if (accept && !frame_depth &&
-			feed_table(open_table, doc, fonts, content_w, frag, pics, in_paragraph, current, paragraphs))
+			feed_table(open_table, doc, fonts, content_w, frag, pics, in_paragraph, current, out.paragraphs, &out.notes))
 			continue;
 		if (frag->getType() == pf_Frag::PFT_Strux)
 		{
@@ -484,12 +553,31 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 				}
 				continue;
 			}
+			const int note_kind = note_kind_of(kind);
+			if (note_kind && accept)
+			{
+				// The reference stays in the open paragraph. The note body is
+				// a subdocument, not more body text.
+				if (!in_paragraph)
+				{
+					current = Paragraph();
+					in_paragraph = true;
+				}
+				append_special(current, note_kind == 3 ? static_cast<char16_t>(0x0005) : static_cast<char16_t>(0x0002));
+				NoteStory story;
+				story.kind = note_kind;
+				out.notes.push_back(story);
+				open_note = OpenNote();
+				open_note.depth = 1;
+				open_note.kind = note_kind;
+				continue;
+			}
 			if (kind == PTX_Block)
 			{
 				if (accept)
 				{
 					if (in_paragraph)
-						paragraphs.push_back(current);
+						out.paragraphs.push_back(current);
 					current = Paragraph();
 					const PP_AttrProp * blockAP = nullptr;
 					doc->getAttrProp(frag->getIndexAP(), &blockAP);
@@ -499,7 +587,7 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 				}
 				else if (in_paragraph)
 				{
-					paragraphs.push_back(current);
+					out.paragraphs.push_back(current);
 					current = Paragraph();
 					in_paragraph = false;
 				}
@@ -507,14 +595,15 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 			}
 			if (in_paragraph)
 			{
-				paragraphs.push_back(current);
+				out.paragraphs.push_back(current);
 				current = Paragraph();
 				in_paragraph = false;
 			}
 			if (kind == PTX_SectionFrame)
 			{
-				// A positioned image is a frame, not a PFT_Object. Closing
-				// the section here used to drop every fragment after it.
+				// A positioned image is a frame, not a PFT_Object. A text
+				// frame keeps its paragraphs in the body.
+				bool took_image = false;
 				if (accept)
 				{
 					Paragraph image;
@@ -524,16 +613,23 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 					{
 						current = image;
 						in_paragraph = true;
+						took_image = true;
 					}
 				}
-				frame_depth = 1;
-				accept = false;
+				if (took_image || !accept)
+				{
+					frame_depth = 1;
+					accept = false;
+				}
 				continue;
 			}
 			if (kind == PTX_Section)
 			{
+				if (section_count > 0)
+					out.section_at.push_back(static_cast<unsigned>(out.paragraphs.size()));
+				++section_count;
 				skip_depth = 0;
-				accept = (frame_depth == 0 && skip_depth == 0);
+				accept = (frame_depth == 0);
 			}
 			else if (skipped_section(kind))
 			{
@@ -586,10 +682,12 @@ static std::vector<Paragraph> collect_paragraphs(PD_Document * doc, std::vector<
 			current.runs.push_back(run);
 	}
 	if (in_paragraph)
-		paragraphs.push_back(current);
-	if (paragraphs.empty() || paragraphs.back().end_mark == 0x0007)
-		paragraphs.push_back(Paragraph());
-	return paragraphs;
+		out.paragraphs.push_back(current);
+	if (open_note.depth > 0 && open_note.in_paragraph && !out.notes.empty())
+		out.notes.back().text.push_back(open_note.paragraph);
+	if (out.paragraphs.empty() || out.paragraphs.back().end_mark == 0x0007)
+		out.paragraphs.push_back(Paragraph());
+	return out;
 }
 
 // MS-DOC 2.8.22 PlcfHdd: six stories per section, in this order. Each story
@@ -1113,10 +1211,207 @@ static std::vector<Paragraph> build_table(unsigned content_w, OpenTable & table)
 	return out;
 }
 
+static void close_note_paragraph(bool & open, Paragraph & paragraph, std::vector<Paragraph> & dest)
+{
+	if (!open)
+		return;
+	dest.push_back(paragraph);
+	paragraph = Paragraph();
+	open = false;
+}
+
+static bool feed_table_note(OpenTable & table, PD_Document * doc, FontCatalog & fonts,
+	pf_Frag * frag, std::vector<Picture> & pics, std::vector<NoteStory> * notes)
+{
+	if (!notes || notes->empty() || table.note_depth <= 0)
+		return false;
+	NoteStory & story = notes->back();
+	if (frag->getType() == pf_Frag::PFT_Strux)
+	{
+		const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
+		if (table.note_frame)
+		{
+			if (kind == PTX_SectionFrame)
+				++table.note_frame;
+			else if (kind == PTX_EndFrame)
+				--table.note_frame;
+			return true;
+		}
+		if (note_kind_of(kind))
+		{
+			++table.note_depth;
+			return true;
+		}
+		if (kind == PTX_EndFootnote || kind == PTX_EndEndnote || kind == PTX_EndAnnotation)
+		{
+			if (table.note_depth == 1 && note_ends(kind, table.note_kind))
+				close_note_paragraph(table.note_para, table.note_paragraph, story.text);
+			if (table.note_depth > 1 || note_ends(kind, table.note_kind))
+				--table.note_depth;
+			return true;
+		}
+		if (table.note_depth > 1)
+			return true;
+		if (kind == PTX_Block)
+		{
+			close_note_paragraph(table.note_para, table.note_paragraph, story.text);
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(frag->getIndexAP(), &ap);
+			table.note_paragraph = Paragraph();
+			table.note_paragraph.block_ap = ap;
+			table.note_paragraph.pap_grpprl = paragraph_grpprl(doc, ap);
+			table.note_para = true;
+			return true;
+		}
+		close_note_paragraph(table.note_para, table.note_paragraph, story.text);
+		if (kind == PTX_SectionFrame)
+		{
+			Paragraph image;
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(frag->getIndexAP(), &ap);
+			if (append_image(doc, image, ap, pics))
+			{
+				table.note_paragraph = image;
+				table.note_para = true;
+				table.note_frame = 1;
+			}
+		}
+		return true;
+	}
+	if (table.note_depth > 1 || table.note_frame)
+		return true;
+	if (frag->getType() == pf_Frag::PFT_Object)
+	{
+		const pf_Frag_Object * object = static_cast<const pf_Frag_Object *>(frag);
+		if (object->getObjectType() == PTO_Image)
+		{
+			if (!table.note_para)
+			{
+				table.note_paragraph = Paragraph();
+				table.note_para = true;
+			}
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(object->getIndexAP(), &ap);
+			append_image(doc, table.note_paragraph, ap, pics);
+		}
+		return true;
+	}
+	if (frag->getType() == pf_Frag::PFT_Text)
+	{
+		if (!table.note_para)
+		{
+			table.note_paragraph = Paragraph();
+			table.note_para = true;
+		}
+		const pf_Frag_Text * text = static_cast<const pf_Frag_Text *>(frag);
+		const PP_AttrProp * props = nullptr;
+		doc->getAttrProp(text->getIndexAP(), &props);
+		append_run(table.note_paragraph, doc, fonts, props, doc->getPointer(text->getBufIndex()), text->getLength());
+	}
+	return true;
+}
+
+static void feed_body_note(OpenNote & note, std::vector<NoteStory> & notes,
+	PD_Document * doc, FontCatalog & fonts, unsigned content_w,
+	pf_Frag * frag, std::vector<Picture> & pics)
+{
+	if (note.depth <= 0 || notes.empty())
+		return;
+	NoteStory & story = notes.back();
+	if (note.depth == 1 && note.frame == 0 &&
+		feed_table(note.table, doc, fonts, content_w, frag, pics, note.in_paragraph, note.paragraph, story.text, nullptr))
+		return;
+	if (frag->getType() == pf_Frag::PFT_Strux)
+	{
+		const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
+		if (note.frame)
+		{
+			if (kind == PTX_SectionFrame)
+				++note.frame;
+			else if (kind == PTX_EndFrame)
+				--note.frame;
+			return;
+		}
+		if (note_kind_of(kind))
+		{
+			++note.depth;
+			return;
+		}
+		if (kind == PTX_EndFootnote || kind == PTX_EndEndnote || kind == PTX_EndAnnotation)
+		{
+			if (note.depth == 1 && note_ends(kind, note.kind))
+				close_note_paragraph(note.in_paragraph, note.paragraph, story.text);
+			if (note.depth > 1 || note_ends(kind, note.kind))
+				--note.depth;
+			return;
+		}
+		if (note.depth > 1)
+			return;
+		if (kind == PTX_Block)
+		{
+			close_note_paragraph(note.in_paragraph, note.paragraph, story.text);
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(frag->getIndexAP(), &ap);
+			note.paragraph = Paragraph();
+			note.paragraph.block_ap = ap;
+			note.paragraph.pap_grpprl = paragraph_grpprl(doc, ap);
+			note.in_paragraph = true;
+			return;
+		}
+		close_note_paragraph(note.in_paragraph, note.paragraph, story.text);
+		if (kind == PTX_SectionFrame)
+		{
+			Paragraph image;
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(frag->getIndexAP(), &ap);
+			if (append_image(doc, image, ap, pics))
+			{
+				note.paragraph = image;
+				note.in_paragraph = true;
+				note.frame = 1;
+			}
+		}
+		return;
+	}
+	if (note.depth > 1 || note.frame)
+		return;
+	if (frag->getType() == pf_Frag::PFT_Object)
+	{
+		const pf_Frag_Object * object = static_cast<const pf_Frag_Object *>(frag);
+		if (object->getObjectType() == PTO_Image)
+		{
+			if (!note.in_paragraph)
+			{
+				note.paragraph = Paragraph();
+				note.in_paragraph = true;
+			}
+			const PP_AttrProp * ap = nullptr;
+			doc->getAttrProp(object->getIndexAP(), &ap);
+			append_image(doc, note.paragraph, ap, pics);
+		}
+		return;
+	}
+	if (frag->getType() == pf_Frag::PFT_Text)
+	{
+		if (!note.in_paragraph)
+		{
+			note.paragraph = Paragraph();
+			note.in_paragraph = true;
+		}
+		const pf_Frag_Text * text = static_cast<const pf_Frag_Text *>(frag);
+		const PP_AttrProp * props = nullptr;
+		doc->getAttrProp(text->getIndexAP(), &props);
+		append_run(note.paragraph, doc, fonts, props, doc->getPointer(text->getBufIndex()), text->getLength());
+	}
+}
+
 static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts,
 	unsigned content_w, pf_Frag * frag, std::vector<Picture> & pics,
-	bool & in_paragraph, Paragraph & current, std::vector<Paragraph> & dest)
+	bool & in_paragraph, Paragraph & current, std::vector<Paragraph> & dest,
+	std::vector<NoteStory> * notes)
 {
+	if (table.note_depth > 0)
+		return feed_table_note(table, doc, fonts, frag, pics, notes);
 	if (frag->getType() == pf_Frag::PFT_Strux)
 	{
 		const PTStruxType kind = static_cast<pf_Frag_Strux *>(frag)->getStruxType();
@@ -1161,6 +1456,33 @@ static bool feed_table(OpenTable & table, PD_Document * doc, FontCatalog & fonts
 			else if (kind == PTX_EndFrame)
 				--table.frame_depth;
 			return true;
+		}
+		if (notes)
+		{
+			const int note_kind = note_kind_of(kind);
+			if (note_kind)
+			{
+				if (!table.in_paragraph)
+				{
+					if (table.current < 0)
+					{
+						table.cells.push_back(TableCell());
+						table.current = static_cast<int>(table.cells.size() - 1);
+					}
+					table.paragraph = Paragraph();
+					table.in_paragraph = true;
+				}
+				append_special(table.paragraph, note_kind == 3 ? static_cast<char16_t>(0x0005) : static_cast<char16_t>(0x0002));
+				NoteStory story;
+				story.kind = note_kind;
+				notes->push_back(story);
+				table.note_depth = 1;
+				table.note_kind = note_kind;
+				table.note_frame = 0;
+				table.note_para = false;
+				table.note_paragraph = Paragraph();
+				return true;
+			}
 		}
 		if (kind == PTX_SectionCell)
 		{
@@ -1272,7 +1594,7 @@ static Headers collect_headers(PD_Document * doc, std::vector<Picture> & pics, F
 	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
 	{
 		if (in_story && skip_depth == 0 &&
-			feed_table(open_table, doc, fonts, content_w, frag, pics, in_paragraph, current, out.stories[current_id].paragraphs))
+			feed_table(open_table, doc, fonts, content_w, frag, pics, in_paragraph, current, out.stories[current_id].paragraphs, nullptr))
 			continue;
 		if (frag->getType() == pf_Frag::PFT_Strux)
 		{
@@ -2348,17 +2670,135 @@ GsfOutput * IE_Exp_MsWord_97::_openFile(const char * /*szFilename*/)
 	return gsf_output_memory_new();
 }
 
+static void assign_note_cps(const std::vector<Paragraph> & paragraphs, std::vector<NoteStory> & notes)
+{
+	size_t next = 0;
+	unsigned cp = 0;
+	for (size_t p = 0; p < paragraphs.size() && next < notes.size(); ++p)
+	{
+		unsigned at = 0;
+		for (size_t r = 0; r < paragraphs[p].runs.size() && next < notes.size(); ++r)
+		{
+			const std::u16string & text = paragraphs[p].runs[r].text;
+			for (size_t i = 0; i < text.size() && next < notes.size(); ++i)
+			{
+				const char16_t want = notes[next].kind == 3 ? static_cast<char16_t>(0x0005) : static_cast<char16_t>(0x0002);
+				if (text[i] == want)
+				{
+					notes[next].cp = cp + at + static_cast<unsigned>(i);
+					notes[next].placed = true;
+					++next;
+				}
+			}
+			at += static_cast<unsigned>(text.size());
+		}
+		cp += at + 1;
+	}
+}
+
+struct WrittenNotes
+{
+	unsigned count = 0;
+	unsigned ccp = 0;
+	std::vector<unsigned> ref_cp;
+	std::vector<unsigned> txt_cp;
+};
+
+static void prepend_special(std::vector<Paragraph> & story, char16_t ch)
+{
+	if (story.empty())
+		story.push_back(Paragraph());
+	Run run;
+	run.text.push_back(ch);
+	append_sprm(run.grpprl, 0x0855, 1, 1);
+	story[0].runs.insert(story[0].runs.begin(), run);
+}
+
+static WrittenNotes write_notes(const std::vector<NoteStory> & notes, int kind, bool leading_ref,
+	unsigned ccp_text,
+	std::vector<uint16_t> & units, std::vector<ChRun> & runs,
+	std::vector<unsigned> & bounds, std::vector<std::string> & pap_grpprls)
+{
+	WrittenNotes out;
+	const unsigned base = static_cast<unsigned>(units.size());
+	for (size_t i = 0; i < notes.size(); ++i)
+	{
+		if (notes[i].kind != kind || !notes[i].placed || notes[i].cp >= ccp_text)
+			continue;
+		if (!out.ref_cp.empty() && notes[i].cp <= out.ref_cp.back())
+			continue;
+		out.ref_cp.push_back(notes[i].cp);
+		out.txt_cp.push_back(static_cast<unsigned>(units.size()) - base);
+		std::vector<Paragraph> story = notes[i].text;
+		if (leading_ref)
+			prepend_special(story, static_cast<char16_t>(0x0002));
+		else if (story.empty())
+			story.push_back(Paragraph());
+		append_paragraphs(story, units, runs, bounds, pap_grpprls);
+		++out.count;
+	}
+	out.ccp = static_cast<unsigned>(units.size()) - base;
+	if (!out.count || !out.ccp)
+		return WrittenNotes();
+	out.txt_cp.push_back(out.ccp);
+	return out;
+}
+
+static Buf plc_cps(const std::vector<unsigned> & cps)
+{
+	Buf out;
+	for (size_t i = 0; i < cps.size(); ++i)
+		append_u32(out, cps[i]);
+	return out;
+}
+
+static Buf plc_with_data(const std::vector<unsigned> & cps, unsigned end_cp, unsigned data_size, bool numbered)
+{
+	Buf out;
+	for (size_t i = 0; i < cps.size(); ++i)
+		append_u32(out, cps[i]);
+	append_u32(out, end_cp);
+	for (size_t i = 0; i < cps.size(); ++i)
+	{
+		if (data_size == 2)
+			append_u16(out, numbered ? static_cast<unsigned>(i + 1) : 0);
+		else
+			out.insert(out.end(), data_size, 0);
+	}
+	return out;
+}
+
+static void append_note_plcs(Buf & table, const WrittenNotes & written, unsigned end_cp,
+	unsigned data_size, bool numbered,
+	unsigned & ref_at, unsigned & ref_len, unsigned & txt_at, unsigned & txt_len)
+{
+	if (!written.count)
+		return;
+	const Buf ref = plc_with_data(written.ref_cp, end_cp, data_size, numbered);
+	const Buf txt = plc_cps(written.txt_cp);
+	ref_at = static_cast<unsigned>(table.size());
+	ref_len = static_cast<unsigned>(ref.size());
+	table.insert(table.end(), ref.begin(), ref.end());
+	txt_at = static_cast<unsigned>(table.size());
+	txt_len = static_cast<unsigned>(txt.size());
+	table.insert(table.end(), txt.begin(), txt.end());
+}
+
 UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 {
 	const PageLayout layout = read_page_layout(getDoc());
 	std::vector<Picture> pictures;
 	FontCatalog fonts;
-	std::vector<Paragraph> paragraphs = collect_paragraphs(getDoc(), pictures, fonts, layout.content_w);
+	BodyExport body = collect_paragraphs(getDoc(), pictures, fonts, layout.content_w);
+	std::vector<Paragraph> & paragraphs = body.paragraphs;
 	Headers headers = collect_headers(getDoc(), pictures, fonts, layout.content_w);
 	const Buf data = layout_pictures(pictures);
 	seal_pictures(paragraphs, pictures);
 	for (std::map<std::string, Story>::iterator it = headers.stories.begin(); it != headers.stories.end(); ++it)
 		seal_pictures(it->second.paragraphs, pictures);
+	for (size_t i = 0; i < body.notes.size(); ++i)
+		seal_pictures(body.notes[i].text, pictures);
+	assign_note_cps(paragraphs, body.notes);
 
 	std::vector<uint16_t> units;
 	std::vector<ChRun> runs;
@@ -2367,63 +2807,77 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	bounds.push_back(FC_MIN);
 	append_paragraphs(paragraphs, units, runs, bounds, pap_grpprls);
 	const unsigned ccp_text = static_cast<unsigned>(units.size());
+	const WrittenNotes feet = write_notes(body.notes, 1, true, ccp_text, units, runs, bounds, pap_grpprls);
+	const unsigned ccp_ftn = feet.ccp;
 
 	// LibreOffice leaves ccpHdd at 0 when the document has no header. A
-	// document that has one gets the six MS-DOC stories after the main text.
+	// document that has one gets six separator stories and six header stories.
+	// Each further section adds its own six stories.
 	unsigned hf_flags = 0;
 	std::vector<unsigned> hdd_cp;
 	unsigned ccp_hdd = 0;
 	if (needs_header_text(headers))
 	{
 		// MS-DOC PlcfHdd starts with six empty footnote and endnote separator
-		// stories, then the six header and footer stories. An empty story is
-		// two equal character positions. A story that has text ends with its
-		// own paragraph mark and one extra guard mark, which is what
-		// LibreOffice writes and what Word expects before it shows the header.
-		std::vector<Paragraph> slot_text[6];
-		std::set<std::string> seen[6];
+		// stories, then six header and footer stories per section. An empty
+		// story is two equal character positions. A story that has text ends
+		// with its own paragraph mark and one extra guard mark.
+		struct SectionSlots
+		{
+			std::vector<Paragraph> slot[6];
+		};
+		std::vector<SectionSlots> per_section;
 		for (size_t s = 0; s < headers.sections.size(); ++s)
 		{
+			SectionSlots slots;
 			for (int slot = 0; slot < 6; ++slot)
 			{
 				const std::string & id = headers.sections[s].slot[slot];
-				if (id.empty() || !seen[slot].insert(id).second)
+				if (id.empty())
 					continue;
 				std::map<std::string, Story>::const_iterator story = headers.stories.find(id);
 				if (story == headers.stories.end())
 					continue;
-				slot_text[slot].insert(slot_text[slot].end(),
-					story->second.paragraphs.begin(), story->second.paragraphs.end());
+				slots.slot[slot] = story->second.paragraphs;
+			}
+			hf_flags |= header_flags(slots.slot);
+			per_section.push_back(slots);
+		}
+		const unsigned hdd_base = ccp_text + ccp_ftn;
+		for (int separator = 0; separator < 6; ++separator)
+			hdd_cp.push_back(static_cast<unsigned>(units.size()) - hdd_base);
+		for (size_t s = 0; s < per_section.size(); ++s)
+		{
+			for (int slot = 0; slot < 6; ++slot)
+			{
+				hdd_cp.push_back(static_cast<unsigned>(units.size()) - hdd_base);
+				if (per_section[s].slot[slot].empty())
+					continue;
+				append_paragraphs(per_section[s].slot[slot], units, runs, bounds, pap_grpprls);
+				append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds, pap_grpprls);
 			}
 		}
-		hf_flags = header_flags(slot_text);
-		for (int separator = 0; separator < 6; ++separator)
-			hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
-		for (int slot = 0; slot < 6; ++slot)
-		{
-			hdd_cp.push_back(static_cast<unsigned>(units.size()) - ccp_text);
-			if (slot_text[slot].empty())
-				continue;
-			append_paragraphs(slot_text[slot], units, runs, bounds, pap_grpprls);
-			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds, pap_grpprls);
-		}
-		ccp_hdd = static_cast<unsigned>(units.size()) - ccp_text;
+		ccp_hdd = static_cast<unsigned>(units.size()) - hdd_base;
 		if (ccp_hdd)
 		{
-			// MS-DOC 2.8.22 PlcfHdd has n + 2 CPs (14 for 12 stories):
-			// the second-to-last CP equals ccpHdd and the last CP is the
-			// ignored guard position. MS-DOC 2.8.35 PlcPcd requires one
-			// extra trailing paragraph mark after non-empty subdocuments
-			// (last CP = ccpText + ccpHdd + 1).
+			// MS-DOC 2.8.22 PlcfHdd: the second-to-last CP equals ccpHdd and
+			// the last CP is ignored. One section has 12 stories and 14 CPs.
 			hdd_cp.push_back(ccp_hdd);
 			hdd_cp.push_back(ccp_hdd + 1);
-			append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds, pap_grpprls);
 		}
 		else
 		{
 			hdd_cp.clear();
 		}
 	}
+	const WrittenNotes anns = write_notes(body.notes, 3, false, ccp_text, units, runs, bounds, pap_grpprls);
+	const unsigned ccp_atn = anns.ccp;
+	const WrittenNotes ends = write_notes(body.notes, 2, true, ccp_text, units, runs, bounds, pap_grpprls);
+	const unsigned ccp_edn = ends.ccp;
+	// MS-DOC 2.8.35 PlcPcd: one trailing paragraph mark past every non-empty
+	// subdocument. With only a header this is ccpText + ccpHdd + 1.
+	if (ccp_ftn || ccp_hdd || ccp_atn || ccp_edn)
+		append_paragraphs(std::vector<Paragraph>(1), units, runs, bounds, pap_grpprls);
 	if (runs.empty())
 	{
 		ChRun run;
@@ -2469,13 +2923,36 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned sepx_at = static_cast<unsigned>(word.size());
 	word.insert(word.end(), sepx.begin(), sepx.end());
 
+	std::vector<unsigned> section_cp;
+	section_cp.push_back(0);
+	{
+		unsigned cp = 0;
+		size_t next = 0;
+		for (size_t p = 0; p < paragraphs.size() && next < body.section_at.size(); ++p)
+		{
+			if (p == body.section_at[next])
+			{
+				if (cp > section_cp.back() && cp < ccp_text)
+					section_cp.push_back(cp);
+				++next;
+			}
+			unsigned chars = 0;
+			for (size_t r = 0; r < paragraphs[p].runs.size(); ++r)
+				chars += static_cast<unsigned>(paragraphs[p].runs[r].text.size());
+			cp += chars + 1;
+		}
+	}
 	const unsigned sed_at = static_cast<unsigned>(table.size());
-	append_u32(table, 0);
+	for (size_t i = 0; i < section_cp.size(); ++i)
+		append_u32(table, section_cp[i]);
 	append_u32(table, ccp);
-	append_u16(table, 0);
-	append_u32(table, sepx_at);
-	append_u16(table, 0);
-	append_u32(table, 0xFFFFFFFF);
+	for (size_t i = 0; i < section_cp.size(); ++i)
+	{
+		append_u16(table, 0);
+		append_u32(table, sepx_at);
+		append_u16(table, 0);
+		append_u32(table, 0xFFFFFFFF);
+	}
 	const unsigned sed_len = static_cast<unsigned>(table.size() - sed_at);
 
 	const Buf ch_bin = bin_table(ch_pages, ch_pns);
@@ -2499,6 +2976,12 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 		hdd_at = static_cast<unsigned>(table.size());
 		table.insert(table.end(), hdd.begin(), hdd.end());
 	}
+
+	unsigned fnd_ref_at = 0, fnd_txt_at = 0, and_ref_at = 0, and_txt_at = 0, edn_ref_at = 0, edn_txt_at = 0;
+	unsigned fnd_ref_len = 0, fnd_txt_len = 0, and_ref_len = 0, and_txt_len = 0, edn_ref_len = 0, edn_txt_len = 0;
+	append_note_plcs(table, feet, ccp_text, 2, true, fnd_ref_at, fnd_ref_len, fnd_txt_at, fnd_txt_len);
+	append_note_plcs(table, anns, ccp_text, 30, false, and_ref_at, and_ref_len, and_txt_at, and_txt_len);
+	append_note_plcs(table, ends, ccp_text, 2, true, edn_ref_at, edn_ref_len, edn_txt_at, edn_txt_len);
 
 	const unsigned dop_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), 500, 0);
@@ -2534,12 +3017,30 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	poke_u16(fib, 0x3E, 0x0016);
 	poke_u32(fib, 0x40, static_cast<unsigned>(word.size()));
 	poke_u32(fib, 0x4C, ccp);
+	poke_u32(fib, 0x50, ccp_ftn);
 	poke_u32(fib, 0x54, ccp_hdd);
+	poke_u32(fib, 0x5C, ccp_atn);
+	poke_u32(fib, 0x60, ccp_edn);
 	poke_u16(fib, 0x98, 93);
 	place(fib, 1, stsh_at, static_cast<unsigned>(stsh.size()));
+	if (feet.count)
+	{
+		place(fib, 2, fnd_ref_at, fnd_ref_len);
+		place(fib, 3, fnd_txt_at, fnd_txt_len);
+	}
+	if (anns.count)
+	{
+		place(fib, 4, and_ref_at, and_ref_len);
+		place(fib, 5, and_txt_at, and_txt_len);
+	}
 	place(fib, 6, sed_at, sed_len);
 	if (ccp_hdd)
 		place(fib, 11, hdd_at, static_cast<unsigned>(hdd.size()));
+	if (ends.count)
+	{
+		place(fib, 46, edn_ref_at, edn_ref_len);
+		place(fib, 47, edn_txt_at, edn_txt_len);
+	}
 	place(fib, 12, ch_at, static_cast<unsigned>(ch_bin.size()));
 	place(fib, 13, pap_at, static_cast<unsigned>(pap_bin.size()));
 	place(fib, 15, font_at, static_cast<unsigned>(fontBytes.size()));

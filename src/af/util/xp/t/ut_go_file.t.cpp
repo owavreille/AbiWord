@@ -42,4 +42,15 @@ TFTEST_MAIN("UT_go_url_may_open allows documents and refuses programs")
 	TFPASS(!UT_go_url_may_open("file:///tmp/run.sh"));
 	TFPASS(!UT_go_url_may_open("file:///tmp/app.desktop"));
 	TFPASS(!UT_go_url_may_open("FILE:///TMP/SETUP.EXE"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/page.html"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/page.htm"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/page.xhtml"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/picture.svg"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/picture.svgz"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/data.xml"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/style.xsl"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/style.xslt"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/mail.mhtml"));
+	TFPASS(!UT_go_url_may_open("file:///tmp/mail.mht"));
+	TFPASS(UT_go_url_may_open("file:///tmp/notes.HTML.txt"));
 }

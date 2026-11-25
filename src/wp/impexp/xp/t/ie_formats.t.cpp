@@ -2434,3 +2434,91 @@ TFTEST_MAIN("PDF export embeds images, textbox frames, metadata and flushes clea
 	TFPASS(pdf_has_text(bytes, "CorpsPdfImg"));
 	TFPASS(pdf_has_text(bytes, "CadrePdf"));
 }
+
+TFTEST_MAIN("DOC export keeps footnotes, annotations and a second section")
+{
+	if (!exporter_known(".doc"))
+		return;
+
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+	if (!TFPASS(doc->insertSpan(first_block_content(doc), std::string("CorpsNote"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionFootnote)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(document_end(doc), std::string("NotePied"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndFootnote)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionEndnote)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(document_end(doc), std::string("NoteFin"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndEndnote)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionAnnotation)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(document_end(doc), std::string("NoteMarge"))) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndAnnotation)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Section)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(doc->insertSpan(document_end(doc), std::string("SectionB"))))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmtnote", ".doc");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * ole = package_open(path, input, gsf_infile_msole_new);
+	if (!TFPASS(ole != nullptr))
+	{
+		package_close(input, ole);
+		std::remove(path.c_str());
+		return;
+	}
+
+	const std::string word = ole_read(ole, "WordDocument");
+	const std::string table = ole_read(ole, "1Table");
+	const unsigned ccp_text = word.size() >= 0x50 ? le32(word, 0x4C) : 0;
+	const unsigned ccp_ftn = word.size() >= 0x54 ? le32(word, 0x50) : 0;
+	const unsigned ccp_hdd = word.size() >= 0x58 ? le32(word, 0x54) : 0;
+	const unsigned ccp_atn = word.size() >= 0x60 ? le32(word, 0x5C) : 0;
+	const unsigned ccp_edn = word.size() >= 0x64 ? le32(word, 0x60) : 0;
+	const std::string main = (word.size() >= 0x800 + ccp_text * 2)
+		? word.substr(0x800, ccp_text * 2) : std::string();
+
+	TFPASS(word.find(utf16_ascii("NotePied")) != std::string::npos);
+	TFPASS(word.find(utf16_ascii("NoteFin")) != std::string::npos);
+	TFPASS(word.find(utf16_ascii("NoteMarge")) != std::string::npos);
+	TFPASS(main.find(utf16_ascii("CorpsNote")) != std::string::npos);
+	TFPASS(main.find(utf16_ascii("SectionB")) != std::string::npos);
+	TFPASS(main.find(utf16_ascii("NotePied")) == std::string::npos);
+	TFPASS(main.find(std::string("\x02\x00", 2)) != std::string::npos);
+	TFPASS(main.find(std::string("\x05\x00", 2)) != std::string::npos);
+	TFPASS(ccp_text > 0 && ccp_ftn > 0 && ccp_atn > 0 && ccp_edn > 0 && ccp_hdd == 0);
+	// One note: (1 + 1) CPs and one 2-byte FRD, or one 30-byte ATRD.
+	TFPASS(word.size() >= 0x9A + 3 * 8 && le32(word, 0x9A + 2 * 8 + 4) == 10);
+	TFPASS(word.size() >= 0x9A + 5 * 8 && le32(word, 0x9A + 4 * 8 + 4) == 38);
+	TFPASS(word.size() >= 0x9A + 47 * 8 && le32(word, 0x9A + 46 * 8 + 4) == 10);
+	// Two sections: 3 CPs and 2 SED entries of 12 bytes.
+	TFPASS(word.size() >= 0x9A + 7 * 8 && le32(word, 0x9A + 6 * 8 + 4) == 36);
+	const unsigned clx_at = word.size() >= 0x9A + 34 * 8 ? le32(word, 0x9A + 33 * 8) : 0;
+	TFPASS(clx_at + 13 <= table.size() &&
+		le32(table, clx_at + 9) == ccp_text + ccp_ftn + ccp_atn + ccp_edn + 1);
+
+	package_close(input, ole);
+	std::remove(path.c_str());
+}

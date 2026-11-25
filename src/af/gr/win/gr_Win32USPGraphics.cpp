@@ -781,9 +781,12 @@ void s_storeUtf16(WCHAR * dest, UT_uint32 & n, UT_UCS4Char ch)
 		UT_UCS4Char c = ch - 0x10000;
 		dest[n++] = static_cast<WCHAR>(0xD800 + ((c >> 10) & 0x3FF));
 		dest[n++] = static_cast<WCHAR>(0xDC00 + (c & 0x3FF));
+		return;
 	}
-	else
-		dest[n++] = static_cast<WCHAR>(ch);
+	// A lone surrogate, or a value past the Unicode range, is not a WCHAR.
+	if (ch > 0xFFFF || (ch >= 0xD800 && ch <= 0xDFFF))
+		ch = 0xFFFD;
+	dest[n++] = static_cast<WCHAR>(ch);
 }
 
 class Utf16Index

@@ -544,6 +544,26 @@ GR_Font* GR_Win32Graphics::_findFont(const char* pszFontFamily,
 	return _newFont(lf, fPointSize, m_hdc, hPrintDC);
 }
 
+// ExtTextOutW consumes UTF-16. U+10000 and above need a surrogate pair.
+// U+200B and U+FEFF are omitted. A lone surrogate or a value past U+10FFFF
+// becomes U+FFFD.
+static int s_utf16Units(UT_UCS4Char ch, UT_UCS2Char out[2])
+{
+	if (ch == 0x200B || ch == 0xFEFF)
+		return 0;
+	if (ch > 0x10FFFF || (ch >= 0xD800 && ch <= 0xDFFF))
+		ch = 0xFFFD;
+	if (ch <= 0xFFFF)
+	{
+		out[0] = static_cast<UT_UCS2Char>(ch);
+		return 1;
+	}
+	ch -= 0x10000;
+	out[0] = static_cast<UT_UCS2Char>(0xD800 + ((ch >> 10) & 0x3FF));
+	out[1] = static_cast<UT_UCS2Char>(0xDC00 + (ch & 0x3FF));
+	return 2;
+}
+
 void GR_Win32Graphics::drawGlyph(UT_uint32 /*Char*/, UT_sint32 /*xoff*/, UT_sint32 /*yoff*/)
 {
 	UT_ASSERT_HARMLESS(UT_TODO);
@@ -568,12 +588,13 @@ void GR_Win32Graphics::drawChar(UT_UCS4Char Char, UT_sint32 xoff, UT_sint32 yoff
 	SetTextAlign(m_hdc, TA_LEFT | TA_TOP);
 	SetBkMode(m_hdc, TRANSPARENT);		// TODO: remember and reset?
 
-	UT_UCS4Char currentChar = Char;
-	//TODO this is a temporary hack -- need a way to handle true 32-bit chars
-	UT_UCS2Char aChar = (UT_UCS2Char) currentChar;
+	if(Char == 0x200B || Char == 0xFEFF
+	   /*|| Char == UCS_LIGATURE_PLACEHOLDER*/)
+		return;
 
-	if(currentChar == 0x200B || currentChar == 0xFEFF
-	   /*|| currentChar == UCS_LIGATURE_PLACEHOLDER*/)
+	UT_UCS2Char units[2];
+	const int nUnits = s_utf16Units(Char, units);
+	if (nUnits <= 0)
 		return;
 	// Windows NT and Windows 95 support the Unicode Font file.
 	// All of the Unicode glyphs can be rendered if the glyph is found in
@@ -590,53 +611,51 @@ void GR_Win32Graphics::drawChar(UT_UCS4Char Char, UT_sint32 xoff, UT_sint32 yoff
 		bWin9xSymbol = (GetObjectW(m_pFont->getFontHandle(), sizeof(lf), &lf) == sizeof(lf)
 			&& lf.lfCharSet == SYMBOL_CHARSET);
 	}
-	if (bWin9xSymbol)
+	if (bWin9xSymbol && nUnits == 1)
 	{
 		// Symbol character handling for Win9x
 		char str[sizeof(UT_UCS2Char)];
 
 		int iConverted = WideCharToMultiByte(CP_ACP, 0,
-			(LPCWSTR) &aChar, 1,
+			(LPCWSTR) units, 1,
 			str, sizeof(str), nullptr, nullptr);
 		if (iConverted > 0)
 			ExtTextOutA(m_hdc, xoff, yoff, 0, nullptr, str, iConverted, nullptr);
 	}
 	else
 	{
-		// Unicode font and default character set handling for WinNT and Win9x
-		ExtTextOutW(m_hdc, xoff, yoff, 0/*ETO_GLYPH_INDEX*/, nullptr, (LPCWSTR) &aChar, 1, nullptr);
+		// ExtTextOutW takes UTF-16. A character above U+FFFF is a surrogate pair.
+		ExtTextOutW(m_hdc, xoff, yoff, 0/*ETO_GLYPH_INDEX*/, nullptr, (LPCWSTR) units, nUnits, nullptr);
 	}
 }
 
 UT_uint16*	GR_Win32Graphics::_remapGlyphs(const UT_UCS4Char* pChars, int iCharOffset, int &iLength)
 {
-	// TODO -- make this handle 32-bit chars properly
-	if (iLength > (int)m_remapBufferSize)
+	const int capacity = iLength * 2;
+	if (capacity > (int)m_remapBufferSize)
 	{
 		delete [] m_remapBuffer;
 
 		if(XAP_App::getApp()->theOSHasBidiSupport() != XAP_App::BIDI_SUPPORT_NONE)
 		{
 			delete [] m_remapIndices;
-			m_remapIndices = new UT_UCS2Char[iLength];
+			m_remapIndices = new UT_UCS2Char[capacity];
 		}
 
-		m_remapBuffer = new UT_UCS2Char[iLength];
-		m_remapBufferSize = iLength;
+		m_remapBuffer = new UT_UCS2Char[capacity];
+		m_remapBufferSize = capacity;
 	}
 
-    // Need to handle zero-width spaces correctly
-	int i, j;
-	for (i = 0, j = 0; i < iLength; ++i, ++j)
+	int j = 0;
+	for (int i = 0; i < iLength; ++i)
 	{
-		m_remapBuffer[j] = (UT_UCS2Char)pChars[iCharOffset + i];
-		
-		if(m_remapBuffer[j] == 0x200B || m_remapBuffer[j] == 0xFEFF
-		   /*|| m_remapBuffer[j] == UCS_LIGATURE_PLACEHOLDER*/)
-			j--;
+		UT_UCS2Char units[2];
+		const int n = s_utf16Units(pChars[iCharOffset + i], units);
+		for (int u = 0; u < n; ++u)
+			m_remapBuffer[j++] = units[u];
 	}
 
-	iLength -= (i - j);
+	iLength = j;
 
 	return m_remapBuffer;
 }
@@ -710,37 +729,30 @@ void GR_Win32Graphics::drawChars(const UT_UCS4Char* pChars,
 
 		if (pCharWidths)
 		{
-			if (iLengthOrig > static_cast<int>(sizeof(duCharWidths)/sizeof(int)) )
-				pCharAdvances = new int [iLengthOrig];
+			const int advanceCap = iLengthOrig * 2;
+			if (advanceCap > static_cast<int>(sizeof(duCharWidths)/sizeof(int)) )
+				pCharAdvances = new int [advanceCap];
 			else
 				pCharAdvances = duCharWidths;
 			UT_ASSERT(pCharAdvances != nullptr);
 
-			// convert width into display units; since we have removed
-			// all 0x200B and 0xFEFF characters, we also have to
-			// remove their entires from the advances
-			UT_sint32 i,j;
+			// One advance per UTF-16 unit. A surrogate pair keeps the whole
+			// width on the first unit. Zero-width characters are absent.
 			UT_sint32 iwidth = 0;
 			UT_sint32 iadvance = 0;
-			UT_sint32 inextAdvance = 0;
-			for (i = 0, j = 0; i < iLengthOrig; i++)
+			int j = 0;
+			for (int i = 0; i < iLengthOrig; i++)
 			{
-				if(! (pChars[iCharOffset+i] == 0x200B || pChars[iCharOffset+i] == 0xFEFF
-				   /*|| pChars[iCharOffset+i] == UCS_LIGATURE_PLACEHOLDER*/ ) )
-				{
-#if 1
-					// I rather stupidly changed this to the version
-					// below the #else, but this one produces much
-					// smaller rounding errors. Tomas, Dec 6, 2003
-					iwidth += pCharWidths[iCharOffset + i];
-					inextAdvance = (UT_sint32)((double)_tduX(iwidth) * m_fXYRatio);
-					pCharAdvances[j] = inextAdvance - iadvance;
-					iadvance = inextAdvance;
-#else
-					pCharAdvances[j] = tdu(pCharWidths[iCharOffset + i]);
-#endif
-					j++;
-				}
+				UT_UCS2Char units[2];
+				const int n = s_utf16Units(pChars[iCharOffset + i], units);
+				if (n <= 0)
+					continue;
+				iwidth += pCharWidths[iCharOffset + i];
+				const UT_sint32 inextAdvance = (UT_sint32)((double)_tduX(iwidth) * m_fXYRatio);
+				pCharAdvances[j++] = inextAdvance - iadvance;
+				iadvance = inextAdvance;
+				if (n == 2)
+					pCharAdvances[j++] = 0;
 			}
 		}
 		else
@@ -806,7 +818,7 @@ void GR_Win32Graphics::drawChars(const UT_UCS4Char* pChars,
 			ExtTextOutW(m_hdc, xoff, yoff, 0, nullptr, (LPCWSTR) currentChars, iLength, pCharAdvances);
 		}
 
-		if (pCharAdvances && (iLengthOrig > static_cast<int>(sizeof(duCharWidths)/sizeof(int))) )
+		if (pCharAdvances && pCharAdvances != duCharWidths)
 			delete[] pCharAdvances;
 	}
 }
@@ -2010,14 +2022,10 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 		return;
 	}
 
-	// When Printing yDest must be within Page Height for each
-	// Page.
-	if (queryProperties(GR_Graphics::DGP_PAPER))
-	{
-		UT_sint32 nPageHeight = GetDeviceCaps(m_hdc, PHYSICALHEIGHT);
-		if (nPageHeight > 0)
-			yDest = ( yDest % nPageHeight );
-	}
+	// startPage() already opens one physical page, and the view draws that
+	// page in page-local coordinates. Text is not folded with PHYSICALHEIGHT.
+	// Doing it here sent a picture whose device Y passed the paper edge back
+	// to the top of the page.
 
 	GR_Win32Image* pWin32Img = static_cast<GR_Win32Image*>(pImg);
 
@@ -2165,12 +2173,6 @@ void GR_Win32Graphics::drawImage(GR_Image* pImg, UT_sint32 xDest, UT_sint32 yDes
 
 	xDest = (UT_sint32)((double)_tduX(xDest) * m_fXYRatio);
 	yDest = _tduY(yDest);
-	if (queryProperties(GR_Graphics::DGP_PAPER))
-	{
-		UT_sint32 nPageHeight = GetDeviceCaps(m_hdc, PHYSICALHEIGHT);
-		if (nPageHeight > 0)
-			yDest = (yDest % nPageHeight);
-	}
 
 	const int destW = pImg->getDisplayWidth();
 	const int destH = pImg->getDisplayHeight();
