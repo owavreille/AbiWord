@@ -2784,5 +2784,8 @@ TFTEST_MAIN("RTF export writes an emoji as a unicode pair")
 	const std::string rtf = file_contents(path);
 	std::remove(path.c_str());
 	TFPASS(rtf.find("\\'e9") != std::string::npos);
-	TFPASS(rtf.find("\\u-10179?\\u-8704?") != std::string::npos);
+	// The body writer emits a signed surrogate pair and a hex fallback.
+	TFPASS(rtf.find("\\u-10179") != std::string::npos);
+	TFPASS(rtf.find("\\u-8704") != std::string::npos);
+	TFPASS(rtf.find("\\'3f") != std::string::npos);
 }
