@@ -19,6 +19,9 @@
 #include <gsf/gsf-infile-msole.h>
 #include <gsf/gsf-infile-zip.h>
 #include <gsf/gsf-input-stdio.h>
+#include <gsf/gsf-outfile.h>
+#include <gsf/gsf-outfile-zip.h>
+#include <gsf/gsf-output-stdio.h>
 
 #include "tf_test.h"
 #include "pd_Document.h"
@@ -1411,6 +1414,195 @@ static std::string file_contents(const std::string & path)
 	std::string text(contents, length);
 	g_free(contents);
 	return text;
+}
+
+static std::string frag_value(PD_Document * doc, pf_Frag * frag, const char * name)
+{
+	const PP_AttrProp * ap = nullptr;
+	if (!doc->getAttrProp(frag->getIndexAP(), &ap) || !ap)
+		return std::string();
+	const gchar * value = nullptr;
+	if (ap->getProperty(name, value) && value)
+		return value;
+	if (ap->getAttribute(name, value) && value)
+		return value;
+	return std::string();
+}
+
+static std::string text_property(PD_Document * doc, const char * needle, const char * name)
+{
+	pt_PieceTable * table = doc ? doc->getPieceTable() : nullptr;
+	if (!table)
+		return std::string();
+	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
+	{
+		if (frag->getType() != pf_Frag::PFT_Text)
+			continue;
+		if (static_cast<pf_Frag_Text *>(frag)->toString().find(needle) == std::string::npos)
+			continue;
+		return frag_value(doc, frag, name);
+	}
+	return std::string();
+}
+
+static std::string cell_property(PD_Document * doc, const char * top, const char * name)
+{
+	pt_PieceTable * table = doc ? doc->getPieceTable() : nullptr;
+	if (!table)
+		return std::string();
+	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
+	{
+		if (frag->getType() != pf_Frag::PFT_Strux)
+			continue;
+		if (static_cast<pf_Frag_Strux *>(frag)->getStruxType() != PTX_SectionCell)
+			continue;
+		if (frag_value(doc, frag, "top-attach") != top)
+			continue;
+		return frag_value(doc, frag, name);
+	}
+	return std::string();
+}
+
+static int count_strux(PD_Document * doc, PTStruxType kind)
+{
+	pt_PieceTable * table = doc ? doc->getPieceTable() : nullptr;
+	int count = 0;
+	if (!table)
+		return 0;
+	for (pf_Frag * frag = table->getFragments().getFirst(); frag; frag = frag->getNext())
+	{
+		if (frag->getType() == pf_Frag::PFT_Strux &&
+			static_cast<pf_Frag_Strux *>(frag)->getStruxType() == kind)
+			++count;
+	}
+	return count;
+}
+
+static int count_text(const std::string & hay, const char * needle)
+{
+	const std::string::size_type step = std::strlen(needle);
+	int count = 0;
+	if (step == 0)
+		return 0;
+	for (std::string::size_type at = 0; (at = hay.find(needle, at)) != std::string::npos; at += step)
+		++count;
+	return count;
+}
+
+static bool zip_store(GsfOutfile * parent, const char * name, const std::string & bytes)
+{
+	GsfOutput * child = gsf_outfile_new_child(parent, name, FALSE);
+	if (!child)
+		return false;
+	const bool wrote = gsf_output_write(child, bytes.size(),
+		reinterpret_cast<const guint8 *>(bytes.data())) && gsf_output_close(child);
+	g_object_unref(child);
+	return wrote;
+}
+
+static GsfOutfile * zip_dir(GsfOutfile * parent, const char * name)
+{
+	GsfOutput * child = gsf_outfile_new_child(parent, name, TRUE);
+	return child ? GSF_OUTFILE(child) : nullptr;
+}
+
+static bool write_docx(const std::string & path, const std::string & document)
+{
+	GError * error = nullptr;
+	GsfOutput * sink = gsf_output_stdio_new(path.c_str(), &error);
+	if (error)
+	{
+		g_error_free(error);
+		error = nullptr;
+	}
+	if (!sink)
+		return false;
+	GsfOutfile * zip = gsf_outfile_zip_new(sink, &error);
+	if (error)
+	{
+		g_error_free(error);
+		error = nullptr;
+	}
+	if (!zip)
+	{
+		g_object_unref(sink);
+		return false;
+	}
+
+	const char * types =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+		"<Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\">"
+		"<Default Extension=\"rels\" ContentType=\"application/vnd.openxmlformats-package.relationships+xml\"/>"
+		"<Default Extension=\"xml\" ContentType=\"application/xml\"/>"
+		"<Override PartName=\"/word/document.xml\" ContentType=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml\"/>"
+		"</Types>";
+	const char * rels =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+		"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\">"
+		"<Relationship Id=\"rId1\" Type=\"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument\" Target=\"word/document.xml\"/>"
+		"</Relationships>";
+	const char * docrels =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+		"<Relationships xmlns=\"http://schemas.openxmlformats.org/package/2006/relationships\"/>";
+
+	bool ok = zip_store(zip, "[Content_Types].xml", types);
+	GsfOutfile * reldir = ok ? zip_dir(zip, "_rels") : nullptr;
+	if (reldir)
+	{
+		ok = zip_store(reldir, ".rels", rels) && ok;
+		ok = gsf_output_close(GSF_OUTPUT(reldir)) && ok;
+		g_object_unref(reldir);
+	}
+	else
+		ok = false;
+
+	GsfOutfile * word = ok ? zip_dir(zip, "word") : nullptr;
+	if (word)
+	{
+		ok = zip_store(word, "document.xml", document) && ok;
+		GsfOutfile * wordrels = ok ? zip_dir(word, "_rels") : nullptr;
+		if (wordrels)
+		{
+			ok = zip_store(wordrels, "document.xml.rels", docrels) && ok;
+			ok = gsf_output_close(GSF_OUTPUT(wordrels)) && ok;
+			g_object_unref(wordrels);
+		}
+		else
+			ok = false;
+		ok = gsf_output_close(GSF_OUTPUT(word)) && ok;
+		g_object_unref(word);
+	}
+	else
+		ok = false;
+
+	ok = gsf_output_close(GSF_OUTPUT(zip)) && ok;
+	g_object_unref(zip);
+	ok = gsf_output_close(sink) && ok;
+	g_object_unref(sink);
+	return ok;
+}
+
+static bool insert_cell(PD_Document * doc, int left, int right, int top, int bot, const char * text, const char * botColor)
+{
+	PP_PropertyVector props = {
+		"left-attach", std::to_string(left),
+		"right-attach", std::to_string(right),
+		"top-attach", std::to_string(top),
+		"bot-attach", std::to_string(bot)
+	};
+	if (botColor)
+	{
+		props.push_back("bot-color");
+		props.push_back(botColor);
+		props.push_back("bot-style");
+		props.push_back("1");
+	}
+	pf_Frag_Strux * cell = nullptr;
+	return doc->insertStrux(document_end(doc), PTX_SectionCell, PP_NOPROPS, props, &cell) &&
+		cell != nullptr &&
+		doc->insertStrux(document_end(doc), PTX_Block) &&
+		doc->insertSpan(document_end(doc), std::string(text)) &&
+		doc->insertStrux(document_end(doc), PTX_EndCell);
 }
 
 static bool fo_min_height_non_negative(const std::string & xml)
@@ -2845,4 +3037,124 @@ TFTEST_MAIN("ABW export splits a math CDATA end")
 	std::remove(path.c_str());
 	TFPASS(saved.find("a]]]]><![CDATA[>b]]") != std::string::npos);
 	TFPASS(saved.find("application/mathml+xml") != std::string::npos);
+}
+
+TFTEST_MAIN("DOCX import keeps val language, a transparent highlight and a stopped merge")
+{
+	ensure_plugin(".docx", "openxml");
+	if (!TFPASS(exporter_known(".docx")))
+		return;
+
+	const char * document =
+		"<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>"
+		"<w:document xmlns:w=\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">"
+		"<w:body>"
+		"<w:p><w:r><w:rPr>"
+		"<w:highlight w:val=\"none\"/>"
+		"<w:lang w:val=\"fr-FR\" w:eastAsia=\"ja-JP\" w:bidi=\"ar-SA\"/>"
+		"</w:rPr><w:t>bonjour</w:t></w:r></w:p>"
+		"<w:p><w:r><w:rPr>"
+		"<w:highlight w:val=\"darkYellow\"/>"
+		"<w:lang w:eastAsia=\"ja-JP\"/>"
+		"</w:rPr><w:t>asie</w:t></w:r></w:p>"
+		"<w:p><w:r><w:rPr>"
+		"<w:lang w:bidi=\"ar-SA\"/>"
+		"</w:rPr><w:t>arabe</w:t></w:r></w:p>"
+		"<w:tbl>"
+		"<w:tr><w:tc><w:tcPr><w:vMerge w:val=\"restart\"/></w:tcPr>"
+		"<w:p><w:r><w:t>haut</w:t></w:r></w:p></w:tc></w:tr>"
+		"<w:tr><w:tc><w:tcPr><w:vMerge w:val=\"continue\"/></w:tcPr>"
+		"<w:p><w:r><w:t>bas</w:t></w:r></w:p></w:tc></w:tr>"
+		"</w:tbl>"
+		"</w:body></w:document>";
+
+	const std::string path = UT_createTmpFile("fmtlang", ".docx");
+	if (!TFPASS(!path.empty()) || !TFPASS(write_docx(path, document)))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+	PD_Document * doc = new PD_Document();
+	const UT_Error err = doc->readFromFile(path.c_str(), IEFT_Unknown, nullptr);
+	std::remove(path.c_str());
+	if (!TFPASS(UT_IS_IE_SUCCESS(err)))
+	{
+		doc->unref();
+		return;
+	}
+
+	TFPASS(text_property(doc, "bonjour", "lang") == "fr-FR");
+	TFPASS(text_property(doc, "bonjour", "bgcolor") == "transparent");
+	TFPASS(text_property(doc, "asie", "lang") == "ja-JP");
+	TFPASS(text_property(doc, "asie", "bgcolor") == "#808000");
+	TFPASS(text_property(doc, "arabe", "lang") == "ar-SA");
+	TFPASS(cell_property(doc, "0", "bot-attach") == "2");
+	TFPASS(count_strux(doc, PTX_SectionCell) == 1);
+	const std::string text = document_text(doc);
+	doc->unref();
+	TFPASS(text.find("bonjour") != std::string::npos);
+	TFPASS(text.find("haut") != std::string::npos);
+}
+
+TFTEST_MAIN("DOCX export stops a vertical merge after two rows")
+{
+	ensure_plugin(".docx", "openxml");
+	if (!TFPASS(exporter_known(".docx")))
+		return;
+
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+	pf_Frag_Strux * table = nullptr;
+	const PP_PropertyVector tableProps = {"table-column-props", "1in/1in/"};
+	if (!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionTable, PP_NOPROPS, tableProps, &table)) ||
+		!TFPASS(table != nullptr) ||
+		!TFPASS(insert_cell(doc, 0, 1, 0, 2, "Fusion", "abcdef")) ||
+		!TFPASS(insert_cell(doc, 1, 2, 0, 1, "A", nullptr)) ||
+		!TFPASS(insert_cell(doc, 1, 2, 1, 2, "B", nullptr)) ||
+		!TFPASS(insert_cell(doc, 0, 1, 2, 3, "C", nullptr)) ||
+		!TFPASS(insert_cell(doc, 1, 2, 2, 3, "D", nullptr)) ||
+		!TFPASS(insert_cell(doc, 0, 1, 3, 4, "E", nullptr)) ||
+		!TFPASS(insert_cell(doc, 1, 2, 3, 4, "F", nullptr)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndTable)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmtmerge", ".docx");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	GsfInput * input = nullptr;
+	GsfInfile * zip = package_open(path, input, gsf_infile_zip_new);
+	if (!TFPASS(zip != nullptr))
+	{
+		package_close(input, zip);
+		std::remove(path.c_str());
+		return;
+	}
+	const std::string xml = zip_read(zip, "word/document.xml");
+	package_close(input, zip);
+	std::remove(path.c_str());
+	TFPASS(xml.find("Fusion") != std::string::npos);
+	// A two-row merge in a four-row table writes one restart and one continue.
+	// The copied bottom border is emitted only by that continuation.
+	TFPASS(count_text(xml, "<w:vMerge") == 2);
+	TFPASS(count_text(xml, "w:val=\"restart\"") == 1);
+	TFPASS(count_text(xml, "w:val=\"continue\"") == 1);
+	TFPASS(count_text(xml, "w:color=\"abcdef\"") == 1);
 }
