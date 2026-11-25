@@ -8013,6 +8013,11 @@ FV_View::findReplace(bool& bDoneEntireDocument)
 UT_uint32
 FV_View::findReplaceAll()
 {
+	if (!m_sFind || !*m_sFind)
+	{
+		return 0;
+	}
+
 	UT_uint32 iReplaced = 0;
 	m_pDoc->beginUserAtomicGlob();
 
@@ -8036,6 +8041,12 @@ FV_View::findReplaceAll()
 	
 	// Compute search prefix
 	UT_uint32* pPrefix = _computeFindPrefix(m_sFind);
+	if (!pPrefix)
+	{
+		m_pDoc->endUserAtomicGlob();
+		setCursorToContext();
+		return 0;
+	}
 
 	// Prime with the first match - _findReplace is really
 	// replace-then-find.
@@ -8057,6 +8068,13 @@ FV_View::findReplaceAll()
 	m_pDoc->endUserAtomicGlob();
 
 	_resetSelection();
+	PT_DocPosition posBeg = 2, posEnd = 2;
+	getEditableBounds(false, posBeg);
+	getEditableBounds(true, posEnd);
+	if (iPoint < posBeg)
+		iPoint = posBeg;
+	else if (iPoint > posEnd)
+		iPoint = posEnd;
 	setPoint(iPoint);
 
 	// restore notifications if we stopped them

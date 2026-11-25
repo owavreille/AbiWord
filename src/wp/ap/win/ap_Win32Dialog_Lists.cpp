@@ -228,6 +228,11 @@ BOOL AP_Win32Dialog_Lists::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /*
 
 	activate();
 
+	if (m_pAutoUpdateLists)
+	{
+		m_pAutoUpdateLists->stop();
+		DELETEP(m_pAutoUpdateLists);
+	}
 	m_pAutoUpdateLists = UT_Timer::static_constructor(autoupdateLists, this);
 	m_bDestroy_says_stopupdating = false;
 	m_pAutoUpdateLists->set(500);	// auto-updater at 1/2 Hz
@@ -423,6 +428,13 @@ BOOL AP_Win32Dialog_Lists::_onDeltaPos(NM_UPDOWN* pnmud)
 
 void AP_Win32Dialog_Lists::destroy(void)
 {
+	m_bDestroy_says_stopupdating = true;
+	if (m_pAutoUpdateLists)
+	{
+		m_pAutoUpdateLists->stop();
+		DELETEP(m_pAutoUpdateLists);
+	}
+
 	if(isModal())
 	{
 		setAnswer(AP_Dialog_Lists::a_QUIT);
@@ -433,8 +445,6 @@ void AP_Win32Dialog_Lists::destroy(void)
 
 	// Check that our hWnd still is valid. This is not always the case,
 	// such as when shutting down the application.
-	m_bDestroy_says_stopupdating = true;
-	m_pAutoUpdateLists->stop();
 	if (!isModal())
 		modeless_cleanup();
 	setAnswer(AP_Dialog_Lists::a_CLOSE);
@@ -566,6 +576,12 @@ void AP_Win32Dialog_Lists::_onApply()
 
 	if(isModal())
 	{
+		m_bDestroy_says_stopupdating = true;
+		if (m_pAutoUpdateLists)
+		{
+			m_pAutoUpdateLists->stop();
+			DELETEP(m_pAutoUpdateLists);
+		}
 		setAnswer(AP_Dialog_Lists::a_OK);
 		EndDialog(m_hThisDlg, 0);
 		m_hThisDlg = nullptr;
@@ -967,7 +983,7 @@ void AP_Win32Dialog_Lists::_getDisplayedData(UT_sint32 controlId)
 		if( getfAlign() < 0.0 )
 		{
 			setfAlign(0.0);
-			_win32Dialog.setControlText(AP_RID_DIALOG_LIST_EDIT_INDENT_ALIGN,
+			_win32Dialog.setControlText(AP_RID_DIALOG_LIST_EDIT_LIST_ALIGN,
 								UT_convertToDimensionlessString(0.0, ".2"));
 		}
 
@@ -975,7 +991,7 @@ void AP_Win32Dialog_Lists::_getDisplayedData(UT_sint32 controlId)
 		{
 			setfIndent(-getfAlign());
 			_win32Dialog.setControlText(AP_RID_DIALOG_LIST_EDIT_INDENT_ALIGN,
-								UT_convertToDimensionlessString(0.0, ".2"));
+								UT_convertToDimensionlessString(-getfAlign(), ".2"));
 		}
 
 	}
@@ -1149,6 +1165,7 @@ void AP_Win32Dialog_Lists::_selectFont()
 	if (pDialog->getAnswer() != XAP_Dialog_FontChooser::a_OK &&
 		pDialog->getAnswer() != XAP_Dialog_FontChooser::a_YES)
 	{
+		pDialogFactory->releaseDialog(pDialog);
 		return;
 	}
 
@@ -1190,6 +1207,8 @@ void AP_Win32Dialog_Lists::_selectFont()
 
 		_enableControls();
 	}
+
+	pDialogFactory->releaseDialog(pDialog);
 }
 
 

@@ -207,6 +207,7 @@ public:
 	virtual void	mouseMotion(EV_EditModifierState ems, UT_sint32 x, UT_sint32 y) override;
 	virtual void	mousePress(EV_EditModifierState ems, EV_EditMouseButton emb, UT_uint32 x, UT_uint32 y) override;
 	virtual void	mouseRelease(EV_EditModifierState ems, EV_EditMouseButton emb, UT_sint32 x, UT_sint32 y) override;
+	void			cancelDrag(void);
 
 	bool            isMouseOverTab(UT_uint32 x, UT_uint32 y);
 	/* used with AV_Listener */

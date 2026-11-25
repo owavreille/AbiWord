@@ -269,11 +269,18 @@ void AP_Win32Dialog_Options::_controlEnable( tControl id, bool value )
 			return;
 
 		case id_CHECK_SMART_QUOTES_ENABLE:
-			EnableWindow(GetDlgItem((HWND)getPage(PG_SMARTQUOTES),AP_RID_DIALOG_OPTIONS_CHK_CustomSmartQuotes),value);
+			EnableWindow(GetDlgItem((HWND)getPage(PG_SMARTQUOTES),AP_RID_DIALOG_OPTIONS_CHK_SmartQuotes),value);
 			return;
 
 		case id_CHECK_CUSTOM_SMART_QUOTES:
+			EnableWindow(GetDlgItem((HWND)getPage(PG_SMARTQUOTES),AP_RID_DIALOG_OPTIONS_CHK_CustomSmartQuotes),value);
+			return;
+
+		case id_LIST_VIEW_OUTER_QUOTE_STYLE:
 			EnableWindow(GetDlgItem((HWND)getPage(PG_SMARTQUOTES),AP_RID_DIALOG_OPTIONS_COMBO_OUTERQUOTE),value);
+			return;
+
+		case id_LIST_VIEW_INNER_QUOTE_STYLE:
 			EnableWindow(GetDlgItem((HWND)getPage(PG_SMARTQUOTES),AP_RID_DIALOG_OPTIONS_COMBO_INNERQUOTE),value);
 			return;
 				
@@ -1024,21 +1031,13 @@ BOOL AP_Win32Dialog_Options_SmartQuotes::_onCommand(HWND hWnd, WPARAM wParam, LP
 	switch (wId)
 	{					
 		case AP_RID_DIALOG_OPTIONS_CHK_SmartQuotes:
-		{
-			bool bChecked = (IsDlgButtonChecked( hWnd, AP_RID_DIALOG_OPTIONS_CHK_SmartQuotes ) == BST_CHECKED);
-			EnableWindow( GetDlgItem( hWnd, AP_RID_DIALOG_OPTIONS_CHK_CustomSmartQuotes), bChecked );
-			if (!bChecked) {
-				EnableWindow( GetDlgItem( hWnd, AP_RID_DIALOG_OPTIONS_COMBO_OUTERQUOTE), bChecked );
-				EnableWindow( GetDlgItem( hWnd, AP_RID_DIALOG_OPTIONS_COMBO_INNERQUOTE), bChecked );
-			}
-			return TRUE;
-		}
-
 		case AP_RID_DIALOG_OPTIONS_CHK_CustomSmartQuotes:
 		{
-			bool bChecked = (IsDlgButtonChecked( hWnd, AP_RID_DIALOG_OPTIONS_CHK_CustomSmartQuotes ) == BST_CHECKED);
-			EnableWindow( GetDlgItem( hWnd, AP_RID_DIALOG_OPTIONS_COMBO_OUTERQUOTE), bChecked );
-			EnableWindow( GetDlgItem( hWnd, AP_RID_DIALOG_OPTIONS_COMBO_INNERQUOTE), bChecked );
+			bool bSmart = (IsDlgButtonChecked( hWnd, AP_RID_DIALOG_OPTIONS_CHK_SmartQuotes ) == BST_CHECKED);
+			bool bCustom = (IsDlgButtonChecked( hWnd, AP_RID_DIALOG_OPTIONS_CHK_CustomSmartQuotes ) == BST_CHECKED);
+			EnableWindow( GetDlgItem( hWnd, AP_RID_DIALOG_OPTIONS_CHK_CustomSmartQuotes), bSmart );
+			EnableWindow( GetDlgItem( hWnd, AP_RID_DIALOG_OPTIONS_COMBO_OUTERQUOTE), bSmart && bCustom );
+			EnableWindow( GetDlgItem( hWnd, AP_RID_DIALOG_OPTIONS_COMBO_INNERQUOTE), bSmart && bCustom );
 			return TRUE;
 		}
 

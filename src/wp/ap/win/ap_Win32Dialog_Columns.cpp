@@ -18,6 +18,7 @@
  */
 
 #include <windows.h>
+#include <commctrl.h>
 #include <string.h>
 
 #include "ut_string.h"
@@ -156,12 +157,19 @@ BOOL AP_Win32Dialog_Columns::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM 
 
 	// set initial state
 	wchar_t buf[BUFSIZE];
-	checkButton(AP_RID_DIALOG_COLUMN_RADIO_ONE + getColumns() - 1, true);
+	checkButton(AP_RID_DIALOG_COLUMN_RADIO_ONE, getColumns() == 1);
+	checkButton(AP_RID_DIALOG_COLUMN_RADIO_TWO, getColumns() == 2);
+	checkButton(AP_RID_DIALOG_COLUMN_RADIO_THREE, getColumns() == 3);
 	enableLineBetweenControl(getColumns() != 1);
 	checkButton(AP_RID_DIALOG_COLUMN_CHECK_LINE_BETWEEN, getLineBetween());
 	SetDlgItemTextW(m_hDlg, AP_RID_DIALOG_COLUMN_EDIT_NUMCOLUMNS, _itow( getColumns(),buf,10) );    
 	setControlText(AP_RID_DIALOG_COLUMN_EDIT_SPACEAFTER, getSpaceAfterString());
 	setControlText(AP_RID_DIALOG_COLUMN_EDIT_MAXSIZE, getHeightString());
+
+	// Default spin range is 100..0 (inverted). Set min < max so UP increases and DOWN decreases.
+	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_SPIN_NUMCOLUMNS, UDM_SETRANGE, 0, MAKELONG(100, 1));
+	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_SPIN_SPACEAFTER, UDM_SETRANGE, 0, MAKELONG(100, 0));
+	SendDlgItemMessageW(hWnd, AP_RID_DIALOG_COLUMN_SPIN_MAXSIZE, UDM_SETRANGE, 0, MAKELONG(100, 0));
 
 	showControl( AP_RID_DIALOG_COLUMN_CHECK_RTL_ORDER, SW_NORMAL );
 	checkButton(AP_RID_DIALOG_COLUMN_CHECK_RTL_ORDER, getColumnOrder()!=false);
@@ -197,9 +205,22 @@ BOOL AP_Win32Dialog_Columns::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lPara
 	{
 	case IDCANCEL:						// also AP_RID_DIALOG_COLUMN_BTN_CANCEL
 		m_answer = a_CANCEL;
-		// fall through
+		EndDialog(hWnd,0);
+		return 1;
 
 	case IDOK:							// also AP_RID_DIALOG_COLUMN_BTN_OK
+		GetDlgItemTextW( hWnd, AP_RID_DIALOG_COLUMN_EDIT_NUMCOLUMNS, buf, BUFSIZE );
+		if( _wtoi( buf ) > 0 && _wtoi(buf) != (signed) getColumns() )
+		{
+			setColumns( _wtoi(buf) );
+		}
+		GetDlgItemTextW( hWnd, AP_RID_DIALOG_COLUMN_EDIT_SPACEAFTER, buf, BUFSIZE );
+		str.fromLocale (buf);
+		setSpaceAfter( str.utf8_str().utf8_str() );
+		GetDlgItemTextW( hWnd, AP_RID_DIALOG_COLUMN_EDIT_MAXSIZE, buf, BUFSIZE );
+		str.fromLocale (buf);
+		setMaxHeight( str.utf8_str().utf8_str() );
+		m_answer = a_OK;
 		EndDialog(hWnd,0);
 		return 1;
 

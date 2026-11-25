@@ -2767,7 +2767,12 @@ bool
 FV_View::_findNext(UT_uint32* pPrefix,
 				   bool& bDoneEntireDocument)
 {
-	UT_ASSERT(m_sFind);
+	if (!m_sFind || !*m_sFind)
+	{
+		bDoneEntireDocument = true;
+		m_wrappedEnd = false;
+		return false;
+	}
 
 	fl_BlockLayout* block = _findGetCurrentBlock();
 	PT_DocPosition offset = _findGetCurrentOffset();
@@ -2776,7 +2781,7 @@ FV_View::_findNext(UT_uint32* pPrefix,
 
 	// Clone the search string, converting it to lowercase is search
 	// should ignore case.
-	UT_UCS4Char* pFindStr = (UT_UCS4Char*) UT_calloc(m, sizeof(UT_UCS4Char));
+	UT_UCS4Char* pFindStr = (UT_UCS4Char*) UT_calloc(m + 1, sizeof(UT_UCS4Char));
 	UT_return_val_if_fail(pFindStr,false);
 
 	UT_uint32 j;
@@ -2806,7 +2811,11 @@ FV_View::_findNext(UT_uint32* pPrefix,
 			// for smart quote matching
 			UT_UCS4Char cPlainQuote = s_smartQuoteToPlain(currentChar);
 			
-			if (!m_bMatchCase) currentChar = UT_UCS4_tolower(currentChar);
+			if (!m_bMatchCase)
+			{
+				currentChar = UT_UCS4_tolower(currentChar);
+				cPlainQuote = UT_UCS4_tolower(cPlainQuote);
+			}
 			
 			while (t > 0 && pFindStr[t] != currentChar && pFindStr[t] != cPlainQuote)
 				t = pPrefix[t-1];
@@ -2818,14 +2827,26 @@ FV_View::_findNext(UT_uint32* pPrefix,
 				if (m_bWholeWord) 
 				{
 					bool start = true;
-					if((static_cast<UT_sint32>(i) - static_cast<UT_sint32>(m)) > 0)
+					if ((static_cast<UT_sint32>(i) - static_cast<UT_sint32>(m)) > 0)
+					{
 						start = UT_isWordDelimiter(buffer[i-m-1], UCS_UNKPUNK, UCS_UNKPUNK);
+					}
+					else if (offset > 0 && block)
+					{
+						UT_GrowBuf blockBuf;
+						if (block->getBlockBuf(&blockBuf) && offset <= blockBuf.getLength())
+						{
+							UT_UCS4Char prevChar = static_cast<UT_UCS4Char>(*blockBuf.getPointer(offset - 1));
+							start = UT_isWordDelimiter(prevChar, UCS_UNKPUNK, UCS_UNKPUNK);
+						}
+					}
 					bool end = UT_isWordDelimiter(buffer[i], UCS_UNKPUNK, UCS_UNKPUNK);
 					if (start && end) 
 					{
 						foundAt = i - m;
 						break;
 					}
+					t = (pPrefix && m > 0) ? pPrefix[m - 1] : 0;
 				}
 				else 
 				{
@@ -2870,7 +2891,12 @@ bool
 FV_View::_findPrev(UT_uint32* /*pPrefix*/,
 				   bool& bDoneEntireDocument)
 {
-	UT_ASSERT(m_sFind);
+	if (!m_sFind || !*m_sFind)
+	{
+		bDoneEntireDocument = true;
+		m_wrappedEnd = false;
+		return false;
+	}
 
 	fl_BlockLayout* block = _findGetCurrentBlock();
 	PT_DocPosition offset = _findGetCurrentOffset();
@@ -2879,7 +2905,7 @@ FV_View::_findPrev(UT_uint32* /*pPrefix*/,
 
 	// Clone the search string, converting it to lowercase is search
 	// should ignore case.
-	UT_UCS4Char* pFindStr = (UT_UCS4Char*) UT_calloc(m, sizeof(UT_UCS4Char));
+	UT_UCS4Char* pFindStr = (UT_UCS4Char*) UT_calloc(m + 1, sizeof(UT_UCS4Char));
 	UT_return_val_if_fail(pFindStr,false);
 
 	UT_uint32 j;
@@ -2900,56 +2926,65 @@ FV_View::_findPrev(UT_uint32* /*pPrefix*/,
 	while ((buffer = _findGetPrevBlockBuffer(&block, &offset, endIndex)))
 	{
 		UT_sint32 foundAt = -1;
-		UT_uint32 i = UT_MIN(offset, UT_UCS4_strlen(buffer));
-		if (i > m) 
-		{
-			i-=m;
-		}
-		else 
-		{
-			if (i==0)
-				i = UT_UCS4_strlen(buffer);
-			else
-				i=0;
-		}
-			
-		UT_uint32 t = 0;
-		UT_UCS4Char currentChar;
+		UT_uint32 bufLen = UT_UCS4_strlen(buffer);
+		UT_uint32 searchEnd = UT_MIN(static_cast<UT_uint32>(offset), bufLen);
+		UT_uint32 minIndex = (endIndex > 0) ? static_cast<UT_uint32>(endIndex) : 0;
 
-		while (i!=UT_uint32(-1))
+		if (searchEnd >= m && (searchEnd - m) >= minIndex)
 		{
-			t = 0;
-			currentChar = buffer[i];
-			UT_UCS4Char cPlainQuote = s_smartQuoteToPlain(currentChar);
+			UT_uint32 i = searchEnd - m;
+			UT_uint32 t = 0;
+			UT_UCS4Char currentChar;
 
-			if (!m_bMatchCase) currentChar = UT_UCS4_tolower(currentChar);
-			while (((m_sFind[t] == currentChar)||(m_sFind[t] == cPlainQuote))&& (t < m))
+			while (i != UT_uint32(-1) && i >= minIndex)
 			{
-				t++;
-				currentChar = buffer[i + t];
-				cPlainQuote = s_smartQuoteToPlain(currentChar);
-				if (!m_bMatchCase) currentChar = UT_UCS4_tolower(currentChar);
-			}	
-				
-			if (t == m) {
-				if (m_bWholeWord)
+				t = 0;
+				currentChar = buffer[i];
+				UT_UCS4Char cPlainQuote = s_smartQuoteToPlain(currentChar);
+
+				if (!m_bMatchCase)
 				{
-					bool start = UT_isWordDelimiter(buffer[i-1], UCS_UNKPUNK, UCS_UNKPUNK);
-					bool end = UT_isWordDelimiter(buffer[i+m], UCS_UNKPUNK, UCS_UNKPUNK);
-					if (start && end)
+					currentChar = UT_UCS4_tolower(currentChar);
+					cPlainQuote = UT_UCS4_tolower(cPlainQuote);
+				}
+				while ((t < m) && ((pFindStr[t] == currentChar) || (pFindStr[t] == cPlainQuote)))
+				{
+					t++;
+					if (t < m)
+					{
+						currentChar = buffer[i + t];
+						cPlainQuote = s_smartQuoteToPlain(currentChar);
+						if (!m_bMatchCase)
+						{
+							currentChar = UT_UCS4_tolower(currentChar);
+							cPlainQuote = UT_UCS4_tolower(cPlainQuote);
+						}
+					}
+				}
+
+				if (t == m)
+				{
+					if (m_bWholeWord)
+					{
+						bool start = (i == 0) ? true : UT_isWordDelimiter(buffer[i - 1], UCS_UNKPUNK, UCS_UNKPUNK);
+						bool end = UT_isWordDelimiter(buffer[i + m], UCS_UNKPUNK, UCS_UNKPUNK);
+						if (start && end)
+						{
+							foundAt = i;
+							break;
+						}
+					}
+					else
 					{
 						foundAt = i;
 						break;
 					}
 				}
-				else
-				{
-					foundAt = i;
+
+				if (i == minIndex)
 					break;
-				}
+				i--;
 			}
-		
-			i--;
 		}
 
 		// Select region of matching string if found
@@ -3096,6 +3131,12 @@ FV_View::_findGetNextBlockBuffer(fl_BlockLayout** pBlock,
 			// Are we at the end of the document?
 			if (!newBlock)
 			{
+				if (m_wrappedEnd)
+				{
+					// Already wrapped once; m_startPosition was past EOF
+					return nullptr;
+				}
+
 				// Then wrap (fetch the first block in the doc)
 				PT_DocPosition startOfDoc;
 				getEditableBounds(false, startOfDoc);
@@ -3130,23 +3171,16 @@ FV_View::_findGetNextBlockBuffer(fl_BlockLayout** pBlock,
 		newOffset = *pOffset;
 	}
 
-	if(newBlock == *pBlock
-	   && (newBlock->getPosition(false) + pBuffer.getLength()) < m_startPosition)
-	{
-		// this happens if the document shrinks in the process of replacement
-		// we get the same block, but it is shorter than the stored m_startPosition
-		return nullptr;
-	}
-			
 	// Are we going to run into the start position in this buffer?	If
 	// so, we need to size our length accordingly
-	if (m_wrappedEnd && _BlockOffsetToPos(newBlock, newOffset) + pBuffer.getLength() >= m_startPosition)
+	if (m_wrappedEnd && _BlockOffsetToPos(newBlock, newOffset) + (pBuffer.getLength() > newOffset ? pBuffer.getLength() - newOffset : 0) >= m_startPosition)
 	{
 		// sanity check
-		if(m_startPosition > (newBlock)->getPosition(false) + newOffset)
-			bufferLength = (m_startPosition - (newBlock)->getPosition(false)) - newOffset;
+		if (m_startPosition > newBlock->getPosition(false) + newOffset && pBuffer.getLength() > newOffset)
+			bufferLength = UT_MIN(static_cast<UT_uint32>((m_startPosition - newBlock->getPosition(false)) - newOffset),
+								  static_cast<UT_uint32>(pBuffer.getLength() - newOffset));
 	}
-	else if(pBuffer.getLength() > newOffset)
+	else if (pBuffer.getLength() > newOffset)
 	{
 		bufferLength = pBuffer.getLength() - newOffset;
 	}
@@ -3361,7 +3395,14 @@ bool FV_View::_insertField(const char* szName,
 bool
 FV_View::_findReplaceReverse(UT_uint32* pPrefix, bool& bDoneEntireDocument, bool bNoUpdate)
 {
-	UT_ASSERT(m_sFind && m_sReplace);
+	if (!m_sFind || !*m_sFind)
+	{
+		bDoneEntireDocument = true;
+		return false;
+	}
+
+	const UT_UCS4Char emptyReplace[1] = { 0 };
+	const UT_UCS4Char* pReplace = m_sReplace ? m_sReplace : emptyReplace;
 
 	bool bRes = false;
 
@@ -3386,13 +3427,13 @@ FV_View::_findReplaceReverse(UT_uint32* pPrefix, bool& bDoneEntireDocument, bool
 
 		// If we have a string with length, do an insert, else let it
 		// hang from the delete above
-		if (*m_sReplace)
+		if (*pReplace)
 		{
-			bRes = m_pDoc->insertSpan(getPoint(), m_sReplace,
-									  UT_UCS4_strlen(m_sReplace),
+			bRes = m_pDoc->insertSpan(getPoint(), pReplace,
+									  UT_UCS4_strlen(pReplace),
 									  &AttrProp_Before);
 			
-			setPoint( getPoint() - UT_UCS4_strlen(m_sReplace)) ;
+			setPoint( getPoint() - UT_UCS4_strlen(pReplace)) ;
 		}
 		// Do not increase the insertion point index, since the insert
 		// span will leave us at the correct place.
@@ -3401,14 +3442,25 @@ FV_View::_findReplaceReverse(UT_uint32* pPrefix, bool& bDoneEntireDocument, bool
 			_generalUpdate();
 
 
-		// If we've wrapped around once, and we're doing work before
-		// we've hit the point at which we started, then we adjust the
-		// start position so that we stop at the right spot.
-		if (m_wrappedEnd && !bDoneEntireDocument)
+		// When searching backwards, replacements before wrapping occur
+		// before m_startPosition and shift it; replacements after wrapping
+		// occur after m_startPosition and do not shift it.
+		if (!m_wrappedEnd && !bDoneEntireDocument)
 		{
-			m_startPosition += (long) UT_UCS4_strlen(m_sReplace);
-			m_startPosition -= (long) UT_UCS4_strlen(m_sFind);
+			UT_sint32 delta = static_cast<UT_sint32>(UT_UCS4_strlen(pReplace)) - static_cast<UT_sint32>(UT_UCS4_strlen(m_sFind));
+			if (delta < 0 && m_startPosition <= static_cast<PT_DocPosition>(-delta) + 2)
+				m_startPosition = 2;
+			else
+				m_startPosition += delta;
 		}
+
+		PT_DocPosition posBeg = 2, posEnd = 2;
+		getEditableBounds(false, posBeg);
+		getEditableBounds(true, posEnd);
+		if (m_startPosition < posBeg)
+			m_startPosition = posBeg;
+		else if (m_startPosition > posEnd)
+			m_startPosition = posEnd;
 
 		UT_ASSERT(m_startPosition >= 2);
 	}
@@ -3437,7 +3489,14 @@ FV_View::_findReplaceReverse(UT_uint32* pPrefix, bool& bDoneEntireDocument, bool
 bool
 FV_View::_findReplace(UT_uint32* pPrefix, bool& bDoneEntireDocument, bool bNoUpdate)
 {
-	UT_ASSERT(m_sFind && m_sReplace);
+	if (!m_sFind || !*m_sFind)
+	{
+		bDoneEntireDocument = true;
+		return false;
+	}
+
+	const UT_UCS4Char emptyReplace[1] = { 0 };
+	const UT_UCS4Char* pReplace = m_sReplace ? m_sReplace : emptyReplace;
 
 	bool bRes = false;
 
@@ -3462,9 +3521,9 @@ FV_View::_findReplace(UT_uint32* pPrefix, bool& bDoneEntireDocument, bool bNoUpd
 
 		// If we have a string with length, do an insert, else let it
 		// hang from the delete above
-		if (*m_sReplace)
-			bRes = m_pDoc->insertSpan(getPoint(), m_sReplace,
-									  UT_UCS4_strlen(m_sReplace),
+		if (*pReplace)
+			bRes = m_pDoc->insertSpan(getPoint(), pReplace,
+									  UT_UCS4_strlen(pReplace),
 									  &AttrProp_Before);
 
 		// Do not increase the insertion point index, since the insert
@@ -3478,9 +3537,20 @@ FV_View::_findReplace(UT_uint32* pPrefix, bool& bDoneEntireDocument, bool bNoUpd
 		// start position so that we stop at the right spot.
 		if (m_wrappedEnd && !bDoneEntireDocument)
 		{
-			m_startPosition += (long) UT_UCS4_strlen(m_sReplace);
-			m_startPosition -= (long) UT_UCS4_strlen(m_sFind);
+			UT_sint32 delta = static_cast<UT_sint32>(UT_UCS4_strlen(pReplace)) - static_cast<UT_sint32>(UT_UCS4_strlen(m_sFind));
+			if (delta < 0 && m_startPosition <= static_cast<PT_DocPosition>(-delta) + 2)
+				m_startPosition = 2;
+			else
+				m_startPosition += delta;
 		}
+
+		PT_DocPosition posBeg = 2, posEnd = 2;
+		getEditableBounds(false, posBeg);
+		getEditableBounds(true, posEnd);
+		if (m_startPosition < posBeg)
+			m_startPosition = posBeg;
+		else if (m_startPosition > posEnd)
+			m_startPosition = posEnd;
 
 		UT_ASSERT(m_startPosition >= 2);
 	}

@@ -187,19 +187,19 @@ void AP_Dialog_Columns::setViewAndDoc(XAP_Frame * pFrame)
 	const std::string & pszMarginBottom =  PP_getAttribute("page-margin-bottom",pszSecProps);
 	const std::string & pszMarginLeft =  PP_getAttribute("page-margin-left",pszSecProps);
 	const std::string & pszMarginRight =  PP_getAttribute("page-margin-right",pszSecProps);
-	if(pszMarginTop.empty())
+	if(!pszMarginTop.empty())
 	{
 		m_dMarginTop = UT_convertToInches(pszMarginTop.c_str());
 	}
-	if(pszMarginBottom.empty())
+	if(!pszMarginBottom.empty())
 	{
 		m_dMarginBottom = UT_convertToInches(pszMarginBottom.c_str());
 	}
-	if(pszMarginLeft.empty())
+	if(!pszMarginLeft.empty())
 	{
 		m_dMarginLeft = UT_convertToInches(pszMarginLeft.c_str());
 	}
-	if(pszMarginRight.empty())
+	if(!pszMarginRight.empty())
 	{
 		m_dMarginRight = UT_convertToInches(pszMarginRight.c_str());
 	}

@@ -60,6 +60,22 @@ FV_FrameEdit::FV_FrameEdit (FV_View * pView)
 	UT_ASSERT_HARMLESS(pView);
 }
 
+static bool bScrollRunning = false;
+static UT_Worker * s_pScroll = nullptr;
+static UT_sint32 iExtra = 0;
+
+static void s_cancelScrollWorker(const FV_FrameEdit * pFE)
+{
+	if (s_pScroll && s_pScroll->getInstanceData() == pFE)
+	{
+		s_pScroll->stop();
+		delete s_pScroll;
+		s_pScroll = nullptr;
+		bScrollRunning = false;
+		iExtra = 0;
+	}
+}
+
 FV_FrameEdit::~FV_FrameEdit()
 {
 	DELETEP(m_pFrameImage);
@@ -68,6 +84,7 @@ FV_FrameEdit::~FV_FrameEdit()
 		m_pAutoScrollTimer->stop();
 		DELETEP(m_pAutoScrollTimer);
 	}
+	s_cancelScrollWorker(this);
 }
 
 void FV_FrameEdit::setPointInside(void)
@@ -92,6 +109,12 @@ void FV_FrameEdit::setMode(FV_FrameEditMode iEditMode)
     UT_DEBUGMSG(("Frame Edit mode set to %d \n",iEditMode));
 	if(iEditMode == FV_FrameEdit_NOT_ACTIVE)
 	{
+		if (m_pAutoScrollTimer)
+		{
+			m_pAutoScrollTimer->stop();
+			DELETEP(m_pAutoScrollTimer);
+		}
+		s_cancelScrollWorker(this);
 		m_pFrameLayout = nullptr;
 		m_pFrameContainer = nullptr;
 		DELETEP(m_pFrameImage);
@@ -109,10 +132,6 @@ void FV_FrameEdit::setMode(FV_FrameEditMode iEditMode)
 	}
 }
 
-
-static bool bScrollRunning = false;
-static UT_Worker * s_pScroll = nullptr;
-static UT_sint32 iExtra = 0;
 
 void FV_FrameEdit::_actuallyScroll(UT_Worker * pWorker)
 {
@@ -475,10 +494,16 @@ void FV_FrameEdit::setDragType(UT_sint32 x, UT_sint32 y, bool bDrawFrame)
 		fl_ContainerLayout* psfh = nullptr;
 		getDoc()->getStruxOfTypeFromPosition(m_pView->getLayout()->getLID(),posAtXY+1,
 										   PTX_SectionFrame, &psfh);
+		if (!psfh || psfh->getContainerType() != FL_CONTAINER_FRAME)
+		{
+			return;
+		}
 		pFL = static_cast<fl_FrameLayout *>(psfh);
-		UT_ASSERT(pFL->getContainerType() == FL_CONTAINER_FRAME);
 		pFCon = static_cast<fp_FrameContainer *>(pFL->getFirstContainer());
-		UT_ASSERT(pFCon->getContainerType() == FP_CONTAINER_FRAME);
+		if (!pFCon || pFCon->getContainerType() != FP_CONTAINER_FRAME)
+		{
+			return;
+		}
 	}
 	else
 	{
@@ -543,6 +568,7 @@ void FV_FrameEdit::setDragType(UT_sint32 x, UT_sint32 y, bool bDrawFrame)
 	UT_sint32 xPage,yPage;
 	UT_sint32 xClick, yClick;
 	fp_Page* pPage = m_pView->_getPageForXY(x, y, xClick, yClick);
+	UT_return_if_fail(pPage);
 	m_pView->getPageScreenOffsets(pPage,xPage,yPage);
 	if(m_iFrameEditMode == FV_FrameEdit_EXISTING_SELECTED)
 	{
@@ -553,16 +579,20 @@ void FV_FrameEdit::setDragType(UT_sint32 x, UT_sint32 y, bool bDrawFrame)
 	{
 		if(pBL)
 		{
-			pFL = static_cast<fl_FrameLayout *>(pBL->myContainingLayout());
+			fl_ContainerLayout * pCL = pBL->myContainingLayout();
+			if (!pCL || pCL->getContainerType() != FL_CONTAINER_FRAME)
+			{
+				return;
+			}
+			pFL = static_cast<fl_FrameLayout *>(pCL);
 			pFCon = static_cast<fp_FrameContainer *>(pFL->getFirstContainer());
 		}
 		else
 		{
-			UT_ASSERT(pFL);
-			UT_ASSERT(pFCon);
+			UT_return_if_fail(pFL && pFCon);
 		}
 	}
-	UT_return_if_fail(pFCon);
+	UT_return_if_fail(pFL && pFCon);
 	UT_sint32 ires = getGraphics()->tlu(FRAME_HANDLE_SIZE); // 6 pixels wide hit area
 	UT_sint32 iLeft = xPage + pFCon->getFullX();
 	UT_sint32 iRight = xPage + pFCon->getFullX() + pFCon->getFullWidth();
@@ -754,14 +784,22 @@ void FV_FrameEdit::mouseLeftPress(UT_sint32 x, UT_sint32 y)
 			if( getDragWhat() != FV_DragWhole)
 			{
 				m_iFrameEditMode = FV_FrameEdit_RESIZE_EXISTING;
+				if (m_pFrameContainer)
+				{
+					m_iInitialFrameX = m_pFrameContainer->getFullX();
+					m_iInitialFrameY = m_pFrameContainer->getFullY();
+				}
 			}
 			else
 			{
 				m_iFrameEditMode = FV_FrameEdit_DRAG_EXISTING;
 				m_iInitialDragX = m_recCurFrame.left;
 				m_iInitialDragY = m_recCurFrame.top;
-				m_iInitialFrameX = m_pFrameContainer->getFullX();
-				m_iInitialFrameY = m_pFrameContainer->getFullY();
+				if (m_pFrameContainer)
+				{
+					m_iInitialFrameX = m_pFrameContainer->getFullX();
+					m_iInitialFrameY = m_pFrameContainer->getFullY();
+				}
 			}
 			if(getGraphics())
 			{
@@ -848,11 +886,11 @@ bool FV_FrameEdit::getFrameStrings(UT_sint32 x, UT_sint32 y,
 		bool bDir=false;
 		m_pView->_findPositionCoords(posAtXY,bEOL,x1,y1,x2,y2,height,bDir,&pBL,&pRun);
 		xxx_UT_DEBUGMSG((" Requested y %d frameEdit y1= %d y2= %d \n",y,y1,y2));
-		fp_Run * pRunOrig = pRun;
 		if((pBL == nullptr) || (pRun == nullptr))
 		{
 			return false;
 		}
+		bool bWalked = false;
 		fl_BlockLayout * pPrevBL = pBL;
 		while(pBL && pBL->myContainingLayout() &&
 		((pBL->myContainingLayout()->getContainerType() == FL_CONTAINER_ENDNOTE) ||
@@ -866,10 +904,19 @@ bool FV_FrameEdit::getFrameStrings(UT_sint32 x, UT_sint32 y,
 		    UT_DEBUGMSG(("Skipping Block %p \n", (void*)pBL));
 		    pPrevBL = pBL;
 		    pBL = pBL->getPrevBlockInDocument();
+		    bWalked = true;
 		}
 		if(pBL == nullptr)
 		{
 		     pBL = pPrevBL;
+		}
+		if (bWalked)
+		{
+		    pRun = pBL->getFirstRun();
+		    if (pRun == nullptr)
+		    {
+		        return false;
+		    }
 		}
 		pLine = pRun->getLine();
 		if(pLine == nullptr)
@@ -901,8 +948,15 @@ bool FV_FrameEdit::getFrameStrings(UT_sint32 x, UT_sint32 y,
 		UT_return_val_if_fail(pBL->getFirstRun(),false);
 		UT_return_val_if_fail(pBL->getFirstRun()->getLine(),false);
 		UT_return_val_if_fail(pBL->getFirstRun()->getLine()->getColumn(),false);
-		fp_Container * pCol = pRunOrig->getLine()->getColumn();
-		UT_ASSERT(pCol->getContainerType() == FP_CONTAINER_COLUMN);
+		fp_Container * pCol = pLine->getColumn();
+		if (!pCol || pCol->getContainerType() != FP_CONTAINER_COLUMN)
+		{
+		    pCol = pBL->getFirstRun()->getLine()->getColumn();
+		}
+		if (!pCol || pCol->getContainerType() != FP_CONTAINER_COLUMN)
+		{
+		    return false;
+		}
 //
 // Find the screen coords of pCol and substract then from x,y
 //
@@ -1022,6 +1076,7 @@ bool FV_FrameEdit::getFrameStrings(UT_sint32 x, UT_sint32 y,
 //
 void FV_FrameEdit::abortDrag(void)
 {
+  s_cancelScrollWorker(this);
   FV_ViewDoubleBuffering dblBuffObj(m_pView, true, true);
   dblBuffObj.beginDoubleBuffering();
 
@@ -1053,11 +1108,23 @@ void FV_FrameEdit::mouseRelease(UT_sint32 x, UT_sint32 y)
 		m_pAutoScrollTimer->stop();
 		DELETEP(m_pAutoScrollTimer);
 	}
+	s_cancelScrollWorker(this);
 
 	PT_DocPosition posAtXY = 0;
 
 	if(m_iFrameEditMode == 	FV_FrameEdit_RESIZE_INSERT)
 	{
+		fv_FrameStrings FrameStrings;
+		fl_BlockLayout * pCloseBL = nullptr;
+		fp_Page * pPage = nullptr;
+		if (!getFrameStrings(m_recCurFrame.left,m_recCurFrame.top,FrameStrings,&pCloseBL,&pPage) || !pCloseBL)
+		{
+			setMode(FV_FrameEdit_NOT_ACTIVE);
+			while (m_iGlobCount > 0)
+				_endGlob();
+			return;
+		}
+
 		// Signal PieceTable Change
 		m_pView->_saveAndNotifyPieceTableChange();
 
@@ -1066,10 +1133,6 @@ void FV_FrameEdit::mouseRelease(UT_sint32 x, UT_sint32 y)
 		getDoc()->disableListUpdates();
 		_beginGlob();
 
-		fv_FrameStrings FrameStrings;
-		fl_BlockLayout * pCloseBL = nullptr;
-		fp_Page * pPage = nullptr;
-		getFrameStrings(m_recCurFrame.left,m_recCurFrame.top,FrameStrings,&pCloseBL,&pPage);
 		pf_Frag_Strux * pfFrame = nullptr;
 		// WARNING: Will need to change this to accomodate variable styles without constantly resetting to solid.
 		//				 Recommend to do whatever is done for thickness, which must also have a default set but not
@@ -1109,10 +1172,21 @@ void FV_FrameEdit::mouseRelease(UT_sint32 x, UT_sint32 y)
 		pCloseBL->getAP(pBlockAP);
 		posAtXY = pCloseBL->getPosition();
 		getDoc()->insertStrux(posAtXY, PTX_SectionFrame, PP_NOPROPS, props, &pfFrame);
+		if (!pfFrame)
+		{
+			_endGlob();
+			getDoc()->enableListUpdates();
+			getDoc()->updateDirtyLists();
+			m_pView->_restorePieceTableState();
+			setMode(FV_FrameEdit_NOT_ACTIVE);
+			while (m_iGlobCount > 0)
+				_endGlob();
+			return;
+		}
 		PT_DocPosition posFrame = pfFrame->getPos();
 		PT_DocPosition posEOD= 0;
 		m_pView->getEditableBounds(true,posEOD);
-		getDoc()->insertStrux(posFrame+1,PTX_Block,PP_NOPROPS,pBlockAP->getProperties());
+		getDoc()->insertStrux(posFrame+1,PTX_Block,PP_NOPROPS, pBlockAP ? pBlockAP->getProperties() : PP_NOPROPS);
 		getDoc()->insertStrux(posFrame+2,PTX_EndFrame);
 		m_pView->insertParaBreakIfNeededAtPos(posFrame+3);
 
@@ -1178,10 +1252,14 @@ void FV_FrameEdit::mouseRelease(UT_sint32 x, UT_sint32 y)
 //
 		if(haveDragged() < 10)
 		{
+			FV_FrameEditMode prevMode = m_iFrameEditMode;
 			m_iFrameEditMode = FV_FrameEdit_NOT_ACTIVE;
 			setDragWhat( FV_DragNothing );
-			m_pFrameContainer->_setX(m_iInitialFrameX);
-			m_pFrameContainer->_setY(m_iInitialFrameY);
+			if (m_pFrameContainer && prevMode == FV_FrameEdit_DRAG_EXISTING)
+			{
+				m_pFrameContainer->_setX(m_iInitialFrameX);
+				m_pFrameContainer->_setY(m_iInitialFrameY);
+			}
 			m_iInitialFrameX = 0;
 			m_iInitialFrameY = 0;
 			drawFrame(false);
@@ -1221,8 +1299,20 @@ void FV_FrameEdit::mouseRelease(UT_sint32 x, UT_sint32 y)
 		fl_BlockLayout * pCloseBL = nullptr;
 		fp_Page * pPage = nullptr;
 		fl_FrameLayout *pFL = m_pFrameLayout;
-		getFrameStrings(m_recCurFrame.left,m_recCurFrame.top,FrameStrings,
-				&pCloseBL,&pPage);
+		if (!pFL || !getFrameStrings(m_recCurFrame.left,m_recCurFrame.top,FrameStrings,
+				&pCloseBL,&pPage) || !pCloseBL)
+		{
+			if (m_pFrameContainer && m_iFrameEditMode == FV_FrameEdit_DRAG_EXISTING)
+			{
+				m_pFrameContainer->_setX(m_iInitialFrameX);
+				m_pFrameContainer->_setY(m_iInitialFrameY);
+			}
+			setMode(FV_FrameEdit_NOT_ACTIVE);
+			while (m_iGlobCount > 0)
+				_endGlob();
+			m_pView->updateScreen(false);
+			return;
+		}
 		posAtXY = pCloseBL->getPosition();
 
 		const PP_PropertyVector props = {
@@ -1264,12 +1354,15 @@ void FV_FrameEdit::mouseRelease(UT_sint32 x, UT_sint32 y)
 		getDoc()->enableListUpdates();
 		getDoc()->updateDirtyLists();
 		m_pView->_restorePieceTableState();
-		PT_DocPosition posFrame = getDoc()->getStruxPosition(pFL->getStruxDocHandle());
-		m_pView->setPoint(posFrame+1);
-		bool bOK = true;
-		while(!m_pView->isPointLegal() && bOK)
+		if (pFL)
 		{
-		    bOK = m_pView->_charMotion(true,1);
+			PT_DocPosition posFrame = getDoc()->getStruxPosition(pFL->getStruxDocHandle());
+			m_pView->setPoint(posFrame+1);
+			bool bOK = true;
+			while(!m_pView->isPointLegal() && bOK)
+			{
+			    bOK = m_pView->_charMotion(true,1);
+			}
 		}
 		m_pView->notifyListeners(AV_CHG_HDRFTR);
 		m_pView->_fixInsertionPointCoords();
@@ -1286,15 +1379,21 @@ void FV_FrameEdit::mouseRelease(UT_sint32 x, UT_sint32 y)
 //	
 		m_pView->updateScreen(false);
 		m_pFrameLayout = pFL;
-		setMode(FV_FrameEdit_EXISTING_SELECTED);
-		if(getGraphics())
+		if (m_pFrameLayout)
 		{
-		      getGraphics()->allCarets()->disable();
-		      m_pView->m_countDisable++;
-		}
-		if(m_pFrameLayout)
+			setMode(FV_FrameEdit_EXISTING_SELECTED);
+			if(getGraphics())
+			{
+			      getGraphics()->allCarets()->disable();
+			      m_pView->m_countDisable++;
+			}
 			m_pFrameContainer = static_cast<fp_FrameContainer *>(m_pFrameLayout->getFirstContainer());
-		drawFrame(true);
+			drawFrame(true);
+		}
+		else
+		{
+			setMode(FV_FrameEdit_NOT_ACTIVE);
+		}
 		m_bFirstDragDone = false;
 		// This must be done after painting because it will finish the cairo surface, see #13622
 		m_pView->_ensureInsertionPointOnScreen();

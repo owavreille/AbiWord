@@ -56,13 +56,15 @@ XAP_Dialog * AP_Win32Dialog_Styles::static_constructor(XAP_DialogFactory * pFact
 AP_Win32Dialog_Styles::AP_Win32Dialog_Styles(XAP_DialogFactory * pDlgFactory,
 										 XAP_Dialog_Id id)
 :	AP_Dialog_Styles(pDlgFactory,id),
+	m_pParaPreviewWidget(nullptr),
+	m_pCharPreviewWidget(nullptr),
+	m_pAbiPreviewWidget(nullptr),
 	_win32Dialog(this),
 	_win32DialogNewModify(this),
 	m_whichType(AP_Win32Dialog_Styles::USED_STYLES),
 	m_bisNewStyle(true),
 	m_selectToggle(0)
 {
-	m_pAbiPreviewWidget = nullptr;
 }
 
 AP_Win32Dialog_Styles::~AP_Win32Dialog_Styles(void)
@@ -167,6 +169,7 @@ void AP_Win32Dialog_Styles::runModal(XAP_Frame * pFrame)
 
 
 	// raise the dialog
+	m_answer = AP_Dialog_Styles::a_CANCEL;
 	_win32Dialog.runModal(pFrame, (XAP_Dialog_Id)AP_DIALOG_ID_STYLES, AP_RID_DIALOG_STYLES_TOP, this);
 	
 	
@@ -346,17 +349,17 @@ BOOL AP_Win32Dialog_Styles::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 			// Set the Default syltes: none, default current
 			UT_sint32 result;
 			str.fromUTF8(pSS->getValue(AP_STRING_ID_DLG_Styles_DefNone));
-			result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, CB_FINDSTRING, -1,
+			result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, CB_FINDSTRINGEXACT, -1,
 										(LPARAM) str.c_str());
 			_win32DialogNewModify.selectComboItem( AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, result );
 			
 			str.fromUTF8(pSS->getValue(AP_STRING_ID_DLG_Styles_DefCurrent));
-			result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, CB_FINDSTRING, -1,
+			result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, CB_FINDSTRINGEXACT, -1,
 										(LPARAM) str.c_str());
 			_win32DialogNewModify.selectComboItem( AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, result );
 			
 			str.fromUTF8(pSS->getValue(AP_STRING_ID_DLG_Styles_ModifyParagraph));
-			result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_TYPE, CB_FINDSTRING, -1,
+			result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_TYPE, CB_FINDSTRINGEXACT, -1,
 										(LPARAM) str.c_str());
 			_win32DialogNewModify.selectComboItem( AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_TYPE, result );
 
@@ -393,7 +396,8 @@ BOOL AP_Win32Dialog_Styles::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 										XAP_Dialog_MessageBox::b_O,
 										XAP_Dialog_MessageBox::a_OK);                                        
 				m_answer = AP_Dialog_Styles::a_CANCEL;
-				return false;
+				EndDialog(hWnd, 0);
+				return FALSE;
 			}
 			//
 			// Valid style get the Based On and followed by values
@@ -433,7 +437,7 @@ BOOL AP_Win32Dialog_Styles::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 				pLocalised = utf8.c_str();
 				str = AP_Win32App::s_fromUTF8ToWinLocale(pLocalised);
 				
-				UT_uint32 result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, CB_FINDSTRING, -1,
+				UT_uint32 result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, CB_FINDSTRINGEXACT, -1,
 										(LPARAM)str.c_str());
 										
 				_win32DialogNewModify.selectComboItem( AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, result );
@@ -442,7 +446,7 @@ BOOL AP_Win32Dialog_Styles::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 			{
 				// Not a style name
 				str.fromUTF8(pSS->getValue(AP_STRING_ID_DLG_Styles_DefNone));
-				UT_uint32 result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, CB_FINDSTRING, -1,
+				UT_uint32 result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, CB_FINDSTRINGEXACT, -1,
 										(LPARAM) str.c_str());
 										
 				_win32DialogNewModify.selectComboItem( AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_BASEDON, result );
@@ -454,7 +458,7 @@ BOOL AP_Win32Dialog_Styles::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 				pLocalised = utf8.c_str();
 				str = AP_Win32App::s_fromUTF8ToWinLocale(pLocalised);
 				
-				UT_uint32 result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, CB_FINDSTRING, -1,
+				UT_uint32 result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, CB_FINDSTRINGEXACT, -1,
 										(LPARAM)str.c_str());
 				_win32DialogNewModify.selectComboItem( AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, result );
 			}
@@ -464,7 +468,7 @@ BOOL AP_Win32Dialog_Styles::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPARAM /
 				pLocalised = utf8.c_str();
 				str = AP_Win32App::s_fromUTF8ToWinLocale(pLocalised);
 				
-				UT_uint32 result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, CB_FINDSTRING, -1,
+				UT_uint32 result = SendDlgItemMessageW(hWnd, AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, CB_FINDSTRINGEXACT, -1,
 										(LPARAM) str.c_str());
 				_win32DialogNewModify.selectComboItem( AP_RID_DIALOG_STYLES_NEWMODIFY_CBX_FOLLOWPARA, result );
 			}
@@ -528,8 +532,12 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 		return 1;
 
 	case AP_RID_DIALOG_STYLES_TOP_BUTTON_CLOSE:
+		EndDialog(hWnd,0);
+		return 1;
+
 	case IDCANCEL:
-		m_answer = a_CANCEL;
+		if (hWnd == _win32DialogNewModify.getHandle())
+			m_answer = a_CANCEL;
 		EndDialog(hWnd,0);
 		return 1;
 
@@ -643,6 +651,7 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 
 	case AP_RID_DIALOG_STYLES_TOP_BUTTON_NEW:
 		{
+			AP_Dialog_Styles::tAnswer prevAnswer = m_answer;
 			m_bisNewStyle = true;
 			//_win32Dialog.showWindow(SW_HIDE);
 			XAP_Frame* pFrame = getFrame();
@@ -653,6 +662,10 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 				createNewStyle((gchar *) m_newStyleName);
 				_populateCList();
 				_populatePreviews(false);
+			}
+			else
+			{
+				m_answer = prevAnswer;
 			}
 			destroyAbiPreview();
 			DELETEP(m_pAbiPreviewWidget);
@@ -670,11 +683,11 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 				pFrame->showMessageBox( pSS->getValue(AP_STRING_ID_DLG_Styles_ErrNoStyle),
 										XAP_Dialog_MessageBox::b_O,
 										XAP_Dialog_MessageBox::a_OK);                                        
-				m_answer = AP_Dialog_Styles::a_CANCEL;
 				return 1;
 			}
 			else
 			{
+				AP_Dialog_Styles::tAnswer prevAnswer = m_answer;
 				PD_Style * pStyle = nullptr;
 				getDoc()->getStyle(m_selectedStyle.c_str(), &pStyle);
 
@@ -697,6 +710,10 @@ BOOL AP_Win32Dialog_Styles::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /*lParam
 					applyModifiedStyleToDoc();
 					getDoc()->updateDocForStyleChange(getCurrentStyle(),true);
 					getDoc()->signalListeners(PD_SIGNAL_UPDATE_LAYOUT);
+				}
+				else
+				{
+					m_answer = prevAnswer;
 				}
 
 				destroyAbiPreview();

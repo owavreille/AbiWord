@@ -62,6 +62,22 @@ FV_VisualInlineImage::FV_VisualInlineImage (FV_View * pView)
 	UT_ASSERT_HARMLESS(pView);
 }
 
+static UT_sint32 iExtra = 0;
+static bool bScrollRunning = false;
+static UT_Worker * s_pScroll = nullptr;
+
+static void s_cancelScrollWorker(const FV_VisualInlineImage * pVis)
+{
+	if (s_pScroll && s_pScroll->getInstanceData() == pVis)
+	{
+		s_pScroll->stop();
+		delete s_pScroll;
+		s_pScroll = nullptr;
+		bScrollRunning = false;
+		iExtra = 0;
+	}
+}
+
 FV_VisualInlineImage::~FV_VisualInlineImage()
 {
 	DELETEP(m_pDragImage);
@@ -70,6 +86,7 @@ FV_VisualInlineImage::~FV_VisualInlineImage()
 		m_pAutoScrollTimer->stop();
 		DELETEP(m_pAutoScrollTimer);
 	}
+	s_cancelScrollWorker(this);
 	DELETEP(m_screenCache);
 	DELETEP(m_pDocUnderCursor);
 }
@@ -87,6 +104,15 @@ void FV_VisualInlineImage::setSelectionDrawn(bool bSelection)
 void FV_VisualInlineImage::setMode(FV_InlineDragMode iEditMode)
 {
        bool bClearSelection =false;
+       if (iEditMode == FV_InlineDrag_NOT_ACTIVE)
+       {
+	    if (m_pAutoScrollTimer != nullptr)
+	    {
+		m_pAutoScrollTimer->stop();
+		DELETEP(m_pAutoScrollTimer);
+	    }
+	    s_cancelScrollWorker(this);
+       }
        if(m_bSelectionDrawn && (iEditMode == FV_InlineDrag_NOT_ACTIVE))
        {
 	    bClearSelection = true;
@@ -98,10 +124,6 @@ void FV_VisualInlineImage::setMode(FV_InlineDragMode iEditMode)
 	    m_bSelectionDrawn = false;
        }
 }
-
-static UT_sint32 iExtra = 0;
-static bool bScrollRunning = false;
-static UT_Worker * s_pScroll = nullptr;
 
 void FV_VisualInlineImage::_actuallyScroll(UT_Worker * pWorker)
 {
@@ -672,7 +694,10 @@ void FV_VisualInlineImage::mouseLeftPress(UT_sint32 x, UT_sint32 y)
 		bool bEOL = false;
 		bool bDir = false;
 		fp_Run * pRun = nullptr;
-		pRun = pBlock->findPointCoords(pos,bEOL,x1,y1,x2,y2,iHeight,bDir);
+		if (pBlock)
+		{
+			pRun = pBlock->findPointCoords(pos,bEOL,x1,y1,x2,y2,iHeight,bDir);
+		}
 		while(pRun && ((pRun->getType() != FPRUN_IMAGE) && (pRun->getType() != FPRUN_EMBED)))
 		{
 			pRun = pRun->getNextRun();
@@ -730,6 +755,12 @@ void FV_VisualInlineImage::abortDrag(void)
 
 void FV_VisualInlineImage::cleanUP(void)
 {
+  if (m_pAutoScrollTimer != nullptr)
+  {
+      m_pAutoScrollTimer->stop();
+      DELETEP(m_pAutoScrollTimer);
+  }
+  s_cancelScrollWorker(this);
   m_iInlineDragMode = FV_InlineDrag_NOT_ACTIVE;
   setDragWhat( FV_DragNothing );
   DELETEP(m_pDragImage);
@@ -1011,6 +1042,7 @@ void FV_VisualInlineImage::mouseRelease(UT_sint32 x, UT_sint32 y)
 		m_pAutoScrollTimer->stop();
 		DELETEP(m_pAutoScrollTimer);
 	}
+	s_cancelScrollWorker(this);
 	clearCursor();
 	if(((m_iInlineDragMode != FV_InlineDrag_DRAGGING) && (m_iInlineDragMode != FV_InlineDrag_RESIZE) ) || !m_bFirstDragDone)
 	{

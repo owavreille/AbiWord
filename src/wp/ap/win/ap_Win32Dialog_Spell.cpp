@@ -276,20 +276,27 @@ void AP_Win32Dialog_Spell::_suggestChange(void)
 	// should be safe here, because there just aren't that many suggestions 
 	m_iSelectedRow = (short) SendMessageW(m_hwndSuggest, LB_GETCURSEL, 0, 0);
 
-	if (!m_Suggestions->getItemCount()) 
+	if (!m_Suggestions || !m_Suggestions->getItemCount()) 
 	{
-		// No suggestion: show the word itself so the field is not empty.
-		// m_bChangingSelection is set, so this does not enable Change.
-		UT_sint32 iLength = 0;
-		const UT_UCS4Char * word = m_pWordIterator ? m_pWordIterator->getCurrentWord(iLength) : nullptr;
-		if (word && iLength > 0)
+		// No suggestion: show the word itself only if the field is empty
+		// (initial display), so clicking "(no suggestions)" never overwrites
+		// custom replacement text typed by the user.
+		if (GetWindowTextLengthW(m_hwndChangeTo) == 0)
 		{
-			UT_Win32LocaleString str;
-			spellSpanToLocale(str, word, iLength);
-			SendMessageW(m_hwndChangeTo, WM_SETTEXT, 0, (LPARAM)str.c_str());
+			UT_sint32 iLength = 0;
+			const UT_UCS4Char * word = m_pWordIterator ? m_pWordIterator->getCurrentWord(iLength) : nullptr;
+			if (word && iLength > 0)
+			{
+				UT_Win32LocaleString str;
+				spellSpanToLocale(str, word, iLength);
+				SendMessageW(m_hwndChangeTo, WM_SETTEXT, 0, (LPARAM)str.c_str());
+			}
 		}
 		if (m_iSelectedRow != -1)
+		{
 			SendMessageW(m_hwndSuggest, LB_SETCURSEL, -1, 0);
+			m_iSelectedRow = -1;
+		}
 	}
 	else
 	{
@@ -473,13 +480,19 @@ BOOL AP_Win32Dialog_Spell::_onCommand(HWND hWnd, WPARAM wParam, LPARAM lParam)
 		switch (HIWORD(wParam))
 		{
 			case LBN_SELCHANGE:
+				if (!m_Suggestions || !m_Suggestions->getItemCount())
+				{
+					SendMessageW(m_hwndSuggest, LB_SETCURSEL, (WPARAM)-1, 0);
+					m_iSelectedRow = -1;
+					return 1;
+				}
 				m_bChangingSelection = 1;
 				_suggestChange();
 				m_bChangingSelection = 0;
 				return 1;
 
 			case LBN_DBLCLK:
-				if (!m_Suggestions->getItemCount()) return 1;
+				if (!m_Suggestions || !m_Suggestions->getItemCount()) return 1;
 				m_bChangingSelection = 1;
 				m_iSelectedRow = SendMessage(hWndCtrl, LB_GETCURSEL, 0, 0);
 				if (m_iSelectedRow!=CB_ERR)	_change();

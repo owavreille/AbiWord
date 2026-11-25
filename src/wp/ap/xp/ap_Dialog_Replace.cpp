@@ -252,6 +252,14 @@ void AP_Dialog_Replace::setWholeWord(bool newValue)
 {
 	UT_DEBUGMSG(("AP_dlg_replace::setWholeWord(%d)\n", newValue));
 
+	if (newValue != getFvView()->findGetWholeWord())
+	{
+		// When search parameters change, clear any existing selection to
+		// avoid replacement of the previous search string.
+		if (!getFvView()->isSelectionEmpty())
+			getFvView()->cmdUnselectSelection();
+	}
+
 	getFvView()->findSetWholeWord(newValue);
 }
 

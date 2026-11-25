@@ -128,7 +128,11 @@ AP_TopRuler::~AP_TopRuler(void)
 	  UT_DEBUGMSG(("AP_TopRuler::~AP_TopRuler (this=%p scroll=%p)\n", (void*)this, (void*)m_pScrollObj));
 
 		DELETEP(m_pScrollObj);
-		DELETEP(m_pAutoScrollTimer);
+		if (m_pAutoScrollTimer)
+		{
+			m_pAutoScrollTimer->stop();
+			DELETEP(m_pAutoScrollTimer);
+		}
 	}
 	if(m_pView)
 	{
@@ -2711,8 +2715,37 @@ static bool s_clearlyOffRulerVertically(UT_sint32 y, UT_sint32 height, UT_sint32
 	return (y < -slack) || (y > height + slack);
 }
 
+void AP_TopRuler::cancelDrag(void)
+{
+	if (m_pAutoScrollTimer)
+	{
+		m_pAutoScrollTimer->stop();
+		DELETEP(m_pAutoScrollTimer);
+	}
+	if (!m_bValidMouseClick && m_draggingWhat == DW_NOTHING)
+	{
+		return;
+	}
+	_xorGuide(true);
+	m_bValidMouseClick = false;
+	m_bEventIgnored = false;
+	m_draggingWhat = DW_NOTHING;
+	m_bBeforeFirstMotion = true;
+	if (m_pG)
+	{
+		m_pG->setCursor(GR_Graphics::GR_CURSOR_DEFAULT);
+		queueDraw();
+	}
+}
+
 void AP_TopRuler::mouseRelease(EV_EditModifierState ems, EV_EditMouseButton /* emb */, UT_sint32 x, UT_sint32 y)
 {
+	if (m_pAutoScrollTimer)
+	{
+		m_pAutoScrollTimer->stop();
+		DELETEP(m_pAutoScrollTimer);
+	}
+
 	if (m_bValidMouseClick && m_draggingWhat == DW_TABTOGGLE)
 	{
 		m_draggingWhat = DW_NOTHING;
@@ -3617,6 +3650,11 @@ void AP_TopRuler::mouseMotion(EV_EditModifierState /*ems*/, UT_sint32 x, UT_sint
 	if (m_pG && s_clearlyOffRulerVertically(y, rulerHeight, verticalSlack)
 		&& (m_draggingWhat == DW_TABSTOP))
 	{
+		if (m_pAutoScrollTimer)
+		{
+			m_pAutoScrollTimer->stop();
+			DELETEP(m_pAutoScrollTimer);
+		}
 		if(!m_bEventIgnored)
 		{
 			_ignoreEvent(false);

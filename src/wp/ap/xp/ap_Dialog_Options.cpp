@@ -121,6 +121,8 @@ void AP_Dialog_Options::_storeWindowData(void)
 	Save_Pref_Bool( pPrefsScheme, AP_PREF_KEY_AutoGrammarCheck, _gatherGrammarCheck() );
 	Save_Pref_Bool( pPrefsScheme, XAP_PREF_KEY_SmartQuotesEnable, _gatherSmartQuotes() );
 	Save_Pref_Bool( pPrefsScheme, XAP_PREF_KEY_CustomSmartQuotes, _gatherCustomSmartQuotes() );
+	pPrefsScheme->setValueInt( XAP_PREF_KEY_OuterQuoteStyle, _gatherOuterQuoteStyle() );
+	pPrefsScheme->setValueInt( XAP_PREF_KEY_InnerQuoteStyle, _gatherInnerQuoteStyle() );
 	Save_Pref_Bool( pPrefsScheme, AP_PREF_KEY_SpellCheckCaps, _gatherSpellUppercase() );
 	Save_Pref_Bool( pPrefsScheme, AP_PREF_KEY_SpellCheckNumbers, _gatherSpellNumbers() );
 	Save_Pref_Bool( pPrefsScheme, AP_PREF_KEY_CursorBlink, _gatherViewCursorBlink() );
@@ -709,6 +711,9 @@ void AP_Dialog_Options::_initEnableControls()
 		_controlEnable( id_PUSH_CHOOSE_COLOR_FOR_TRANSPARENT, true);
 	}
 #endif
+
+	// smart quotes
+	_enableDisableLogic( id_CHECK_SMART_QUOTES_ENABLE );
 
 	_initEnableControlsPlatformSpecific();
 }

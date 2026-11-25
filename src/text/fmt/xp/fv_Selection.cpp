@@ -135,10 +135,16 @@ void FV_Selection::setTOCSelected(fl_TOCLayout * pTOCL)
 
 void FV_Selection::pasteRowOrCol(void)
 {
-	const pf_Frag_Strux* cellSDH, *tableSDH;
+	const pf_Frag_Strux* cellSDH = nullptr;
+	const pf_Frag_Strux* tableSDH = nullptr;
 	PT_DocPosition pos = m_pView->getPoint();
 	if(m_iPrevSelectionMode == FV_SelectionMode_TableColumn)
 	{
+		if (!getDoc()->getStruxOfTypeFromPosition(pos, PTX_SectionCell, &cellSDH) || !cellSDH ||
+			!getDoc()->getStruxOfTypeFromPosition(pos, PTX_SectionTable, &tableSDH) || !tableSDH)
+		{
+			return;
+		}
 //
 // GLOB stuff together so it undo's in one go.
 //
@@ -166,9 +172,20 @@ void FV_Selection::pasteRowOrCol(void)
 		UT_sint32 iLeft,iRight,iTop,iBot;
 		posCell = 0;
 		m_pView->getCellParams(pos, &iLeft, &iRight,&iTop,&iBot);
-		bool bRes = getDoc()->getStruxOfTypeFromPosition(pos,PTX_SectionCell,&cellSDH);
-		bRes = getDoc()->getStruxOfTypeFromPosition(pos,PTX_SectionTable,&tableSDH);
-		UT_return_if_fail(bRes);
+		cellSDH = nullptr;
+		tableSDH = nullptr;
+		bool bCellRes = getDoc()->getStruxOfTypeFromPosition(pos,PTX_SectionCell,&cellSDH);
+		bool bTableRes = getDoc()->getStruxOfTypeFromPosition(pos,PTX_SectionTable,&tableSDH);
+		if (!bCellRes || !bTableRes || !cellSDH || !tableSDH)
+		{
+			getDoc()->endUserAtomicGlob();
+			getDoc()->setDontImmediatelyLayout(false);
+			m_pView->_generalUpdate();
+			getDoc()->enableListUpdates();
+			getDoc()->updateDirtyLists();
+			m_pView->_restorePieceTableState();
+			return;
+		}
 		posTable = getDoc()->getStruxPosition(tableSDH) + 1;
 		UT_sint32 numRows = 0;
 		UT_sint32 numCols = 0;
@@ -182,7 +199,7 @@ void FV_Selection::pasteRowOrCol(void)
 			posCell = m_pView->findCellPosAt(posTable,i,iLeft)+2;
 			m_pView->setPoint(posCell);
 			PD_DocumentRange * pR = getNthSelection(i);
-			if(pR->m_pos1 == pR->m_pos2)
+			if(!pR || pR->m_pos1 == pR->m_pos2)
 			{
 //
 // Dont paste empty cells
@@ -197,8 +214,15 @@ void FV_Selection::pasteRowOrCol(void)
 			IE_Imp_RTF * pImpRTF = new IE_Imp_RTF(getDoc());
 			pImpRTF->pasteFromBuffer(&DocRange,pData,iLen);
 			DELETEP(pImpRTF);
-			fl_SectionLayout * pSL = m_pView->getCurrentBlock()->getSectionLayout();
-			pSL->checkAndAdjustCellSize();
+			fl_BlockLayout * pBL = m_pView->getCurrentBlock();
+			if (pBL)
+			{
+				fl_SectionLayout * pSL = pBL->getSectionLayout();
+				if (pSL)
+				{
+					pSL->checkAndAdjustCellSize();
+				}
+			}
 		}
 		getDoc()->endUserAtomicGlob();
 		getDoc()->setDontImmediatelyLayout(false);
@@ -396,9 +420,12 @@ void FV_Selection::addCellToSelection(fl_CellLayout * pCell)
 	const pf_Frag_Strux* sdhStart = pCell->getStruxDocHandle();
 	PT_DocPosition posLow = getDoc()->getStruxPosition(sdhStart) +1; // First block
 
-	UT_DebugOnly<bool> bres = getDoc()->getNextStruxOfType(sdhStart,PTX_EndCell,&sdhEnd);
+	bool bres = getDoc()->getNextStruxOfType(sdhStart,PTX_EndCell,&sdhEnd);
+	if (!bres || !sdhEnd)
+	{
+		return;
+	}
 	PT_DocPosition posHigh = getDoc()->getStruxPosition(sdhEnd) -1;
-	UT_ASSERT(bres && sdhEnd);
 	PD_DocumentRange * pDocRange = new PD_DocumentRange(getDoc(),posLow,posHigh);
 	m_vecSelRanges.addItem(pDocRange);
 	IE_Exp_RTF * pExpRtf = new IE_Exp_RTF(pDocRange->m_pDoc);
@@ -436,7 +463,7 @@ void FV_Selection::addCellToSelection(fl_CellLayout * pCell)
  */
 PD_DocumentRange * FV_Selection::getNthSelection(UT_sint32 i) const
 {
-	if(i >= getNumSelections())
+	if(i < 0 || i >= getNumSelections())
 	{
 		return nullptr;
 	}

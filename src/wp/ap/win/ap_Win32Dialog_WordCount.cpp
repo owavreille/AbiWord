@@ -47,14 +47,23 @@ XAP_Dialog * AP_Win32Dialog_WordCount::static_constructor(XAP_DialogFactory * pF
 
 AP_Win32Dialog_WordCount::AP_Win32Dialog_WordCount(XAP_DialogFactory * pDlgFactory,
 										 XAP_Dialog_Id id)
-	: AP_Dialog_WordCount(pDlgFactory,id)
+	: AP_Dialog_WordCount(pDlgFactory,id),
+	  m_bAutoWC(true),
+	  m_pAutoUpdateWC(nullptr),
+	  m_bDestroy_says_stopupdating(false),
+	  m_bAutoUpdate_happening_now(false),
+	  m_iUpdateRate(1)
 {
-	m_bAutoWC = 1;
-	m_iUpdateRate = 1;
 }
 
 AP_Win32Dialog_WordCount::~AP_Win32Dialog_WordCount(void)
 {
+	m_bDestroy_says_stopupdating = true;
+	if (m_pAutoUpdateWC)
+	{
+		m_pAutoUpdateWC->stop();
+		DELETEP(m_pAutoUpdateWC);
+	}
 }
 
 /*****************************************************************/
@@ -89,11 +98,12 @@ void    AP_Win32Dialog_WordCount::setUpdateCounter( UT_uint32 iRate )
 	if( iRate == 0 )
 		iFactor = 100;
 
-	m_pAutoUpdateWC->stop();
+	if (m_pAutoUpdateWC)
+		m_pAutoUpdateWC->stop();
 
 	m_iUpdateRate = iRate;
 
-	if(m_bAutoWC == true)
+	if(m_bAutoWC == true && m_pAutoUpdateWC)
 		m_pAutoUpdateWC->set(m_iUpdateRate * iFactor);
 }         
 
@@ -125,7 +135,11 @@ void AP_Win32Dialog_WordCount::destroy(void)
 {
 	m_bDestroy_says_stopupdating = true;
 
-	m_pAutoUpdateWC->stop();
+	if (m_pAutoUpdateWC)
+	{
+		m_pAutoUpdateWC->stop();
+		DELETEP(m_pAutoUpdateWC);
+	}
 
     destroyWindow ();
 
@@ -226,6 +240,11 @@ BOOL AP_Win32Dialog_WordCount::_onInitDialog(HWND /*hWnd*/, WPARAM /*wParam*/, L
 	ConstructWindowName();
 	setDialogTitle (m_WindowName);
 			
+	if (m_pAutoUpdateWC)
+	{
+		m_pAutoUpdateWC->stop();
+		DELETEP(m_pAutoUpdateWC);
+	}
 	m_pAutoUpdateWC = UT_Timer::static_constructor(autoupdateWC,this);
 	setUpdateCounter( 1 );
 

@@ -579,8 +579,16 @@ UT_uint32 AP_Frame::getNewZoom(XAP_Frame::tZoomType * tZoom)
 			return iZoom;
 		}
 	}
-	iZoom = pF->getZoomPercentage();
-	*tZoom = pF->getZoomType();
+	if (pF)
+	{
+		iZoom = pF->getZoomPercentage();
+		*tZoom = pF->getZoomType();
+	}
+	else
+	{
+		iZoom = pLastFrame->getZoomPercentage();
+		*tZoom = pLastFrame->getZoomType();
+	}
 	return iZoom;
 }
 
@@ -890,7 +898,7 @@ UT_sint32 AP_Frame::registerListener(AP_FrameListener* pListener)
 void AP_Frame::unregisterListener(UT_sint32 iListenerId)
 {
 	UT_return_if_fail(iListenerId >= 0);
-	UT_return_if_fail(iListenerId >= static_cast<UT_sint32>(m_listeners.size()));	
+	UT_return_if_fail(iListenerId < static_cast<UT_sint32>(m_listeners.size()));	
 	m_listeners[iListenerId] = nullptr;
 }
 

@@ -378,6 +378,7 @@ static void autoSaveCallback(UT_Worker *wkr)
 	if(pDoc && pDoc->isPieceTableChanging())
 	{
 		UT_DEBUGMSG(("PieceTable is changing no backup made \n"));
+		return;
 	}
 	if (me->isDirty())
 	{
@@ -727,13 +728,13 @@ void XAP_Frame::setAutoSaveFile(bool b)
 
 	if (!b && m_iIdAutoSaveTimer)
 	{
-		// TODO: We're leaking UT_Timer objects.  We should
-		// TODO: give the posibility to erase a UT_Timer...
-		// TODO: something like UT_Timer::eraseTimer(...) should
-		// TODO: do the work (we should change the sign. of findTimer).
 		UT_Timer *timer = UT_Timer::findTimer(m_iIdAutoSaveTimer);
 		if (timer)
+		{
 			timer->stop();
+			DELETEP(timer);
+		}
+		m_iIdAutoSaveTimer = 0;
 	}
 	if(b)
 	{
@@ -757,7 +758,7 @@ void XAP_Frame::setAutoSaveFilePeriod(int min)
 {
 	m_iAutoSavePeriod = min;
 	
-	if (m_iIdAutoSaveTimer != 0)
+	if (m_bBackupRunning && m_iIdAutoSaveTimer != 0)
 	{
 		// I know, it looks weird... I just want to restart the timer
 		setAutoSaveFile(false);
@@ -857,8 +858,20 @@ std::string XAP_Frame::makeBackupName(const char* szExt)
   {
       const XAP_StringSet * pSS = XAP_App::getApp()->getStringSet();
       std::string sTmp;
-      pSS->getValue(XAP_STRING_ID_UntitledDocument, XAP_App::getApp()->getDefaultEncoding(), sTmp);
+      pSS->getValueUTF8(XAP_STRING_ID_UntitledDocument, sTmp);
       oldName = UT_std_string_sprintf(sTmp.c_str(), m_iUntitled);
+
+      const char * szDir = XAP_App::getApp()->getUserPrivateDirectory();
+      if (!szDir || !*szDir)
+          szDir = g_get_tmp_dir();
+      if (szDir && *szDir)
+      {
+          std::string sDir(szDir);
+          char last = sDir[sDir.size() - 1];
+          if (last != '/' && last != G_DIR_SEPARATOR)
+              sDir += G_DIR_SEPARATOR;
+          oldName = sDir + oldName;
+      }
 
       UT_DEBUGMSG(("Untitled.  We will give it the name [%s]\n", oldName.c_str()));
   }

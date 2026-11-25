@@ -25,6 +25,7 @@
 
 #include "ut_assert.h"
 #include "ut_string.h"
+#include "ut_string_class.h"
 #include "ut_hash.h"
 
 #include "xap_Dialog_Id.h"
@@ -84,6 +85,7 @@ AP_Dialog_Spell::AP_Dialog_Spell(XAP_DialogFactory * pDlgFactory, XAP_Dialog_Id 
    m_pChangeAll = nullptr;
    m_pIgnoreAll = nullptr;
    m_pPreserver = nullptr;
+   m_pWordIterator = nullptr;
 
    m_bCancelled = false;
 }
@@ -101,9 +103,11 @@ AP_Dialog_Spell::~AP_Dialog_Spell(void)
 
 	DELETEP(m_pPreserver);
 
-	m_pChangeAll->freeData();
-//	UT_HASH_PURGEDATA(UT_UCS4Char*,m_pChangeAll, g_free);
-	DELETEP(m_pChangeAll);
+	if (m_pChangeAll)
+	{
+		m_pChangeAll->freeData();
+		DELETEP(m_pChangeAll);
+	}
 	DELETEP(m_pIgnoreAll);
 	DELETEP(m_pWordIterator);
 
@@ -339,7 +343,10 @@ bool AP_Dialog_Spell::makeWordVisible(void)
 
 bool AP_Dialog_Spell::addIgnoreAll(void)
 {
-	_getDict ()->ignoreWord(m_pWord,m_iWordLength);
+	SpellChecker * checker = _getDict();
+	if (!checker)
+		return false;
+	checker->ignoreWord(m_pWord,m_iWordLength);
 	return true;
 }
 
@@ -352,13 +359,14 @@ void AP_Dialog_Spell::ignoreWord(void)
 
 bool AP_Dialog_Spell::inChangeAll(void)
 {
-	UT_sint32 iLength;
+	if (!m_pChangeAll)
+		return false;
+
+	UT_sint32 iLength = 0;
 	const UT_UCS4Char * bufferUnicode = m_pWordIterator->getCurrentWord(iLength);
-	UT_return_val_if_fail (bufferUnicode, false);
-	char * bufferNormal = static_cast<char *>(UT_calloc(iLength + 1, sizeof(char)));
-	UT_UCS4_strncpy_to_char(bufferNormal, bufferUnicode, iLength);
-	const UT_UCS4Char * ent = m_pChangeAll->pick(bufferNormal);
-	FREEP(bufferNormal);
+	UT_return_val_if_fail (bufferUnicode && iLength > 0, false);
+	UT_UTF8String utf8Word(bufferUnicode, static_cast<size_t>(iLength));
+	const UT_UCS4Char * ent = m_pChangeAll->pick(utf8Word.utf8_str());
 
 	if (ent == nullptr)
 		return false;
@@ -371,19 +379,18 @@ bool AP_Dialog_Spell::inChangeAll(void)
 
 bool AP_Dialog_Spell::addChangeAll(const UT_UCS4Char * newword)
 {
-	UT_sint32 iLength;
+	UT_return_val_if_fail (m_pChangeAll && newword, false);
+
+	UT_sint32 iLength = 0;
 	const UT_UCS4Char * bufferUnicode = m_pWordIterator->getCurrentWord(iLength);
-	UT_return_val_if_fail (bufferUnicode, false);
-	char * bufferNormal = static_cast<char *>(UT_calloc(iLength + 1, sizeof(char)));
-	UT_UCS4_strncpy_to_char(bufferNormal, bufferUnicode, iLength);
+	UT_return_val_if_fail (bufferUnicode && iLength > 0, false);
+	UT_UTF8String utf8Word(bufferUnicode, static_cast<size_t>(iLength));
 
    // make a copy of the word for storage
    UT_UCS4Char * newword2 = static_cast<UT_UCS4Char*>(UT_calloc(UT_UCS4_strlen(newword) + 1, sizeof(UT_UCS4Char)));
    UT_UCS4_strcpy(newword2, newword);
    
-   m_pChangeAll->insert(bufferNormal, newword2);
-
-   FREEP(bufferNormal);
+   m_pChangeAll->insert(utf8Word.utf8_str(), newword2);
    
    return true;
 }
@@ -401,7 +408,9 @@ bool AP_Dialog_Spell::changeWordWith(const UT_UCS4Char * newword)
 
    // have the spell checker learn about our misspellings
    const UT_UCS4Char * oldWord = m_pWordIterator->getCurrentWord(iOldLength);
-   _getDict()->correctWord (oldWord, iOldLength, newword, iNewLength);
+   SpellChecker * checker = _getDict();
+   if (checker)
+	   checker->correctWord (oldWord, iOldLength, newword, iNewLength);
 
    result = m_pPreserver->cmdCharInsert(newword, iNewLength);
    m_pView->updateScreen(true);
@@ -419,5 +428,8 @@ bool AP_Dialog_Spell::changeWordWith(const UT_UCS4Char * newword)
 
 bool AP_Dialog_Spell::addToDict(void)
 {
-  return _getDict()->addToCustomDict(m_pWord, m_iWordLength);
+  SpellChecker * checker = _getDict();
+  if (!checker)
+	  return false;
+  return checker->addToCustomDict(m_pWord, m_iWordLength);
 }
