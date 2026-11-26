@@ -3188,7 +3188,8 @@ TFTEST_MAIN("Text import reads UTF-8 past the first block, skips a BOM and rewri
 	TFPASS(laterText.find("\xef\xbb\xbf") != std::string::npos);
 	TFPASS(laterText.find('?') == std::string::npos);
 
-	PD_Document * control = import_bytes(std::string("a\x01b"), ".txt");
+	const char controlBytes[] = { 'a', '\x01', 'b' };
+	PD_Document * control = import_bytes(std::string(controlBytes, sizeof(controlBytes)), ".txt");
 	if (!TFPASS(control != nullptr))
 		return;
 	const std::string controlText = document_text(control);
