@@ -3602,6 +3602,7 @@ private:
 	pf_Frag::PFType fragType;
 	pf_Frag_Strux * lastFragStrux;
 	PT_AttrPropIndex indexAPFrag;
+	PT_AttrPropIndex indexNewAPFrag;
 	pf_Frag * thisFrag;
 	PT_DocPosition thisPos;
 	PT_DocPosition thisStruxPos;
@@ -3625,6 +3626,8 @@ bool PD_Document::removeStyle(const gchar * pszName)
 	PD_Style * pNuke = nullptr;
 	m_pPieceTable->getStyle(pszName,&pNuke);
 	UT_return_val_if_fail (pNuke, false);
+	if (!pNuke->isUserDefined())
+		return false;
 	pNormal = pNuke->getBasedOn();
 	const gchar * szBack = nullptr;
 	if(pNormal == nullptr)
@@ -3642,7 +3645,14 @@ bool PD_Document::removeStyle(const gchar * pszName)
 	}
 	UT_return_val_if_fail (szBack, false);
 	UT_return_val_if_fail (pNormal, false);
-	PT_AttrPropIndex indexNormal = pNormal->getIndexAP();
+	const gchar * szReplacementStyle = nullptr;
+	if (!pNormal->getAttribute(PT_NAME_ATTRIBUTE_NAME, szReplacementStyle) || !szReplacementStyle)
+	{
+		szReplacementStyle = "Normal";
+	}
+	const PP_PropertyVector styleAtts = {
+		PT_STYLE_ATTRIBUTE_NAME, szReplacementStyle
+	};
 
 //
 // Now scan through the document finding all instances of pszName as either
@@ -3693,11 +3703,18 @@ bool PD_Document::removeStyle(const gchar * pszName)
 //
 		if(pszStyleName != nullptr && strcmp(pszStyleName,pszName)==0)
 		{
+			PT_AttrPropIndex indexNewAP = indexAP;
+			if (!m_pPieceTable->getVarSet().mergeAP(PTC_AddFmt, indexAP, styleAtts, PP_NOPROPS, &indexNewAP, this))
+			{
+				UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+				indexNewAP = indexAP;
+			}
 			prevStuff *  pStuff = new prevStuff;
 			pf_Frag::PFType cType = currentFrag->getType();
 			pStuff->fragType = cType;
 			pStuff->thisFrag = currentFrag;
 			pStuff->indexAPFrag = indexAP;
+			pStuff->indexNewAPFrag = indexNewAP;
 			pStuff->lastFragStrux = pfs;
 			pStuff->thisPos = pos;
 			pStuff->thisStruxPos = pos;
@@ -3705,17 +3722,17 @@ bool PD_Document::removeStyle(const gchar * pszName)
 			pStuff->bChangeIndexAP = true;
 			vFrag.addItem(pStuff);
 //
-// OK set this frag's indexAP to that of basedon of our deleted style or
-// Normal.
+// OK replace only PT_STYLE_ATTRIBUTE_NAME on this frag while preserving its other
+// attributes and properties.
 //
 			if(pf_Frag::PFT_Strux == cType)
-				static_cast<pf_Frag_Strux *>(currentFrag)->setIndexAP(indexNormal);
+				static_cast<pf_Frag_Strux *>(currentFrag)->setIndexAP(indexNewAP);
 			else if(pf_Frag::PFT_Text == cType)
-				static_cast<pf_Frag_Text *>(currentFrag)->setIndexAP(indexNormal);
+				static_cast<pf_Frag_Text *>(currentFrag)->setIndexAP(indexNewAP);
 			else if(pf_Frag::PFT_Object == cType)
-				static_cast<pf_Frag_Object *>(currentFrag)->setIndexAP(indexNormal);
+				static_cast<pf_Frag_Object *>(currentFrag)->setIndexAP(indexNewAP);
 			else if(pf_Frag::PFT_FmtMark == cType)
-				static_cast<pf_Frag_FmtMark *>(currentFrag)->setIndexAP(indexNormal);
+				static_cast<pf_Frag_FmtMark *>(currentFrag)->setIndexAP(indexNewAP);
 		}
 //
 // Now recursively search to see if has our style in the basedon list
@@ -3740,6 +3757,7 @@ bool PD_Document::removeStyle(const gchar * pszName)
 				pStuff->fragType = currentFrag->getType();
 				pStuff->thisFrag = currentFrag;
 				pStuff->indexAPFrag = indexAP;
+				pStuff->indexNewAPFrag = indexAP;
 				pStuff->lastFragStrux = pfs;
 				pStuff->thisPos = pos;
 				pStuff->thisStruxPos = pos;
@@ -3756,6 +3774,7 @@ bool PD_Document::removeStyle(const gchar * pszName)
 				pStuff->fragType = currentFrag->getType();
 				pStuff->thisFrag = currentFrag;
 				pStuff->indexAPFrag = indexAP;
+				pStuff->indexNewAPFrag = indexAP;
 				pStuff->lastFragStrux = pfs;
 				pStuff->thisPos = pos;
 				pStuff->thisStruxPos = pos;
@@ -3837,42 +3856,46 @@ bool PD_Document::removeStyle(const gchar * pszName)
 		UT_nonnull_or_continue(pStuff);
 		if(pStuff->fragType == pf_Frag::PFT_Strux)
 		{
-			pfsLast = pStuff->thisFrag;
+			pf_Frag_Strux * pfsCur = static_cast<pf_Frag_Strux *>(pStuff->thisFrag);
+			pfsLast = pfsCur;
 			if(pStuff->bChangeIndexAP)
 			{
-				pcr = new PX_ChangeRecord(PX_ChangeRecord::PXT_ChangeStrux,pStuff->thisPos,indexNormal,
-										  pfsLast->getXID());
+				pcr = new PX_ChangeRecord_StruxChange(PX_ChangeRecord::PXT_ChangeStrux,
+													  pStuff->thisPos,
+													  pStuff->indexAPFrag,
+													  pStuff->indexNewAPFrag,
+													  pfsCur->getStruxType(),
+													  false);
 				notifyListeners(pStuff->lastFragStrux, pcr);
 				delete pcr;
 			}
 			else
 			{
-				pcr = new PX_ChangeRecord(PX_ChangeRecord::PXT_ChangeStrux,pStuff->thisPos,pStuff->indexAPFrag,
-										  pfsLast->getXID());
+				pcr = new PX_ChangeRecord_StruxChange(PX_ChangeRecord::PXT_ChangeStrux,
+													  pStuff->thisPos,
+													  pStuff->indexAPFrag,
+													  pStuff->indexAPFrag,
+													  pfsCur->getStruxType(),
+													  false);
 				notifyListeners(pStuff->lastFragStrux, pcr);
 				delete pcr;
 			}
 		}
 		else
 		{
-			if(pStuff->lastFragStrux != pfsLast)
+			if(pStuff->lastFragStrux != pfsLast && pStuff->lastFragStrux)
 			{
-				pfsLast = pStuff->lastFragStrux;
-				if(pStuff->bChangeIndexAP)
-				{
-					pcr = new PX_ChangeRecord(PX_ChangeRecord::PXT_ChangeStrux,pStuff->thisPos,indexNormal,
-											  pfsLast->getXID());
-					notifyListeners(pStuff->lastFragStrux, pcr);
-					delete pcr;
-				}
-				else
-				{
-					PT_AttrPropIndex indexLastAP = static_cast<pf_Frag_Strux *>(pfsLast)->getIndexAP();
-					pcr = new PX_ChangeRecord(PX_ChangeRecord::PXT_ChangeStrux,pStuff->thisPos,indexLastAP,
-											  pfsLast->getXID());
-					notifyListeners(pStuff->lastFragStrux, pcr);
-					delete pcr;
-				}
+				pf_Frag_Strux * pfsCur = pStuff->lastFragStrux;
+				pfsLast = pfsCur;
+				PT_AttrPropIndex indexLastAP = pfsCur->getIndexAP();
+				pcr = new PX_ChangeRecord_StruxChange(PX_ChangeRecord::PXT_ChangeStrux,
+													  pStuff->thisPos,
+													  indexLastAP,
+													  indexLastAP,
+													  pfsCur->getStruxType(),
+													  false);
+				notifyListeners(pfsCur, pcr);
+				delete pcr;
 			}
 		}
 	}
@@ -5455,7 +5478,7 @@ const pf_Frag_Strux* PD_Document::getPrevNumberedHeadingStyle(const pf_Frag_Stru
 				}
 				pBasedOn  = pStyle->getBasedOn();
 				UT_uint32 i = 0;
-				while(pBasedOn != nullptr && i < 10 && !bFound)
+				while(pBasedOn != nullptr && i < pp_BASEDON_DEPTH_LIMIT && !bFound)
 				{
 					if (strstr(pBasedOn->getName(), "Numbered Heading") != nullptr)
 					{
@@ -5465,6 +5488,7 @@ const pf_Frag_Strux* PD_Document::getPrevNumberedHeadingStyle(const pf_Frag_Stru
 					{
 						pBasedOn = pBasedOn->getBasedOn();
 					}
+					i++;
 				}
 				if(bFound)
 				{
@@ -5753,8 +5777,9 @@ void  PD_Document::updateAllLayoutsInDoc(const pf_Frag_Strux* pfs)
 {
 	PT_AttrPropIndex indexAP = pfs->getIndexAP();
 	PT_DocPosition pos = getStruxPosition(pfs);
-	PX_ChangeRecord * pcr = new PX_ChangeRecord(PX_ChangeRecord::PXT_ChangeStrux,
-												pos,indexAP,pfs->getXID());
+	PX_ChangeRecord * pcr = new PX_ChangeRecord_StruxChange(PX_ChangeRecord::PXT_ChangeStrux,
+															pos, indexAP, indexAP,
+															pfs->getStruxType(), false);
 	notifyListeners(pfs, pcr);
 	delete pcr;
 }
@@ -6938,6 +6963,21 @@ bool PD_Document::_acceptRejectRevision(bool bReject, UT_uint32 iStart, UT_uint3
 	UT_return_val_if_fail(pf && pRev, false);
 	bDeleted = false;
 
+	struct MarkRevisionsGuard
+	{
+		PD_Document * m_pDoc;
+		bool m_bMark;
+		explicit MarkRevisionsGuard(PD_Document * pDoc)
+			: m_pDoc(pDoc), m_bMark(pDoc->isMarkRevisions())
+		{
+			m_pDoc->_setMarkRevisions(false);
+		}
+		~MarkRevisionsGuard()
+		{
+			m_pDoc->_setMarkRevisions(m_bMark);
+		}
+	} markRevGuard(this);
+
 	UT_uint32 iRealDeleteCount;
 	const std::string rev = "revision";
 	PP_PropertyVector ppAttr = {
@@ -7116,10 +7156,11 @@ bool PD_Document::_acceptRejectRevision(bool bReject, UT_uint32 iStart, UT_uint3
 					// the changeStrux function tries to locate the strux which _contains_ the
 					// position we pass into it; however, iStart is the doc position of the actual
 					// strux, so we have to skip over the strux
-					return changeStruxFmt(PTC_RemoveFmt, iStart + 1, iEnd, ppAttr, PP_NOPROPS, pfs->getStruxType());
+					bRet &= changeStruxFmt(PTC_RemoveFmt, iStart + 1, iEnd, ppAttr, PP_NOPROPS, pfs->getStruxType());
 				}
 				else
-					return changeSpanFmt(PTC_RemoveFmt, iStart, iEnd, ppAttr, PP_NOPROPS);
+					bRet &= changeSpanFmt(PTC_RemoveFmt, iStart, iEnd, ppAttr, PP_NOPROPS);
+				// fall through to overlay formatting changes from pRev
 
 			case PP_REVISION_FMT_CHANGE:
 				// overlay the formatting and remove this revision
@@ -7175,16 +7216,19 @@ bool PD_Document::_acceptRejectRevision(bool bReject, UT_uint32 iStart, UT_uint3
 
 				UT_ASSERT_HARMLESS( !ppAttr2.empty() || !ppProps.empty() );
 
-				if(pf->getType() == pf_Frag::PFT_Strux)
+				if(!ppAttr2.empty() || !ppProps.empty())
 				{
-					pf_Frag_Strux * pfs = static_cast<pf_Frag_Strux *>(pf);
-					// the changeStrux function tries to locate the strux which _contains_ the
-					// position we pass into it; however, iStart is the doc position of the actual
-					// strux, so we have to skip over the strux
-					bRet &= changeStruxFmt(PTC_AddFmt,iStart+1,iEnd,ppAttr2,ppProps, pfs->getStruxType());
+					if(pf->getType() == pf_Frag::PFT_Strux)
+					{
+						pf_Frag_Strux * pfs = static_cast<pf_Frag_Strux *>(pf);
+						// the changeStrux function tries to locate the strux which _contains_ the
+						// position we pass into it; however, iStart is the doc position of the actual
+						// strux, so we have to skip over the strux
+						bRet &= changeStruxFmt(PTC_AddFmt,iStart+1,iEnd,ppAttr2,ppProps, pfs->getStruxType());
+					}
+					else
+						bRet &= changeSpanFmt(PTC_AddFmt,iStart,iEnd,ppAttr2,ppProps);
 				}
-				else
-					bRet &= changeSpanFmt(PTC_AddFmt,iStart,iEnd,ppAttr2,ppProps);
 
 				return bRet;
 
@@ -7406,7 +7450,11 @@ bool PD_Document::acceptRejectRevision(bool bReject, UT_uint32 iPos1,
 			bFirst = false;
 			iFragLen -= (iPosStart - pf->getPos());
 		}
-		
+
+		UT_uint32 iRemaining = iPosEnd - (iPosStart + iLenProcessed);
+		if (iFragLen > iRemaining)
+			iFragLen = iRemaining;
+
 		iLenProcessed += iFragLen;
 
 		PT_AttrPropIndex API = pf->getIndexAP();

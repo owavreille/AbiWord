@@ -289,6 +289,14 @@ PD_Style * PD_Style::getFollowedBy(void) const
 	return m_pFollowedBy;
 }
 
+void PD_Style::clearCachedStyle(const PD_Style * pStyle)
+{
+	if (m_pBasedOn == pStyle)
+		m_pBasedOn = nullptr;
+	if (m_pFollowedBy == pStyle)
+		m_pFollowedBy = nullptr;
+}
+
 /*!
  * Add a property to the style definition.
  */

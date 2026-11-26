@@ -195,46 +195,46 @@ UT_Error IE_Exp_HTML::copyToBuffer(PD_DocumentRange * pDocRange,UT_ByteBuf *  bu
         UNREFP( outDoc);
         return UT_ERROR;
     }
-    GsfOutput * outBuf =  gsf_output_stdio_new (szTempFileName,&err);
+    gchar * uri = g_filename_to_uri(szTempFileName, nullptr, &err);
     g_clear_error(&err);
-    if (!outBuf)
+    if (!uri)
     {
         delete pRangeListener;
         UNREFP( outDoc);
         g_remove(szTempFileName);
-        g_free (szTempFileName);
+        g_free(szTempFileName);
         return UT_ERROR;
     }
     IEFileType ftHTML = IE_Exp::fileTypeForMimetype("text/html");
-    UT_Error aerr = IE_Exp::constructExporter(outDoc,outBuf,
-											  ftHTML,(IE_Exp**)&pNewExp);
-    g_object_unref(outBuf);
-    if(pNewExp == nullptr)
+    UT_Error aerr = IE_Exp::constructExporter(outDoc, uri,
+											  ftHTML, (IE_Exp**)&pNewExp);
+    if (pNewExp == nullptr)
     {
+        g_free(uri);
         delete pRangeListener;
         UNREFP( outDoc);
         g_remove(szTempFileName);
-        g_free (szTempFileName);
+        g_free(szTempFileName);
         return aerr;
     }
 
 	pNewExp->suppressDialog();
-    std::string url = UT_std_string_sprintf("file://%s", szTempFileName);
-    aerr = pNewExp->writeFile(url.c_str());
-    if(aerr != UT_OK)
+    aerr = pNewExp->writeFile(uri);
+    g_free(uri);
+    if (aerr != UT_OK)
     {
         delete pNewExp;
         delete pRangeListener;
         UNREFP( outDoc);
         g_remove(szTempFileName);
-        g_free (szTempFileName);
+        g_free(szTempFileName);
         return aerr;
     }
     //
     // File is closed at the end of the export. Open it again.
     //
 
-    GsfInput *  fData = gsf_input_stdio_new(szTempFileName,&err);
+    GsfInput * fData = gsf_input_stdio_new(szTempFileName, &err);
     g_clear_error(&err);
     if (fData)
     {
@@ -247,14 +247,22 @@ UT_Error IE_Exp_HTML::copyToBuffer(PD_DocumentRange * pDocRange,UT_ByteBuf *  bu
                 UT_DEBUGMSG(("Writing %d bytes to clipboard \n", (UT_sint32)siz));
                 bufHTML->append(pData, siz);
             }
+            else
+            {
+                aerr = UT_ERROR;
+            }
         }
         g_object_unref(fData);
+    }
+    else
+    {
+        aerr = UT_ERROR;
     }
     delete pNewExp;
     delete pRangeListener;
     UNREFP( outDoc);
     g_remove(szTempFileName);
-    g_free (szTempFileName);
+    g_free(szTempFileName);
     return aerr;
 }
 
@@ -354,7 +362,8 @@ UT_Error IE_Exp_HTML::_writeDocument()
 {
 	m_pNavigationHelper = new IE_Exp_HTML_NavigationHelper(getDoc(), getFileName());
     UT_UTF8String basename = UT_go_basename(getFileName());
-    m_suffix = strchr(basename.utf8_str(), '.');
+    const char * dot = strrchr(basename.utf8_str(), '.');
+    m_suffix = dot ? dot : "";
     UT_DEBUGMSG(("Determined suffix: %s", m_suffix.utf8_str()));
     
     if (!UT_go_utf8_collate_casefold(m_suffix.utf8_str(), ".html")||

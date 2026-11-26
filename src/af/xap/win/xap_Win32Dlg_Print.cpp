@@ -446,9 +446,10 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 
 	// The driver must not print the copies as well: AbiWord loops itself,
 	// as on the other ports. Read the count first, then force a single copy
-	// only when the driver DEVMODE actually requests more than one copy or
-	// collation, avoiding unnecessary DocumentPropertiesW/ResetDCW calls.
-	DEVMODEW *pDevMode=(DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
+	// on a temporary DEVMODE copy for ResetDCW so m_pPersistPrintDlg->hDevMode
+	// keeps the user's copies/collate settings across Quick Print and future dialogs.
+	const SIZE_T dmBytes = GlobalSize(m_pPersistPrintDlg->hDevMode);
+	DEVMODEW *pDevMode = static_cast<DEVMODEW *>(GlobalLock(m_pPersistPrintDlg->hDevMode));
 	if (!pDevMode)
 	{
 		m_answer = a_CANCEL;
@@ -465,40 +466,67 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 	else
 		m_bCollate = (m_pPersistPrintDlg->Flags & PD_COLLATE) != 0;
 
-	bool bNeedReset = false;
-	if ((pDevMode->dmFields & DM_COPIES) && pDevMode->dmCopies > 1)
+	const bool bNeedCopiesReset = (pDevMode->dmFields & DM_COPIES) && pDevMode->dmCopies > 1;
+	const bool bNeedCollateReset = (pDevMode->dmFields & DM_COLLATE) && pDevMode->dmCollate != DMCOLLATE_FALSE;
+	const bool bNeedReset = bNeedCopiesReset || bNeedCollateReset;
+
+	HGLOBAL hTempDevMode = nullptr;
+	if (bNeedReset && dmBytes >= sizeof(DEVMODEW))
 	{
-		pDevMode->dmCopies = 1;
-		pDevMode->dmFields |= DM_COPIES;
-		bNeedReset = true;
-	}
-	if ((pDevMode->dmFields & DM_COLLATE) && pDevMode->dmCollate != DMCOLLATE_FALSE)
-	{
-		pDevMode->dmCollate = DMCOLLATE_FALSE;
-		pDevMode->dmFields |= DM_COLLATE;
-		bNeedReset = true;
+		hTempDevMode = GlobalAlloc(GHND, dmBytes);
+		if (hTempDevMode)
+		{
+			DEVMODEW *pTemp = static_cast<DEVMODEW *>(GlobalLock(hTempDevMode));
+			if (pTemp)
+			{
+				memcpy(pTemp, pDevMode, dmBytes);
+				if (bNeedCopiesReset)
+				{
+					pTemp->dmCopies = 1;
+					pTemp->dmFields |= DM_COPIES;
+				}
+				if (bNeedCollateReset)
+				{
+					pTemp->dmCollate = DMCOLLATE_FALSE;
+					pTemp->dmFields |= DM_COLLATE;
+				}
+				GlobalUnlock(hTempDevMode);
+			}
+			else
+			{
+				GlobalFree(hTempDevMode);
+				hTempDevMode = nullptr;
+			}
+		}
 	}
 	GlobalUnlock(m_pPersistPrintDlg->hDevMode);
 
 	if (bNeedReset)
 	{
+		if (!hTempDevMode)
+		{
+			m_answer = a_CANCEL;
+			return;
+		}
 		std::wstring driver;
 		std::wstring device;
 		s_extractDevNames(m_pPersistPrintDlg->hDevNames, driver, device);
 
 		// any changes to the DEVMODE structure must be followed by this call before the
 		// modified structure can be used !!!
-		GR_Win32Graphics::fixDevMode(m_pPersistPrintDlg->hDevMode,
+		GR_Win32Graphics::fixDevMode(hTempDevMode,
 									 device.empty() ? nullptr : device.c_str());
 
-		pDevMode=(DEVMODEW *)GlobalLock(m_pPersistPrintDlg->hDevMode);
-		if (!pDevMode)
+		DEVMODEW *pTemp = static_cast<DEVMODEW *>(GlobalLock(hTempDevMode));
+		if (!pTemp)
 		{
+			GlobalFree(hTempDevMode);
 			m_answer = a_CANCEL;
 			return;
 		}
-		const HDC reset = m_pPersistPrintDlg->hDC ? ResetDCW(m_pPersistPrintDlg->hDC, pDevMode) : nullptr;
-		GlobalUnlock(m_pPersistPrintDlg->hDevMode);
+		const HDC reset = m_pPersistPrintDlg->hDC ? ResetDCW(m_pPersistPrintDlg->hDC, pTemp) : nullptr;
+		GlobalUnlock(hTempDevMode);
+		GlobalFree(hTempDevMode);
 		if (!reset)
 		{
 			m_answer = a_CANCEL;

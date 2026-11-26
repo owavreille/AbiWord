@@ -380,7 +380,7 @@ PP_RevisionAttr::PP_RevisionAttr(const gchar * r):
 PP_RevisionAttr::PP_RevisionAttr(UT_uint32 iId, PP_RevisionType eType,
                                  const PP_PropertyVector & attrs,
                                  const PP_PropertyVector & props)
-	: m_bDirty(false)
+	: m_bDirty(true)
 	, m_iSuperfluous(0)
 	, m_pLastRevision(nullptr)
 {
@@ -1022,24 +1022,12 @@ void PP_RevisionAttr::addRevision(UT_uint32 iId, PP_RevisionType eType )
 void
 PP_RevisionAttr::addRevision( const PP_Revision* r )
 {
-    std::stringstream ss;
-    if(r->getType() & PP_REVISION_FMT_CHANGE)
-        ss << "!";
-    
-    ss << (r->getId() * ((r->getType() == PP_REVISION_DELETION)?-1:1));
-
-    if(r->hasProperties())
-    {
-        ss << "{" << r->getPropsString() << "}";
-    }
-    if(r->hasAttributes())
-    {
-        ss << "{" << r->getAttrsString() << "}";
-    }
+    UT_return_if_fail(r);
 
     PP_RevisionAttr us( getXMLstring() );
     _clear();
-    std::string tmp = (std::string)us.getXMLstring() + "," + ss.str();
+    std::string existing = us.getXMLstring();
+    std::string tmp = existing.empty() ? r->toString() : (existing + "," + r->toString());
     setRevision(tmp);
 }
 
@@ -1536,15 +1524,19 @@ PP_RevisionType PP_RevisionAttr::getType() const
 UT_uint32 PP_RevisionAttr::getHighestRevisionNumberWithAttribute( const gchar * attrName ) const
 {
     const PP_Revision* r = nullptr;
+    UT_uint32 highest = 0;
 
     for( UT_uint32 raIdx = 0;
          raIdx < getRevisionsCount() && (r = getNthRevision( raIdx ));
          raIdx++ )
     {
         if (UT_getAttribute(r, attrName, nullptr))
-            return r->getId();
+        {
+            if (r->getId() > highest)
+                highest = r->getId();
+        }
     }
-    return 0;
+    return highest;
 }
 
 
@@ -1582,7 +1574,7 @@ PP_RevisionAttr::getLowestDeletionRevision() const
         }
         last = p;
     }
-    return nullptr;
+    return last;
 }
 
 

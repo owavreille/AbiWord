@@ -789,7 +789,6 @@ bool pt_PieceTable::deleteSpan(PT_DocPosition dpos1,
         dumpDoc( "deleteSpan(top)", 0, 0 );
 #endif
         
-		bool bHdrFtr = false;
 		// if the user selected the whole document for deletion, we will not delete the
 		// first block (we need always a visible block in any document); we make an
 		// exception to this in VDND, because in that case the original block is
@@ -857,6 +856,7 @@ bool pt_PieceTable::deleteSpan(PT_DocPosition dpos1,
 			PT_BlockOffset Offset1, Offset2;
 			bool bTableStrux = false;
 			bool bHasEndStrux = false;
+			bool bHdrFtr = false;
 			UT_sint32 iTableDepth = 0;
 
             // UT_DEBUGMSG(("ODTCT: deleteSpan(revisions) while.top dpos1:%d dpos2:%d\n", dpos1, dpos2 ));
@@ -947,7 +947,8 @@ bool pt_PieceTable::deleteSpan(PT_DocPosition dpos1,
 					case PTX_SectionFrame:
 					case PTX_SectionTOC:
 						bHasEndStrux = true;
-						// fall through ...
+						iLen = pf_FRAG_STRUX_SECTION_LENGTH;
+						break;
 					case PTX_SectionHdrFtr:
 						bHdrFtr = true;
 						// fall through
@@ -1484,8 +1485,8 @@ bool pt_PieceTable::_deleteSpanWithNotify(PT_DocPosition dpos,
 	pcr->setDocument(m_pDocument);
 	bool bResult = _deleteSpan(pft,fragOffset,pft->getBufIndex(),length,ppfEnd,pfragOffsetEnd);
 
-	bool canCoalesce = _canCoalesceDeleteSpan(pcr);
-	if (!bAddChangeRec || (canCoalesce && !m_pDocument->isCoalescingMasked()))
+	bool canCoalesce = bAddChangeRec && !m_pDocument->isCoalescingMasked() && _canCoalesceDeleteSpan(pcr);
+	if (!bAddChangeRec || canCoalesce)
 	{
 		if (canCoalesce)
 			m_history.coalesceHistory(pcr);

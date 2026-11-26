@@ -22,6 +22,7 @@
 #pragma once
 
 #include <stdio.h>
+#include <string>
 #include "ie_imp.h"
 #include "ut_mbtowc.h"
 #include "pd_Document.h"
@@ -165,7 +166,7 @@ protected:
 	bool _insertSpan (UT_GrowBuf &b);
 
  private:
-	const char *	m_szEncoding;
+	std::string		m_szEncoding;
 	bool m_bExplicitlySetEncoding;
 	bool			m_bIsEncoded;
 	bool			m_bIs16Bit;

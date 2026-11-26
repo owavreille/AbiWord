@@ -229,7 +229,8 @@ bool pt_PieceTable::_unlinkStrux_Block(pf_Frag_Strux * pfs,
 		      }
 		  }  
 		}
-		break;
+		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
+		return true;
 	case PTX_SectionHdrFtr:
 		// we are the first paragraph in this section.  if we have
 		// content, we cannot be deleted, since there is no one to
@@ -532,12 +533,17 @@ bool pt_PieceTable::_deleteStruxWithNotify(PT_DocPosition dpos,
 	UT_return_val_if_fail (pcrs, false);
 
 	if (!_unlinkStrux(pfs,ppfEnd,pfragOffsetEnd))
+	{
+		delete pcrs;
 		return false;
+	}
 
 	// add record to history.  we do not attempt to coalesce these.
 	if (bWithRec)
 		m_history.addChangeRecord(pcrs);
 	m_pDocument->notifyListeners(pfs,pcrs);
+	if (!bWithRec)
+		delete pcrs;
 
 	delete pfs;
 

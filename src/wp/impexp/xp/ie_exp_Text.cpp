@@ -232,7 +232,7 @@ UT_Error IE_Exp_Text::_writeDocument(void)
 	// TODO If we're going to the clipboard and the OS supports unicode, set encoding.
 	// TODO Only supports Windows so far.
 	// TODO Should use a finer-grain technique than IsWinNT() since Win98 supports unicode clipboard.
-	if (getDocRange())
+	if (getDocRange() && !m_bExplicitlySetEncoding && m_szEncoding.empty())
 	{
 #ifdef _WIN32
 		if (UT_IsWinNT())
@@ -317,7 +317,14 @@ void IE_Exp_Text::_setEncoding(const char *szEncoding)
 	const char *szUCS2LEName = XAP_EncodingManager::get_instance()->getUCS2LEName();
 	const char *szUCS2BEName = XAP_EncodingManager::get_instance()->getUCS2BEName();
 
-	if (szEncoding && szUCS2LEName && !strcmp(szEncoding,szUCS2LEName))
+	const bool bIs16LE = szEncoding &&
+		((szUCS2LEName && !g_ascii_strcasecmp(szEncoding, szUCS2LEName)) ||
+		 !g_ascii_strcasecmp(szEncoding, "UTF-16LE"));
+	const bool bIs16BE = szEncoding &&
+		((szUCS2BEName && !g_ascii_strcasecmp(szEncoding, szUCS2BEName)) ||
+		 !g_ascii_strcasecmp(szEncoding, "UTF-16BE"));
+
+	if (bIs16LE)
 	{
 		m_bIs16Bit = true;
 		m_bBigEndian = false;
@@ -328,7 +335,7 @@ void IE_Exp_Text::_setEncoding(const char *szEncoding)
 #endif
 		m_bUnicode = true;
 	}
-	else if (szEncoding && szUCS2BEName && !strcmp(szEncoding,szUCS2BEName))
+	else if (bIs16BE)
 	{
 		m_bIs16Bit = true;
 		m_bBigEndian = true;
@@ -464,9 +471,25 @@ void Text_Listener::_outputData(const UT_UCS4Char * data, UT_uint32 length)
 		{
 			if (!_wctomb(pC,mbLen,*pData))
 			{
-				UT_ASSERT_HARMLESS(!m_bIs16Bit);
-				mbLen=1;
-				pC[0]='?';
+				if (m_bIs16Bit)
+				{
+					mbLen = 2;
+					if (m_bBigEndian)
+					{
+						pC[0] = 0x00;
+						pC[1] = '?';
+					}
+					else
+					{
+						pC[0] = '?';
+						pC[1] = 0x00;
+					}
+				}
+				else
+				{
+					mbLen = 1;
+					pC[0] = '?';
+				}
 				m_wctomb.initialize();
 			}
 			UT_ASSERT_HARMLESS(mbLen>=1);

@@ -348,9 +348,9 @@ bool pt_PieceTable::_fmtChangeSpanWithNotify(PTChangeFmt ptc,
 
 	UT_return_val_if_fail (fragOffset+length <= pft->getLength(), false);
 
-	PT_AttrPropIndex indexNewAP;
+	PT_AttrPropIndex indexNewAP = 0;
 	PT_AttrPropIndex indexOldAP = pft->getIndexAP();
-	UT_DebugOnly<bool> bMerged;
+	bool bMerged;
 	if(attributes.empty() && properties.empty())
 	{
 	    //
@@ -363,6 +363,8 @@ bool pt_PieceTable::_fmtChangeSpanWithNotify(PTChangeFmt ptc,
 	  bMerged = m_varset.mergeAP(ptc,indexOldAP,attributes,properties,&indexNewAP,getDocument());
 
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 	{

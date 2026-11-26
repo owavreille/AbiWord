@@ -401,9 +401,15 @@ bool pt_PieceTable::removeStyle (const gchar * szName)
 		if (!pStyle->isUserDefined())
 			return false; // can't destroy a builtin style
 
-		delete pStyle;
-
 		m_hashStyles.erase(szName);
+
+		for (auto & entry : m_hashStyles)
+		{
+			if (entry.second)
+				entry.second->clearCachedStyle(pStyle);
+		}
+
+		delete pStyle;
 		return true;
 	}
 

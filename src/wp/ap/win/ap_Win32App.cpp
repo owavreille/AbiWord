@@ -1084,10 +1084,10 @@ void AP_Win32App::pasteFromClipboard(PD_DocumentRange * pDocRange, bool /*bUseCl
 		// TODO Paste the most detailed version unless user overrides.
 		// TODO decide if we need to support .ABW on the clipboard.
 		if (!((bHonorFormatting && _pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_RTF, ".rtf", false)) ||
-			s_pastePng(this, m_pClipboard) ||
+			(bHonorFormatting && s_pastePng(this, m_pClipboard)) ||
 			_pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_TEXTPLAIN_UCS2, ".txt", true) ||
-			s_pasteDib(this, m_pClipboard) ||
-			_pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_BMP, ".bmp", false) ||
+			(bHonorFormatting && s_pasteDib(this, m_pClipboard)) ||
+			(bHonorFormatting && _pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_BMP, ".bmp", false)) ||
 			_pasteFormatFromClipboard(pDocRange, AP_CLIPBOARD_TEXTPLAIN_8BIT, ".txt", false)))
 		{
 			UT_DEBUGMSG(("PasteFromClipboard: no supported format\n"));
@@ -1161,8 +1161,13 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
  			return false;
  		}
  		pFrameData = (AP_FrameData*) pFrame->getFrameData();		
- 		pDocLy =	pFrameData->m_pDocLayout;	
- 		pView =  pDocLy->getView();		
+ 		pDocLy = pFrameData ? pFrameData->m_pDocLayout : nullptr;	
+ 		pView = pDocLy ? pDocLy->getView() : nullptr;		
+ 		if (!pView)
+ 		{
+ 			DELETEP(pIEG);
+ 			return false;
+ 		}
  				
  		errorCode = pView->cmdInsertGraphic(pFG);	  		  		
  	
@@ -1204,37 +1209,28 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
 
 bool AP_Win32App::canPasteFromClipboard(void) const
 {
-	if (!getLastFocussedFrame()) 
+	if (!getLastFocussedFrame() || !m_pClipboard) 
 		return false;
 
-	AP_Win32FrameImpl * pFrameImp = static_cast<AP_Win32FrameImpl*>(getLastFocussedFrame()->getFrameImpl());
-	UT_return_val_if_fail(pFrameImp, false);
-	
-	if (!m_pClipboard->openClipboard(pFrameImp->getHwndDocument()))
-		return false;
-
+	// IsClipboardFormatAvailable() does not require OpenClipboard(); avoid
+	// locking the system clipboard on every UI refresh.
 	// TODO decide if we need to support .ABW format on the clipboard.	
 	if (m_pClipboard->hasFormat(AP_CLIPBOARD_RTF))
-		goto ReturnTrue;
+		return true;
 	if (m_pClipboard->hasFormat(AP_CLIPBOARD_TEXTPLAIN_UCS2))
-		goto ReturnTrue;
+		return true;
 	if (m_pClipboard->hasFormat(AP_CLIPBOARD_TEXTPLAIN_8BIT))
-		goto ReturnTrue;
+		return true;
 
 	if (m_pClipboard->hasFormat(AP_CLIPBOARD_PNG) && IEGFT_PNG != IEGFT_Unknown)
-		goto ReturnTrue;
+		return true;
 	if (m_pClipboard->hasFormat(AP_CLIPBOARD_DIB) && IEGFT_BMP != IEGFT_Unknown)
-		goto ReturnTrue;
+		return true;
 	// If IEGFT_BMP!=0 we have a plugin that can deal with BMP format
 	if (m_pClipboard->hasFormat(AP_CLIPBOARD_BMP) && IEGFT_BMP)
-  		goto ReturnTrue;
+  		return true;
   		
-	m_pClipboard->closeClipboard();
 	return false;
-
-ReturnTrue:
-	m_pClipboard->closeClipboard();
-	return true;
 }
 
 /*****************************************************************/

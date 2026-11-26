@@ -98,10 +98,25 @@ int main()
 	expect(anthropicAnswer.ok, "une reponse Anthropic est acceptee");
 	expect_eq(anthropicAnswer.text, "Salut", "le texte Anthropic");
 
+	ABI_LLM_Result anthropicMulti = abi_llm_interpret(200,
+		"{\"content\":[{\"type\":\"text\",\"text\":\"Premiere\"},{\"type\":\"text\",\"text\":\"Seconde\"}]}");
+	expect(anthropicMulti.ok, "une reponse Anthropic multi-blocs est acceptee");
+	expect_eq(anthropicMulti.text, "Premiere\nSeconde", "les blocs Anthropic sont separes par un saut de ligne");
+
 	ABI_LLM_Result geminiAnswer = abi_llm_interpret(200,
 		"{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Voici\"}]}}]}");
 	expect(geminiAnswer.ok, "une reponse Gemini est acceptee");
 	expect_eq(geminiAnswer.text, "Voici", "le texte Gemini");
+
+	ABI_LLM_Result geminiMulti = abi_llm_interpret(200,
+		"{\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Ligne 1\"},{\"text\":\"Ligne 2\"}]}}]}");
+	expect(geminiMulti.ok, "une reponse Gemini multi-blocs est acceptee");
+	expect_eq(geminiMulti.text, "Ligne 1\nLigne 2", "les blocs Gemini sont separes par un saut de ligne");
+
+	ABI_LLM_Result embeddedKey = abi_llm_interpret(200,
+		"{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"Exemple {\\\"content\\\":\\\"faux\\\"} ok\"}}]}");
+	expect(embeddedKey.ok, "une cle imbriquee dans le texte ne perturbe pas le parseur");
+	expect_eq(embeddedKey.text, "Exemple {\"content\":\"faux\"} ok", "le texte contenant une cle JSON est preserve");
 
 	ABI_LLM_Result last = abi_llm_interpret(200,
 		"{\"content\":\"premier\",\"content\":\"second\"}");

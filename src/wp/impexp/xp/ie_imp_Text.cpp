@@ -622,12 +622,12 @@ UT_Error IE_Imp_Text::_loadFile(GsfInput * fp)
 	ImportStream *pStream = nullptr;
 	UT_Error error;
 
-	// First we try to determine the encoding.
-	if (_recognizeEncoding(fp) == UT_OK)
-		getDoc()->setEncodingName(m_szEncoding);
+	// First we try to determine the encoding unless explicitly set.
+	if (!m_bExplicitlySetEncoding && _recognizeEncoding(fp) == UT_OK)
+		getDoc()->setEncodingName(m_szEncoding.c_str());
 
 	// Call encoding dialog
-	if (!m_bIsEncoded || m_bExplicitlySetEncoding || _doEncodingDialog(m_szEncoding))
+	if (!m_bIsEncoded || m_bExplicitlySetEncoding || _doEncodingDialog(m_szEncoding.c_str()))
 	{
 		X_CleanupIfError(error,_constructStream(pStream,fp));
 		X_CleanupIfError(error,_writeHeader(fp));
@@ -656,7 +656,7 @@ Cleanup:
 */
 IE_Imp_Text::IE_Imp_Text(PD_Document * pDocument, bool bEncoded)
   : IE_Imp(pDocument),
-    m_szEncoding(nullptr),
+    m_szEncoding(),
     m_bExplicitlySetEncoding(false),
     m_bIsEncoded(false),
     m_bIs16Bit(false),
@@ -667,7 +667,7 @@ IE_Imp_Text::IE_Imp_Text(PD_Document * pDocument, bool bEncoded)
 	m_pBlock(nullptr)
 {
 	// Get encoding dialog prefs setting
-	bool bAlwaysPrompt;
+	bool bAlwaysPrompt = false;
 	XAP_App::getApp()->getPrefsValueBool(AP_PREF_KEY_AlwaysPromptEncoding, bAlwaysPrompt);
 
 	m_bIsEncoded = bAlwaysPrompt | bEncoded;
@@ -681,7 +681,7 @@ IE_Imp_Text::IE_Imp_Text(PD_Document * pDocument, bool bEncoded)
 
 IE_Imp_Text::IE_Imp_Text(PD_Document * pDocument, const char * encoding)
   : IE_Imp(pDocument),
-    m_szEncoding(nullptr),
+    m_szEncoding(),
     m_bExplicitlySetEncoding(false),
     m_bIsEncoded(false),
     m_bIs16Bit(false),
@@ -719,14 +719,137 @@ IE_Imp_Text::~IE_Imp_Text ()
  */
 UT_Error IE_Imp_Text::_recognizeEncoding(GsfInput * fp)
 {
-	char szBuf[4096];  // 4096 ought to be enough
-	UT_sint32 iNumbytes;
+	UT_return_val_if_fail(fp, UT_ERROR);
 
-	iNumbytes = UT_MIN(4096, gsf_input_remaining(fp));
-	gsf_input_read(fp, iNumbytes, (guint8 *)szBuf);
-	gsf_input_seek(fp, 0, G_SEEK_SET);
+	gsf_off_t remaining = gsf_input_remaining(fp);
+	if (remaining <= 0)
+	{
+		_setEncoding("UTF-8");
+		return UT_OK;
+	}
 
-	return _recognizeEncoding(szBuf, iNumbytes);
+	char szBuf[4096];
+	UT_uint32 iNumbytes = static_cast<UT_uint32>(UT_MIN(static_cast<gsf_off_t>(sizeof(szBuf)), remaining));
+	if (!gsf_input_read(fp, iNumbytes, reinterpret_cast<guint8 *>(szBuf)))
+	{
+		gsf_input_seek(fp, 0, G_SEEK_SET);
+		return UT_ERROR;
+	}
+
+	if (IE_Imp_Text_Sniffer::_recognizeUTF8(szBuf, iNumbytes))
+	{
+		gsf_input_seek(fp, 0, G_SEEK_SET);
+		_setEncoding("UTF-8");
+		return UT_OK;
+	}
+
+	IE_Imp_Text_Sniffer::UCS2_Endian eUcs2 = IE_Imp_Text_Sniffer::_recognizeUCS2(szBuf, iNumbytes, false);
+	if (eUcs2 == IE_Imp_Text_Sniffer::UE_BigEnd)
+	{
+		gsf_input_seek(fp, 0, G_SEEK_SET);
+		_setEncoding(XAP_EncodingManager::get_instance()->getUCS2BEName());
+		return UT_OK;
+	}
+	if (eUcs2 == IE_Imp_Text_Sniffer::UE_LittleEnd)
+	{
+		gsf_input_seek(fp, 0, G_SEEK_SET);
+		_setEncoding(XAP_EncodingManager::get_instance()->getUCS2LEName());
+		return UT_OK;
+	}
+
+	bool bAllAscii = true;
+	for (UT_uint32 i = 0; i < iNumbytes; ++i)
+	{
+		const unsigned char ch = static_cast<unsigned char>(szBuf[i]);
+		if (ch == 0 || (ch & 0x80) != 0)
+		{
+			bAllAscii = false;
+			break;
+		}
+	}
+
+	if (bAllAscii)
+	{
+		// First 4 KB was pure ASCII: scan further chunks (up to 256 KB or EOF)
+		// to distinguish UTF-8 from legacy 8-bit bytes occurring later in the file.
+		const gsf_off_t maxScan = 256 * 1024;
+		gsf_off_t scanned = iNumbytes;
+		int utf8Expected = 0;
+		bool bInvalidUtf8 = false;
+
+		while (scanned < maxScan && !bInvalidUtf8)
+		{
+			gsf_off_t rem = gsf_input_remaining(fp);
+			if (rem <= 0)
+				break;
+			UT_uint32 toRead = static_cast<UT_uint32>(UT_MIN(static_cast<gsf_off_t>(sizeof(szBuf)), UT_MIN(rem, maxScan - scanned)));
+			if (!gsf_input_read(fp, toRead, reinterpret_cast<guint8 *>(szBuf)))
+				break;
+			scanned += toRead;
+
+			for (UT_uint32 i = 0; i < toRead; ++i)
+			{
+				const unsigned char ch = static_cast<unsigned char>(szBuf[i]);
+				if (ch == 0)
+				{
+					bInvalidUtf8 = true;
+					break;
+				}
+				if (utf8Expected > 0)
+				{
+					if ((ch & 0xc0) != 0x80)
+					{
+						bInvalidUtf8 = true;
+						break;
+					}
+					--utf8Expected;
+				}
+				else if ((ch & 0x80) == 0)
+				{
+					continue;
+				}
+				else if ((ch & 0xe0) == 0xc0)
+				{
+					utf8Expected = 1;
+				}
+				else if ((ch & 0xf0) == 0xe0)
+				{
+					utf8Expected = 2;
+				}
+				else if ((ch & 0xf8) == 0xf0)
+				{
+					utf8Expected = 3;
+				}
+				else
+				{
+					bInvalidUtf8 = true;
+					break;
+				}
+			}
+		}
+
+		const bool reachedEof = (gsf_input_remaining(fp) <= 0);
+		gsf_input_seek(fp, 0, G_SEEK_SET);
+
+		if (!bInvalidUtf8 && (!reachedEof || utf8Expected == 0))
+		{
+			_setEncoding("UTF-8");
+			return UT_OK;
+		}
+	}
+	else
+	{
+		gsf_input_seek(fp, 0, G_SEEK_SET);
+	}
+
+	_setEncoding(
+#ifdef TOOLKIT_WIN
+		XAP_EncodingManager::get_instance()->getNative8BitEncodingName()
+#else
+		"ISO-8859-1"
+#endif
+	);
+	return UT_OK;
 }
 
 /*!
@@ -739,6 +862,12 @@ UT_Error IE_Imp_Text::_recognizeEncoding(GsfInput * fp)
  */
 UT_Error IE_Imp_Text::_recognizeEncoding(const char *szBuf, UT_uint32 iNumbytes)
 {
+	if (!szBuf || iNumbytes == 0)
+	{
+		_setEncoding("UTF-8");
+		return UT_OK;
+	}
+
 	if (IE_Imp_Text_Sniffer::_recognizeUTF8(szBuf, iNumbytes))
 		_setEncoding("UTF-8");
 	else
@@ -752,13 +881,29 @@ UT_Error IE_Imp_Text::_recognizeEncoding(const char *szBuf, UT_uint32 iNumbytes)
 		else if (eUcs2 == IE_Imp_Text_Sniffer::UE_LittleEnd)
 			_setEncoding(XAP_EncodingManager::get_instance()->getUCS2LEName());
 		else
-			_setEncoding(
+		{
+			bool bPureAscii = true;
+			for (UT_uint32 i = 0; i < iNumbytes; ++i)
+			{
+				const unsigned char ch = static_cast<unsigned char>(szBuf[i]);
+				if (ch == 0 || (ch & 0x80) != 0)
+				{
+					bPureAscii = false;
+					break;
+				}
+			}
+
+			if (bPureAscii)
+				_setEncoding("UTF-8");
+			else
+				_setEncoding(
 #ifdef TOOLKIT_WIN
-				XAP_EncodingManager::get_instance()->getNative8BitEncodingName()
+					XAP_EncodingManager::get_instance()->getNative8BitEncodingName()
 #else
-				"ISO-8859-1"
+					"ISO-8859-1"
 #endif
-			);
+				);
+		}
 	}
 
 	return UT_OK;
@@ -822,7 +967,7 @@ UT_Error IE_Imp_Text::_parseStream(ImportStream * pStream)
 		}
 	}
 
-	pStream->init(m_szEncoding);
+	pStream->init(m_szEncoding.empty() ? nullptr : m_szEncoding.c_str());
 
 	while (pStream->getChar(c))
 	{
@@ -845,11 +990,12 @@ UT_Error IE_Imp_Text::_parseStream(ImportStream * pStream)
 			break;
 
 		case UCS_BOM:
-			// This is Byte Order Mark at the start of file, Zero Width Non Joiner elsewhere
+			// This is Byte Order Mark at the start of file, Zero Width Non-Breaking Space elsewhere
 			if (bFirstChar)
 				break;
 
-			// fall through
+			X_ReturnNoMemIfError(gbBlock.append(reinterpret_cast<UT_GrowBufElement*>(&c), 1));
+			break;
 
 		// if we encounter any of the following characters we will
 		// substitute a '?' as they correspond to control characters,
@@ -960,14 +1106,16 @@ bool IE_Imp_Text::_doEncodingDialog(const char *szEncoding)
  */
 void IE_Imp_Text::_setEncoding(const char *szEncoding)
 {
-	m_szEncoding = szEncoding;
+	std::string enc = szEncoding ? szEncoding : "";
+	m_szEncoding = std::move(enc);
+	const char *szEnc = m_szEncoding.empty() ? nullptr : m_szEncoding.c_str();
 
 	// TODO Should BOM use be a user pref?
 	// TODO Does Mac OSX prefer BOMs?
 	const char *szUCS2LEName = XAP_EncodingManager::get_instance()->getUCS2LEName();
 	const char *szUCS2BEName = XAP_EncodingManager::get_instance()->getUCS2BEName();
 
-	if (szEncoding && szUCS2LEName && !strcmp(szEncoding,szUCS2LEName))
+	if (szEnc && szUCS2LEName && !strcmp(szEnc, szUCS2LEName))
 	{
 		m_bIs16Bit = true;
 		m_bBigEndian = false;
@@ -977,7 +1125,7 @@ void IE_Imp_Text::_setEncoding(const char *szEncoding)
 		m_bUseBOM = false;
 #endif
 	}
-	else if (szEncoding && szUCS2BEName && !strcmp(szEncoding,szUCS2BEName))
+	else if (szEnc && szUCS2BEName && !strcmp(szEnc, szUCS2BEName))
 	{
 		m_bIs16Bit = true;
 		m_bBigEndian = true;

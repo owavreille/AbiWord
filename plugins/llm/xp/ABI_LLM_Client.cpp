@@ -160,49 +160,78 @@ std::string json_unescape(const std::string & raw)
 	return out;
 }
 
+bool read_json_string(const std::string & json, std::size_t & i, std::string & raw)
+{
+	if (i >= json.size() || json[i] != '"')
+		return false;
+	++i;
+	raw.clear();
+	while (i < json.size())
+	{
+		if (json[i] == '\\' && i + 1 < json.size())
+		{
+			raw.push_back('\\');
+			raw.push_back(json[i + 1]);
+			i += 2;
+			continue;
+		}
+		if (json[i] == '"')
+		{
+			++i;
+			return true;
+		}
+		raw.push_back(json[i]);
+		++i;
+	}
+	return true;
+}
+
+void skip_ws(const std::string & json, std::size_t & i)
+{
+	while (i < json.size() && (json[i] == ' ' || json[i] == '\t' || json[i] == '\r' || json[i] == '\n'))
+		++i;
+}
+
 std::string extract_string_values(const std::string & json, const char * key, bool concatenate)
 {
-	const std::string needle = std::string("\"") + key + "\"";
 	std::string result;
-	for (std::size_t at = json.find(needle); at != std::string::npos; )
+	std::size_t i = 0;
+	while (i < json.size())
 	{
-		std::size_t i = at + needle.size();
-		while (i < json.size() && (json[i] == ' ' || json[i] == '\t' || json[i] == '\r' || json[i] == '\n'))
-			++i;
-		if (i >= json.size() || json[i] != ':')
+		if (json[i] != '"')
 		{
-			at = json.find(needle, at + needle.size());
+			++i;
 			continue;
 		}
-		++i;
-		while (i < json.size() && (json[i] == ' ' || json[i] == '\t' || json[i] == '\r' || json[i] == '\n'))
-			++i;
-		if (i >= json.size() || json[i] != '"')
-		{
-			at = json.find(needle, at + needle.size());
+		std::string token;
+		if (!read_json_string(json, i, token))
+			break;
+		std::size_t afterKey = i;
+		skip_ws(json, afterKey);
+		if (afterKey >= json.size() || json[afterKey] != ':')
 			continue;
-		}
-		++i;
-		std::string raw;
-		while (i < json.size())
+		i = afterKey + 1;
+		skip_ws(json, i);
+		if (token == key && i < json.size() && json[i] == '"')
 		{
-			if (json[i] == '\\' && i + 1 < json.size())
-			{
-				raw.push_back('\\');
-				raw.push_back(json[i + 1]);
-				i += 2;
-				continue;
-			}
-			if (json[i] == '"')
+			std::string raw;
+			if (!read_json_string(json, i, raw))
 				break;
-			raw.push_back(json[i]);
-			++i;
+			const std::string decoded = json_unescape(raw);
+			if (concatenate)
+			{
+				if (!decoded.empty())
+				{
+					if (!result.empty())
+						result.push_back('\n');
+					result += decoded;
+				}
+			}
+			else
+			{
+				result = decoded;
+			}
 		}
-		if (concatenate)
-			result += json_unescape(raw);
-		else
-			result = json_unescape(raw);
-		at = (i < json.size()) ? json.find(needle, i + 1) : std::string::npos;
 	}
 	return result;
 }

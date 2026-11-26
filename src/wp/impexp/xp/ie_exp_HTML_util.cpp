@@ -239,7 +239,7 @@ UT_UTF8String ConvertToClean(const UT_UTF8String & str)
                 break;
             }
 
-            if (isalnum(*pCurrent) || (*pCurrent == '-') || (*pCurrent == '_'))
+            if (g_ascii_isalnum(*pCurrent) || (*pCurrent == '-') || (*pCurrent == '_'))
             {
                 result += *pCurrent;
             }

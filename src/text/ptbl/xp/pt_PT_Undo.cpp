@@ -143,23 +143,25 @@ bool pt_PieceTable::_doTheDo(PX_ChangeRecord* pcr, bool bUndo)
 			}
 			else
 			{
-			    pf_Frag_Text * pftNext = static_cast<pf_Frag_Text *>(pft->getNext());
+			    pf_Frag * pfEnd = nullptr;
+			    UT_uint32 fragOffsetEnd = 0;
 			    UT_uint32 iLenDel = pft->getLength() - fragOffset;
 			    iLenDeleted = 0;
-			    while(pft && (pft ->getType() == pf_Frag::PFT_Text) && (iLenDeleted < pcrSpan->getLength()) )
+			    while(pft && (pft->getType() == pf_Frag::PFT_Text) && (iLenDeleted < pcrSpan->getLength()))
 			    {
-				_deleteSpan(pft,fragOffset,pcrSpan->getBufIndex(),iLenDel,nullptr,nullptr);
+				_deleteSpan(pft, fragOffset, pft->getBufIndex(), iLenDel, &pfEnd, &fragOffsetEnd);
 				iLenDeleted += iLenDel;
 				if (iLenDeleted >= pcrSpan->getLength())
 				  break;
-				pft = pftNext;
-				if (!pft || pft->getType() != pf_Frag::PFT_Text)
+				if (!pfEnd || pfEnd->getType() != pf_Frag::PFT_Text)
 				  break;
-				pftNext = static_cast<pf_Frag_Text *>(pft->getNext());
+				pft = static_cast<pf_Frag_Text *>(pfEnd);
+				fragOffset = fragOffsetEnd;
+				if (fragOffset >= pft->getLength())
+				  break;
 				iLenDel = pcrSpan->getLength() - iLenDeleted;
-				if(iLenDel > pft->getLength())
-				  iLenDel = pft->getLength();
-				fragOffset = 0;
+				if(iLenDel > pft->getLength() - fragOffset)
+				  iLenDel = pft->getLength() - fragOffset;
 			    }
 			}
 			UT_DEBUGMSG(("newOffset %d spanBlockOffset %d \n",newOffset,pcrSpan->getBlockOffset()));

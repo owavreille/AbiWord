@@ -26,6 +26,8 @@
 #include "ut_jpeg.h"
 
 #include <png.h>
+#include <cairo-pdf.h>
+#include <cairo-ps.h>
 
 static const UT_uint32 c_MaxImageSide = 16384;
 
@@ -410,10 +412,26 @@ bool GR_CairoPrintGraphics::startPrint(void)
 }
 
 bool GR_CairoPrintGraphics::startPage(const char *, UT_uint32,
-									  bool, UT_uint32, UT_uint32)
+									  bool, UT_uint32 iWidth, UT_uint32 iHeight)
 {
 	if (m_bDoShowPage && m_cr)
 		cairo_show_page(m_cr);
+
+	if (m_cr && iWidth > 0 && iHeight > 0)
+	{
+		cairo_surface_t *surface = cairo_get_target(m_cr);
+		if (surface)
+		{
+			const double widthPt = static_cast<double>(iWidth) * 72.0 / static_cast<double>(UT_LAYOUT_RESOLUTION);
+			const double heightPt = static_cast<double>(iHeight) * 72.0 / static_cast<double>(UT_LAYOUT_RESOLUTION);
+			const cairo_surface_type_t surfaceType = cairo_surface_get_type(surface);
+			if (surfaceType == CAIRO_SURFACE_TYPE_PDF)
+				cairo_pdf_surface_set_size(surface, widthPt, heightPt);
+			else if (surfaceType == CAIRO_SURFACE_TYPE_PS)
+				cairo_ps_surface_set_size(surface, widthPt, heightPt);
+		}
+	}
+
 	m_bDoShowPage = true;
 	return true;
 }

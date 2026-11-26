@@ -78,9 +78,16 @@ struct PendingInsert
 };
 
 std::atomic<bool> g_busy(false);
+std::atomic<int> g_modal_depth(0);
 std::atomic<PendingInsert *> g_ready(nullptr);
 std::thread g_worker;
 UT_Timer * g_timer = nullptr;
+
+struct ModalGuard
+{
+	ModalGuard() { g_modal_depth.fetch_add(1); }
+	~ModalGuard() { g_modal_depth.fetch_sub(1); }
+};
 
 XAP_PrefsScheme * scheme()
 {
@@ -191,9 +198,12 @@ void insert_proposal_page(FV_View * view, const std::string & proposal)
 		return;
 	const bool hasExistingText = has_document_text(view);
 	document->beginUserAtomicGlob();
+	if (view->isHdrFtrEdit())
+		view->clearHdrFtrEdit();
 	view->cmdUnselectSelection();
 	PT_DocPosition docEnd = 0;
-	document->getBounds(true, docEnd);
+	if (!view->getEditableBounds(true, docEnd))
+		document->getBounds(true, docEnd);
 	view->moveInsPtTo(docEnd);
 	if (hasExistingText)
 	{
@@ -261,7 +271,11 @@ void apply_pending(PendingInsert * pending)
 		frame->setStatusMessage("");
 	if (view && pending->error.empty())
 	{
-		const bool accepted = review_proposal(frame, pending->text);
+		bool accepted = false;
+		{
+			ModalGuard modalGuard;
+			accepted = review_proposal(frame, pending->text);
+		}
 		view = live_view(pending->view);
 		frame = view ? static_cast<XAP_Frame *>(view->getParentData()) : nullptr;
 		if (accepted && view)
@@ -508,6 +522,26 @@ std::string to_crlf(const std::string & text)
 	return out;
 }
 
+std::string from_crlf(const std::string & text)
+{
+	std::string out;
+	out.reserve(text.size());
+	for (std::size_t i = 0; i < text.size(); ++i)
+	{
+		if (text[i] == '\r')
+		{
+			if (i + 1 < text.size() && text[i + 1] == '\n')
+				++i;
+			out.push_back('\n');
+		}
+		else
+		{
+			out.push_back(text[i]);
+		}
+	}
+	return out;
+}
+
 HWND parent_hwnd(XAP_Frame * frame)
 {
 	if (!frame || !frame->getFrameImpl())
@@ -593,7 +627,7 @@ INT_PTR CALLBACK settings_dialog(HWND dialog, UINT message, WPARAM wparam, LPARA
 			settings->endpoint = control_text(dialog, 102);
 			settings->model = control_text(dialog, 103);
 			settings->apiKey = control_text(dialog, 104);
-			settings->prompt = control_text(dialog, 105);
+			settings->prompt = from_crlf(control_text(dialog, 105));
 			EndDialog(dialog, IDOK);
 			return TRUE;
 		}
@@ -625,6 +659,8 @@ bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings & settings)
 
 	const DWORD labelStyle = WS_CHILD | WS_VISIBLE;
 	const DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL;
+	const DWORD multiEditStyle = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP
+		| ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN;
 	dialog.item(labelStyle, 8, 8, 60, 12, static_cast<WORD>(-1), 0x0082, L"Fournisseur");
 	dialog.item(editStyle, 72, 6, 196, 14, 101, 0x0081, L"");
 	dialog.item(labelStyle, 8, 26, 60, 12, static_cast<WORD>(-1), 0x0082, L"Adresse");
@@ -634,7 +670,7 @@ bool ask_settings(XAP_Frame * frame, ABI_LLM_Settings & settings)
 	dialog.item(labelStyle, 8, 62, 60, 12, static_cast<WORD>(-1), 0x0082, L"Cle API");
 	dialog.item(editStyle | ES_PASSWORD, 72, 60, 196, 14, 104, 0x0081, L"");
 	dialog.item(labelStyle, 8, 80, 60, 12, static_cast<WORD>(-1), 0x0082, L"Consigne");
-	dialog.item(editStyle | ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL, 72, 78, 196, 52, 105, 0x0081, L"");
+	dialog.item(multiEditStyle, 72, 78, 196, 52, 105, 0x0081, L"");
 	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON, 112, 142, 70, 16, IDOK, 0x0080, L"Enregistrer");
 	dialog.item(WS_CHILD | WS_VISIBLE | WS_TABSTOP, 190, 142, 70, 16, IDCANCEL, 0x0080, L"Annuler");
 
@@ -666,7 +702,7 @@ INT_PTR CALLBACK request_dialog(HWND dialog, UINT message, WPARAM wparam, LPARAM
 	case WM_COMMAND:
 		if (LOWORD(wparam) == IDOK && question)
 		{
-			*question = control_text(dialog, 201);
+			*question = from_crlf(control_text(dialog, 201));
 			EndDialog(dialog, IDOK);
 			return TRUE;
 		}
@@ -697,7 +733,7 @@ bool ask_request(XAP_Frame * frame, std::string & question)
 	dialog.wide(L"Demande a l'assistant");
 
 	const DWORD labelStyle = WS_CHILD | WS_VISIBLE;
-	const DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP | ES_AUTOHSCROLL
+	const DWORD editStyle = WS_CHILD | WS_VISIBLE | WS_BORDER | WS_TABSTOP
 		| ES_MULTILINE | ES_AUTOVSCROLL | WS_VSCROLL | ES_WANTRETURN;
 	dialog.item(labelStyle, 8, 8, 80, 12, static_cast<WORD>(-1), 0x0082, L"Demande");
 	dialog.item(editStyle, 8, 22, 260, 68, 201, 0x0081, L"");
@@ -726,11 +762,42 @@ INT_PTR CALLBACK proposal_dialog(HWND dialog, UINT message, WPARAM wparam, LPARA
 	case WM_INITDIALOG:
 		SetWindowLongPtrW(dialog, DWLP_USER, lparam);
 		proposal = reinterpret_cast<const std::string *>(lparam);
+		SendDlgItemMessageW(dialog, 301, EM_SETLIMITTEXT, 0, 0);
 		if (proposal)
 		{
 			SetDlgItemTextW(dialog, 301, widen(to_crlf(*proposal)).c_str());
 		}
 		return TRUE;
+	case WM_SIZE:
+	{
+		const int width = static_cast<int>(LOWORD(lparam));
+		const int height = static_cast<int>(HIWORD(lparam));
+		const int margin = 12;
+		const int gap = 10;
+		HWND edit = GetDlgItem(dialog, 301);
+		HWND okBtn = GetDlgItem(dialog, IDOK);
+		HWND cancelBtn = GetDlgItem(dialog, IDCANCEL);
+		int btnW = 105;
+		int btnH = 26;
+		RECT btnRect{};
+		if (okBtn && GetWindowRect(okBtn, &btnRect))
+		{
+			btnW = btnRect.right - btnRect.left;
+			btnH = btnRect.bottom - btnRect.top;
+		}
+		const int editW = (width > margin * 2) ? (width - margin * 2) : 1;
+		const int editH = (height > margin * 3 + btnH) ? (height - margin * 3 - btnH) : 1;
+		const int btnY = margin * 2 + editH;
+		const int cancelX = (width > margin + btnW) ? (width - margin - btnW) : margin;
+		const int okX = (cancelX > gap + btnW) ? (cancelX - gap - btnW) : margin;
+		if (edit)
+			MoveWindow(edit, margin, margin, editW, editH, TRUE);
+		if (okBtn)
+			MoveWindow(okBtn, okX, btnY, btnW, btnH, TRUE);
+		if (cancelBtn)
+			MoveWindow(cancelBtn, cancelX, btnY, btnW, btnH, TRUE);
+		return TRUE;
+	}
 	case WM_COMMAND:
 		if (LOWORD(wparam) == IDOK)
 		{
@@ -810,7 +877,12 @@ bool llm_configure(AV_View *, EV_EditMethodCallData *)
 		return false;
 	ABI_LLM_Settings settings = load_settings();
 	const ABI_LLM_Settings previous = settings;
-	if (!ask_settings(frame, settings))
+	bool accepted = false;
+	{
+		ModalGuard modalGuard;
+		accepted = ask_settings(frame, settings);
+	}
+	if (!accepted)
 		return true;
 	if (settings.provider != previous.provider)
 	{
@@ -873,7 +945,12 @@ bool llm_ask(AV_View * view, EV_EditMethodCallData *)
 	if (!document || !frame)
 		return false;
 	std::string question;
-	if (!ask_request(frame, question))
+	bool accepted = false;
+	{
+		ModalGuard modalGuard;
+		accepted = ask_request(frame, question);
+	}
+	if (!accepted)
 		return true;
 	document = live_view(document);
 	if (!document)
@@ -966,6 +1043,8 @@ int abi_plugin_register(XAP_ModuleInfo * info)
 ABI_BUILTIN_FAR_CALL
 int abi_plugin_unregister(XAP_ModuleInfo * info)
 {
+	if (g_modal_depth.load() > 0)
+		return 0;
 	info->name = nullptr;
 	info->desc = nullptr;
 	info->version = nullptr;
@@ -983,6 +1062,7 @@ int abi_plugin_unregister(XAP_ModuleInfo * info)
 	delete leftover;
 	g_busy.store(false);
 	remove_from_menus();
+	curl_global_cleanup();
 	return 1;
 }
 

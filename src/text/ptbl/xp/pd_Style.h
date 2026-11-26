@@ -52,6 +52,7 @@ public:
 
 	PD_Style *				getBasedOn(void) const;
 	PD_Style *				getFollowedBy(void) const;
+	void					clearCachedStyle(const PD_Style * pStyle);
 
 	virtual bool			isUserDefined(void) const { return true; };
 	void					used(UT_sint32 count);

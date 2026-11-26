@@ -328,7 +328,7 @@ static PT_DocPosition _tellListenerSubsetWalkRange(
         return true;
     }
     
-	PT_DocPosition sum = rangeStartPos - fragOffset1;
+	PT_DocPosition sum = walkForwards ? (rangeStartPos - fragOffset1) : pf1->getPos();
 
     pf_Frag * pf = pf1;
 	for ( ; (pf); )
@@ -428,17 +428,20 @@ static PT_DocPosition _tellListenerSubsetWalkRange(
         xxx_UT_DEBUGMSG(("_tellListenerSubsetWalkRange(loop) listener %p sum %d startpos %d endpos %d\n",
                      pListener, sum, rangeStartPos, rangeEndPos ));
         
-		sum += pf->getLength();
-        if( finishedFunctor( rangeStartPos, rangeEndPos, sum, pListener ) )
-			break;
-
         if( walkForwards )
         {
+            sum += pf->getLength();
+            if( finishedFunctor( rangeStartPos, rangeEndPos, sum, pListener ) )
+                break;
             pf=pf->getNext();
         }
         else
         {
+            if( finishedFunctor( rangeStartPos, rangeEndPos, sum, pListener ) )
+                break;
             pf=pf->getPrev();
+            if( pf )
+                sum = pf->getPos();
         }
 	}
 
@@ -519,7 +522,7 @@ bool pt_PieceTable::tellListenerSubset( PL_Listener * pListener,
             
             /*rc =*/ _tellListenerSubsetWalkRange( this, cl,
                                                pDocRange, startPos, pDocRange->m_pos1,
-                                               f, closerFragmentTypesToVisit, walkForwards );
+                                               f, closerFragmentTypesToVisit, true );
             
         }
     }

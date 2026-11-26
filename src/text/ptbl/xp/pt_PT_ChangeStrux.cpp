@@ -70,13 +70,14 @@ bool pt_PieceTable::changeStruxFmtNoUndo(PTChangeFmt ptc,
 										 const PP_PropertyVector & attributes,
 										 const PP_PropertyVector & properties)
 {
-	PT_AttrPropIndex indexNewAP;
+	PT_AttrPropIndex indexNewAP = 0;
 	PTStruxType pts = pfs->getStruxType();
 
 	PT_AttrPropIndex indexOldAP = pfs->getIndexAP();
-	UT_DebugOnly<bool> bMerged;
-	bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
+	bool bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 	xxx_UT_DEBUGMSG(("Merging atts/props oldindex=%d , newindex =%d \n",indexOldAP,indexNewAP));
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 		return true;
@@ -131,14 +132,26 @@ bool pt_PieceTable::changeStruxFmt(PTChangeFmt ptc,
 		// a simple change.  otherwise, we have a multistep change.
 		bool bSimple = (pfs_First == pfs_End);
 
-		if (!bSimple)
-			beginMultiStepGlob();
+		struct MultiStepGlobGuard
+		{
+			pt_PieceTable * m_pPT;
+			explicit MultiStepGlobGuard(pt_PieceTable * pPT) : m_pPT(pPT)
+			{
+				if (m_pPT)
+					m_pPT->beginMultiStepGlob();
+			}
+			~MultiStepGlobGuard()
+			{
+				if (m_pPT)
+					m_pPT->endMultiStepGlob();
+			}
+		} globGuard(bSimple ? nullptr : this);
 
 		pf_Frag * pf = pfs_First;
 		bool bFinished = false;
 
 		// simple loop for normal strux change
-		while (!bFinished)
+		while (!bFinished && pf)
 		{
 			switch (pf->getType())
 			{
@@ -213,8 +226,6 @@ bool pt_PieceTable::changeStruxFmt(PTChangeFmt ptc,
 			pf = pf->getNext();
 		}
 
-		if (!bSimple)
-			endMultiStepGlob();
 		return true;
 	}
 	else
@@ -223,11 +234,12 @@ bool pt_PieceTable::changeStruxFmt(PTChangeFmt ptc,
 
 bool pt_PieceTable::changeStruxFormatNoUpdate(PTChangeFmt ptc ,pf_Frag_Strux * pfs, const PP_PropertyVector & attributes)
 {
-	PT_AttrPropIndex indexNewAP;
+	PT_AttrPropIndex indexNewAP = 0;
 	PT_AttrPropIndex indexOldAP = pfs->getIndexAP();
-	UT_DebugOnly<bool> bMerged;
-	bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, PP_NOPROPS, &indexNewAP, getDocument());
+	bool bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, PP_NOPROPS, &indexNewAP, getDocument());
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 	xxx_UT_DEBUGMSG(("Merging atts/props oldindex=%d , newindex =%d \n",indexOldAP,indexNewAP));
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 		return true;
@@ -253,13 +265,14 @@ bool pt_PieceTable::_fmtChangeStruxWithNotify(PTChangeFmt ptc,
 											  const PP_PropertyVector & properties,
 											  bool bRevisionDelete)
 {
-	PT_AttrPropIndex indexNewAP;
+	PT_AttrPropIndex indexNewAP = 0;
 	PTStruxType pts = pfs->getStruxType();
 
 	PT_AttrPropIndex indexOldAP = pfs->getIndexAP();
-	UT_DebugOnly<bool> bMerged;
-	bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
+	bool bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 	xxx_UT_DEBUGMSG(("Merging atts/props oldindex=%d , newindex =%d \n",indexOldAP,indexNewAP));
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 		return true;
@@ -300,13 +313,14 @@ bool pt_PieceTable::_fmtChangeStruxWithNotify(PTChangeFmt ptc,
 											  bool bDoAll,
 											  bool bRevisionDelete)
 {
-	PT_AttrPropIndex indexNewAP;
+	PT_AttrPropIndex indexNewAP = 0;
 	PTStruxType pts = pfs->getStruxType();
    
 	PT_AttrPropIndex indexOldAP = pfs->getIndexAP();
-	UT_DebugOnly<bool> bMerged;
-	bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
+	bool bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 	xxx_UT_DEBUGMSG(("Merging atts/props oldindex=%d , newindex =%d \n",indexOldAP,indexNewAP));
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 		return true;
@@ -353,11 +367,12 @@ bool pt_PieceTable::_realChangeStruxForLists(pf_Frag_Strux* sdh,
 
 	const char * attributes[3] = {PT_PARENTID_ATTRIBUTE_NAME,pszParentID,nullptr};
 
-	PT_AttrPropIndex indexNewAP;
+	PT_AttrPropIndex indexNewAP = 0;
 	PT_AttrPropIndex indexOldAP = pfs->getIndexAP();
-	UT_DebugOnly<bool> bMerged;
-	bMerged = m_varset.mergeAP(PTC_AddFmt, indexOldAP, PP_std_copyProps(attributes), PP_NOPROPS, &indexNewAP, getDocument());
+	bool bMerged = m_varset.mergeAP(PTC_AddFmt, indexOldAP, PP_std_copyProps(attributes), PP_NOPROPS, &indexNewAP, getDocument());
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 	xxx_UT_DEBUGMSG(("Merging atts/props oldindex=%d , newindex =%d \n",indexOldAP,indexNewAP));
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 		return true;
@@ -398,11 +413,12 @@ bool pt_PieceTable::_realChangeSectionAttsNoUpdate(pf_Frag_Strux * pfs,
 {
 	const char * attributes[3] = {atts,attsValue,nullptr};
 
-	PT_AttrPropIndex indexNewAP;
+	PT_AttrPropIndex indexNewAP = 0;
 	PT_AttrPropIndex indexOldAP = pfs->getIndexAP();
-	UT_DebugOnly<bool> bMerged;
-	bMerged = m_varset.mergeAP(PTC_AddFmt, indexOldAP, PP_std_copyProps(attributes), PP_NOPROPS, &indexNewAP, getDocument());
+	bool bMerged = m_varset.mergeAP(PTC_AddFmt, indexOldAP, PP_std_copyProps(attributes), PP_NOPROPS, &indexNewAP, getDocument());
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 	xxx_UT_DEBUGMSG(("Merging atts/props oldindex=%d , newindex =%d \n",indexOldAP,indexNewAP));
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 		return true;
@@ -518,8 +534,20 @@ bool pt_PieceTable::_realChangeStruxFmt(PTChangeFmt ptc,
 	// NOTE: the undo/redo won't be properly bracketed.
 
 	bool bSimple = (!bApplyStyle && (pfs_First == pfs_End));
-	if (!bSimple)
-		beginMultiStepGlob();
+	struct MultiStepGlobGuard
+	{
+		pt_PieceTable * m_pPT;
+		explicit MultiStepGlobGuard(pt_PieceTable * pPT) : m_pPT(pPT)
+		{
+			if (m_pPT)
+				m_pPT->beginMultiStepGlob();
+		}
+		~MultiStepGlobGuard()
+		{
+			if (m_pPT)
+				m_pPT->endMultiStepGlob();
+		}
+	} globGuard(bSimple ? nullptr : this);
 
 	pf_Frag * pf = pfs_First;
 	bool bFinished = false;
@@ -715,9 +743,6 @@ bool pt_PieceTable::_realChangeStruxFmt(PTChangeFmt ptc,
 			pf = pfNewEnd;
 		}
 	}
-
-	if (!bSimple)
-		endMultiStepGlob();
 
 	return true;
 }

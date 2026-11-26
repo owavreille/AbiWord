@@ -95,7 +95,7 @@ IE_Exp_HTML_NavigationHelper::IE_Exp_HTML_NavigationHelper(
     if (!m_baseName)
         m_baseName = g_strdup("document.html");
 
-    const char * dot = m_baseName ? strchr(m_baseName, '.') : nullptr;
+    const char * dot = m_baseName ? strrchr(m_baseName, '.') : nullptr;
     if (dot)
         m_suffix = dot;
     m_minTOCLevel = 10;
