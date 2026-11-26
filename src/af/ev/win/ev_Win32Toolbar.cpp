@@ -122,6 +122,7 @@ EV_Win32Toolbar::EV_Win32Toolbar(XAP_Win32App * pWin32App, XAP_Frame * pFrame,
 	m_pWin32App(pWin32App),
 	m_pWin32Frame(pFrame),
 	m_pViewListener(nullptr),
+	m_pBoundView(nullptr),
 	m_lid(0),				// view listener id
 	m_hwnd(nullptr),
 	m_imageList(nullptr),
@@ -315,12 +316,11 @@ static int toolbarIconPx(HWND hwnd)
 
 static HFONT toolbarUIFont(int dpiOverride = 0)
 {
-	static HFONT font = nullptr;
-	static HFONT retired = nullptr;
-	static int dpi = -1;
+	static std::map<int, HFONT> s_fonts;
 	int now = (dpiOverride >= 96) ? dpiOverride : toolbarIconDpi(nullptr);
-	if (font && dpi == now)
-		return font;
+	std::map<int, HFONT>::const_iterator it = s_fonts.find(now);
+	if (it != s_fonts.end() && it->second)
+		return it->second;
 
 	NONCLIENTMETRICSW metrics;
 	HFONT created = nullptr;
@@ -329,15 +329,8 @@ static HFONT toolbarUIFont(int dpiOverride = 0)
 	if (!created)
 		created = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 	if (created)
-	{
-		const HFONT stock = (HFONT)GetStockObject(DEFAULT_GUI_FONT);
-		if (retired && retired != stock)
-			DeleteObject(retired);
-		retired = (font && font != stock) ? font : nullptr;
-		font = created;
-		dpi = now;
-	}
-	return font ? font : (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+		s_fonts[now] = created;
+	return created ? created : (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 }
 
 static int centeredTextY(HDC hdc, const RECT & rc)
@@ -1502,6 +1495,11 @@ void EV_Win32Toolbar::_releaseListener(void)
 {
 	if (!m_pViewListener)
 		return;
+	if (m_pBoundView && m_pWin32Frame && m_pWin32Frame->getCurrentView() == m_pBoundView)
+	{
+		m_pBoundView->removeListener(m_lid);
+	}
+	m_pBoundView = nullptr;
 	DELETEP(m_pViewListener);
 	m_pViewListener = nullptr;
 	m_lid = 0;
@@ -1513,12 +1511,16 @@ bool EV_Win32Toolbar::bindListenerToView(AV_View * pView)
 		return false;
 
 	_releaseListener();
+	if (!pView)
+		return false;
 	
 	m_pViewListener = new EV_Win32Toolbar_ViewListener(this,pView);
 	UT_ASSERT(m_pViewListener);
 
-	UT_DebugOnly<bool> bResult = pView->addListener(static_cast<AV_Listener *>(m_pViewListener),&m_lid);
+	bool bResult = pView->addListener(static_cast<AV_Listener *>(m_pViewListener),&m_lid);
 	UT_ASSERT(bResult);
+	if (bResult)
+		m_pBoundView = pView;
 
 	if(pView->isDocumentPresent())
 	{

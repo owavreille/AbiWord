@@ -803,7 +803,7 @@ void fp_TextRun::mapXYToPosition(UT_sint32 x, UT_sint32 y,
 
 			bBOL = false;
 			bEOL = false;
-			pos += adjustCaretPosition(pos,true);
+			pos = adjustCaretPosition(pos,true);
 			return;
 		}
 
@@ -837,7 +837,7 @@ void fp_TextRun::mapXYToPosition(UT_sint32 x, UT_sint32 y,
 					iLog = getLength() - i;
 				
 				pos = getBlock()->getPosition() + getBlockOffset() + iLog;
-				pos += adjustCaretPosition(pos,true);
+				pos = adjustCaretPosition(pos,true);
 				return;
 			}
 		}
@@ -1009,31 +1009,23 @@ void fp_TextRun::findPointCoords(UT_uint32 iOffset, UT_sint32& x, UT_sint32& y, 
 
 bool fp_TextRun::canMergeWithNext(void) const
 {
-	bool bNextIsFmt = false;
-	if (!getNextRun() ||
-		!getLine() ||
-		getNextRun()->getType() != FPRUN_TEXT ||
-		!getNextRun()->getLine() ||
-		getLength()+ getNextRun()->getLength() > 16000) // sanity check, see bugs 8542 and 13709
+	if (!getNextRun() || !getLine())
 	{
-		if(getNextRun()->getType() == FPRUN_FMTMARK)
-		{
-			bNextIsFmt = true;
-		}
-		else
-		{
-			return false;
-		}
+		return false;
 	}
+
 	fp_TextRun* pNext = nullptr;
 	//
 	// This code looks to see if we have a redundant fmtmark. If so 
 	// we remove it later.
 	//
-	if(bNextIsFmt)
+	if (getNextRun()->getType() == FPRUN_FMTMARK)
 	{
 		fp_Run * pNextNext = getNextRun()->getNextRun();
-		if(pNextNext && pNextNext->getType() == FPRUN_TEXT)
+		if (pNextNext &&
+			pNextNext->getType() == FPRUN_TEXT &&
+			pNextNext->getLine() &&
+			getLength() + pNextNext->getLength() <= 16000) // sanity check, see bugs 8542 and 13709
 		{
 			xxx_UT_DEBUGMSG(("Looking if we can merge through fmtMArk \n"));
 #ifdef DEBUG
@@ -1042,10 +1034,20 @@ bool fp_TextRun::canMergeWithNext(void) const
 			pNext = static_cast<fp_TextRun *>(pNextNext);
 		}
 		else
+		{
 			return false;
+		}
+	}
+	else if (getNextRun()->getType() == FPRUN_TEXT &&
+			 getNextRun()->getLine() &&
+			 getLength() + getNextRun()->getLength() <= 16000) // sanity check, see bugs 8542 and 13709
+	{
+		pNext = static_cast<fp_TextRun*>(getNextRun());
 	}
 	else
-		pNext = static_cast<fp_TextRun*>(getNextRun());
+	{
+		return false;
+	}
 
 	if (
 		(pNext->getBlockOffset() != (getBlockOffset() + getLength()))
@@ -3367,25 +3369,23 @@ UT_uint32 fp_TextRun::adjustCaretPosition(UT_uint32 iDocumentPosition, bool bFor
 						   m_pRenderInfo,
 						   iDocumentPosition);
 
-	PD_StruxIterator * text =  new PD_StruxIterator(getBlock()->getStruxDocHandle(),
+	PD_StruxIterator text(getBlock()->getStruxDocHandle(),
 						  getBlockOffset() + fl_BLOCK_STRUX_OFFSET);
 	
-	UT_return_val_if_fail(text->getStatus() == UTIter_OK, iDocumentPosition);
-	xxx_UT_DEBUGMSG(("sdh %p text->getPosition() %d getLength() %d \n",getBlock()->getStruxDocHandle(),text->getPosition(),getLength()));
-	text->setUpperLimit(text->getPosition() + getLength() - 1);
-	xxx_UT_DEBUGMSG(("text->getUpperLimit() %d \n",text->getUpperLimit()));
+	UT_return_val_if_fail(text.getStatus() == UTIter_OK, iDocumentPosition);
+	xxx_UT_DEBUGMSG(("sdh %p text.getPosition() %d getLength() %d \n",getBlock()->getStruxDocHandle(),text.getPosition(),getLength()));
+	text.setUpperLimit(text.getPosition() + getLength() - 1);
+	xxx_UT_DEBUGMSG(("text.getUpperLimit() %d \n",text.getUpperLimit()));
 	//	DELETEP(m_pRenderInfo->m_pText);
-	m_pRenderInfo->m_pText = text;
+	m_pRenderInfo->m_pText = &text;
 	m_pRenderInfo->m_iOffset = iDocumentPosition - iRunOffset;
 	m_pRenderInfo->m_iLength = getLength();
 	if(!getGraphics()->needsSpecialCaretPositioning(*m_pRenderInfo))
 	{
-		DELETEP(text);
 		m_pRenderInfo->m_pText = nullptr;
 	   return iDocumentPosition;
 	}
 	UT_uint32 adjustedPos = iRunOffset + getGraphics()->adjustCaretPosition(*m_pRenderInfo, bForward);
-	DELETEP(text);
 	m_pRenderInfo->m_pText = nullptr;
 	if((adjustedPos - iRunOffset) > getLength())
 		adjustedPos = iRunOffset + getLength();
@@ -3400,20 +3400,19 @@ void fp_TextRun::adjustDeletePosition(UT_uint32 &iDocumentPosition, UT_uint32 &i
 	UT_return_if_fail( iDocumentPosition >= iRunOffset && iDocumentPosition < iRunOffset + getLength() &&
 						   m_pRenderInfo);
 
-	PD_StruxIterator * text =  new PD_StruxIterator(getBlock()->getStruxDocHandle(),
+	PD_StruxIterator text(getBlock()->getStruxDocHandle(),
 						  getBlockOffset() + fl_BLOCK_STRUX_OFFSET);
 	
-	UT_return_if_fail(text->getStatus() == UTIter_OK);
-	xxx_UT_DEBUGMSG(("sdh %p text->getPosition() %d getLength() %d \n",getBlock()->getStruxDocHandle(),text->getPosition(),getLength()));
-	text->setUpperLimit(text->getPosition() + getLength() - 1);
-	xxx_UT_DEBUGMSG(("text->getUpperLimit() %d \n",text->getUpperLimit()));
+	UT_return_if_fail(text.getStatus() == UTIter_OK);
+	xxx_UT_DEBUGMSG(("sdh %p text.getPosition() %d getLength() %d \n",getBlock()->getStruxDocHandle(),text.getPosition(),getLength()));
+	text.setUpperLimit(text.getPosition() + getLength() - 1);
+	xxx_UT_DEBUGMSG(("text.getUpperLimit() %d \n",text.getUpperLimit()));
 		
-	m_pRenderInfo->m_pText = text;
+	m_pRenderInfo->m_pText = &text;
 	m_pRenderInfo->m_iOffset = iDocumentPosition - iRunOffset;
 	m_pRenderInfo->m_iLength = iCount;
 	if(!getGraphics()->needsSpecialCaretPositioning(*m_pRenderInfo))
 	{
-		DELETEP(text);
 		m_pRenderInfo->m_pText = nullptr;
 		return;
 	}
@@ -3421,7 +3420,6 @@ void fp_TextRun::adjustDeletePosition(UT_uint32 &iDocumentPosition, UT_uint32 &i
 
 	iDocumentPosition = iRunOffset + m_pRenderInfo->m_iOffset;
 	iCount = m_pRenderInfo->m_iLength;
-	DELETEP(text);
 	m_pRenderInfo->m_pText = nullptr;
 }
 

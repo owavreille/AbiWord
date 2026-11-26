@@ -1334,7 +1334,8 @@ UT_sint32 GR_Win32USPGraphics::getTextWidth(GR_RenderInfo & ri)
 	GR_Win32USPFont * pFont = (GR_Win32USPFont*)RI.m_pFont;
 
 	// NB -- do not have to check for zoom as the internal metrics is always for 100%
-	if(pFont->getPrintDC() != getPrintDC() || RI.m_hdc != getPrintDC())
+	HDC expectedDC = getPrintDC() ? getPrintDC() : m_hdc;
+	if (!pFont || pFont->getPrintDC() != getPrintDC() || RI.m_hdc != expectedDC || !RI.m_pAdvances)
 	{
 		measureRenderedCharWidths(ri);
 	}
@@ -1348,6 +1349,7 @@ UT_sint32 GR_Win32USPGraphics::getTextWidth(GR_RenderInfo & ri)
 		return (RI.m_ABC.abcA + RI.m_ABC.abcB + RI.m_ABC.abcC);
 #endif
 	
+	UT_return_val_if_fail(RI.m_pAdvances && RI.m_pClust && ri.m_pItem, 0);
 	UT_return_val_if_fail(ri.m_iOffset + ri.m_iLength <= (UT_sint32)RI.m_iCharCount, 0);
 	
 	UT_sint32 iWidth = 0;
@@ -2048,11 +2050,10 @@ bool GR_Win32USPGraphics::canBreak(GR_RenderInfo & ri, UT_sint32 &iNext, bool bA
 	if(!_scriptBreak(RI))
 		return false;
 
-	if(ri.m_iLength > (UT_sint32)RI.s_iAdvancesSize)
-	{
-		UT_return_val_if_fail( RI.allocStaticBuffers(ri.m_iLength),false );
-	}
-	
+	UT_sint32 iMaxLen = UT_MIN(RI.m_iLength, (UT_sint32)RI.s_iAdvancesSize);
+	if (RI.m_iCharCount > 0)
+		iMaxLen = UT_MIN(iMaxLen, (UT_sint32)RI.m_iCharCount);
+	UT_return_val_if_fail(RI.s_pLogAttr && ri.m_iOffset >= 0 && ri.m_iOffset < iMaxLen, false);
 	
 	if(_needsSpecialBreaking(RI))
 	{
@@ -2062,7 +2063,7 @@ bool GR_Win32USPGraphics::canBreak(GR_RenderInfo & ri, UT_sint32 &iNext, bool bA
 		{
 			// the caller wants to know if break can occur on the (logically) right edge of the given
 			// character
-			if(ri.m_iOffset + 1 == ri.m_iLength)
+			if(ri.m_iOffset + 1 >= iMaxLen)
 			{
 				// we are quering the last char of a run, for which we do not have the info
 				// we will return false, which should force the next run to be examined ...
@@ -2077,7 +2078,7 @@ bool GR_Win32USPGraphics::canBreak(GR_RenderInfo & ri, UT_sint32 &iNext, bool bA
 			return true;
 
 		// find the next break
-		for(UT_sint32 i = ri.m_iOffset + iDelta + 1; i < RI.m_iLength; ++i)
+		for(UT_sint32 i = ri.m_iOffset + iDelta + 1; i < iMaxLen; ++i)
 		{
 			if(RI.s_pLogAttr[i].fSoftBreak)
 			{
@@ -2165,7 +2166,7 @@ void GR_Win32USPGraphics::adjustDeletePosition(GR_RenderInfo & ri)
 	UT_return_if_fail(ri.getType() == GRRI_WIN32_UNISCRIBE);
 	GR_Win32USPRenderInfo & RI = (GR_Win32USPRenderInfo &)ri;
 
-	if(ri.m_iLength >= (UT_sint32)RI.m_iCharCount)
+	if(ri.m_iOffset + ri.m_iLength >= (UT_sint32)RI.m_iCharCount)
 	{
 		// we are deleting the last character of the run, or past it; we will assume that clusters
 		// do not cross run boundaries and allow the deletion happen
@@ -2182,7 +2183,10 @@ void GR_Win32USPGraphics::adjustDeletePosition(GR_RenderInfo & ri)
 	ri.m_iLength = RI.m_iCharCount;
 	
 	if(!_scriptBreak(RI))
+	{
+		ri.m_iLength = iCharCount;
 		return;
+	}
 
 	// deletion can start anywhere, but can only end on cluster boundary if the base character is
 	// included in the deletion
@@ -2459,9 +2463,8 @@ UT_uint32 GR_Win32USPGraphics::XYToPosition(const GR_RenderInfo & ri, UT_sint32 
 	// x = tdu(x); -- no conversion here, since we keep m_pAdvances in
 	// layout units
 	
-	int iPos;
-	int iTrail;
-	int * pAdvances = RI.m_pJustify ? RI.s_pJustifiedAdvances : RI.m_pAdvances;
+	int iPos = 0;
+	int iTrail = 0;
 	
 	if(RI.m_pJustify && RI.s_pOwnerCP != &RI)
 	{
@@ -2478,15 +2481,18 @@ UT_uint32 GR_Win32USPGraphics::XYToPosition(const GR_RenderInfo & ri, UT_sint32 
 
 		RI.s_pOwnerCP = &RI;
 	}
+
+	int * pAdvances = RI.m_pJustify ? RI.s_pJustifiedAdvances : RI.m_pAdvances;
 	
 	HRESULT hRes = fScriptXtoCP(x, RI.m_iLength, RI.m_iIndicesCount, RI.m_pClust,
 								RI.m_pVisAttr, pAdvances,
 								& pItem->m_si.a, &iPos, &iTrail);
 
-	if(hRes)
+	if(hRes != S_OK)
 	{
 		UT_ASSERT_HARMLESS( UT_SHOULD_NOT_HAPPEN );
 		LOG_USP_EXCPT_X("fScriptXtoCP failed", hRes)
+		return 0;
 	}
 
 	return iPos + iTrail;
@@ -2506,8 +2512,6 @@ void GR_Win32USPGraphics::positionToXY(const GR_RenderInfo & ri,
 		return;
 
 	bool bTrailing = true;
-
-	int * pAdvances = RI.m_pJustify ? RI.s_pJustifiedAdvances : RI.m_pAdvances;
 	
 	if(RI.m_pJustify && RI.s_pOwnerCP != &RI)
 	{
@@ -2524,6 +2528,8 @@ void GR_Win32USPGraphics::positionToXY(const GR_RenderInfo & ri,
 
 		RI.s_pOwnerCP = &RI;
 	}
+
+	int * pAdvances = RI.m_pJustify ? RI.s_pJustifiedAdvances : RI.m_pAdvances;
 	
 	HRESULT hRes = fScriptCPtoX(RI.m_iOffset,
 							   bTrailing, /* fTrailing*/

@@ -247,19 +247,28 @@ bool ev_Win32Keyboard::onKeyDown(AV_View * pView,
 		charData[1]	= 0;
 #else
 		charLen = 1;
-		charData[0] = (UT_UCS4Char)MapVirtualKeyEx(nVirtKey, 2, m_hKeyboardLayout);
-
-		if(!charData[0]) // no mapping
-			return true;
-		
-		charData[1]	= 0;
-
-		if((ems & EV_EMS_SHIFT) == 0)
+		const UINT mapped = MapVirtualKeyEx(nVirtKey, 2, m_hKeyboardLayout);
+		if ((mapped == 0 || (mapped & 0x80000000) || mapped > 0x7F) &&
+			nVirtKey >= 'A' && nVirtKey <= 'Z')
 		{
-			// shift not pressed; MapVirtualKeyEx() always returns capital letter, so we
-			// have to lowercase it
-			charData[0] = UT_UCS4_tolower(charData[0]);
+			// Non-Latin or dead-key layout: fall back to ASCII Latin letter so Ctrl+C/V/X/Z/S work.
+			charData[0] = (ems & EV_EMS_SHIFT)
+				? static_cast<UT_UCS4Char>(nVirtKey)
+				: static_cast<UT_UCS4Char>('a' + (nVirtKey - 'A'));
 		}
+		else
+		{
+			charData[0] = (UT_UCS4Char)mapped;
+			if(!charData[0]) // no mapping
+				return true;
+			if((ems & EV_EMS_SHIFT) == 0)
+			{
+				// shift not pressed; MapVirtualKeyEx() always returns capital letter, so we
+				// have to lowercase it
+				charData[0] = UT_UCS4_tolower(charData[0]);
+			}
+		}
+		charData[1]	= 0;
 		
 #endif
 	}

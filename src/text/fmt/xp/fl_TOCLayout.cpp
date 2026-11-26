@@ -100,7 +100,11 @@ void TOCEntry::calculateLabel(const TOCEntry * pPrevLevel)
 {
 	UT_String sVal;
 	sVal.clear();
-	m_pBlock->getView()->getLayout()->getStringFromFootnoteVal(sVal,m_iPosInList,m_iFType);
+	FL_DocLayout * pDocLayout = m_pBlock ? m_pBlock->getDocLayout() : nullptr;
+	if(pDocLayout)
+	{
+		pDocLayout->getStringFromFootnoteVal(sVal,m_iPosInList,m_iFType);
+	}
 	if((pPrevLevel == nullptr) || !m_bInherit)
 	{
 		m_sLabel = sVal.c_str();
@@ -181,24 +185,73 @@ PT_DocPosition fl_TOCLayout::getDocPosition(void) const
     return 	m_pLayout->getDocument()->getStruxPosition(sdh);
 }
 
+static fl_BlockLayout * s_findFirstNonTOCBlock(fl_ContainerLayout * pCL)
+{
+	while(pCL)
+	{
+		if(pCL->getContainerType() == FL_CONTAINER_TOC)
+		{
+			pCL = pCL->getNext();
+			continue;
+		}
+		if(pCL->getContainerType() == FL_CONTAINER_BLOCK)
+		{
+			return static_cast<fl_BlockLayout *>(pCL);
+		}
+		fl_BlockLayout * pChild = s_findFirstNonTOCBlock(pCL->getFirstLayout());
+		if(pChild)
+		{
+			return pChild;
+		}
+		pCL = pCL->getNext();
+	}
+	return nullptr;
+}
+
+static fl_BlockLayout * s_findFirstDocBlock(fl_DocSectionLayout * pDSL)
+{
+	while(pDSL)
+	{
+		fl_BlockLayout * pBlock = s_findFirstNonTOCBlock(pDSL->getFirstLayout());
+		if(pBlock)
+		{
+			return pBlock;
+		}
+		pDSL = pDSL->getNextDocSection();
+	}
+	return nullptr;
+}
+
 void fl_TOCLayout::setSelected(bool bIsSelected)
 {
 	if(!bIsSelected  && m_bIsSelected)
 	{
 		m_bIsSelected = false;
 		fp_TOCContainer * pTOCCon = static_cast<fp_TOCContainer *>(getFirstContainer());
-		pTOCCon->forceClearScreen();
+		if(pTOCCon)
+		{
+			pTOCCon->forceClearScreen();
+		}
 		markAllRunsDirty();
-		m_pLayout->getView()->updateScreen(true);
+		if(m_pLayout->getView())
+		{
+			m_pLayout->getView()->updateScreen(true);
+		}
 //		pTOCCon->draw(m_pLayout->getGraphics());
 	}
 	m_bIsSelected = bIsSelected;
 	if(m_bIsSelected)
 	{
 		fp_TOCContainer * pTOCCon = static_cast<fp_TOCContainer *>(getFirstContainer());
-		pTOCCon->forceClearScreen();
+		if(pTOCCon)
+		{
+			pTOCCon->forceClearScreen();
+		}
 		markAllRunsDirty();
-		m_pLayout->getView()->updateScreen(true);
+		if(m_pLayout->getView())
+		{
+			m_pLayout->getView()->updateScreen(true);
+		}
 //		pTOCCon->draw(m_pLayout->getGraphics());
 	}
 }
@@ -419,24 +472,13 @@ bool fl_TOCLayout::addBlock(fl_BlockLayout * pBlock, bool bVerifyRange)
 			fp_Run * pRun;
 			fl_BlockLayout * pBL;
 			fp_BookmarkRun * pB[2] = {nullptr,nullptr};
-			fl_ContainerLayout * pDSL = m_pLayout->getFirstSection();
-			fl_ContainerLayout * pCL = static_cast<fl_ContainerLayout *>(pDSL);
 			bool bFound = false;
-			
-			while(pCL && pCL->getContainerType() != FL_CONTAINER_BLOCK)
-			{
-				pCL = pCL->getFirstLayout();
-			}
-			if(pCL == nullptr)
-			{
-				return false;
-			}
-			if(pCL->getContainerType() != FL_CONTAINER_BLOCK)
-			{
-				return false;
-			}
 
-			pBL = static_cast<fl_BlockLayout *>(pCL);
+			pBL = s_findFirstDocBlock(m_pLayout->getFirstSection());
+			if(pBL == nullptr)
+			{
+				return false;
+			}
 			PT_DocPosition pos1 = 0, pos2 = 0xffffffff;
 
 			// during the fill process we will take advantage of the fact that the doc positions do
@@ -1187,7 +1229,7 @@ bool fl_TOCLayout::doclistener_changeStrux(const PX_ChangeRecord_StruxChange * p
 
 
 	setAttrPropIndex(pcrxc->getIndexAP());
-	fp_Page * pPage = getFirstContainer()->getPage();
+	fp_Page * pPage = getFirstContainer() ? getFirstContainer()->getPage() : nullptr;
 	collapse();
 	lookupProperties();
 	_createTOCContainer();
@@ -1263,13 +1305,13 @@ bool fl_TOCLayout::doclistener_deleteStrux(const PX_ChangeRecord_Strux * pcrx)
 //
 // Remove all remaining structures
 //
-	fp_Page * pPage = getFirstContainer()->getPage();
+	fp_Page * pPage = getFirstContainer() ? getFirstContainer()->getPage() : nullptr;
 	collapse();
 //	UT_ASSERT(pcrx->getStruxType()== PTX_SectionTOC);
 //
 	fl_DocSectionLayout * pDSL = getDocSectionLayout();
 	myContainingLayout()->remove(this);
-	UT_sint32 iPage = getDocLayout()->findPage(pPage);
+	UT_sint32 iPage = pPage ? getDocLayout()->findPage(pPage) : -1;
 	if(iPage >= 0)
 	{
 		pDSL->setNeedsSectionBreak(true,pPage);
@@ -1978,9 +2020,9 @@ void fl_TOCLayout::_lookupProperties(const PP_AttrProp* pSectionAP)
 		m_sLabAfter2 = pszTOCSTRAFTER;
 	}
 	pszTOCSTRAFTER = nullptr;
-	if(!pSectionAP || !pSectionAP->getProperty("toc-label-after2",pszTOCSTRAFTER))
+	if(!pSectionAP || !pSectionAP->getProperty("toc-label-after3",pszTOCSTRAFTER))
 	{
-		m_sLabAfter2 = "";
+		m_sLabAfter3 = "";
 	}
 	else
 	{
@@ -2252,7 +2294,10 @@ void fl_TOCLayout::collapse(void)
 //
 // Remove it from the vertical container that contains it.
 //
-		static_cast<fp_VerticalContainer *>(pTC->getContainer())->removeContainer(pTC);
+		if (pTC->getContainer())
+		{
+			static_cast<fp_VerticalContainer *>(pTC->getContainer())->removeContainer(pTC);
+		}
 		pTC->setContainer(nullptr);
 		delete pTC;
 	}
@@ -2278,7 +2323,10 @@ fl_TOCListener::fl_TOCListener(fl_TOCLayout* pTOCL, fl_BlockLayout* pPrevBL, PD_
 	m_pStyle = pStyle;
 	// Mark this style as used, so it will be available in the list of used styles when
 	// exporters need to export this TOC
-	m_pStyle->used(1);
+	if (m_pStyle)
+	{
+		m_pStyle->used(1);
+	}
 }
 
 fl_TOCListener::~fl_TOCListener()
@@ -2348,7 +2396,7 @@ bool fl_TOCListener::populateStrux(pf_Frag_Strux* sdh,
 	UT_ASSERT(m_pTOCL);
 
 	UT_ASSERT(pcr->getType() == PX_ChangeRecord::PXT_InsertStrux);
-	PT_AttrPropIndex iTOC = m_pStyle->getIndexAP();
+	PT_AttrPropIndex iTOC = m_pStyle ? m_pStyle->getIndexAP() : 0;
 	const PX_ChangeRecord_Strux * pcrx = static_cast<const PX_ChangeRecord_Strux *> (pcr);
 	m_bListening = true;
 	fl_BlockLayout * pMyBL = m_pPrevBL;
@@ -2417,23 +2465,17 @@ bool fl_TOCListener::signal(UT_uint32 /*iSignal*/)
 
 bool fl_TOCLayout::fillTOC(void)
 {
+    // clear any existing contents before locating the first document block so
+    // pBlock can never point to one of this TOC's own freed shadow blocks.
+    _purgeLayout();
+
     fl_DocSectionLayout * pDSL = getDocLayout()->getFirstSection();
-    fl_BlockLayout * pBlock = nullptr;
-    fl_ContainerLayout * pCL = static_cast<fl_ContainerLayout *>(pDSL);
-    while(pCL && pCL->getContainerType() != FL_CONTAINER_BLOCK)
-    {
-	pCL = pCL->getFirstLayout();
-    }
-    if(pCL == nullptr)
-    {
-	return false;
-    }
-    if(pCL->getContainerType() != FL_CONTAINER_BLOCK)
+    fl_BlockLayout * pBlock = s_findFirstDocBlock(pDSL);
+    if(pBlock == nullptr)
     {
 	return false;
     }
     UT_UTF8String sStyle;
-    pBlock = static_cast<fl_BlockLayout *>(pCL);
     bool filled = false;
     
     const gchar * pBookmark = getRangeBookmarkName().size() ? getRangeBookmarkName().utf8_str() : nullptr;
@@ -2506,9 +2548,6 @@ bool fl_TOCLayout::fillTOC(void)
 	}
     }
     
-    // clear any existing contents
-    _purgeLayout();
-    
     while(pBlock)
     {
 	pBlock->getStyle(sStyle);
@@ -2531,7 +2570,11 @@ bool fl_TOCLayout::fillTOC(void)
 	{
 	    m_pDoc->getStyle("Heading 1", &pStyle);
 	}
-	PT_AttrPropIndex indexAP = pStyle->getIndexAP();
+	if(pStyle == nullptr)
+	{
+	    m_pDoc->getStyle("Normal", &pStyle);
+	}
+	PT_AttrPropIndex indexAP = pStyle ? pStyle->getIndexAP() : 0;
 	
 	fl_BlockLayout * pNewBlock = static_cast<fl_BlockLayout *>(insert(getStruxDocHandle(),nullptr,
 									  indexAP,FL_CONTAINER_BLOCK));

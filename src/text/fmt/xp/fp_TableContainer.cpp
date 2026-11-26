@@ -2546,9 +2546,13 @@ fp_ContainerObject * fp_CellContainer::VBreakAt(UT_sint32 vpos)
 	fp_Container * pCon;
 	fp_TableContainer * pBroke = nullptr;
 	UT_sint32 iY = 0;
-	for(i=0; (i < count) || (iY <= vpos); i++)
+	for(i=0; (i < count) && (iY <= vpos); i++)
 	{
 		pCon = static_cast<fp_Container *>(getNthCon(i));
+		if (!pCon)
+		{
+			break;
+		}
 		xxx_UT_DEBUGMSG(("Looking Container iY  %d height %d \n",iY,pCon->getHeight()));
 		if(iY <= vpos && iY + pCon->getHeight() > vpos)
 		{
@@ -4052,7 +4056,6 @@ fp_ContainerObject * fp_TableContainer::VBreakAt(UT_sint32 vpos)
 	{
 		return getLastBrokenTable()->VBreakAt(vpos);
 	}
-	pBroke = new fp_TableContainer(getSectionLayout(),getMasterTable());
 	UT_sint32 iTotalHeight = getTotalTableHeight();
 	UT_sint32 iNewYBreak = vpos + getYBreak();
 	if(getContainer() && getContainer()->getContainerType() == FP_CONTAINER_CELL)
@@ -4064,6 +4067,7 @@ fp_ContainerObject * fp_TableContainer::VBreakAt(UT_sint32 vpos)
 		iNewYBreak = m_iNextWantedVBreak + getYBreak();
 	}
 	UT_return_val_if_fail(iNewYBreak < iTotalHeight, nullptr);
+	pBroke = new fp_TableContainer(getSectionLayout(),getMasterTable());
 
 //
 // vpos is relative to the container that contains this height but we need
@@ -4308,7 +4312,7 @@ UT_sint32 fp_TableContainer::wantVBreakAtNoFootnotes(UT_sint32 vpos)
 		pCell = static_cast<fp_CellContainer*>(pCell->getNext());
 	}
 	setAdditionalBottomSpace(iYBreakLine - iYBreak);
-	m_iNextWantedVBreak = iYBreak;
+	m_iNextWantedVBreak = iYBreak - getYBreak();
 	return (iYBreak - getYBreak());
 }
 
@@ -4540,18 +4544,19 @@ fp_Line * fp_TableContainer::getLastLineInColumn(fp_Column * pCol) const
 				{
 					pLast = static_cast<fp_Container *>(pLast->getPrev());
 				}
-				if(!pLast)
+				if(pLast)
+				{
+					if(pLast->getContainerType() == FP_CONTAINER_LINE)
+					{
+						return static_cast<fp_Line *>(pLast);
+					}
+					if(pLast->getContainerType() == FP_CONTAINER_TABLE)
+					{
+						return static_cast<fp_TableContainer *>(pLast)->getLastLineInColumn(pCol);
+					}
+					UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
 					return nullptr;
-				if(pLast->getContainerType() == FP_CONTAINER_LINE)
-				{
-					return static_cast<fp_Line *>(pLast);
 				}
-				if(pLast->getContainerType() == FP_CONTAINER_TABLE)
-				{
-					return static_cast<fp_TableContainer *>(pLast)->getLastLineInColumn(pCol);
-				}
-				UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
-				return nullptr;
 			}
 			pCell = static_cast<fp_CellContainer *>(pCell->getPrev());
 		}
@@ -4564,7 +4569,7 @@ fp_Line * fp_TableContainer::getLastLineInColumn(fp_Column * pCol) const
 			fp_Container * pLast = static_cast<fp_Container *>(pCell->getNthCon(pCell->countCons()-1));
 			while(pLast && pCell->getColumn(pLast) != static_cast<fp_VerticalContainer *>(pCol))
 			{
-				pLast =  static_cast<fp_Container *>(pLast->getNext());
+				pLast =  static_cast<fp_Container *>(pLast->getPrev());
 			}
 			if(pLast)
 			{

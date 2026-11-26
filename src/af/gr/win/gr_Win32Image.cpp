@@ -143,9 +143,11 @@ GR_Win32Image::~GR_Win32Image()
 void GR_Win32Image::setDIB(BITMAPINFO *pDIB)
 {
 	clearPremultipliedBitmap();
+	if (m_pDIB && m_pDIB != pDIB)
+		g_free(m_pDIB);
 	m_pDIB = pDIB;
 	if (m_pDIB)
-		setDisplaySize(m_pDIB->bmiHeader.biWidth, m_pDIB->bmiHeader.biHeight);
+		setDisplaySize(m_pDIB->bmiHeader.biWidth, abs(m_pDIB->bmiHeader.biHeight));
 }
 
 void GR_Win32Image::clearPremultipliedBitmap(void)
@@ -315,7 +317,10 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 	  of DIB images.
 	*/
 	
-	UT_uint32 iSizeOfColorData = m_pDIB->bmiHeader.biClrUsed * sizeof(RGBQUAD);
+	const UT_uint32 nColors = m_pDIB->bmiHeader.biClrUsed
+		? m_pDIB->bmiHeader.biClrUsed
+		: (m_pDIB->bmiHeader.biBitCount <= 8 ? (1u << m_pDIB->bmiHeader.biBitCount) : 0);
+	UT_uint32 iSizeOfColorData = nColors * sizeof(RGBQUAD);
 	RGBQUAD* pColors = (RGBQUAD*) (((unsigned char*) m_pDIB) + m_pDIB->bmiHeader.biSize);
 	UT_Byte* pBits = ((unsigned char*) m_pDIB) + m_pDIB->bmiHeader.biSize + iSizeOfColorData;
 	
@@ -377,7 +382,7 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 					pixel = byt >> 4;
 				}
 
-				UT_ASSERT(pixel < m_pDIB->bmiHeader.biClrUsed);
+				UT_ASSERT(pixel < nColors);
 
 				pData[(iRow*iWidth + iCol)*3 + 0] = pColors[pixel].rgbRed;
 				pData[(iRow*iWidth + iCol)*3 + 1] = pColors[pixel].rgbGreen;
@@ -411,7 +416,7 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 			{
 				UT_Byte pixel = pRow[iCol];
 
-				UT_ASSERT(pixel < m_pDIB->bmiHeader.biClrUsed);
+				UT_ASSERT(pixel < nColors);
 
 				pData[(iRow*iWidth + iCol)*3 + 0] = pColors[pixel].rgbRed;
 				pData[(iRow*iWidth + iCol)*3 + 1] = pColors[pixel].rgbGreen;
@@ -482,7 +487,10 @@ bool GR_Win32Image::convertToBuffer(UT_ConstByteBufPtr& ppBB) const
 	default:
 		// there are DIB formats we do not support.
 		UT_ASSERT_HARMLESS(UT_TODO);
-		break;
+		g_free(pData);
+		pData = nullptr;
+		png_destroy_write_struct(&png_ptr, &info_ptr);
+		return false;
 	}
 
 	/*
@@ -543,8 +551,10 @@ GR_Image * GR_Win32Image::createImageSegment(GR_Graphics * pG,const UT_Rect & re
 	// coordinaces
 
 	// these are the DIB physical dimensions of the original
-	UT_sint32 dH = m_pDIB->bmiHeader.biHeight;
+	const bool bTopDown = (m_pDIB->bmiHeader.biHeight < 0);
+	UT_sint32 dH = abs(m_pDIB->bmiHeader.biHeight);
 	UT_sint32 dW = m_pDIB->bmiHeader.biWidth;
+	UT_return_val_if_fail(dW > 0 && dH > 0, nullptr);
 
 	// this is the internal scaling of the orginal DIB, which we need to workout
 	// relationship between display units and DIB units; we need to use separate factors
@@ -576,6 +586,14 @@ GR_Image * GR_Win32Image::createImageSegment(GR_Graphics * pG,const UT_Rect & re
 	{
 		yDIB = 0;
 	}
+	if(xDIB >= dW)
+	{
+		xDIB = dW - 1;
+	}
+	if(yDIB >= dH)
+	{
+		yDIB = dH - 1;
+	}
 
 	if(heightDIB > dH)
 	{
@@ -593,14 +611,16 @@ GR_Image * GR_Win32Image::createImageSegment(GR_Graphics * pG,const UT_Rect & re
 	{
 		heightDIB = dH - yDIB;
 	}
-	if(widthDIB < 0)
+	if(widthDIB < 1)
 	{
-		xDIB = dW -1;
+		if (xDIB >= dW)
+			xDIB = dW - 1;
 		widthDIB = 1;
 	}
-	if(heightDIB < 0)
+	if(heightDIB < 1)
 	{
-		yDIB = dH -1;
+		if (yDIB >= dH)
+			yDIB = dH - 1;
 		heightDIB = 1;
 	}
 	
@@ -628,22 +648,24 @@ GR_Image * GR_Win32Image::createImageSegment(GR_Graphics * pG,const UT_Rect & re
 	}
 	pImage->m_bHasAlpha = m_bHasAlpha;
 
-	// simply copy the whole header
+	// simply copy the base header
 	memcpy(pImage->m_pDIB, m_pDIB, sizeof(BITMAPINFOHEADER));
 
 	// now set the image size ...
 	pImage->setDisplaySize(widthDU, heightDU);
+	pImage->m_pDIB->bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+	pImage->m_pDIB->bmiHeader.biClrUsed = 0;
 	pImage->m_pDIB->bmiHeader.biWidth = widthDIB;
 	pImage->m_pDIB->bmiHeader.biHeight = heightDIB;
 	pImage->m_pDIB->bmiHeader.biSizeImage = 0;
 
 	// now copy the bitmap bits
 	// the rows in both maps are/need to be padded to 4-bytes
-	// NB: in the DIB lines are numbered from bottom up, while in our coord system y goes
-	// from top to bottom
+	// NB: in bottom-up DIBs lines are numbered from bottom up, while in top-down DIBs
+	// (biHeight < 0) lines are numbered from top to bottom. Output is always bottom-up.
 
 	// how wide is a row in the orignal ?
-	UT_uint32 iOrigRowBytes = m_pDIB->bmiHeader.biWidth * bpp;
+	UT_uint32 iOrigRowBytes = dW * bpp;
 	if(iOrigRowBytes%4)
 		iOrigRowBytes += (4 - iOrigRowBytes%4);
 
@@ -651,18 +673,21 @@ GR_Image * GR_Win32Image::createImageSegment(GR_Graphics * pG,const UT_Rect & re
 	UT_uint32 iByteWidth = widthDIB * bpp;
 	UT_uint32 iLeft = xDIB * bpp;
 	UT_uint32 iRight = iLeft + iByteWidth;
-	UT_uint32 iTop = m_pDIB->bmiHeader.biHeight - yDIB;
-	UT_uint32 iBottom = iTop - heightDIB;
 	UT_uint32 iRightPadded = iRight + (iBytesInRow - iByteWidth);
 
-	UT_Byte * pBits1 = ((UT_Byte*)m_pDIB) + sizeof(BITMAPINFOHEADER);
+	const UT_uint32 nColors = m_pDIB->bmiHeader.biClrUsed
+		? m_pDIB->bmiHeader.biClrUsed
+		: (m_pDIB->bmiHeader.biBitCount <= 8 ? (1u << m_pDIB->bmiHeader.biBitCount) : 0);
+	const UT_uint32 iSizeOfColorData = nColors * sizeof(RGBQUAD);
+	UT_Byte * pBits1 = ((UT_Byte*)m_pDIB) + m_pDIB->bmiHeader.biSize + iSizeOfColorData;
 	UT_Byte * pBits2 = ((UT_Byte*)pImage->m_pDIB) + sizeof(BITMAPINFOHEADER);
 
-	UT_uint32 iRow;
-	
-	for(iRow = iBottom; iRow < iTop; iRow++)
+	for (UT_sint32 r = 0; r < heightDIB; r++)
 	{
-		memcpy(pBits2, pBits1 + iRow * iOrigRowBytes + iLeft, iByteWidth);
+		const UT_uint32 iSrcRow = bTopDown
+			? static_cast<UT_uint32>(yDIB + heightDIB - 1 - r)
+			: static_cast<UT_uint32>(dH - yDIB - heightDIB + r);
+		memcpy(pBits2, pBits1 + iSrcRow * iOrigRowBytes + iLeft, iByteWidth);
 		pBits2 += iByteWidth;
 		
 		// now the padding ...

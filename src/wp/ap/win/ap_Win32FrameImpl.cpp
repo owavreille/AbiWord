@@ -1317,34 +1317,48 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 				pView = f->getCurrentView();
 				pMouse = (EV_Win32Mouse *) fImpl->m_pMouse;
 			}
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON1,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			fImpl->m_bMouseActivateReceived = false;
 			return 0;
 
 		case WM_MBUTTONDOWN:
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			fImpl->_startTracking(signedLoWord(static_cast<UT_uint32>(lParam)), signedHiWord(static_cast<UT_uint32>(lParam)));
 			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON2,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_RBUTTONDOWN:
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON3,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_LBUTTONDBLCLK:
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON1,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_MBUTTONDBLCLK:
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON2,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_RBUTTONDBLCLK:
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			pMouse->onDoubleClick(pView,hwnd,EV_EMB_BUTTON3,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_SYSKEYDOWN:
 		{
 			UT_DEBUGMSG(("WM_SYSKEYDOWN %d  - %d\n",wParam, lParam));
+			if (!pView || !fImpl->m_pKeyboard)
+				return UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
 			ev_Win32Keyboard *pWin32Keyboard = static_cast<ev_Win32Keyboard *>(fImpl->m_pKeyboard);
 
 			BYTE	keyboardState[256];
@@ -1362,10 +1376,9 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 				(keyboardState[VK_CONTROL]), (keyboardState[VK_MENU])	));
 
 	    
-	     	if (pWin32Keyboard->onKeyDown(pView,hwnd,iMsg,wParam,lParam))
-    			return UT_DefWindowProc(hwnd,iMsg,wParam,lParam);
-	 		else
- 				return false;	    				 	     			
+			if (!pWin32Keyboard->onKeyDown(pView,hwnd,iMsg,wParam,lParam))
+				return UT_DefWindowProc(hwnd,iMsg,wParam,lParam);
+			return UT_DefWindowProc(hwnd,iMsg,wParam,lParam);
 		
 		}
 
@@ -1395,6 +1408,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 		case WM_KEYDOWN:
 		{
 			UT_DEBUGMSG(("WM_KEYDOWN %d  - %d\n",wParam, lParam));
+			if (!pView || !fImpl->m_pKeyboard)
+				return UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
 			ev_Win32Keyboard *pWin32Keyboard = static_cast<ev_Win32Keyboard *>(fImpl->m_pKeyboard);
 
 				BYTE	keyboardState[256];
@@ -1457,6 +1472,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 		{
 //            bool is_uni = IsWindowUnicode (hwnd);
 			UT_DEBUGMSG(("WM_CHAR %d  - %d\n",wParam, lParam));
+			if (!pView || !fImpl->m_pKeyboard)
+				return UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
 			ev_Win32Keyboard *pWin32Keyboard = static_cast<ev_Win32Keyboard *>(fImpl->m_pKeyboard);
 	    
 			pWin32Keyboard->onChar(pView,hwnd,iMsg,wParam,lParam);		
@@ -1471,6 +1488,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 			if(wParam == UNICODE_NOCHAR)
 				return 1;
 			
+			if (!pView || !fImpl->m_pKeyboard)
+				return UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
 			ev_Win32Keyboard *pWin32Keyboard = static_cast<ev_Win32Keyboard *>(fImpl->m_pKeyboard);
 	    
 			pWin32Keyboard->onUniChar(pView,hwnd,iMsg,wParam,lParam);		
@@ -1484,6 +1503,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 
 		case WM_IME_CHAR:
 		{
+			if (!pView || !fImpl->m_pKeyboard)
+				return UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
 			ev_Win32Keyboard *pWin32Keyboard = static_cast<ev_Win32Keyboard *>(fImpl->m_pKeyboard);
 			if (pWin32Keyboard->onIMEChar(pView,hwnd,iMsg,wParam,lParam))
 				return 0;
@@ -1497,6 +1518,8 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 			}
 			else
 			{
+				if (!pView || !pView->getGraphics() || !pMouse)
+					return 0;
 				pMouse->onButtonMove(pView,hwnd,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			}
 			return 0;
@@ -1507,17 +1530,25 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 				SetFocus(hwnd);
 				pView = f->getCurrentView();
 				pMouse = (EV_Win32Mouse *) fImpl->m_pMouse;
+				if (!pView || !pView->getGraphics() || !pMouse)
+					return 0;
 				pMouse->onButtonDown(pView,hwnd,EV_EMB_BUTTON1,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			}
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON1,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_MBUTTONUP:
 			fImpl->_endTracking(signedLoWord(static_cast<UT_uint32>(lParam)), signedHiWord(static_cast<UT_uint32>(lParam)));
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON2,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 
 		case WM_RBUTTONUP:
+			if (!pView || !pView->getGraphics() || !pMouse)
+				return 0;
 			pMouse->onButtonUp(pView,hwnd,EV_EMB_BUTTON3,wParam,signedLoWord(static_cast<UT_uint32>(lParam)),signedHiWord(static_cast<UT_uint32>(lParam)));
 			return 0;
 

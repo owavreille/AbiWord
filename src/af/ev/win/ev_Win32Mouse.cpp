@@ -194,8 +194,11 @@ void EV_Win32Mouse::onButtonUp(AV_View * pView,
 		m_iCaptureCount--;
 
 	// ReleaseCapture delivers WM_CAPTURECHANGED before it returns, and that
-	// handler clears m_embCaptured. Keep the button that started the click.
+	// handler clears m_embCaptured, m_clickState, and m_contextState. Keep
+	// the state from when the click started.
 	const EV_EditMouseButton embCaptured = m_embCaptured;
+	const EV_EditMouseOp clickState = m_clickState;
+	const EV_EditMouseContext contextState = m_contextState;
 	if (emb != embCaptured)	// ignore other button releases
 		return;
 	ReleaseCapture();
@@ -213,11 +216,11 @@ void EV_Win32Mouse::onButtonUp(AV_View * pView,
 	UT_sint32 y = s_layoutUnit(pView, yPos);
 
 	mop = EV_EMO_RELEASE;
-	if (m_clickState == EV_EMO_DOUBLECLICK)
+	if (clickState == EV_EMO_DOUBLECLICK)
 		mop = EV_EMO_DOUBLERELEASE;
 	m_clickState = 0;
 
-	emc = m_contextState;
+	emc = contextState;
 	result = m_pEEM->Mouse(emc|mop|embCaptured|ems, &pEM);
 	switch (result)
 	{

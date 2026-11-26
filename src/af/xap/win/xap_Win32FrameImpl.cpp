@@ -112,7 +112,7 @@ LRESULT CALLBACK s_rebarWndProc( HWND hWnd, UINT uMessage, WPARAM wParam, LPARAM
 
 			if (mesure->CtlType==ODT_COMBOBOX)
 			{
-				mesure->itemHeight = 16;										
+				mesure->itemHeight = static_cast<UINT>(UT_ui_px_at_dpi(16, UT_Win32WindowDpi(hWnd)));
 				return TRUE;
 			}
 			break;
@@ -140,15 +140,13 @@ XAP_Win32FrameImpl::XAP_Win32FrameImpl(XAP_Frame *pFrame) :
 	m_iStatusBarHeight(0),
 	m_iRealSizeHeight(0),
 	m_iRealSizeWidth(0),
-	m_iWindowStateBeforeFS(SW_SHOWNORMAL),
-	m_iWindowXBeforeFS(0),
-	m_iWindowYBeforeFS(0),
-	m_iWindowHeightBeforeFS(0),
-	m_iWindowWidthBeforeFS(0),
+	m_bHasWpBeforeFS(false),
 	m_mouseWheelMessage(0),
 	m_iSizeWidth(0),
 	m_iSizeHeight(0)
 {
+	memset(&m_wpBeforeFS, 0, sizeof(m_wpBeforeFS));
+	m_wpBeforeFS.length = sizeof(WINDOWPLACEMENT);
 }
 
 XAP_Win32FrameImpl::~XAP_Win32FrameImpl(void)
@@ -659,62 +657,25 @@ bool XAP_Win32FrameImpl::_runModalContextMenu(AV_View * pView, const char * szMe
 
 void XAP_Win32FrameImpl::_setFullScreen(bool isFullScreen)
 {
-	XAP_Frame * pFrame = XAP_App::getApp()->getLastFocussedFrame();
-	HWND hwndFrame = static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow();
+	UT_return_if_fail(m_hwndFrame);
+	HWND hwndFrame = m_hwndFrame;
 
 	// Get the window's style so we can add or remove the titlebar later
-	long hStyle = GetWindowLongPtrW(hwndFrame, GWL_STYLE);
+	LONG_PTR hStyle = GetWindowLongPtrW(hwndFrame, GWL_STYLE);
 
 	if (isFullScreen)
 	{
-		// Save window state prior to fullscreen (are we maximized?)
-		WINDOWPLACEMENT wndPlacement;
-		wndPlacement.length = sizeof(WINDOWPLACEMENT);
-		if (GetWindowPlacement(hwndFrame, &wndPlacement))
-		{
-			m_iWindowStateBeforeFS = wndPlacement.showCmd;
-		}
-		else
-		{
-			// Couldn't retrieve windowplacement info
-			// Assume we were at Normal (non-maximized) state
-			m_iWindowStateBeforeFS = SW_SHOWNORMAL;
-		}
+		// Save full window placement (normal rect + maximized state) prior to fullscreen
+		m_wpBeforeFS.length = sizeof(WINDOWPLACEMENT);
+		m_bHasWpBeforeFS = (GetWindowPlacement(hwndFrame, &m_wpBeforeFS) != 0);
 
-		// Save window dimensions, as well
-		RECT rc;
+		// Remove title-bar. SWP_FRAMECHANGED applies the style.
+		SetWindowLongPtrW(hwndFrame, GWL_STYLE, hStyle & ~WS_CAPTION);
 
-		if(!GetWindowRect(hwndFrame, &rc))
-		{
-			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
-			// try to pick some sane defaults that will work with any monitor
-			m_iWindowXBeforeFS = 0;
-			m_iWindowYBeforeFS = 0;
-			m_iWindowHeightBeforeFS = 400;
-			m_iWindowWidthBeforeFS = 400;
-		}
-		else
-		{
-			m_iWindowXBeforeFS = rc.left;
-			m_iWindowYBeforeFS = rc.top;
-			m_iWindowHeightBeforeFS = rc.bottom - rc.top;
-			m_iWindowWidthBeforeFS = rc.right - rc.left;
-		}
-		
-	}
+		// Hide before maximizing to avoid resizing animation
+		ShowWindow(hwndFrame, SW_HIDE);
+		ShowWindow(hwndFrame, SW_SHOWMAXIMIZED);
 
-	// Add or remove title-bar and border. SWP_FRAMECHANGED applies the style.
-	SetWindowLongPtrW(hwndFrame, GWL_STYLE, isFullScreen ? hStyle & ~WS_CAPTION : hStyle | WS_CAPTION);
-
-	// We hide the window before maximizing
-	// to ensure it displays with the proper geometry
-	// and to bypass the window resizing animation
-	ShowWindow(hwndFrame, SW_HIDE);
-
-	ShowWindow(hwndFrame, isFullScreen ? SW_SHOWMAXIMIZED : m_iWindowStateBeforeFS);
-
-	if(isFullScreen)
-	{
 		HMONITOR monitor = MonitorFromWindow(hwndFrame, MONITOR_DEFAULTTONEAREST);
 		MONITORINFO info;
 		info.cbSize = sizeof(info);
@@ -725,10 +686,28 @@ void XAP_Win32FrameImpl::_setFullScreen(bool isFullScreen)
 						 rc.right - rc.left, rc.bottom - rc.top,
 						 SWP_NOZORDER | SWP_FRAMECHANGED);
 		}
+		else
+		{
+			SetWindowPos(hwndFrame, nullptr, 0, 0, 0, 0,
+						 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+		}
 	}
 	else
 	{
-		SetWindowPos(hwndFrame, nullptr, m_iWindowXBeforeFS, m_iWindowYBeforeFS, m_iWindowWidthBeforeFS, m_iWindowHeightBeforeFS, SWP_NOZORDER | SWP_FRAMECHANGED);
+		// Restore title-bar and previous window placement (including maximized state)
+		SetWindowLongPtrW(hwndFrame, GWL_STYLE, hStyle | WS_CAPTION);
+
+		if (m_bHasWpBeforeFS)
+		{
+			SetWindowPlacement(hwndFrame, &m_wpBeforeFS);
+		}
+		else
+		{
+			ShowWindow(hwndFrame, SW_SHOWNORMAL);
+		}
+
+		SetWindowPos(hwndFrame, nullptr, 0, 0, 0, 0,
+					 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 	}
 
 	UpdateWindow(hwndFrame);
@@ -1355,7 +1334,11 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 					if (errorCode != UT_OK)
 					{
 						if (f != pNewFrame)
+						{
+							pApp->forgetFrame(pNewFrame);
 							pNewFrame->close();
+							delete pNewFrame;
+						}
 					}
 					else
 					{
@@ -1365,7 +1348,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 
 				if (errorCode != UT_OK)
 				{
-				    s_CouldNotLoadFileMessage(f, uri, errorCode);
+				    s_CouldNotLoadFileMessage(f, uri ? uri : str.utf8_str().utf8_str(), errorCode);
 				}
 				g_free(uri);
 			}

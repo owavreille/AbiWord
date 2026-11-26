@@ -109,6 +109,7 @@ private:
 	XAP_Win32App *					m_pWin32App;
 	XAP_Frame *						m_pWin32Frame;
 	EV_Win32Toolbar_ViewListener *	m_pViewListener;
+	AV_View *						m_pBoundView;
 	AV_ListenerId					m_lid;	/* view listener id */
 
 	HWND							m_hwnd;

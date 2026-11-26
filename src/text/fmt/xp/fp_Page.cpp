@@ -1777,7 +1777,7 @@ void fp_Page::updateColumnX()
 		UT_ASSERT(pLeader->getContainerType() == FP_CONTAINER_COLUMN);
 		fl_DocSectionLayout* pSL = (pLeader->getDocSectionLayout());
 
-		if((m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB) &&
+		if(m_pView && (m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB) &&
 		   !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
 		{
 			iLeftMargin = m_pView->getNormalModeXOffset();
@@ -1791,7 +1791,7 @@ void fp_Page::updateColumnX()
 		
 		UT_sint32 iSpaceLeft = pSL->getLeftMargin();
 		UT_sint32 iSpaceRight = pSL->getRightMargin();
-		if ((m_pView->getViewMode() == VIEW_WEB) &&
+		if (m_pView && (m_pView->getViewMode() == VIEW_WEB) &&
 		    !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
 		{
 			iSpaceLeft = iLeftMargin;
@@ -1936,7 +1936,7 @@ void fp_Page::_reformatColumns(void)
 		UT_ASSERT(pLeader->getContainerType() == FP_CONTAINER_COLUMN);
 		fl_DocSectionLayout* pSL = (pLeader->getDocSectionLayout());
 
-		if((m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB) &&
+		if(m_pView && (m_pView->getViewMode() == VIEW_NORMAL || m_pView->getViewMode() == VIEW_WEB) &&
 		   !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
 		{
 			iLeftMargin = m_pView->getNormalModeXOffset();
@@ -1956,7 +1956,7 @@ void fp_Page::_reformatColumns(void)
 		// column and a horizontal scrollbar.
 		UT_sint32 iSpaceLeft = iLeftMarginReal;
 		UT_sint32 iSpaceRight = iRightMarginReal;
-		if ((m_pView->getViewMode() == VIEW_WEB) &&
+		if (m_pView && (m_pView->getViewMode() == VIEW_WEB) &&
 		    !m_pLayout->getGraphics()->queryProperties(GR_Graphics::DGP_PAPER))
 		{
 			iSpaceLeft = iLeftMargin;

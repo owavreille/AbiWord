@@ -240,8 +240,13 @@ STDMETHODIMP XAP_Win32DropTarget::DragLeave()
 //
 // Called when the user drops an object
 //
-STDMETHODIMP XAP_Win32DropTarget::Drop (LPDATAOBJECT pDataObj, DWORD /*grfKeyState*/, POINTL /*pointl*/, LPDWORD /*pdwEffect*/)
+STDMETHODIMP XAP_Win32DropTarget::Drop (LPDATAOBJECT pDataObj, DWORD /*grfKeyState*/, POINTL /*pointl*/, LPDWORD pdwEffect)
 {
+	if (pdwEffect)
+		*pdwEffect = DROPEFFECT_NONE;
+	if (!pDataObj || !m_pFrame)
+		return E_INVALIDARG;
+
 	int count = 0;
 	STGMEDIUM medium;
 	memset(&medium, 0, sizeof(medium));
@@ -255,11 +260,15 @@ STDMETHODIMP XAP_Win32DropTarget::Drop (LPDATAOBJECT pDataObj, DWORD /*grfKeySta
 	//
 	if (NOERROR == pDataObj->QueryGetData(&fmte))
 	{
-		if (pDataObj && SUCCEEDED (pDataObj->GetData (&fmte, &medium)))
+		if (SUCCEEDED (pDataObj->GetData (&fmte, &medium)))
 		{
 			count = DragQueryFileW((HDROP)medium.hGlobal, 0xFFFFFFFF, nullptr, 0);
 			if (count)
+			{
 				SendMessageW(static_cast<XAP_Win32FrameImpl*>(m_pFrame->getFrameImpl())->getTopLevelWindow(), WM_DROPFILES, (WPARAM)medium.hGlobal, 1);
+				if (pdwEffect)
+					*pdwEffect = DROPEFFECT_COPY;
+			}
 			ReleaseStgMedium(&medium);
 		}
 		return S_OK;
@@ -268,9 +277,17 @@ STDMETHODIMP XAP_Win32DropTarget::Drop (LPDATAOBJECT pDataObj, DWORD /*grfKeySta
 	// RTF first, then the same plain-text format paste already accepts.
 	const char * encoding = XAP_EncodingManager::get_instance()->getNative8BitEncodingName();
 	if (s_dropTextFormat(pDataObj, static_cast<CLIPFORMAT>(m_uCF_RTF), false, ".rtf", encoding, m_pFrame))
+	{
+		if (pdwEffect)
+			*pdwEffect = DROPEFFECT_COPY;
 		return S_OK;
+	}
 
-	s_dropTextFormat(pDataObj, CF_UNICODETEXT, true, ".txt", "UTF-16LE", m_pFrame);
+	if (s_dropTextFormat(pDataObj, CF_UNICODETEXT, true, ".txt", "UTF-16LE", m_pFrame))
+	{
+		if (pdwEffect)
+			*pdwEffect = DROPEFFECT_COPY;
+	}
 	return S_OK;
 }
 

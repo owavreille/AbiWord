@@ -3074,7 +3074,7 @@ void fp_Line::layout(void)
 					// shifts is the one to erase from; in RTL context
 					// it is the last visual run that shifts
 					
-					if(!bLineErased && iStartX != s_pOldXs[k])
+					if(!bLineErased && (k >= ii || iStartX != s_pOldXs[k]))
 					{
 						if(iDomDirection == UT_BIDI_LTR)
 							bLineErased = true;
@@ -3131,7 +3131,7 @@ void fp_Line::layout(void)
 					{
 						iStartX -= pRun->getWidth();
 						//eClearScreen = iStartX == pOldXs[iK] ? FP_CLEARSCREEN_NEVER : FP_CLEARSCREEN_FORCE;
-						if(!bLineErased && iStartX != s_pOldXs[iK])
+						if(!bLineErased && (iK >= static_cast<UT_uint32>(ii) || iStartX != s_pOldXs[iK]))
 						{
 							if(iDomDirection == UT_BIDI_LTR)
 								bLineErased = true;
@@ -3144,7 +3144,7 @@ void fp_Line::layout(void)
 					else
 					{
 						//eClearScreen = iStartX == pOldXs[iK] ? FP_CLEARSCREEN_NEVER : FP_CLEARSCREEN_FORCE;
-						if(!bLineErased && iStartX != s_pOldXs[iK])
+						if(!bLineErased && (iK >= static_cast<UT_uint32>(ii) || iStartX != s_pOldXs[iK]))
 						{
 							if(iDomDirection == UT_BIDI_LTR)
 								bLineErased = true;
@@ -3178,7 +3178,7 @@ void fp_Line::layout(void)
 
 					UT_sint32 iCurX = pRun->getX();
 					//eClearScreen = iCurX + iStartX == pOldXs[k] ? FP_CLEARSCREEN_NEVER : FP_CLEARSCREEN_FORCE;
-					if(!bLineErased && iCurX + iStartX != s_pOldXs[k])
+					if(!bLineErased && (k >= ii || iCurX + iStartX != s_pOldXs[k]))
 					{
 						if(iDomDirection == UT_BIDI_LTR)
 							bLineErased = true;
@@ -3235,10 +3235,12 @@ bool fp_Line::getFootnoteContainers(UT_GenericVector<fp_FootnoteContainer*> * pv
 	UT_uint32 i =0;
 	bool bFound = false;
 	fp_FootnoteContainer * pFC = nullptr;
-	PT_DocPosition posStart = getBlock()->getPosition();
-	PT_DocPosition posEnd = posStart + getLastRun()->getBlockOffset() + getLastRun()->getLength();
 	auto firstRun = getFirstRun();
+	auto lastRun = getLastRun();
 	UT_nonnull_or_return(firstRun, false);
+	UT_nonnull_or_return(lastRun, false);
+	PT_DocPosition posStart = getBlock()->getPosition();
+	PT_DocPosition posEnd = posStart + lastRun->getBlockOffset() + lastRun->getLength();
 	posStart += firstRun->getBlockOffset();
 	for(i=0; (i< static_cast<UT_uint32>(countRuns())); i++)
 	{
@@ -3299,10 +3301,12 @@ bool fp_Line::getAnnotationContainers(UT_GenericVector<fp_AnnotationContainer*> 
 	UT_uint32 i =0;
 	bool bFound = false;
 	fp_AnnotationContainer * pAC = nullptr;
-	PT_DocPosition posStart = getBlock()->getPosition();
-	PT_DocPosition posEnd = posStart + getLastRun()->getBlockOffset() + getLastRun()->getLength();
 	auto firstRun = getFirstRun();
+	auto lastRun = getLastRun();
 	UT_nonnull_or_return(firstRun, false);
+	UT_nonnull_or_return(lastRun, false);
+	PT_DocPosition posStart = getBlock()->getPosition();
+	PT_DocPosition posEnd = posStart + lastRun->getBlockOffset() + lastRun->getLength();
 	posStart += firstRun->getBlockOffset();
 	for(i=0; (i< static_cast<UT_uint32>(countRuns())); i++)
 	{
@@ -3963,8 +3967,8 @@ UT_uint32 fp_Line::countJustificationPoints(void)
 		else if (pRun->getType () == FPRUN_FORCEDLINEBREAK || pRun->getType () == FPRUN_FORCEDPAGEBREAK ||
 				 pRun->getType () == FPRUN_FORCEDCOLUMNBREAK)
 		{
-			// why do we count these types of run as justifiable spaces? Tomas, Apr 8, 2004
-			iSpaceCount++;
+			// forced breaks are not justifiable spaces
+			continue;
 		}
 		else if (   pRun->getType () == FPRUN_DIRECTIONMARKER || pRun->getType () == FPRUN_FMTMARK
 				 || pRun->getType () == FPRUN_BOOKMARK || pRun->getType () == FPRUN_HYPERLINK)
@@ -4076,7 +4080,7 @@ void fp_Line::justify(UT_sint32 iAmount)
 						UT_uint32 iMySpaces = abs(iSpacesInText);
 						UT_sint32 iJustifyAmountForRun;						
 
-						if (iSpaceCount-1 > 0)
+						if (iSpaceCount > iMySpaces)
 							iJustifyAmountForRun = static_cast<int>(static_cast<double>(iAmount) / (iSpaceCount) * iMySpaces);
 						else
 							iJustifyAmountForRun = iAmount;

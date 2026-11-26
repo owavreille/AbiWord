@@ -1834,7 +1834,11 @@ GR_Image* GR_Win32Graphics::createNewImage(const char* pszName, const UT_ConstBy
 	else
 		pImg = new GR_VectorImage(pszName);
 
-	pImg->convertFromBuffer(pBB, mimetype, iDisplayWidth,iDisplayHeight);
+	if (!pImg->convertFromBuffer(pBB, mimetype, iDisplayWidth, iDisplayHeight))
+	{
+		delete pImg;
+		return nullptr;
+	}
 
 	return pImg;
 }

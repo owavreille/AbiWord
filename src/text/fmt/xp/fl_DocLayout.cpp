@@ -2009,8 +2009,7 @@ bool FL_DocLayout::addOrRemoveBlockFromTOC(fl_BlockLayout * pBlock)
 	UT_UTF8String sStyle;
 	pBlock->getStyle(sStyle);
 	UT_sint32 i = 0;
-	UT_sint32 inTOC = count;
-	UT_sint32 _addTOC = 0;
+	UT_sint32 inTOC = 0;
 
 	for(i=0; i<count; i++)
 	{
@@ -2020,7 +2019,6 @@ bool FL_DocLayout::addOrRemoveBlockFromTOC(fl_BlockLayout * pBlock)
 			if(!pTOC->isStyleInTOC(sStyle))
 			{
 				pTOC->removeBlock(pBlock);
-				inTOC--;
 			}
 			else
 			{
@@ -2029,6 +2027,7 @@ bool FL_DocLayout::addOrRemoveBlockFromTOC(fl_BlockLayout * pBlock)
 //
 				pTOC->removeBlock(pBlock);
 				pTOC->addBlock(pBlock);
+				inTOC++;
 			}
 		}
 		else
@@ -2036,15 +2035,11 @@ bool FL_DocLayout::addOrRemoveBlockFromTOC(fl_BlockLayout * pBlock)
 			if(pTOC->isStyleInTOC(sStyle))
 			{
 				pTOC->addBlock(pBlock);
-				_addTOC++;
+				inTOC++;
 			}
 		}
 	}
-	if((inTOC <= 0) && (_addTOC == 0))
-	{
-		return false;
-	}
-	return true;
+	return (inTOC > 0);
 }
 
 /*!
@@ -4603,6 +4598,8 @@ void FL_DocLayout::considerSmartQuoteCandidateAt(fl_BlockLayout *block, UT_uint3
 {
 	if (!block)
 		return;
+	if (!m_pView)
+		return;
 	if (m_pView->isHdrFtrEdit())
 		return;
 	if (!getSmartQuotes())
@@ -4635,15 +4632,16 @@ void FL_DocLayout::considerSmartQuoteCandidateAt(fl_BlockLayout *block, UT_uint3
 		{
 			// candidate was the first character in the block, so
 			// see what was at the end of the previous block, if any
-			fl_BlockLayout *ob = static_cast<fl_BlockLayout *>(block->getPrev());
-			if (ob)
+			fl_ContainerLayout *pPrev = block->getPrev();
+			if (pPrev && pPrev->getContainerType() == FL_CONTAINER_BLOCK)
 			{
-				fp_Run *last, *r = ob->getFirstRun();
-				do
+				fl_BlockLayout *ob = static_cast<fl_BlockLayout *>(pPrev);
+				fp_Run *last = nullptr;
+				for (fp_Run *r = ob->getFirstRun(); r; r = r->getNextRun())
 				{
 					last = r;
-				} while ((r = r->getNextRun()));  // assignment
-				if (last  &&  (FPRUN_TEXT == last->getType())  &&  last->getLength() > 0)
+				}
+				if (last  &&  (FPRUN_TEXT == last->getType())  &&  last->getLength() > 0 && block->getFirstRun())
 				{
 					fp_Line *blocks_line, *lasts_line;
 					blocks_line = block->getFirstRun()->getLine();
@@ -4674,9 +4672,10 @@ void FL_DocLayout::considerSmartQuoteCandidateAt(fl_BlockLayout *block, UT_uint3
 		{
 			// candidate was the last character in a block, so see
 			// what's at the beginning of the next block, if any
-			fl_BlockLayout *ob = static_cast<fl_BlockLayout *>(block->getNext());
-			if (ob)
+			fl_ContainerLayout *pNext = block->getNext();
+			if (pNext && pNext->getContainerType() == FL_CONTAINER_BLOCK)
 			{
+				fl_BlockLayout *ob = static_cast<fl_BlockLayout *>(pNext);
 				fp_Run *r = ob->getFirstRun();
 				if (r  &&  (FPRUN_TEXT == r->getType()))
 				{
@@ -4766,9 +4765,18 @@ void FL_DocLayout::considerSmartQuoteCandidateAt(fl_BlockLayout *block, UT_uint3
 			}
 
 			// 3rd - bad thing happened, go with English
-			if (nOuterQuoteStyleIndex < 0 || nInnerQuoteStyleIndex < 0)
+			gint nQuoteStyleCount = 0;
+			while (XAP_EncodingManager::smartQuoteStyles[nQuoteStyleCount].leftQuote != 0 ||
+				   XAP_EncodingManager::smartQuoteStyles[nQuoteStyleCount].rightQuote != 0)
+			{
+				++nQuoteStyleCount;
+			}
+			if (nOuterQuoteStyleIndex < 0 || nOuterQuoteStyleIndex >= nQuoteStyleCount)
 			{
 				nOuterQuoteStyleIndex = 0;
+			}
+			if (nInnerQuoteStyleIndex < 0 || nInnerQuoteStyleIndex >= nQuoteStyleCount)
+			{
 				nInnerQuoteStyleIndex = 1;
 			}
 			bool bNoChange = false;

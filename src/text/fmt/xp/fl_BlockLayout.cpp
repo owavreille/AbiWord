@@ -7323,67 +7323,67 @@ fl_BlockLayout::doclistener_deleteStrux(const PX_ChangeRecord_Strux* pcrx)
 		pLastLine = static_cast<fp_Line *>(pPrevBL->getLastContainer());
 		fp_Run* pNukeRun = pPrevBL->m_pFirstRun;
 		fp_Run * pPrevRun = pPrevBL->m_pFirstRun;
-		while(pNukeRun->getNextRun() != nullptr)
+		if (pNukeRun)
 		{
-			pPrevRun = pNukeRun;
-			UT_ASSERT(FPRUN_ENDOFPARAGRAPH != pPrevRun->getType());
-			pNukeRun  = pPrevRun->getNextRun();
-		}
-		UT_ASSERT(FPRUN_ENDOFPARAGRAPH == pNukeRun->getType());
-		//
-		// The idea here is to append the runs of the deleted block, if
-		// any, at the end of the previous block. We must make sure to take
-		// account of embedded footnotes/endnotes. 
-		// We need to calculate the offset
-		// before we delete the EOP run.
-		//
-		if(FPRUN_ENDOFPARAGRAPH == pNukeRun->getType())
-		{
-			offset = pNukeRun->getBlockOffset();
-		}
-		else
-		{
-			offset =  pNukeRun->getBlockOffset() + pNukeRun->getLength();
-		}
+			while(pNukeRun->getNextRun() != nullptr)
+			{
+				pPrevRun = pNukeRun;
+				UT_ASSERT(FPRUN_ENDOFPARAGRAPH != pPrevRun->getType());
+				pNukeRun  = pPrevRun->getNextRun();
+			}
+			UT_ASSERT(FPRUN_ENDOFPARAGRAPH == pNukeRun->getType());
+			//
+			// The idea here is to append the runs of the deleted block, if
+			// any, at the end of the previous block. We must make sure to take
+			// account of embedded footnotes/endnotes. 
+			// We need to calculate the offset
+			// before we delete the EOP run.
+			//
+			if(FPRUN_ENDOFPARAGRAPH == pNukeRun->getType())
+			{
+				offset = pNukeRun->getBlockOffset();
+			}
+			else
+			{
+				offset =  pNukeRun->getBlockOffset() + pNukeRun->getLength();
+			}
 
-		// Detach from the line
-		fp_Line* pLine = pNukeRun->getLine();
-		UT_ASSERT(pLine && pLine == pLastLine);
-		if(pLine)
-		{
-			pLine->removeRun(pNukeRun);
+			// Detach from the line
+			fp_Line* pLine = pNukeRun->getLine();
+			UT_ASSERT(pLine && pLine == pLastLine);
+			if(pLine)
+			{
+				pLine->removeRun(pNukeRun);
+			}
+			// Unlink and delete it
+			if (pPrevRun && (pPrevRun != pNukeRun))
+			{
+				pPrevRun->setNextRun(nullptr);
+			}
+			else
+			{
+				pPrevBL->m_pFirstRun = nullptr;
+			}
+			delete pNukeRun;
 		}
-		// Unlink and delete it
-		if (pPrevRun && (pPrevRun != pNukeRun))
-		{
-			pPrevRun->setNextRun(nullptr);
-		}
-		else
-		{
-			pPrevBL->m_pFirstRun = nullptr;
-		}
-		delete pNukeRun;
 	}
 	else
 	{
-		// Delete end-of-paragraph Run in this strux
-		UT_ASSERT(m_pFirstRun
-				  && (FPRUN_ENDOFPARAGRAPH == m_pFirstRun->getType()));
-
+		// Delete all runs in this strux since there is no previous block
 		fp_Run* pNukeRun = m_pFirstRun;
-
-		// Detach from the line
-		fp_Line* pLine = pNukeRun->getLine();
-		UT_ASSERT(pLine);
-		if(pLine)
-		{
-			pLine->removeRun(pNukeRun);
-		}
-
-		// Unlink and delete it
 		m_pFirstRun = nullptr;
-		delete pNukeRun;
-
+		while (pNukeRun)
+		{
+			fp_Run* pNextRun = pNukeRun->getNextRun();
+			// Detach from the line
+			fp_Line* pLine = pNukeRun->getLine();
+			if(pLine)
+			{
+				pLine->removeRun(pNukeRun);
+			}
+			delete pNukeRun;
+			pNukeRun = pNextRun;
+		}
 	}
 
 	// We use the offset we calculated earlier.
@@ -7520,7 +7520,7 @@ fl_BlockLayout::doclistener_deleteStrux(const PX_ChangeRecord_Strux* pcrx)
 	if(pSL)
 	{
 		FV_View* pView = pSL->getDocLayout()->getView();
-		if (pView->isHdrFtrEdit() && (!pView->getEditShadow() ||
+		if (pView && pView->isHdrFtrEdit() && (!pView->getEditShadow() ||
 									  !pView->getEditShadow()->getLastLayout()))
 			pView->clearHdrFtrEdit();
 		

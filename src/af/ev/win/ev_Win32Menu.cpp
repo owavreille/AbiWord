@@ -451,22 +451,40 @@ void EV_Win32Menu::refreshForDpi(int dpi)
 	// hbmpItem is drawn at the bitmap's real size. Replace the cached
 	//  icons before deleting them, or the menu keeps a freed handle.
 	std::vector<HBITMAP> previous = m_vechBitmaps;
+	std::map<XAP_Menu_Id, HBITMAP> previousById = m_mapMenuBitmaps;
 	std::vector<BitmapSite> sites = m_bitmapSites;
 	m_vechBitmaps.clear();
 	m_mapMenuBitmaps.clear();
-	bool replaced = true;
+	std::vector<HBITMAP> keep;
 	for (std::vector<BitmapSite>::const_iterator site = sites.begin(); site != sites.end(); ++site)
 	{
 		if (!_setBitmapforID(site->menu, site->id, site->cmd))
-			replaced = false;
-	}
-	if (replaced)
-	{
-		for (std::vector<HBITMAP>::const_iterator i = previous.begin(); i != previous.end(); ++i)
 		{
-			if (*i)
-				DeleteObject(*i);
+			std::map<XAP_Menu_Id, HBITMAP>::const_iterator oldIt = previousById.find(site->id);
+			if (oldIt != previousById.end() && oldIt->second)
+			{
+				keep.push_back(oldIt->second);
+				m_mapMenuBitmaps[site->id] = oldIt->second;
+			}
 		}
+	}
+	for (std::vector<HBITMAP>::const_iterator i = previous.begin(); i != previous.end(); ++i)
+	{
+		if (!*i)
+			continue;
+		bool stillUsed = false;
+		for (std::vector<HBITMAP>::const_iterator k = keep.begin(); k != keep.end(); ++k)
+		{
+			if (*k == *i)
+			{
+				stillUsed = true;
+				break;
+			}
+		}
+		if (stillUsed)
+			m_vechBitmaps.push_back(*i);
+		else
+			DeleteObject(*i);
 	}
 }
 
@@ -783,6 +801,18 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 					// need to check before disabling ...
 					CheckMenuItem(hMenuBar,cmd,uCheck);
 					EnableMenuItem(hMenuBar,cmd,uEnable);
+					if (uBold)
+					{
+						MENUITEMINFOW mifBold;
+						memset(&mifBold, 0, sizeof(mifBold));
+						mifBold.cbSize = sizeof(mifBold);
+						mifBold.fMask = MIIM_STATE;
+						if (GetMenuItemInfoW(hMenuBar, cmd, FALSE, &mifBold))
+						{
+							mifBold.fState |= MFS_DEFAULT;
+							SetMenuItemInfoW(hMenuBar, cmd, FALSE, &mifBold);
+						}
+					}
 					break;
 				}
 
@@ -863,11 +893,11 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 					//UT_DEBUGMSG(("Menu adding menu->%s\n",szLabelName));
 										
 					if (UT_IsWinVista()) {
-						AppendMenuW(m, MF_STRING, cmd, szLabelName);
+						InsertMenuW(m, static_cast<UINT>(pos - 1), MF_BYPOSITION | MF_STRING, cmd, szLabelName);
 						_setBitmapforID(m, id, cmd);
 					}
 					else
-						AppendMenuW(m, MF_OWNERDRAW,cmd, (const wchar_t*) item);
+						InsertMenuW(m, static_cast<UINT>(pos - 1), MF_BYPOSITION | MF_OWNERDRAW, cmd, (const wchar_t*) item);
 				}
 				
 				EV_Menu_ItemState mis = pAction->getMenuItemState(pView);
@@ -1133,12 +1163,21 @@ LPARAM EV_Win32Menu::onMenuChar(HWND /*hwnd*/, WPARAM wParam, LPARAM lParam)
 
 		if (item && item->szText)
 		{
-			const wchar_t * pHotKeyPos = wcschr(item->szText, L'&');
-			if (pHotKeyPos && pHotKeyPos[1])
+			const wchar_t * pHotKeyPos = item->szText;
+			while ((pHotKeyPos = wcschr(pHotKeyPos, L'&')) != nullptr)
 			{
-				const wchar_t n = (wchar_t)(wParam & 0x000000ff);
-				if (towupper(pHotKeyPos[1]) == towupper(n))
-					return MAKELRESULT(i, MNC_EXECUTE);
+				if (pHotKeyPos[1] == L'&')
+				{
+					pHotKeyPos += 2;
+					continue;
+				}
+				if (pHotKeyPos[1])
+				{
+					const wchar_t n = static_cast<wchar_t>(LOWORD(wParam));
+					if (towupper(pHotKeyPos[1]) == towupper(n))
+						return MAKELRESULT(i, MNC_EXECUTE);
+				}
+				break;
 			}
 		}			
 	}
