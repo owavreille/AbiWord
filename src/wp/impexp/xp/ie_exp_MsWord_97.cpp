@@ -196,7 +196,7 @@ static int note_kind_of(PTStruxType kind)
 		return 1;
 	if (kind == PTX_SectionEndnote)
 		return 2;
-	if (kind == PTX_SectionAnnotation)
+	if (kind == PTX_SectionAnnotation || kind == PTX_SectionMarginnote)
 		return 3;
 	return 0;
 }
@@ -205,7 +205,7 @@ static bool note_ends(PTStruxType kind, int note_kind)
 {
 	return (kind == PTX_EndFootnote && note_kind == 1)
 		|| (kind == PTX_EndEndnote && note_kind == 2)
-		|| (kind == PTX_EndAnnotation && note_kind == 3);
+		|| ((kind == PTX_EndAnnotation || kind == PTX_EndMarginnote) && note_kind == 3);
 }
 
 struct NoteStory
@@ -514,6 +514,152 @@ static void feed_body_note(OpenNote & note, std::vector<NoteStory> & notes,
 	PD_Document * doc, FontCatalog & fonts, unsigned content_w,
 	pf_Frag * frag, std::vector<Picture> & pics);
 
+static void append_ascii_text(Paragraph & paragraph, const std::string & text)
+{
+	if (text.empty())
+		return;
+	Run run;
+	for (size_t i = 0; i < text.size(); ++i)
+		run.text.push_back(static_cast<char16_t>(static_cast<unsigned char>(text[i])));
+	paragraph.runs.push_back(run);
+}
+
+static Paragraph build_toc_paragraph(PD_Document * doc, const PP_AttrProp * ap)
+{
+	int max_level = 3;
+	const gchar * prop = nullptr;
+	if (ap && ap->getProperty("toc-source-style4", prop) && prop && *prop)
+		max_level = 4;
+
+	std::string instr = " TOC \\o \"1-";
+	instr.push_back(static_cast<char>('0' + max_level));
+	instr += "\" ";
+	if (ap && ap->getProperty("toc-tab-leader1", prop) && prop && *prop)
+	{
+		if (!strcmp(prop, "dot"))
+			instr += "\\p \".\" ";
+		else if (!strcmp(prop, "hyphen"))
+			instr += "\\p \"-\" ";
+		else if (!strcmp(prop, "underline"))
+			instr += "\\p \"_\" ";
+		else if (!strcmp(prop, "none"))
+			instr += "\\p \" \" ";
+	}
+
+	std::u16string cached;
+	if (pt_PieceTable * pt = doc ? doc->getPieceTable() : nullptr)
+	{
+		bool in_heading = false;
+		bool has_entry = false;
+		std::u16string entry;
+		for (pf_Frag * f = pt->getFragments().getFirst(); f; f = f->getNext())
+		{
+			if (f->getType() == pf_Frag::PFT_Strux)
+			{
+				if (in_heading && !entry.empty())
+				{
+					if (has_entry)
+						cached.push_back(0x000B);
+					cached += entry;
+					has_entry = true;
+				}
+				in_heading = false;
+				entry.clear();
+				const PTStruxType k = static_cast<pf_Frag_Strux *>(f)->getStruxType();
+				if (k == PTX_Block)
+				{
+					const PP_AttrProp * bap = nullptr;
+					const gchar * style = nullptr;
+					if (doc->getAttrProp(f->getIndexAP(), &bap) && bap &&
+						bap->getAttribute(PT_STYLE_ATTRIBUTE_NAME, style) && style &&
+						strncmp(style, "Heading ", 8) == 0 && style[8] >= '1' && style[8] <= ('0' + max_level) && style[9] == '\0')
+					{
+						in_heading = true;
+					}
+				}
+			}
+			else if (in_heading && f->getType() == pf_Frag::PFT_Text)
+			{
+				const pf_Frag_Text * t = static_cast<const pf_Frag_Text *>(f);
+				const UT_UCS4Char * chars = doc->getPointer(t->getBufIndex());
+				for (UT_uint32 i = 0; i < t->getLength(); ++i)
+					append_utf16(entry, chars[i]);
+			}
+		}
+		if (in_heading && !entry.empty())
+		{
+			if (has_entry)
+				cached.push_back(0x000B);
+			cached += entry;
+		}
+	}
+
+	Paragraph para;
+	append_special(para, 0x0013);
+	append_ascii_text(para, instr);
+	append_special(para, 0x0014);
+	if (!cached.empty())
+	{
+		Run r;
+		r.text = cached;
+		para.runs.push_back(r);
+	}
+	else
+	{
+		append_ascii_text(para, " ");
+	}
+	append_special(para, 0x0015);
+	return para;
+}
+
+static Buf build_plc_fld_mom(const std::vector<Paragraph> & paragraphs, unsigned ccp_text)
+{
+	std::vector<unsigned> cps;
+	std::vector<std::pair<unsigned char, unsigned char> > flds;
+	unsigned cp = 0;
+	for (size_t p = 0; p < paragraphs.size(); ++p)
+	{
+		for (size_t r = 0; r < paragraphs[p].runs.size(); ++r)
+		{
+			const Run & run = paragraphs[p].runs[r];
+			const bool is_spec = !run.grpprl.empty() && run.text.size() == 1;
+			if (is_spec)
+			{
+				const char16_t ch = run.text[0];
+				if (ch == 0x0013)
+				{
+					cps.push_back(cp);
+					flds.push_back(std::make_pair(static_cast<unsigned char>(0x13), static_cast<unsigned char>(0x0D)));
+				}
+				else if (ch == 0x0014)
+				{
+					cps.push_back(cp);
+					flds.push_back(std::make_pair(static_cast<unsigned char>(0x14), static_cast<unsigned char>(0xFF)));
+				}
+				else if (ch == 0x0015)
+				{
+					cps.push_back(cp);
+					flds.push_back(std::make_pair(static_cast<unsigned char>(0x15), static_cast<unsigned char>(0x80)));
+				}
+			}
+			cp += static_cast<unsigned>(run.text.size());
+		}
+		cp += 1;
+	}
+	Buf out;
+	if (cps.empty())
+		return out;
+	for (size_t i = 0; i < cps.size(); ++i)
+		append_u32(out, cps[i]);
+	append_u32(out, ccp_text);
+	for (size_t i = 0; i < flds.size(); ++i)
+	{
+		out.push_back(flds[i].first);
+		out.push_back(flds[i].second);
+	}
+	return out;
+}
+
 static BodyExport collect_paragraphs(PD_Document * doc, std::vector<Picture> & pics, FontCatalog & fonts, unsigned content_w)
 {
 	BodyExport out;
@@ -621,6 +767,18 @@ static BodyExport collect_paragraphs(PD_Document * doc, std::vector<Picture> & p
 					frame_depth = 1;
 					accept = false;
 				}
+				continue;
+			}
+			if (kind == PTX_SectionTOC)
+			{
+				if (accept)
+				{
+					const PP_AttrProp * ap = nullptr;
+					doc->getAttrProp(frag->getIndexAP(), &ap);
+					out.paragraphs.push_back(build_toc_paragraph(doc, ap));
+				}
+				++skip_depth;
+				accept = false;
 				continue;
 			}
 			if (kind == PTX_Section)
@@ -1242,7 +1400,7 @@ static bool feed_table_note(OpenTable & table, PD_Document * doc, FontCatalog & 
 			++table.note_depth;
 			return true;
 		}
-		if (kind == PTX_EndFootnote || kind == PTX_EndEndnote || kind == PTX_EndAnnotation)
+		if (kind == PTX_EndFootnote || kind == PTX_EndEndnote || kind == PTX_EndAnnotation || kind == PTX_EndMarginnote)
 		{
 			if (table.note_depth == 1 && note_ends(kind, table.note_kind))
 				close_note_paragraph(table.note_para, table.note_paragraph, story.text);
@@ -1337,7 +1495,7 @@ static void feed_body_note(OpenNote & note, std::vector<NoteStory> & notes,
 			++note.depth;
 			return;
 		}
-		if (kind == PTX_EndFootnote || kind == PTX_EndEndnote || kind == PTX_EndAnnotation)
+		if (kind == PTX_EndFootnote || kind == PTX_EndEndnote || kind == PTX_EndAnnotation || kind == PTX_EndMarginnote)
 		{
 			if (note.depth == 1 && note_ends(kind, note.kind))
 				close_note_paragraph(note.in_paragraph, note.paragraph, story.text);
@@ -2965,6 +3123,10 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	const unsigned font_at = static_cast<unsigned>(table.size());
 	table.insert(table.end(), fontBytes.begin(), fontBytes.end());
 
+	const Buf fld_mom = build_plc_fld_mom(paragraphs, ccp_text);
+	const unsigned fld_mom_at = static_cast<unsigned>(table.size());
+	table.insert(table.end(), fld_mom.begin(), fld_mom.end());
+
 	// FibRgFcLcb97 index 11 is fcPlcfHdd / lcbPlcfHdd. The CPs are relative
 	// to the header subdocument and the last one equals ccpHdd.
 	Buf hdd;
@@ -3044,6 +3206,8 @@ UT_Error IE_Exp_MsWord_97::_writeDocument(void)
 	place(fib, 12, ch_at, static_cast<unsigned>(ch_bin.size()));
 	place(fib, 13, pap_at, static_cast<unsigned>(pap_bin.size()));
 	place(fib, 15, font_at, static_cast<unsigned>(fontBytes.size()));
+	if (!fld_mom.empty())
+		place(fib, 16, fld_mom_at, static_cast<unsigned>(fld_mom.size()));
 	place(fib, 31, dop_at, 500);
 	place(fib, 33, clx_at, clx_len);
 	memcpy(&word[0], &fib[0], FIB_BYTES);

@@ -351,6 +351,8 @@ public:
 	virtual void			setNeedsReformat(fl_ContainerLayout * pCL, UT_uint32 offset = 0) override;
 	inline bool 		    needsReformat(void) const override
 		{ return (m_iNeedsReformat >= 0); }
+	bool                    hasTabRun(void) const;
+	void                    releaseLoadReformat(void);
 	virtual void			setNeedsRedraw(void) override;
 	virtual bool 		    needsRedraw(void) const override
 		{ return m_bNeedsRedraw; }

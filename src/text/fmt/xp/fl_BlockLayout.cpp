@@ -4029,18 +4029,40 @@ void fl_BlockLayout::format()
 	}
 
 	// Paragraph has been reformatted. While the document is still loading,
-	// keep the block pending so the pass after the columns exist can
-	// recompute tabs against the final column width.
-	if(!m_pLayout->isLayoutFilling())
-    {
+	// keep only blocks without lines or containing tabs pending so the pass
+	// after the columns exist recomputes tab stops without reformatting the
+	// entire body.
+	if (!m_pLayout->isLayoutFilling() || (getFirstContainer() && !hasTabRun()))
+	{
 		m_iNeedsReformat = -1;
-		getDocSectionLayout()->clearNeedsReformat(this);
+		if (!m_pLayout->isLayoutFilling())
+			getDocSectionLayout()->clearNeedsReformat(this);
 	}
 	else
 	{
 		m_iNeedsReformat = 0;
 	}
 	return;	// TODO return code
+}
+
+bool fl_BlockLayout::hasTabRun(void) const
+{
+	for (const fp_Run * r = m_pFirstRun; r; r = r->getNextRun())
+	{
+		if (r->getType() == FPRUN_TAB)
+			return true;
+	}
+	return false;
+}
+
+void fl_BlockLayout::releaseLoadReformat(void)
+{
+	if (m_iNeedsReformat != 0 || !getFirstContainer() || hasTabRun())
+		return;
+	m_iNeedsReformat = -1;
+	fl_DocSectionLayout * section = getDocSectionLayout();
+	if (section)
+		section->clearNeedsReformat(this);
 }
 
 UT_sint32 fl_BlockLayout::findLineInBlock(fp_Line * pLine) const

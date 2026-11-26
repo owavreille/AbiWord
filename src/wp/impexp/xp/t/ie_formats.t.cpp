@@ -3205,3 +3205,62 @@ TFTEST_MAIN("Text import reads UTF-8 past the first block, skips a BOM and rewri
 	TFPASS(wideText.find("A") != std::string::npos);
 	TFPASS(wideText.find('?') == std::string::npos);
 }
+
+TFTEST_MAIN("Word 97 export preserves TOC as a real field and writes margin notes")
+{
+	PD_Document * doc = new PD_Document();
+	if (!TFPASS(doc->newDocument() == UT_OK))
+	{
+		doc->unref();
+		return;
+	}
+	auto pushText = [doc](const char * utf8) {
+		UT_UCS4String s(utf8);
+		return doc->insertSpan(document_end(doc), s.ucs4_str(), s.size());
+	};
+	const PP_PropertyVector tocProps = { "toc-source-style1", "Heading 1", "toc-tab-leader1", "dot" };
+	const PP_PropertyVector h1Attrs = { "style", "Heading 1" };
+	if (!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionTOC, PP_NOPROPS, tocProps)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndTOC)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block, h1Attrs, PP_NOPROPS)) ||
+		!TFPASS(pushText("Chapitre Un")) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(pushText("Texte principal")) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_SectionMarginnote)) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_Block)) ||
+		!TFPASS(pushText("Note en marge")) ||
+		!TFPASS(doc->insertStrux(document_end(doc), PTX_EndMarginnote)))
+	{
+		doc->unref();
+		return;
+	}
+
+	const std::string path = UT_createTmpFile("fmttocmn", ".doc");
+	if (!TFPASS(!path.empty()))
+	{
+		doc->unref();
+		return;
+	}
+	const UT_Error err = doc->AD_Document::saveAs(path.c_str(), IEFT_Unknown, false, nullptr);
+	doc->unref();
+	if (!TFPASS(err == UT_OK))
+	{
+		std::remove(path.c_str());
+		return;
+	}
+
+	PD_Document * loaded = new PD_Document();
+	const UT_Error loadErr = loaded->readFromFile(path.c_str(), IEFT_Unknown);
+	std::remove(path.c_str());
+	if (!TFPASS(loadErr == UT_OK))
+	{
+		loaded->unref();
+		return;
+	}
+	const unsigned tocCount = count_strux(loaded, PTX_SectionTOC);
+	const std::string text = document_text(loaded);
+	loaded->unref();
+	TFPASS(tocCount >= 1);
+	TFPASS(text.find("Chapitre Un") != std::string::npos);
+	TFPASS(text.find("Note en marge") != std::string::npos);
+}

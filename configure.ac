@@ -834,15 +834,13 @@ fi
 
 if test "$TOOLKIT" = "win"; then
 	AC_DEFINE([TOOLKIT_WIN], [1], [Build win32 user interface])
+	AC_DEFINE([_WIN32_IE], [0x0A00], [Target Windows 10 common controls])
+	AC_DEFINE([_WIN32_WINNT], [0x0A00], [Target Windows 10 or higher])
+	AC_DEFINE([WINVER], [0x0A00], [Target Windows 10 or higher])
 	case ${host} in
 	  *-w64-mingw*)
 		AC_DEFINE([UNICODE], [1], [Build a full unicode AbiWord])
 		;;
-	  *)
-dnl on Mingw32 it is defined.
-		AC_DEFINE([_WIN32_IE], [0x0501], [minimal comctl.dll v4.70 for toolbars])
-		AC_DEFINE([_WIN32_WINNT], [0x0500], [support collaboration plugin in Windows 2000 or higher])
-	  	;;
 	esac
 elif test "$TOOLKIT" = "cocoa"; then
 	AC_DEFINE([TOOLKIT_COCOA], [1], [Build cocoa user interface])
@@ -874,7 +872,7 @@ if test "$TOOLKIT" = "gtk"  || test "$TOOLKIT" = "qt" &&
 	# derived classes in dlopened modules
 	PLUGIN_LIBS='${top_builddir}/src/libabiword-'"$ABIWORD_SERIES"'.la'" $PLUGIN_LIBS"
 elif test "$TOOLKIT" = "win"; then
-	PLUGIN_CFLAGS="$PLUGIN_CFLAGS "'-D_WIN32_IE=0x0501 -D_WIN32_WINNT=0x0500'
+	PLUGIN_CFLAGS="$PLUGIN_CFLAGS "'-D_WIN32_IE=0x0A00 -D_WIN32_WINNT=0x0A00 -DWINVER=0x0A00'
 	PLUGIN_LIBS='${top_builddir}/src/libabiword-'"$ABIWORD_SERIES"'.la'" $PLUGIN_LIBS"
 elif test "$TOOLKIT" = "cocoa" ; then 
 	PLUGIN_LIBS='${top_builddir}/src/libabiword-'"$ABIWORD_SERIES"'.la'" $PLUGIN_LIBS"
