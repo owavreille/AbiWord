@@ -285,7 +285,9 @@ LRESULT CALLBACK AP_Win32TopRuler::_TopRulerWndProc(HWND hwnd, UINT iMsg, WPARAM
 
 	case WM_SYSCOLORCHANGE:
 		{
-			pG->init3dColors();
+			if (pG)
+				pG->init3dColors();
+			InvalidateRect(hwnd, nullptr, TRUE);
 			return 0;
 		}
 

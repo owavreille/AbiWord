@@ -984,6 +984,8 @@ void XAP_Prefs::startElement(const gchar *name, const gchar **atts)
 			
 			if (!(flags & PREF_FLAG_GEOMETRY_MAXIMIZED))
 				m_geom.m_flags &= ~PREF_FLAG_GEOMETRY_MAXIMIZED;
+			else
+				m_geom.m_flags |= PREF_FLAG_GEOMETRY_MAXIMIZED;
 			
 			
 		}
@@ -1380,8 +1382,9 @@ bool XAP_Prefs::savePrefsFile(void)
 		for (std::vector<std::string>::const_iterator k = v.begin(); 
 			 k != v.end() ; ++k)
 		{
+			auto escaped = UT_escapeXML(*k);
 			fprintf(fp,"\n\t\t<Face name=\"%s\"/>",
-					(*k).c_str());
+					escaped.c_str());
 		}
 
 		fprintf(fp, "\n\t</Fonts>\n");

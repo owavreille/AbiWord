@@ -49,6 +49,7 @@ public:
 
 protected:
 	HWND					m_hwndLeftRuler;
+	bool					m_bReleasingCapture;
 };
 
 #endif /* AP_WIN32LEFTRULER_H */

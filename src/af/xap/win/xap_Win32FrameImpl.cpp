@@ -577,16 +577,7 @@ void XAP_Win32FrameImpl::_refreshChrome(void)
 			bar->layoutParts();
 	}
 	if (m_pWin32Menu && m_hwndFrame)
-	{
-		HDC dc = GetDC(m_hwndFrame);
-		int dpi = 96;
-		if (dc)
-		{
-			dpi = GetDeviceCaps(dc, LOGPIXELSX);
-			ReleaseDC(m_hwndFrame, dc);
-		}
-		m_pWin32Menu->refreshForDpi(dpi);
-	}
+		m_pWin32Menu->refreshForDpi(UT_Win32WindowDpi(m_hwndFrame));
 
 	UT_uint32 bars = m_vecToolbars.getItemCount();
 	for (UT_uint32 i = 0; i < bars; ++i)
@@ -620,16 +611,7 @@ bool XAP_Win32FrameImpl::_runModalContextMenu(AV_View * pView, const char * szMe
 	m_pWin32Popup = new EV_Win32MenuPopup(static_cast<XAP_Win32App*>(XAP_App::getApp()),szMenuName,m_szMenuLabelSetName);
 	m_pWin32Popup->setTrackMenu(true);
 	if (m_hwndFrame)
-	{
-		HDC dc = GetDC(m_hwndFrame);
-		int dpi = 96;
-		if (dc)
-		{
-			dpi = GetDeviceCaps(dc, LOGPIXELSX);
-			ReleaseDC(m_hwndFrame, dc);
-		}
-		m_pWin32Popup->refreshForDpi(dpi);
-	}
+		m_pWin32Popup->refreshForDpi(UT_Win32WindowDpi(m_hwndFrame));
 
 	if (m_pWin32Popup && m_pWin32Popup->synthesizeMenuPopup(getFrame()))
 	{
@@ -1024,11 +1006,16 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 						if( pNMcd->dwDrawStage == CDDS_POSTPAINT )
 						{
 							RECT  rc;
-							HBRUSH	hBr = nullptr;
+							const bool dark = UT_Win32AppsUseDarkTheme();
+							HBRUSH hBr = dark
+								? static_cast<HBRUSH>(GetStockObject(DC_BRUSH))
+								: GetSysColorBrush( COLOR_3DFACE );
+							COLORREF prevBrushColor = CLR_INVALID;
+							if (dark)
+								prevBrushColor = SetDCBrushColor(pNMcd->hdc, UT_Win32WorkspaceColor());
 
 							rc.top    = pNMcd->rc.top;
 							rc.bottom = pNMcd->rc.bottom;
-							hBr = GetSysColorBrush( COLOR_3DFACE );
 
 							HWND  hWndChild = FindWindowExW( pNMcd->hdr.hwndFrom, nullptr, nullptr, nullptr );
 							while( hWndChild != nullptr )
@@ -1057,7 +1044,10 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 								hWndChild = nextChild;
 							}
 
-							/* Don't delete hBr since it was obtained using GetSysColorBrush, so System owned */
+							if (dark && prevBrushColor != CLR_INVALID)
+								SetDCBrushColor(pNMcd->hdc, prevBrushColor);
+
+							/* Don't delete hBr since it is stock or system owned */
 						}
 						break;
 					}
@@ -1079,6 +1069,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 			if (pG)
 				pG->refreshDeviceScale();
 		}
+		fimpl->_refreshRulersForDpi();
 		const RECT * suggested = reinterpret_cast<const RECT *>(lParam);
 		if (suggested)
 		{
@@ -1220,13 +1211,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		MINMAXINFO * info = reinterpret_cast<MINMAXINFO *>(lParam);
 		if (!info)
 			break;
-		HDC dc = GetDC(hwnd);
-		int dpi = 96;
-		if (dc)
-		{
-			dpi = GetDeviceCaps(dc, LOGPIXELSX);
-			ReleaseDC(hwnd, dc);
-		}
+		const int dpi = UT_Win32WindowDpi(hwnd);
 		const int minW = UT_ui_px_at_dpi(480, dpi);
 		const int minH = UT_ui_px_at_dpi(320, dpi);
 		if (info->ptMinTrackSize.x < minW)

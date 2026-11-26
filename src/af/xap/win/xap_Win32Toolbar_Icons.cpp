@@ -545,7 +545,11 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 												const char * szIconName,
 												HBITMAP * pBitmap)
 {
+	if (!pBitmap)
+		return false;
 	*pBitmap = nullptr;
+	if (!szIconName || !*szIconName)
+		return false;
 
 	XAP_Win32App * pWin32App = static_cast<XAP_Win32App *>(XAP_App::getApp());
 	HINSTANCE hInst = pWin32App->getInstance();		
@@ -600,7 +604,7 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 
 			if (cmp == 0) {
 				dibBitmap = (HBITMAP) LoadImage (hInst, MAKEINTRESOURCE (s_nametoIdTable[middle].id), 
-					IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION | LR_LOADTRANSPARENT);
+					IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
 				break;
 			}
 
@@ -628,6 +632,26 @@ bool XAP_Win32Toolbar_Icons::getBitmapForIcon(HWND /*hwnd*/,
 			ReleaseDC(nullptr, hdc);
 		DeleteObject(dibBitmap);
 		return false;
+	}
+
+	if (bmpInfo.header.biBitCount != 32)
+	{
+		const LONG srcH = bmpInfo.header.biHeight < 0 ? -bmpInfo.header.biHeight : bmpInfo.header.biHeight;
+		if (bmpInfo.header.biWidth <= 0 || srcH <= 0)
+		{
+			ReleaseDC(nullptr, hdc);
+			DeleteObject(dibBitmap);
+			return false;
+		}
+		bmpInfo.header.biPlanes = 1;
+		bmpInfo.header.biBitCount = 32;
+		bmpInfo.header.biCompression = BI_RGB;
+		bmpInfo.header.biClrUsed = 0;
+		bmpInfo.header.biClrImportant = 0;
+		bmpInfo.header.biSizeImage = static_cast<DWORD>(bmpInfo.header.biWidth) * static_cast<DWORD>(srcH) * 4;
+		bmpInfo.masks[0] = 0;
+		bmpInfo.masks[1] = 0;
+		bmpInfo.masks[2] = 0;
 	}
 
 	LPVOID pBuf = malloc(bmpInfo.header.biSizeImage);
@@ -704,7 +728,11 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 												const char * szIconName,
 												HBITMAP * pBitmap)
 {
+	if (!pBitmap)
+		return false;
 	*pBitmap = nullptr;
+	if (!szIconName || !*szIconName)
+		return false;
 
 	XAP_Win32App * pWin32App = static_cast<XAP_Win32App *>(XAP_App::getApp());
 	HINSTANCE hInst = pWin32App->getInstance();		
@@ -759,7 +787,7 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 
 			if (cmp == 0) {
 				dibBitmap = (HBITMAP) LoadImage (hInst, MAKEINTRESOURCE (s_nametoIdTable[middle].id),
-					IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION | LR_LOADTRANSPARENT);
+					IMAGE_BITMAP, 0, 0, LR_CREATEDIBSECTION);
 				break;
 			}
 
@@ -783,6 +811,26 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 			ReleaseDC(nullptr, hdc);
 		DeleteObject(dibBitmap);
 		return false;
+	}
+
+	if (bmpInfo.header.biBitCount != 32)
+	{
+		const LONG srcH = bmpInfo.header.biHeight < 0 ? -bmpInfo.header.biHeight : bmpInfo.header.biHeight;
+		if (bmpInfo.header.biWidth <= 0 || srcH <= 0)
+		{
+			ReleaseDC(nullptr, hdc);
+			DeleteObject(dibBitmap);
+			return false;
+		}
+		bmpInfo.header.biPlanes = 1;
+		bmpInfo.header.biBitCount = 32;
+		bmpInfo.header.biCompression = BI_RGB;
+		bmpInfo.header.biClrUsed = 0;
+		bmpInfo.header.biClrImportant = 0;
+		bmpInfo.header.biSizeImage = static_cast<DWORD>(bmpInfo.header.biWidth) * static_cast<DWORD>(srcH) * 4;
+		bmpInfo.masks[0] = 0;
+		bmpInfo.masks[1] = 0;
+		bmpInfo.masks[2] = 0;
 	}
 
 	LPVOID pBuf = malloc(bmpInfo.header.biSizeImage);

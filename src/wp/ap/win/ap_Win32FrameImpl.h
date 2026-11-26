@@ -48,6 +48,7 @@ class ABI_EXPORT AP_Win32FrameImpl : public XAP_Win32FrameImpl
 
 	virtual void _initialize(void) override;
 	void _refreshChrome(void) override;
+	void _refreshRulersForDpi(void) override;
 
 	virtual void _refillToolbarsInFrameData() override;
 	virtual void _rebuildToolbar(UT_uint32 ibar) override;

@@ -270,38 +270,7 @@ WHICHPROC s_lpfnDefToolBar;
 // on the wrong baseline next to the font sample.
 static int toolbarIconDpi(HWND hwnd)
 {
-	int iconDpi = 96;
-	typedef UINT (WINAPI *GetDpiForWindowFn)(HWND);
-	static bool s_resolved = false;
-	static GetDpiForWindowFn getDpi = nullptr;
-	if (!s_resolved)
-	{
-		s_resolved = true;
-		HMODULE user32 = GetModuleHandleW(L"user32.dll");
-		if (user32)
-			getDpi = reinterpret_cast<GetDpiForWindowFn>(
-				reinterpret_cast<void *>(GetProcAddress(user32, "GetDpiForWindow")));
-	}
-	if (getDpi && hwnd)
-	{
-		UINT got = getDpi(hwnd);
-		if (got >= 96)
-			iconDpi = (int)got;
-	}
-	if (iconDpi == 96)
-	{
-		HDC screen = GetDC(hwnd);
-		if (screen)
-		{
-			int caps = GetDeviceCaps(screen, LOGPIXELSX);
-			if (caps >= 96)
-				iconDpi = caps;
-			ReleaseDC(hwnd, screen);
-		}
-	}
-	if (iconDpi < 96)
-		iconDpi = 96;
-	return iconDpi;
+	return UT_Win32WindowDpi(hwnd);
 }
 
 static int toolbarIconPx(HWND hwnd)
@@ -890,7 +859,6 @@ bool EV_Win32Toolbar::synthesize(void)
 							   | WS_CLIPCHILDREN | WS_CLIPSIBLINGS 
 							   | TBSTYLE_TOOLTIPS | TBSTYLE_FLAT
 							   | ( bText && !bIcons ? TBSTYLE_LIST : 0 )
-							   | TBSTYLE_CUSTOMERASE
 							   | CCS_NOPARENTALIGN | CCS_NODIVIDER
 							   | CCS_NORESIZE
 							   ,						// window style
@@ -1016,7 +984,7 @@ bool EV_Win32Toolbar::synthesize(void)
 				case EV_TBIT_GroupButton:
 					bButton = true;
 					tbb.fsState = TBSTATE_ENABLED; 
-					tbb.fsStyle = TBSTYLE_CHECKGROUP;     
+					tbb.fsStyle = TBSTYLE_CHECK;     
 					break;
 
 				case EV_TBIT_ComboBox:
@@ -1024,12 +992,14 @@ bool EV_Win32Toolbar::synthesize(void)
 						EV_Toolbar_Control * pControl = pFactory->getControl(this, id);
 						UT_ASSERT_HARMLESS(pControl);
 
+						const int dpi = toolbarIconDpi(m_hwnd);
 						int iWidth = 100;
 
 						if (pControl)
 						{
 							iWidth = pControl->getPixelWidth();
 						}
+						iWidth = UT_ui_px_at_dpi(iWidth, dpi);
 						
 						bControls = true;
 						tbb.fsStyle = TBSTYLE_SEP;   
@@ -1069,17 +1039,18 @@ bool EV_Win32Toolbar::synthesize(void)
 						else
 							SendMessageW(hwndEdit, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)0);
 						HFONT hComboFont = (id == AP_TOOLBAR_ID_FMT_FONT)
-							? toolbarUIFont(toolbarIconDpi(m_hwnd))
+							? toolbarUIFont(dpi)
 							: (HFONT)GetStockObject(DEFAULT_GUI_FONT);
 						SendMessageW(hwndCombo, WM_SETFONT, (WPARAM)hComboFont, MAKELPARAM(TRUE, 0));
 						if (id == AP_TOOLBAR_ID_FMT_FONT)
 							SendMessageW(hwndCombo, CB_SETITEMHEIGHT, 0,
-								UT_ui_px_at_dpi(22, toolbarIconDpi(m_hwnd)));
+								UT_ui_px_at_dpi(22, dpi));
 
 						// populate it
 						if (pControl)
 						{
-							SendMessageW(hwndCombo, CB_SETDROPPEDWIDTH,(WPARAM)pControl->getDroppedWidth(), 0);
+							SendMessageW(hwndCombo, CB_SETDROPPEDWIDTH,
+								static_cast<WPARAM>(UT_ui_px_at_dpi(pControl->getDroppedWidth(), dpi)), 0);
 
 							if (id == AP_TOOLBAR_ID_FMT_FONT)
 							{
@@ -1331,10 +1302,29 @@ void EV_Win32Toolbar::_placeControls(void)
 		HWND hwndCtrl = _getControlWindow(id);
 		if (!hwndCtrl)
 			continue;
-		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(toolbarIconDpi(m_hwnd)), TRUE);
+		const int dpi = toolbarIconDpi(m_hwnd);
+		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(dpi), TRUE);
 		if (id == AP_TOOLBAR_ID_FMT_FONT)
 			SendMessageW(hwndCtrl, CB_SETITEMHEIGHT, 0,
-				UT_ui_px_at_dpi(22, toolbarIconDpi(m_hwnd)));
+				UT_ui_px_at_dpi(22, dpi));
+		XAP_Toolbar_ControlFactory * pFactory = m_pWin32App->getControlFactory();
+		EV_Toolbar_Control * pControl = (id == AP_TOOLBAR_ID_FMT_FONT && m_pFontCtrl)
+			? static_cast<EV_Toolbar_Control *>(m_pFontCtrl)
+			: (pFactory ? pFactory->getControl(this, id) : nullptr);
+		if (pControl)
+		{
+			TBBUTTONINFOW tbbi;
+			memset(&tbbi, 0, sizeof(tbbi));
+			tbbi.cbSize = sizeof(tbbi);
+			tbbi.dwMask = TBIF_SIZE;
+			tbbi.cx = static_cast<WORD>(UT_ui_px_at_dpi(pControl->getPixelWidth(), dpi));
+			SendMessageW(m_hwnd, TB_SETBUTTONINFOW, static_cast<WPARAM>(WmCommandFromItemId(id)),
+				reinterpret_cast<LPARAM>(&tbbi));
+			SendMessageW(hwndCtrl, CB_SETDROPPEDWIDTH,
+				static_cast<WPARAM>(UT_ui_px_at_dpi(pControl->getDroppedWidth(), dpi)), 0);
+			if (pControl != m_pFontCtrl)
+				delete pControl;
+		}
 		RECT r;
 		memset(&r, 0, sizeof(r));
 		if (!GetWindowRect(hwndCtrl, &r))
@@ -1459,13 +1449,15 @@ void EV_Win32Toolbar::rebuildIcons(void)
 	HWND rebar = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl())->getToolbarWindow();
 	if (rebar && band >= 0 && size.cy > 0)
 	{
+		const DWORD dwBtnSize = static_cast<DWORD>(SendMessageW(m_hwnd, TB_GETBUTTONSIZE, 0, 0));
 		REBARBANDINFOW info;
 		memset(&info, 0, sizeof(info));
 		info.cbSize = sizeof(info);
-		info.fMask = RBBIM_CHILDSIZE;
+		info.fMask = RBBIM_CHILDSIZE | RBBIM_IDEALSIZE;
 		info.cyMinChild = static_cast<UINT>(size.cy);
 		info.cyChild = info.cyMinChild;
-		info.cxMinChild = static_cast<UINT>(size.cx > 0 ? size.cx : iconPx);
+		info.cxMinChild = LOWORD(dwBtnSize);
+		info.cxIdeal = static_cast<UINT>(size.cx);
 		SendMessageW(rebar, RB_SETBANDINFO, (WPARAM)band, (LPARAM)&info);
 	}
 }
@@ -1620,9 +1612,21 @@ bool EV_Win32Toolbar::_refreshItem(AV_View * pView, const EV_Toolbar_Action * pA
 			{
 				bool bGrayed = EV_TIS_ShouldBeGray(tis);
 				bool bToggled = EV_TIS_ShouldBeToggled(tis);
-				
+
+				const bool wasChecked = (SendMessageW(m_hwnd, TB_ISBUTTONCHECKED, u, 0) != 0);
+				const bool wasEnabled = (SendMessageW(m_hwnd, TB_ISBUTTONENABLED, u, 0) != 0);
+
 				SendMessageW(m_hwnd, TB_ENABLEBUTTON, u, (!bGrayed ? 1 : 0));
 				SendMessageW(m_hwnd, TB_CHECKBUTTON, u, (bToggled ? 1 : 0));
+
+				if (wasChecked != bToggled || wasEnabled != (!bGrayed) ||
+					(!bToggled && pAction->getItemType() == EV_TBIT_GroupButton))
+				{
+					RECT rcBtn;
+					memset(&rcBtn, 0, sizeof(rcBtn));
+					if (SendMessageW(m_hwnd, TB_GETRECT, u, reinterpret_cast<LPARAM>(&rcBtn)))
+						RedrawWindow(m_hwnd, &rcBtn, nullptr, RDW_INVALIDATE | RDW_ERASE | RDW_UPDATENOW);
+				}
 
 				//UT_DEBUGMSG(("refreshToolbar: ToggleButton [%s] is %s and %s\n",
 				//			 m_pToolbarLabelSet->getLabel(id)->getToolbarLabel(),
@@ -1633,10 +1637,11 @@ bool EV_Win32Toolbar::_refreshItem(AV_View * pView, const EV_Toolbar_Action * pA
 
 		case EV_TBIT_ComboBox:
 			{
-				//bool bGrayed = EV_TIS_ShouldBeGray(tis);
+				bool bGrayed = EV_TIS_ShouldBeGray(tis);
 				//bool bString = EV_TIS_ShouldUseString(tis);
 				HWND hwndCombo = _getControlWindow(id);
 				UT_return_val_if_fail(hwndCombo, true);
+				EnableWindow(hwndCombo, bGrayed ? FALSE : TRUE);
 				std::string utf8;
 				UT_String str;
 
@@ -1685,8 +1690,8 @@ bool EV_Win32Toolbar::_refreshItem(AV_View * pView, const EV_Toolbar_Action * pA
 					 */
 					case AP_TOOLBAR_ID_FMT_SIZE:
 					case AP_TOOLBAR_ID_FMT_FONT:
-						idx = SendMessageW(hwndCombo, WM_SETTEXT, (WPARAM)-1, (LPARAM)localised.c_str());
-						if (idx == CB_ERR)
+						SendMessageW(hwndCombo, CB_SETCURSEL, static_cast<WPARAM>(-1), 0);
+						if (!SetWindowTextW(hwndCombo, localised.c_str()))
 						{
 							UT_DEBUGMSG(("refreshToolbar: Failed to set text for font combo.\n"));
 						}
@@ -2042,7 +2047,7 @@ bool EV_Win32Toolbar::repopulateStyles(void)
 	SendMessageW(hwndCombo, CB_RESETCONTENT, 0 , 0);
 
 	SendMessageW(hwndCombo, CB_SETDROPPEDWIDTH,
-				(WPARAM)pStyleC->getDroppedWidth(), 0);
+				static_cast<WPARAM>(UT_ui_px_at_dpi(pStyleC->getDroppedWidth(), toolbarIconDpi(m_hwnd))), 0);
 
 //
 //	GtkList * oldlist = GTK_LIST(item->list);
@@ -2275,17 +2280,35 @@ static void s_fillSwatch(HDC hdc, const RECT & cell, COLORREF color, bool hot)
 	RECT edge = cell;
 	if (hot)
 		InflateRect(&edge, 1, 1);
-	SetDCBrushColor(hdc, hot ? RGB(0, 0, 0) : RGB(90, 90, 90));
+	const COLORREF hotBorder = UT_Win32AppsUseDarkTheme() ? RGB(255, 255, 255) : RGB(0, 0, 0);
+	SetDCBrushColor(hdc, hot ? hotBorder : RGB(90, 90, 90));
 	FrameRect(hdc, &edge, dcBrush);
 	SetDCBrushColor(hdc, prevColor);
 }
 
 static void s_paintFooter(HDC hdc, const RECT & cell, const wchar_t * text, bool hot)
 {
-	FillRect(hdc, &cell, GetSysColorBrush(hot ? COLOR_HIGHLIGHT : COLOR_BTNFACE));
+	const bool dark = UT_Win32AppsUseDarkTheme();
+	if (hot)
+	{
+		FillRect(hdc, &cell, GetSysColorBrush(COLOR_HIGHLIGHT));
+	}
+	else if (dark)
+	{
+		HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+		COLORREF prevColor = SetDCBrushColor(hdc, UT_Win32WorkspaceColor());
+		FillRect(hdc, &cell, dcBrush);
+		SetDCBrushColor(hdc, prevColor);
+	}
+	else
+	{
+		FillRect(hdc, &cell, GetSysColorBrush(COLOR_BTNFACE));
+	}
 
 	SetBkMode(hdc, TRANSPARENT);
-	SetTextColor(hdc, hot ? GetSysColor(COLOR_HIGHLIGHTTEXT) : GetSysColor(COLOR_BTNTEXT));
+	SetTextColor(hdc, hot
+		? GetSysColor(COLOR_HIGHLIGHTTEXT)
+		: (dark ? RGB(240, 240, 240) : GetSysColor(COLOR_BTNTEXT)));
 	RECT textRc = cell;
 	DrawTextW(hdc, text, -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 }
@@ -2390,6 +2413,16 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 			DestroyWindow(hwnd);
 		return 0;
 
+	case WM_ACTIVATE:
+		if (popup && LOWORD(wParam) == WA_INACTIVE)
+			DestroyWindow(hwnd);
+		return 0;
+
+	case WM_CANCELMODE:
+		if (popup)
+			DestroyWindow(hwnd);
+		return 0;
+
 	case WM_PAINT:
 		{
 			PAINTSTRUCT ps;
@@ -2406,7 +2439,17 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 				EndPaint(hwnd, &ps);
 				return 0;
 			}
-			FillRect(hdc, &rc, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
+			if (UT_Win32AppsUseDarkTheme())
+			{
+				HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+				COLORREF prevColor = SetDCBrushColor(hdc, UT_Win32WorkspaceColor());
+				FillRect(hdc, &rc, dcBrush);
+				SetDCBrushColor(hdc, prevColor);
+			}
+			else
+			{
+				FillRect(hdc, &rc, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
+			}
 
 			int gx = s_colorGridX(rc.right - rc.left, hwnd);
 			int gy = s_colorPad(hwnd);
@@ -2499,17 +2542,26 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 
 	RECT button;
 	POINT origin;
+	POINT buttonTop;
 	origin.x = 0;
 	origin.y = 0;
+	buttonTop.x = 0;
+	buttonTop.y = 0;
 	HWND toolbarHwnd = toolbar->getWindow();
 	if (toolbarHwnd && SendMessageW(toolbarHwnd, TB_GETRECT, cmd, reinterpret_cast<LPARAM>(&button)))
 	{
 		origin.x = button.left;
 		origin.y = button.bottom;
+		buttonTop.x = button.left;
+		buttonTop.y = button.top;
 		ClientToScreen(toolbarHwnd, &origin);
+		ClientToScreen(toolbarHwnd, &buttonTop);
 	}
 	else
+	{
 		GetCursorPos(&origin);
+		buttonTop = origin;
+	}
 
 	RECT windowRc = { 0, 0, s_colorClientWidth(toolbarHwnd), s_colorClientHeight(toolbarHwnd) };
 	AdjustWindowRectEx(&windowRc, WS_POPUP | WS_BORDER, FALSE, WS_EX_TOOLWINDOW | WS_EX_TOPMOST);
@@ -2538,7 +2590,7 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 	if (x + width > work.right)
 		x = work.right - width;
 	if (y + height > work.bottom)
-		y = origin.y - height;
+		y = buttonTop.y - height;
 	if (x < work.left)
 		x = work.left;
 	if (y < work.top)
@@ -2556,7 +2608,8 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 		return;
 	}
 
-	ShowWindow(hwnd, SW_SHOWNA);
+	ShowWindow(hwnd, SW_SHOW);
+	SetFocus(hwnd);
 	SetCapture(hwnd);
 }
 
@@ -2618,6 +2671,8 @@ void EV_Win32Toolbar::showChevron(POINT screen)
 		UINT flags = MF_STRING;
 		if (!(btn.fsState & TBSTATE_ENABLED))
 			flags |= MF_GRAYED;
+		if (btn.fsState & TBSTATE_CHECKED)
+			flags |= MF_CHECKED;
 		if (AppendMenuW(menu, flags, btn.idCommand, text.c_str()))
 			++added;
 	}

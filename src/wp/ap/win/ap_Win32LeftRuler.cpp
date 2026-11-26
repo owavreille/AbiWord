@@ -29,6 +29,7 @@
 #include "ap_Win32Frame.h"
 #include "ut_Win32LocaleString.h"
 #include "ut_misc.h"
+#include "fv_View.h"
 
 /*****************************************************************/
 
@@ -46,10 +47,14 @@ AP_Win32LeftRuler::AP_Win32LeftRuler(XAP_Frame * pFrame)
 {
 	m_pG = nullptr;
 	m_hwndLeftRuler = nullptr;
+	m_bReleasingCapture = false;
 }
 
 AP_Win32LeftRuler::~AP_Win32LeftRuler(void)
 {
+	if (getView())
+		reinterpret_cast<FV_View *>(getView())->setLeftRuler(nullptr);
+
 	if (m_hwndLeftRuler && IsWindow(m_hwndLeftRuler))
 		SWL(m_hwndLeftRuler, nullptr);
 
@@ -162,7 +167,7 @@ LRESULT CALLBACK AP_Win32LeftRuler::_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPAR
 	switch (iMsg)
 	{
 	case WM_CAPTURECHANGED:
-		if (reinterpret_cast<HWND>(lParam) != hwnd)
+		if (!pRuler->m_bReleasingCapture && reinterpret_cast<HWND>(lParam) != hwnd)
 			pRuler->mouseRelease(0, EV_EMB_BUTTON1, -1, 0);
 		return 0;
 
@@ -195,18 +200,33 @@ LRESULT CALLBACK AP_Win32LeftRuler::_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPAR
 		return 0;
 
 	case WM_LBUTTONUP:
+		if (GetCapture() == hwnd)
+		{
+			pRuler->m_bReleasingCapture = true;
+			ReleaseCapture();
+			pRuler->m_bReleasingCapture = false;
+		}
 		pRuler->mouseRelease(s_GetEMS(wParam),EV_EMB_BUTTON1,pG->tlu(signedLoWord(lParam)),pG->tlu(signedHiWord(lParam)));
-		ReleaseCapture();
 		return 0;
 
 	case WM_MBUTTONUP:
+		if (GetCapture() == hwnd)
+		{
+			pRuler->m_bReleasingCapture = true;
+			ReleaseCapture();
+			pRuler->m_bReleasingCapture = false;
+		}
 		pRuler->mouseRelease(s_GetEMS(wParam),EV_EMB_BUTTON2,pG->tlu(signedLoWord(lParam)),pG->tlu(signedHiWord(lParam)));
-		ReleaseCapture();
 		return 0;
 		
 	case WM_RBUTTONUP:
+		if (GetCapture() == hwnd)
+		{
+			pRuler->m_bReleasingCapture = true;
+			ReleaseCapture();
+			pRuler->m_bReleasingCapture = false;
+		}
 		pRuler->mouseRelease(s_GetEMS(wParam),EV_EMB_BUTTON3,pG->tlu(signedLoWord(lParam)),pG->tlu(signedHiWord(lParam)));
-		ReleaseCapture();
 		return 0;
 
 	case WM_LBUTTONDBLCLK:
@@ -245,7 +265,9 @@ LRESULT CALLBACK AP_Win32LeftRuler::_LeftRulerWndProc(HWND hwnd, UINT iMsg, WPAR
 
 	case WM_SYSCOLORCHANGE:
 		{
-			pG->init3dColors();
+			if (pG)
+				pG->init3dColors();
+			InvalidateRect(hwnd, nullptr, TRUE);
 			return 0;
 		}
 

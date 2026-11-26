@@ -1075,7 +1075,7 @@ cb_print_property (char const *name, GsfDocProp const *prop, DocAndLid * doc)
 						  // check with document from bug 11148
 						  const char * contents = g_value_get_string(val);
 						  
-						  if (encoding && *encoding)
+						  if (contents && !g_utf8_validate(contents, -1, nullptr) && encoding && *encoding)
 							  {
 								  tmp = g_convert_with_fallback(contents, -1, (gchar*)"UTF-8", encoding, (gchar*)"?", nullptr, nullptr, nullptr);
 							  }
@@ -1951,9 +1951,12 @@ int IE_Imp_MsWord_97::_specCharProc (wvParseStruct *ps, U16 eachchar, CHP *achp)
 		return 0;
 
 	case 21: // field end
-		ps->fieldstate--;
-		ps->fieldmiddle = 0;
-		this->_fieldProc (ps, eachchar, 0, 0x400);
+		if (ps->fieldstate)
+		{
+			ps->fieldstate--;
+			ps->fieldmiddle = 0;
+			this->_fieldProc (ps, eachchar, 0, 0x400);
+		}
 		return 0;
 
 	}
@@ -3456,7 +3459,7 @@ int IE_Imp_MsWord_97::_fieldProc (wvParseStruct *ps, U16 eachchar,
 					// for these fields we want to dump into the
 					// document anything in the argument
 					{
-						f->argument[f->fieldI] = 0;
+						f->argument[f->fieldI < FLD_SIZE ? f->fieldI : FLD_SIZE - 1] = 0;
 						UT_UCS2Char * a = f->argument;
 
 						if(*a == 0x14)
@@ -3501,10 +3504,12 @@ int IE_Imp_MsWord_97::_fieldProc (wvParseStruct *ps, U16 eachchar,
 	}
 	else if (eachchar == 0x14) // field trigger
 	{
-		f = !m_stackField.empty() ? m_stackField.top() : nullptr;
+		if (m_stackField.empty())
+			return 0;
+		f = m_stackField.top();
 		UT_return_val_if_fail(f,0);
 		
-		f->command[f->fieldI] = 0;
+		f->command[f->fieldI < FLD_SIZE ? f->fieldI : FLD_SIZE - 1] = 0;
 		f->fieldC = wvWideStrToMB (f->command);
 
 		if (this->_handleCommandField(f->fieldC))
@@ -3518,12 +3523,14 @@ int IE_Imp_MsWord_97::_fieldProc (wvParseStruct *ps, U16 eachchar,
 	}
 	if(!f)
 	{
+		if (m_stackField.empty())
+			return 0;
 		f = m_stackField.top();
 	}
 	
 	UT_return_val_if_fail(f,0);
 	
-	if (f->fieldI >= FLD_SIZE)
+	if (f->fieldI + 1 >= FLD_SIZE)
 	{
 		UT_DEBUGMSG(("DOM: Something completely absurd in the fields implementation!\n"));
 		UT_ASSERT_NOT_REACHED();
@@ -3545,7 +3552,7 @@ int IE_Imp_MsWord_97::_fieldProc (wvParseStruct *ps, U16 eachchar,
 
 	if (eachchar == 0x15) // end of field marker
 	{
-		f->fieldWhich[f->fieldI] = 0;
+		f->fieldWhich[f->fieldI < FLD_SIZE ? f->fieldI : FLD_SIZE - 1] = 0;
 		//I do not think we should convert this -- this is the field value
 		//displayed in the document; in most cases we do not need it, as we
 		//calulate it ourselves, but for instance for hyperlinks this is the
@@ -3556,6 +3563,8 @@ int IE_Imp_MsWord_97::_fieldProc (wvParseStruct *ps, U16 eachchar,
 		wvFree (f->fieldC);
 		iRet = f->fieldRet;
 
+		if (m_stackField.empty())
+			return 0;
 		f = m_stackField.top();
 		m_stackField.pop();
 		UT_return_val_if_fail(f,0);
@@ -3569,6 +3578,8 @@ bool IE_Imp_MsWord_97::_handleFieldEnd (char *command, UT_uint32 /*iDocPosition*
 	Doc_Field_t tokenIndex = F_OTHER;
 	char *token;
 	field * f = nullptr;
+	if (m_stackField.empty())
+		return false;
 	f = m_stackField.top();
 	UT_return_val_if_fail(f, true);
 
@@ -4040,6 +4051,8 @@ bool IE_Imp_MsWord_97::_handleCommandField (char *command)
 	
 	Doc_Field_t tokenIndex = F_OTHER;
 	char *token = nullptr;
+	if (m_stackField.empty())
+		return false;
 	field * f = m_stackField.top();
 	UT_return_val_if_fail(f,true);
 	bool bTypeSet = false;
@@ -4552,11 +4565,11 @@ void IE_Imp_MsWord_97::_table_open ()
  */
 void IE_Imp_MsWord_97::setNumberVector(UT_NumberVector & vec, UT_sint32 i, UT_sint32 val)
 {
-	while(i > static_cast<UT_sint32>(vec.size() +1))
+	while (static_cast<UT_sint32>(vec.size()) <= i)
 	{
 		vec.addItem(0);
 	}
-	vec.addItem(val); // we are sure that it will be appened at index i
+	vec.setNthItem(i, val, nullptr);
 }
 
 /*!
@@ -4664,7 +4677,7 @@ bool IE_Imp_MsWord_97::_build_ColumnWidths(UT_NumberVector & colWidths)
 					UT_sint32 k =0;
 					for(k=0; k<static_cast<UT_sint32>(m_vecColumnWidths.size()); k++)
 					{
-						MsColSpan * pMulSpan = m_vecColumnWidths.getNthItem(i);
+						MsColSpan * pMulSpan = m_vecColumnWidths.getNthItem(k);
 						UT_nonnull_or_continue(pMulSpan);
 						UT_sint32 iMulLeft = pMulSpan->iLeft;
 						UT_sint32 iMulRight = pMulSpan->iRight;
@@ -4982,15 +4995,15 @@ void IE_Imp_MsWord_97::_cell_open (const wvParseStruct *ps, const PAP *apap)
 									  sMapIcoToColor(apap->ptap.rgtc[m_iCurrentCell].brcTop.ico, true).c_str(),
 									  brc_to_pixel(apap->ptap.rgtc[m_iCurrentCell].brcTop.dptLineWidth),
 									  sConvertLineStyle(apap->ptap.rgtc[m_iCurrentCell].brcTop.brcType));
-	  propBuffer += UT_String_sprintf("left-color:%s; left-thickness:%fpx; left-style:%d;",
+	  propBuffer += UT_String_sprintf("left-color:%s; left-thickness:%fpt; left-style:%d;",
 									  sMapIcoToColor(apap->ptap.rgtc[m_iCurrentCell].brcLeft.ico, true).c_str(),
 									  brc_to_pixel(apap->ptap.rgtc[m_iCurrentCell].brcLeft.dptLineWidth),
 									  sConvertLineStyle(apap->ptap.rgtc[m_iCurrentCell].brcLeft.brcType));
-	  propBuffer += UT_String_sprintf("bot-color:%s; bot-thickness:%fpx; bot-style:%d;",
+	  propBuffer += UT_String_sprintf("bot-color:%s; bot-thickness:%fpt; bot-style:%d;",
 									  sMapIcoToColor(apap->ptap.rgtc[m_iCurrentCell].brcBottom.ico, true).c_str(),
 									  brc_to_pixel(apap->ptap.rgtc[m_iCurrentCell].brcBottom.dptLineWidth),
 									  sConvertLineStyle(apap->ptap.rgtc[m_iCurrentCell].brcBottom.brcType));
-	  propBuffer += UT_String_sprintf("right-color:%s; right-thickness:%fpx; right-style:%d",
+	  propBuffer += UT_String_sprintf("right-color:%s; right-thickness:%fpt; right-style:%d",
 									  sMapIcoToColor(apap->ptap.rgtc[m_iCurrentCell].brcRight.ico, true).c_str(),
 									  brc_to_pixel(apap->ptap.rgtc[m_iCurrentCell].brcRight.dptLineWidth),
 									  sConvertLineStyle(apap->ptap.rgtc[m_iCurrentCell].brcRight.brcType));
@@ -5511,34 +5524,31 @@ int IE_Imp_MsWord_97::_handleBookmarks(const wvParseStruct *ps)
 			}
 		}
 		delete [] m_pBookmarks;
+		m_pBookmarks = nullptr;
 	}
-	BKF *bkf;
-	BKL *bkl;
-	U32 *posf, *posl, nobkf, nobkl;
+	BKF *bkf = nullptr;
+	BKL *bkl = nullptr;
+	U32 *posf = nullptr, *posl = nullptr, nobkf = 0, nobkl = 0;
 
-	if(!wvGetBKF_PLCF (&bkf, &posf, &nobkf, ps->fib.fcPlcfbkf, ps->fib.lcbPlcfbkf, ps->tablefd))
+	if(wvGetBKF_PLCF (&bkf, &posf, &nobkf, ps->fib.fcPlcfbkf, ps->fib.lcbPlcfbkf, ps->tablefd))
 	{
-		m_iBookmarksCount = nobkf;
-	}
-	else
+		wvFree(bkf);
+		wvFree(posf);
 		m_iBookmarksCount = 0;
+		return 0;
+	}
+	m_iBookmarksCount = nobkf;
 
-	if(!wvGetBKL_PLCF (&bkl, &posl, &nobkl, ps->fib.fcPlcfbkl, ps->fib.lcbPlcfbkl, ps->fib.fcPlcfbkf, ps->fib.lcbPlcfbkf, ps->tablefd))
+	if(wvGetBKL_PLCF (&bkl, &posl, &nobkl, ps->fib.fcPlcfbkl, ps->fib.lcbPlcfbkl, ps->fib.fcPlcfbkf, ps->fib.lcbPlcfbkf, ps->tablefd))
 	{
-		m_iBookmarksCount += nobkl;
+		wvFree(bkf);
+		wvFree(posf);
+		wvFree(bkl);
+		wvFree(posl);
+		m_iBookmarksCount = 0;
+		return 0;
 	}
-	else
-	{
-		if(m_iBookmarksCount > 0)
-		{
-			//g_free the bkf and posf
-			wvFree(bkf);
-			wvFree(posf);
-			bkf = nullptr;
-			posf = nullptr;
-			m_iBookmarksCount = 0;
-		}
-	}
+	m_iBookmarksCount += nobkl;
 	if (nobkl != nobkf)
 	{
 		wvFree(bkf);
@@ -5667,6 +5677,11 @@ void IE_Imp_MsWord_97::_handleNotes(const wvParseStruct *ps)
 			UT_return_if_fail(pPLCF_ref && pPLCF_txt);
 			for(i = 0; i < m_iFootnotesCount; i++)
 			{
+				if ((i + 1) * sizeof(UT_uint32) > ps->fib.lcbPlcffndRef) {
+					bNoteError = true;
+					m_iFootnotesCount = i;
+					break;
+				}
 				m_pFootnotes[i].ref_pos = pPLCF_ref[i];
 				m_pFootnotes[i].txt_pos = pPLCF_txt[i] + m_iFootnotesStart;
 				m_pFootnotes[i].txt_len = pPLCF_txt[i+1] - pPLCF_txt[i];
@@ -5679,7 +5694,7 @@ void IE_Imp_MsWord_97::_handleNotes(const wvParseStruct *ps)
 					bNoteError = true;
 					// We are done with the footnotes here.
 					// This is as graceful as it can be.
-					m_iFootnotesCount--;
+					m_iFootnotesCount = i;
 					break;
 				}
 				UT_uint32 iType = ((UT_uint16*)pPLCF_ref)[idx];
@@ -5691,6 +5706,11 @@ void IE_Imp_MsWord_97::_handleNotes(const wvParseStruct *ps)
 
 			wvFree(pPLCF_ref);
 			wvFree(pPLCF_txt);
+		}
+		else
+		{
+			DELETEPV(m_pFootnotes);
+			m_iFootnotesCount = 0;
 		}
 
 		// next, deal footnote formatting matters
@@ -5779,6 +5799,11 @@ void IE_Imp_MsWord_97::_handleNotes(const wvParseStruct *ps)
 			UT_return_if_fail(pPLCF_ref && pPLCF_txt);
 			for(i = 0; i < m_iEndnotesCount; i++)
 			{
+				if ((i + 1) * sizeof(UT_uint32) > ps->fib.lcbPlcfendRef) {
+					bNoteError = true;
+					m_iEndnotesCount = i;
+					break;
+				}
 				m_pEndnotes[i].ref_pos = pPLCF_ref[i];
 				m_pEndnotes[i].txt_pos = pPLCF_txt[i] + m_iEndnotesStart;
 				m_pEndnotes[i].txt_len = pPLCF_txt[i+1] - pPLCF_txt[i];
@@ -5791,7 +5816,7 @@ void IE_Imp_MsWord_97::_handleNotes(const wvParseStruct *ps)
 					bNoteError = true;
 					// We are done with the endnotes here.
 					// This is as graceful as it can be.
-					m_iEndnotesCount--;
+					m_iEndnotesCount = i;
 					break;
 				}
 				UT_uint32 iType = ((UT_uint16*)pPLCF_ref)[idx];
@@ -5803,6 +5828,11 @@ void IE_Imp_MsWord_97::_handleNotes(const wvParseStruct *ps)
 
 			wvFree(pPLCF_ref);
 			wvFree(pPLCF_txt);
+		}
+		else
+		{
+			DELETEPV(m_pEndnotes);
+			m_iEndnotesCount = 0;
 		}
 		// next, deal endnote formatting matters
 		PP_PropertyVector props = {
@@ -6861,6 +6891,11 @@ void IE_Imp_MsWord_97::_handleHeaders(const wvParseStruct *ps)
 			}
 
 			wvFree(pPLCF_txt);
+		}
+		else
+		{
+			DELETEPV(m_pHeaders);
+			m_iHeadersCount = 0;
 		}
 	}
 }

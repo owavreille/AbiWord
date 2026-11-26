@@ -244,7 +244,7 @@ const char* XAP_EncodingManager::strToNative(const char* in,const char* charset,
 const char* XAP_EncodingManager::strToNative(const char* in, const char* charset, char* buf, int bufsz,
 											 bool bReverse, bool bUseSysEncoding) const
 {
-	if (!charset || !*charset || !in || !*in || !buf)
+	if (!charset || !*charset || !in || !*in || !buf || bufsz <= 1)
 		return in; /*won't translate*/
 #if 1
 	// TODO this gets around the fact that gtk 1.2 cannot handle UTF-8 input
@@ -274,14 +274,14 @@ const char* XAP_EncodingManager::strToNative(const char* in, const char* charset
 	const char* inptr = in;
 	char* outptr = buf;
 	size_t inbytes = strlen(in);
-	size_t outbytes = bufsz;	
+	size_t outbytes = static_cast<size_t>(bufsz - 1);
 	size_t donecnt = UT_iconv(iconv_handle, &inptr, &inbytes, &outptr, &outbytes);
 	const char* retstr = in;
 
 	if (donecnt != (size_t) -1 && inbytes == 0)
 	{
 		retstr = buf;
-		buf[bufsz - outbytes] = '\0';/*for sure*/
+		buf[(bufsz - 1) - outbytes] = '\0';/*for sure*/
 	}
 
 	UT_iconv_close(iconv_handle);
@@ -691,7 +691,7 @@ static const _map MSCodepagename_to_charset_name_map[]=
 	{ "CP852",		"CP852" },				// MS-DOS Slavic (Latin II)
 	{ "CP855",		"CP855" },				// IBM Cyrillic (primarily Russian)
 	{ "CP857",		"CP857" },				// IBM Turkish
-	{ "CP860",		"CP861" },				// MS-DOS Portuguese
+	{ "CP860",		"CP860" },				// MS-DOS Portuguese
 	{ "CP861",		"CP861" },				// MS-DOS Icelandic
 	{ "CP862",		"CP862" },				// Hebrew
 	{ "CP863",		"CP863" },				// MS-DOS Canadian-French
@@ -1204,13 +1204,17 @@ const XAP_LangInfo* XAP_EncodingManager::findLangInfoByLocale(const char* locale
 {
 	if (!locale)
 		return nullptr;
-		
+
+	size_t len = strlen(locale);
+	if (len < 2)
+		return nullptr;
+
 	std::string strISOName(locale, 2);
 	std::string strCountryCode;
-	
-	if (strlen(locale) == 5)
+
+	if (len >= 5 && (locale[2] == '-' || locale[2] == '_'))
 	{
-		strCountryCode = (locale + 3);
+		strCountryCode.assign(locale + 3, 2);
 	}
 	
 	const XAP_LangInfo* cur = langinfo;
@@ -1570,7 +1574,7 @@ const char** localeinfo_combinations(const char* prefix,const char* suffix,const
 	static UT_String buf[5];
 	static const char *ptrs[6];
 
-	for (size_t i = 1; i < 5; i++)
+	for (size_t i = 0; i < 5; i++)
 		buf[i] = prefix;
 
     int idx = 0;
@@ -1615,10 +1619,11 @@ const char** localeinfo_combinations(const char* prefix,const char* suffix,const
 	buf[idx] += enc;
 	if(suffix && *suffix)
 		buf[idx++] += suffix;
+	else idx++;
 
-	for (size_t j = 0; j < 5; ++j)
+	for (int j = 0; j < idx; ++j)
 		ptrs[j] = buf[j].c_str();
-	ptrs[5] = nullptr;
+	ptrs[idx] = nullptr;
 	
     return ptrs;
 }

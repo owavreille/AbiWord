@@ -117,6 +117,7 @@ protected:
 	// so a hidden toolbar does not leave an empty strip over the rulers.
 	void						_layoutRebar(int frameWidth, int frameHeight);
 	virtual void				_refreshChrome(void);
+	virtual void				_refreshRulersForDpi(void) {}
 	UT_uint32					_getSizeWidth(void) { return m_iSizeWidth; }
 	UT_uint32					_getSizeHeight(void) { return m_iSizeHeight; }
 

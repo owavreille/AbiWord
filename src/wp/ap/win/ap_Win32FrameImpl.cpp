@@ -135,6 +135,36 @@ void AP_Win32FrameImpl::_refreshChrome(void)
 		InvalidateRect(m_hWndGripperHack, nullptr, TRUE);
 }
 
+void AP_Win32FrameImpl::_refreshRulersForDpi(void)
+{
+	XAP_Frame * pFrame = getFrame();
+	AP_FrameData * pData = pFrame ? static_cast<AP_FrameData *>(pFrame->getFrameData()) : nullptr;
+	if (!pData)
+		return;
+
+	if (pData->m_pTopRuler && pData->m_pTopRuler->getGraphics())
+		static_cast<GR_Win32Graphics *>(pData->m_pTopRuler->getGraphics())->refreshDeviceScale();
+
+	if (pData->m_pLeftRuler && pData->m_pLeftRuler->getGraphics())
+		static_cast<GR_Win32Graphics *>(pData->m_pLeftRuler->getGraphics())->refreshDeviceScale();
+
+	if (pData->m_pTopRuler && pData->m_pLeftRuler && pData->m_pLeftRuler->getGraphics())
+	{
+		const UT_uint32 xLeftRulerWidth =
+			pData->m_pLeftRuler->getGraphics()->tdu(pData->m_pLeftRuler->getWidth());
+		pData->m_pTopRuler->setOffsetLeftRuler(xLeftRulerWidth);
+	}
+
+	RECT r;
+	if (m_hwndContainer && m_hwndDocument && s_clientRect(m_hwndContainer, r))
+		_onSize(pData, r.right - r.left, r.bottom - r.top);
+
+	if (m_hwndTopRuler)
+		InvalidateRect(m_hwndTopRuler, nullptr, TRUE);
+	if (m_hwndLeftRuler)
+		InvalidateRect(m_hwndLeftRuler, nullptr, TRUE);
+}
+
 HWND AP_Win32FrameImpl::_createDocumentWindow(XAP_Frame *pFrame, HWND hwndParent,
 							UT_uint32 iLeft, UT_uint32 iTop,
 							UT_uint32 iWidth, UT_uint32 iHeight)
@@ -387,14 +417,15 @@ void AP_Win32FrameImpl::_createTopRuler(XAP_Frame *pFrame)
 
 	// get the width from the left ruler and stuff it into the top ruler.
 	UT_uint32 xLeftRulerWidth = 0;
-#if 0   // Why? We still want to draw the corner, don't we? Also, the width value is messed when leaving normal mode.
-	if( m_hwndLeftRuler )
+	if (m_hwndLeftRuler)
 	{
-		AP_Win32LeftRuler * pWin32LeftRuler = nullptr;
-		pWin32LeftRuler =  static_cast<AP_Win32LeftRuler *>(static_cast<AP_FrameData *>(pFrame->getFrameData())->m_pLeftRuler);
-		xLeftRulerWidth = pWin32LeftRuler->getWidth();
+		AP_Win32LeftRuler * pWin32LeftRuler =
+			static_cast<AP_Win32LeftRuler *>(static_cast<AP_FrameData *>(pFrame->getFrameData())->m_pLeftRuler);
+		if (pWin32LeftRuler)
+			xLeftRulerWidth = pWin32LeftRuler->getGraphics()
+				? pWin32LeftRuler->getGraphics()->tdu(pWin32LeftRuler->getWidth())
+				: 0;
 	}
-#endif
 	pWin32TopRuler->setOffsetLeftRuler(xLeftRulerWidth);
 }
  

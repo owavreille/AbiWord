@@ -716,13 +716,7 @@ void UT_Win32RefreshStatusFont(HWND bar)
 	static HFONT font = nullptr;
 	static HFONT retired = nullptr;
 	static int dpi = -1;
-	HDC dc = GetDC(bar);
-	int now = 96;
-	if (dc)
-	{
-		now = GetDeviceCaps(dc, LOGPIXELSX);
-		ReleaseDC(bar, dc);
-	}
+	int now = UT_Win32WindowDpi(bar);
 	if (now < 96)
 		now = 96;
 	if (!font || dpi != now)

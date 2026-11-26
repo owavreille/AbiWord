@@ -68,7 +68,8 @@ XAP_Win32App::XAP_Win32App(HINSTANCE hInstance, const char * szAppName)
 :	XAP_App(szAppName),
 	m_hInstance(hInstance),
 	m_dialogFactory(new AP_Win32DialogFactory(this)),
-	m_controlFactory(new AP_Win32Toolbar_ControlFactory)
+	m_controlFactory(new AP_Win32Toolbar_ControlFactory),
+	m_pSlurp(nullptr)
 {
 	UT_return_if_fail(hInstance);
 
@@ -149,8 +150,11 @@ XAP_Win32App::XAP_Win32App(HINSTANCE hInstance, const char * szAppName)
 
 XAP_Win32App::~XAP_Win32App(void)
 {
-	m_pSlurp->disconnectSlurper();
-	DELETEP(m_pSlurp);
+	if (m_pSlurp)
+	{
+		m_pSlurp->disconnectSlurper();
+		DELETEP(m_pSlurp);
+	}
 	delete m_dialogFactory;
 	delete m_controlFactory;
 }
@@ -227,10 +231,12 @@ UT_uint32 XAP_Win32App::_getExeDir(LPWSTR pDirBuf, UT_uint32 iBufLen)
 
 static bool isWriteable(LPWSTR lpPath)
 {
+	if (!lpPath)
+		return false;
 	bool  result = false;
 	DWORD len = lstrlenW(lpPath);
-	DWORD rem = MAX_PATH - len - 1;
-	if (rem < 13) return false;
+	if (len + 13 >= PATH_MAX)
+		return false;
 
 	lstrcpyW(&lpPath[len],L"/abiword.flg");
 	if (CreateDirectoryW(lpPath,nullptr)) {
@@ -407,16 +413,18 @@ void XAP_Win32App::_setAbiSuiteLibDir(void)
 		if (datadirLen > 0 && datadirLen < PATH_MAX)
 		{
 		utf8 = (char*) getUTF8String(buf);
+		if (!utf8)
+			return;
 		char * p = utf8;
 		int len = strlen(p);
-		if ( (p[0]=='"') && (p[len-1]=='"') )
+		if ( len >= 2 && (p[0]=='"') && (p[len-1]=='"') )
 		{
 			// trim leading and trailing DQUOTES
 			p[len-1]=0;
 			p++;
 			len -= 2;
 		}
-		if (p[len-1]=='\\')				// trim trailing slash
+		if (len > 0 && p[len-1]=='\\')				// trim trailing slash
 			p[len-1] = 0;
 		XAP_App::_setAbiSuiteLibDir(p);
 		return;

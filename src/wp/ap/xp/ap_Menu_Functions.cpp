@@ -136,8 +136,8 @@ Defun_EV_GetMenuItemComputedLabel_Fn(ap_GetLabel_Recent)
     {
         const char * szFormat = pLabel->getMenuLabel();
         const char * szURI = pPrefs->getRecent(ndx);
-        char *szFname = g_filename_from_uri(szURI, nullptr, nullptr);
-        char *szRecent = g_filename_to_utf8(szFname, -1, nullptr, nullptr, nullptr);
+        char *szFname = szURI ? g_filename_from_uri(szURI, nullptr, nullptr) : nullptr;
+        char *szRecent = szFname ? g_filename_to_utf8(szFname, -1, nullptr, nullptr, nullptr) : g_strdup(szURI);
         char *szBasename = szRecent ? g_path_get_basename(szRecent) : g_strdup ("");
 		char *szMenuname = s_escapeMenuString(szBasename);
         g_free(szFname);
@@ -328,7 +328,7 @@ Defun_EV_GetMenuItemComputedLabel_Fn(ap_GetLabel_WindowMore)
 	// we return the static menu label.  if not, we return
 	// null string to tell the menu code to remove this
 	// item from the menu.
-	if (8 < pApp->getFrameCount())
+	if (9 < pApp->getFrameCount())
 		return pLabel->getMenuLabel();
 
 	return nullptr;
@@ -677,9 +677,7 @@ Defun_EV_GetMenuItemState_Fn(ap_GetState_haveSemItems)
 		return EV_MIS_Gray;
 
 	EV_Menu_ItemState s = EV_MIS_ZERO ;
-    return s;
 
-    
     PD_RDFContacts contacts = rdf->getContacts();
 
     std::set< std::string > xmlids;
@@ -727,6 +725,7 @@ Defun_EV_GetMenuItemComputedLabel_Fn(ap_GetLabel_Suggest)
 	XAP_App * pApp = XAP_App::getApp();
 	UT_return_val_if_fail (pApp && pLabel, nullptr);
 	XAP_Frame * frame = pApp->getLastFocussedFrame();
+	UT_return_val_if_fail(frame != nullptr, nullptr);
 
 	AV_View * pAV_View = frame->getCurrentView();
 	ABIWORD_VIEW;

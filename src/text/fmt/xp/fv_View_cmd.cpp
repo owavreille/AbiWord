@@ -6025,10 +6025,13 @@ void FV_View::cmdContextIgnoreAll(void)
 	UT_sint32 iLength, iPTLength, iBlockPos;
 
 	fl_BlockSpellIterator BSI(pBL, pPOB->getOffset());
-	BSI.nextWordForSpellChecking(pBuf, iLength, iBlockPos, iPTLength);
+	if (!BSI.nextWordForSpellChecking(pBuf, iLength, iBlockPos, iPTLength))
+		return;
 	
 	// make the change
-	getDictForSelection ()->ignoreWord ((const UT_UCS4Char *)pBuf, (size_t)iLength);
+	SpellChecker * pChecker = getDictForSelection();
+	UT_return_if_fail(pChecker);
+	pChecker->ignoreWord ((const UT_UCS4Char *)pBuf, (size_t)iLength);
 	{
 		// remove the squiggles, too
 		fl_DocSectionLayout * pSL = m_pLayout->getFirstSection();
@@ -6072,10 +6075,13 @@ void FV_View::cmdContextAdd(void)
 	UT_sint32 iLength, iPTLength, iBlockPos;
 
 	fl_BlockSpellIterator BSI(pBL, pPOB->getOffset());
-	BSI.nextWordForSpellChecking(pBuf, iLength, iBlockPos, iPTLength);
+	if (!BSI.nextWordForSpellChecking(pBuf, iLength, iBlockPos, iPTLength))
+		return;
 
 	// make the change
-	if (getDictForSelection ()->addToCustomDict (pBuf, iLength))
+	SpellChecker * pChecker = getDictForSelection();
+	UT_return_if_fail(pChecker);
+	if (pChecker->addToCustomDict (pBuf, iLength))
 	{
 		// remove the squiggles, too
 		fl_DocSectionLayout * pSL = m_pLayout->getFirstSection();

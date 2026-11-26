@@ -21,6 +21,8 @@
 #include "config.h"
 #endif
 
+#include <stdio.h>
+
 #include "xap_App.h"
 #include "xap_Frame.h"
 #include "xap_Strings.h"
@@ -165,7 +167,7 @@ void SpellChecker::correctWord (const UT_UCS4Char * /*toCorrect*/, size_t /*toCo
 	
 	UT_uint32 id = lang.getIndxFromCode(szLang);
 	const gchar* pLang  = lang.getNthLangName(id);	
-	sprintf(szLangName, "%s [%s]", pLang, szLang); // language name [language_code]
+	snprintf(szLangName, sizeof(szLangName), "%s [%s]", pLang ? pLang : "", szLang ? szLang : ""); // language name [language_code]
 
 	UT_String buf (UT_String_sprintf(pApp->getStringSet ()->getValue (XAP_STRING_ID_SPELL_CANTLOAD_DICT),
 									 szLangName));
