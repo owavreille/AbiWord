@@ -23,6 +23,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include "ut_types.h"
+#include "ut_unicode.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_string.h"
@@ -787,51 +788,20 @@ UT_Error IE_Imp_Text::_recognizeEncoding(GsfInput * fp)
 				break;
 			scanned += toRead;
 
-			for (UT_uint32 i = 0; i < toRead; ++i)
+			for (UT_uint32 i = 0; i < toRead && !bInvalidUtf8; ++i)
 			{
-				const unsigned char ch = static_cast<unsigned char>(szBuf[i]);
-				if (ch == 0)
-				{
+				const int next = UT_utf8_feed(utf8Expected, static_cast<unsigned char>(szBuf[i]));
+				if (next < 0)
 					bInvalidUtf8 = true;
-					break;
-				}
-				if (utf8Expected > 0)
-				{
-					if ((ch & 0xc0) != 0x80)
-					{
-						bInvalidUtf8 = true;
-						break;
-					}
-					--utf8Expected;
-				}
-				else if ((ch & 0x80) == 0)
-				{
-					continue;
-				}
-				else if ((ch & 0xe0) == 0xc0)
-				{
-					utf8Expected = 1;
-				}
-				else if ((ch & 0xf0) == 0xe0)
-				{
-					utf8Expected = 2;
-				}
-				else if ((ch & 0xf8) == 0xf0)
-				{
-					utf8Expected = 3;
-				}
 				else
-				{
-					bInvalidUtf8 = true;
-					break;
-				}
+					utf8Expected = next;
 			}
 		}
 
 		const bool reachedEof = (gsf_input_remaining(fp) <= 0);
 		gsf_input_seek(fp, 0, G_SEEK_SET);
 
-		if (!bInvalidUtf8 && (!reachedEof || utf8Expected == 0))
+		if (UT_utf8_tail_is_text(bInvalidUtf8, reachedEof, utf8Expected))
 		{
 			_setEncoding("UTF-8");
 			return UT_OK;
@@ -991,52 +961,17 @@ UT_Error IE_Imp_Text::_parseStream(ImportStream * pStream)
 
 		case UCS_BOM:
 			// This is Byte Order Mark at the start of file, Zero Width Non-Breaking Space elsewhere
-			if (bFirstChar)
+			if (!UT_text_keeps_bom(bFirstChar, c))
 				break;
 
 			X_ReturnNoMemIfError(gbBlock.append(reinterpret_cast<UT_GrowBufElement*>(&c), 1));
 			break;
 
-		// if we encounter any of the following characters we will
-		// substitute a '?' as they correspond to control characters,
-		// though some text files use them for their character representations
-		// We do this instead of of immediately returning an error
-		// (and assuming they have no business in a text file) so we can
-		// still show usable text to a user who has one of these files.
-		case 0x0000:
-		case 0x0001:
-		case 0x0002:
-		case 0x0003:
-		case 0x0004:
-		case 0x0005:
-		case 0x0006:
-		case 0x0007:
-		case 0x0008:
-		case 0x000e:
-		case 0x000f:
-		case 0x0010:
-		case 0x0011:
-		case 0x0012:
-		case 0x0013:
-		case 0x0014:
-		case 0x0015:
-		case 0x0016:
-		case 0x0017:
-		case 0x0018:
-		case 0x0019:
-		case 0x001a:
-		case 0x001b:
-		case 0x001c:
-		case 0x001d:
-		case 0x001e:
-		case 0x001f:
-			// UT_ASSERT(!(c <= 0x001f));
-			c = '?';
-			/* return UT_ERROR; // fall through with modified character */
-
-
-			// fall through
 		default:
+			// C0 controls become '?' so the rest of the file stays readable.
+			// U+FEFF is not in that set.
+			if (UT_text_control_is_question(c))
+				c = '?';
 			X_ReturnNoMemIfError(gbBlock.append(reinterpret_cast<UT_GrowBufElement*>(&c),1));
 			break;
 		}

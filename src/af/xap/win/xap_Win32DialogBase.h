@@ -112,7 +112,7 @@ protected:
 
 	void centerDialog();
 	void setHandle(HWND hWnd) { m_hDlg = hWnd; };
-	void setDialog(XAP_Dialog * pDlg) { m_pDlg = pDlg; };
+	void setDialog(XAP_Dialog * pDlg);
 	bool isDialogValid() const;
 
 protected:

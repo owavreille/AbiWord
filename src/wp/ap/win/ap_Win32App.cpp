@@ -1209,7 +1209,7 @@ bool AP_Win32App::_pasteFormatFromClipboard(PD_DocumentRange * pDocRange, const 
 
 bool AP_Win32App::canPasteFromClipboard(void) const
 {
-	if (!getLastFocussedFrame() || !m_pClipboard) 
+	if (!UT_paste_may_ask(getLastFocussedFrame(), m_pClipboard))
 		return false;
 
 	// IsClipboardFormatAvailable() does not require OpenClipboard(); avoid

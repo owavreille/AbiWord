@@ -27,6 +27,7 @@
 
 #include <pd_DocumentRDF.h>
 #include "ut_std_string.h"
+#include "ut_unicode.h"
 #include "ie_exp_DocRangeListener.h"
 #include "pl_ListenerCoupleCloser.h"
 
@@ -236,28 +237,27 @@ UT_Error IE_Exp_HTML::copyToBuffer(PD_DocumentRange * pDocRange,UT_ByteBuf *  bu
 
     GsfInput * fData = gsf_input_stdio_new(szTempFileName, &err);
     g_clear_error(&err);
+    const bool opened = fData != nullptr;
+    bool hadBytes = false;
+    bool read = false;
     if (fData)
     {
         gsf_off_t siz = gsf_input_size(fData);
-        if (siz > 0)
+        hadBytes = siz > 0;
+        if (hadBytes)
         {
             const UT_Byte * pData = gsf_input_read(fData, siz, nullptr);
             if (pData)
             {
                 UT_DEBUGMSG(("Writing %d bytes to clipboard \n", (UT_sint32)siz));
                 bufHTML->append(pData, siz);
-            }
-            else
-            {
-                aerr = UT_ERROR;
+                read = true;
             }
         }
         g_object_unref(fData);
     }
-    else
-    {
+    if (UT_copy_failed(opened, hadBytes, read))
         aerr = UT_ERROR;
-    }
     delete pNewExp;
     delete pRangeListener;
     UNREFP( outDoc);

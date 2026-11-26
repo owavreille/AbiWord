@@ -706,3 +706,116 @@ inline int UT_cdata_escape (const unsigned char * src, unsigned srcLen,
 	}
 	return static_cast<int>(at);
 }
+
+// A leading U+FEFF is a byte-order mark. The same character later in the file stays.
+inline bool UT_text_keeps_bom (bool first, unsigned code)
+{
+	if (code != 0xFEFFu)
+		return true;
+	return !first;
+}
+
+// These C0 controls are rewritten as '?' . U+FEFF is not one of them.
+inline bool UT_text_control_is_question (unsigned code)
+{
+	if (code <= 0x08u)
+		return true;
+	return code >= 0x0Eu && code <= 0x1Fu;
+}
+
+// Next expected UTF-8 continuation count. -1 means the byte is not UTF-8.
+inline int UT_utf8_feed (int expected, unsigned char ch)
+{
+	if (ch == 0)
+		return -1;
+	if (expected > 0)
+		return ((ch & 0xc0) == 0x80) ? expected - 1 : -1;
+	if ((ch & 0x80) == 0)
+		return 0;
+	if ((ch & 0xe0) == 0xc0)
+		return 1;
+	if ((ch & 0xf0) == 0xe0)
+		return 2;
+	if ((ch & 0xf8) == 0xf0)
+		return 3;
+	return -1;
+}
+
+// A tail that ended mid-sequence is still text when the scan stopped at the cap.
+inline bool UT_utf8_tail_is_text (bool invalid, bool atEnd, int expected)
+{
+	return !invalid && (!atEnd || expected == 0);
+}
+
+// -1 is little-endian UTF-16, 1 is big-endian, 0 is neither.
+inline int UT_text_endian (const char * name, const char * ucs2le, const char * ucs2be)
+{
+	if (!name)
+		return 0;
+	if ((ucs2le && UT_ascii_eq_ci(name, ucs2le)) || UT_ascii_eq_ci(name, "UTF-16LE"))
+		return -1;
+	if ((ucs2be && UT_ascii_eq_ci(name, ucs2be)) || UT_ascii_eq_ci(name, "UTF-16BE"))
+		return 1;
+	return 0;
+}
+
+// Clipboard text may choose Unicode only when the caller did not name an encoding.
+inline bool UT_text_may_pick_unicode (bool clipboard, bool explicitSet, bool encodingEmpty)
+{
+	return clipboard && !explicitSet && encodingEmpty;
+}
+
+// An unopened copy, or a read that returned no bytes of a non-empty file, failed.
+inline bool UT_copy_failed (bool opened, bool hadBytes, bool read)
+{
+	if (!opened)
+		return true;
+	return hadBytes && !read;
+}
+
+inline bool UT_help_opens (const void * dialog)
+{
+	return dialog != nullptr;
+}
+
+template <typename T>
+inline T * UT_dialog_bind (T * dialog)
+{
+	return dialog;
+}
+
+inline bool UT_stylist_is_this (int id, int expected)
+{
+	return id == expected;
+}
+
+inline bool UT_gdi_restores (const void * previous)
+{
+	return previous != nullptr;
+}
+
+inline int UT_print_copy_count (bool hasField, int copies, int dialogCopies)
+{
+	if (hasField && copies > 0)
+		return copies;
+	if (dialogCopies > 0)
+		return dialogCopies;
+	return 1;
+}
+
+// More than one copy is printed by AbiWord, so the temporary DEVMODE is a single copy.
+inline bool UT_print_temp_is_single (int copies)
+{
+	return copies > 1;
+}
+
+inline bool UT_paste_may_ask (const void * frame, const void * board)
+{
+	return frame != nullptr && board != nullptr;
+}
+
+// The search for an opening tag walks backward. The replay walks forward.
+inline bool UT_listener_walks_forward (int pass)
+{
+	return pass > 0;
+}

@@ -446,6 +446,76 @@ TFTEST_MAIN("CDATA splits a math end, an ODF href keeps the file and UTF-8 math 
 	TFPASS(emoji.byteLength() == 4);
 }
 
+TFTEST_MAIN("Text past the first block, help without a dialog, GDI, stylist, print and paste")
+{
+	TFPASS(!UT_text_keeps_bom(true, 0xFEFF));
+	TFPASS(UT_text_keeps_bom(false, 0xFEFF));
+	TFPASS(UT_text_keeps_bom(true, 'A'));
+	TFPASS(UT_text_control_is_question(0x01));
+	TFPASS(UT_text_control_is_question(0x08));
+	TFPASS(UT_text_control_is_question(0x0E));
+	TFPASS(UT_text_control_is_question(0x1F));
+	TFPASS(!UT_text_control_is_question(0x09));
+	TFPASS(!UT_text_control_is_question(0x0A));
+	TFPASS(!UT_text_control_is_question(0x0B));
+	TFPASS(!UT_text_control_is_question(0x0C));
+	TFPASS(!UT_text_control_is_question(0x0D));
+	TFPASS(!UT_text_control_is_question(0x20));
+	TFPASS(!UT_text_control_is_question(0xFEFF));
+
+	TFPASS(UT_utf8_feed(0, 'A') == 0);
+	TFPASS(UT_utf8_feed(0, 0xC3) == 1);
+	TFPASS(UT_utf8_feed(1, 0xA9) == 0);
+	TFPASS(UT_utf8_feed(0, 0xE9) == 2);
+	TFPASS(UT_utf8_feed(0, 0x00) == -1);
+	TFPASS(UT_utf8_feed(0, 0x80) == -1);
+	TFPASS(UT_utf8_feed(0, 0xFF) == -1);
+	TFPASS(UT_utf8_tail_is_text(false, false, 1));
+	TFPASS(!UT_utf8_tail_is_text(false, true, 1));
+	TFPASS(UT_utf8_tail_is_text(false, true, 0));
+	TFPASS(!UT_utf8_tail_is_text(true, false, 0));
+
+	TFPASS(UT_text_endian("UTF-16LE", "UCS-2LE", "UCS-2BE") == -1);
+	TFPASS(UT_text_endian("utf-16be", "UCS-2LE", "UCS-2BE") == 1);
+	TFPASS(UT_text_endian("UCS-2LE", "UCS-2LE", "UCS-2BE") == -1);
+	TFPASS(UT_text_endian("UTF-8", "UCS-2LE", "UCS-2BE") == 0);
+	TFPASS(UT_text_endian(nullptr, "UCS-2LE", "UCS-2BE") == 0);
+	TFPASS(UT_text_may_pick_unicode(true, false, true));
+	TFPASS(!UT_text_may_pick_unicode(true, true, false));
+	TFPASS(!UT_text_may_pick_unicode(false, false, true));
+
+	TFPASS(UT_copy_failed(false, false, false));
+	TFPASS(!UT_copy_failed(true, false, false));
+	TFPASS(UT_copy_failed(true, true, false));
+	TFPASS(!UT_copy_failed(true, true, true));
+
+	int dialog = 0;
+	TFPASS(!UT_help_opens(nullptr));
+	TFPASS(UT_dialog_bind(&dialog) == &dialog);
+	TFPASS(UT_help_opens(UT_dialog_bind(&dialog)));
+	TFPASS(!UT_help_opens(UT_dialog_bind(static_cast<int *>(nullptr))));
+	TFPASS(UT_stylist_is_this(4, 4));
+	TFPASS(!UT_stylist_is_this(3, 4));
+	TFPASS(!UT_gdi_restores(nullptr));
+	TFPASS(UT_gdi_restores(&dialog));
+
+	TFPASS(UT_print_copy_count(true, 3, 1) == 3);
+	TFPASS(UT_print_copy_count(true, 0, 2) == 2);
+	TFPASS(UT_print_copy_count(false, 9, 4) == 4);
+	TFPASS(UT_print_copy_count(false, 0, 0) == 1);
+	TFPASS(UT_print_temp_is_single(2));
+	TFPASS(!UT_print_temp_is_single(1));
+
+	int frame = 0;
+	int board = 0;
+	TFPASS(!UT_paste_may_ask(nullptr, &board));
+	TFPASS(!UT_paste_may_ask(&frame, nullptr));
+	TFPASS(UT_paste_may_ask(&frame, &board));
+
+	TFPASS(!UT_listener_walks_forward(0));
+	TFPASS(UT_listener_walks_forward(1));
+}
+
 TFTEST_MAIN("ShellExecute failure is a result at or below 32")
 {
 	TFPASS(UT_go_shell_launch_failed(0));

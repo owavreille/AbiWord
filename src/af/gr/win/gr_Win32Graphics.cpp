@@ -4136,7 +4136,7 @@ void GR_Win32Graphics::_DoubleBuffering_ReleaseBuffer(HDC hdc, HBITMAP bitmap, H
 	UT_Win32TraceF("buffer-pen %p", pen);
 	HGDIOBJ brush = SelectObject(hdc, GetStockObject(WHITE_BRUSH));
 	UT_Win32TraceF("buffer-brush %p", brush);
-	if (previous)
+	if (UT_gdi_restores(previous))
 	{
 		HGDIOBJ back = SelectObject(hdc, previous);
 		UT_Win32TraceF("buffer-bm-back %p", back);

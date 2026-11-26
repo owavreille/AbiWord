@@ -20,6 +20,7 @@
 #include <windows.h>
 
 #include "ut_std_string.h"
+#include "ut_unicode.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_Win32LocaleString.h"
@@ -65,7 +66,7 @@ void AP_Win32Dialog_Stylist::runModal(XAP_Frame * pFrame)
 {
 	UT_return_if_fail(pFrame);
 	
-	UT_return_if_fail(m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_STYLIST));
+	UT_return_if_fail(UT_stylist_is_this(static_cast<int>(m_id), static_cast<int>(AP_DIALOG_ID_STYLIST)));
 	m_bIsModal = true;
 
 	setDialog(this);
@@ -77,7 +78,7 @@ void AP_Win32Dialog_Stylist::runModeless(XAP_Frame * pFrame)
 	// raise the dialog
 	UT_DebugOnly<int> iResult;
 	m_bIsModal = false;
-	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_STYLIST));
+	UT_return_if_fail(UT_stylist_is_this(static_cast<int>(m_id), static_cast<int>(AP_DIALOG_ID_STYLIST)));
 	setDialog(this);
 	createModeless (pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_STYLIST));
 

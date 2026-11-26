@@ -3158,3 +3158,49 @@ TFTEST_MAIN("DOCX export stops a vertical merge after two rows")
 	TFPASS(count_text(xml, "w:val=\"continue\"") == 1);
 	TFPASS(count_text(xml, "w:color=\"abcdef\"") == 1);
 }
+
+TFTEST_MAIN("Text import reads UTF-8 past the first block, skips a BOM and rewrites a control")
+{
+	std::string longAscii(4096, 'a');
+	longAscii += "\xc3\xa9";
+	PD_Document * accent = import_bytes(longAscii, ".txt");
+	if (!TFPASS(accent != nullptr))
+		return;
+	const std::string accentText = document_text(accent);
+	accent->unref();
+	TFPASS(accentText.find("\xc3\xa9") != std::string::npos);
+
+	PD_Document * bom = import_bytes(std::string("\xef\xbb\xbf") + "bonjour", ".txt");
+	if (!TFPASS(bom != nullptr))
+		return;
+	const std::string bomText = document_text(bom);
+	bom->unref();
+	TFPASS(bomText.find("bonjour") != std::string::npos);
+	TFPASS(bomText.find('?') == std::string::npos);
+
+	PD_Document * later = import_bytes(std::string("a\xef\xbb\xbf") + "b", ".txt");
+	if (!TFPASS(later != nullptr))
+		return;
+	const std::string laterText = document_text(later);
+	later->unref();
+	TFPASS(laterText.find("a") != std::string::npos);
+	TFPASS(laterText.find("b") != std::string::npos);
+	TFPASS(laterText.find("\xef\xbb\xbf") != std::string::npos);
+	TFPASS(laterText.find('?') == std::string::npos);
+
+	PD_Document * control = import_bytes(std::string("a\x01b"), ".txt");
+	if (!TFPASS(control != nullptr))
+		return;
+	const std::string controlText = document_text(control);
+	control->unref();
+	TFPASS(controlText.find("a?b") != std::string::npos);
+
+	const char utf16[] = { '\xff', '\xfe', 'A', '\0' };
+	PD_Document * wide = import_bytes(std::string(utf16, sizeof(utf16)), ".txt");
+	if (!TFPASS(wide != nullptr))
+		return;
+	const std::string wideText = document_text(wide);
+	wide->unref();
+	TFPASS(wideText.find("A") != std::string::npos);
+	TFPASS(wideText.find('?') == std::string::npos);
+}

@@ -24,6 +24,7 @@
 #include "ut_debugmsg.h"
 #include "ut_string.h"
 #include "ut_assert.h"
+#include "ut_unicode.h"
 #include "xap_Dialog_Id.h"
 #include "xap_Win32Dlg_Print.h"
 #include "xap_Win32App.h"
@@ -455,18 +456,15 @@ void XAP_Win32Dialog_Print::_extractResults(XAP_Frame *pFrame)
 		m_answer = a_CANCEL;
 		return;
 	}
-	if ((pDevMode->dmFields & DM_COPIES) && pDevMode->dmCopies > 0)
-		m_nCopies = pDevMode->dmCopies;
-	else if (m_pPersistPrintDlg->nCopies > 0)
-		m_nCopies = m_pPersistPrintDlg->nCopies;
-	else
-		m_nCopies = 1;
+	m_nCopies = UT_print_copy_count((pDevMode->dmFields & DM_COPIES) != 0,
+									pDevMode->dmCopies,
+									m_pPersistPrintDlg->nCopies);
 	if (pDevMode->dmFields & DM_COLLATE)
 		m_bCollate = (pDevMode->dmCollate == DMCOLLATE_TRUE);
 	else
 		m_bCollate = (m_pPersistPrintDlg->Flags & PD_COLLATE) != 0;
 
-	const bool bNeedCopiesReset = (pDevMode->dmFields & DM_COPIES) && pDevMode->dmCopies > 1;
+	const bool bNeedCopiesReset = (pDevMode->dmFields & DM_COPIES) && UT_print_temp_is_single(pDevMode->dmCopies);
 	const bool bNeedCollateReset = (pDevMode->dmFields & DM_COLLATE) && pDevMode->dmCollate != DMCOLLATE_FALSE;
 	const bool bNeedReset = bNeedCopiesReset || bNeedCollateReset;
 

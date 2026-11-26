@@ -26,6 +26,7 @@
 
 #include <string.h>
 #include "ut_debugmsg.h"
+#include "ut_unicode.h"
 #include "ut_string.h"
 #include "ut_bytebuf.h"
 #include "ut_base64.h"
@@ -232,7 +233,7 @@ UT_Error IE_Exp_Text::_writeDocument(void)
 	// TODO If we're going to the clipboard and the OS supports unicode, set encoding.
 	// TODO Only supports Windows so far.
 	// TODO Should use a finer-grain technique than IsWinNT() since Win98 supports unicode clipboard.
-	if (getDocRange() && !m_bExplicitlySetEncoding && m_szEncoding.empty())
+	if (UT_text_may_pick_unicode(getDocRange() != nullptr, m_bExplicitlySetEncoding, m_szEncoding.empty()))
 	{
 #ifdef _WIN32
 		if (UT_IsWinNT())
@@ -317,12 +318,9 @@ void IE_Exp_Text::_setEncoding(const char *szEncoding)
 	const char *szUCS2LEName = XAP_EncodingManager::get_instance()->getUCS2LEName();
 	const char *szUCS2BEName = XAP_EncodingManager::get_instance()->getUCS2BEName();
 
-	const bool bIs16LE = szEncoding &&
-		((szUCS2LEName && !g_ascii_strcasecmp(szEncoding, szUCS2LEName)) ||
-		 !g_ascii_strcasecmp(szEncoding, "UTF-16LE"));
-	const bool bIs16BE = szEncoding &&
-		((szUCS2BEName && !g_ascii_strcasecmp(szEncoding, szUCS2BEName)) ||
-		 !g_ascii_strcasecmp(szEncoding, "UTF-16BE"));
+	const int endian = UT_text_endian(szEncoding, szUCS2LEName, szUCS2BEName);
+	const bool bIs16LE = endian < 0;
+	const bool bIs16BE = endian > 0;
 
 	if (bIs16LE)
 	{

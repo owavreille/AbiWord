@@ -19,6 +19,7 @@
 
 
 #include "ut_types.h"
+#include "ut_unicode.h"
 #include "ut_misc.h"
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
@@ -503,7 +504,7 @@ bool pt_PieceTable::tellListenerSubset( PL_Listener * pListener,
          */
         if( PL_FinishingListener* cl = closer->getBeforeContentListener() )
         {
-            bool walkForwards = false;
+            bool walkForwards = UT_listener_walks_forward(0);
             f_WalkRangeFinished_t f = std::bind( finishedFunctorFinishingListener, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, std::placeholders::_4, cl );
 
             PL_FinishingListener* nullListener = closer->getNullContentListener();
@@ -522,7 +523,7 @@ bool pt_PieceTable::tellListenerSubset( PL_Listener * pListener,
             
             /*rc =*/ _tellListenerSubsetWalkRange( this, cl,
                                                pDocRange, startPos, pDocRange->m_pos1,
-                                               f, closerFragmentTypesToVisit, true );
+                                               f, closerFragmentTypesToVisit, UT_listener_walks_forward(1) );
             
         }
     }

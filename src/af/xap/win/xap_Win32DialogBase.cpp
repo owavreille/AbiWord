@@ -26,6 +26,7 @@
 #include "xap_Win32DialogBase.h"
 #include "xap_Win32FrameImpl.h"
 #include "ut_Win32LocaleString.h"
+#include "ut_unicode.h"
 
 /* Copy whole UTF-8 characters that fit, and always write a NUL inside
    the destination. Buffer_length is the byte capacity. */
@@ -566,9 +567,14 @@ void XAP_Win32DialogBase::localizeControlText(UT_sint32 controlId, UT_uint32 str
 
 extern bool helpLocalizeAndOpenURL(const char* pathBeforeLang, const char* pathAfterLang, const char *remoteURLbase);
 
+void XAP_Win32DialogBase::setDialog(XAP_Dialog * pDlg)
+{
+	m_pDlg = UT_dialog_bind(pDlg);
+}
+
 BOOL XAP_Win32DialogBase::_callHelp()
 {
-	UT_return_val_if_fail(m_pDlg, FALSE);
+	UT_return_val_if_fail(UT_help_opens(m_pDlg), FALSE);
 
 	if ( m_pDlg->getHelpUrl().size () > 0 )
     {
