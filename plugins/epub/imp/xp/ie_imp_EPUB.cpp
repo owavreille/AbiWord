@@ -19,9 +19,46 @@
  */
 
 #include "ie_imp_EPUB.h"
+#include <glib/gstdio.h>
+
+static void removePathRecursive(const std::string& path)
+{
+    if (g_file_test(path.c_str(), G_FILE_TEST_IS_DIR))
+    {
+        GDir* dir = g_dir_open(path.c_str(), 0, NULL);
+        if (dir)
+        {
+            const gchar* entry = NULL;
+            while ((entry = g_dir_read_name(dir)) != NULL)
+            {
+                std::string child = path + G_DIR_SEPARATOR_S + entry;
+                removePathRecursive(child);
+            }
+            g_dir_close(dir);
+        }
+        g_rmdir(path.c_str());
+    }
+    else
+    {
+        g_unlink(path.c_str());
+    }
+}
+
+static void removeUriDirectoryRecursive(const std::string& uri)
+{
+    if (uri.empty())
+        return;
+    gchar* localPath = UT_go_filename_from_uri(uri.c_str());
+    if (localPath)
+    {
+        removePathRecursive(localPath);
+        g_free(localPath);
+    }
+}
 
 IE_Imp_EPUB::IE_Imp_EPUB(PD_Document* pDocument) :
-    IE_Imp(pDocument)
+    IE_Imp(pDocument),
+    m_epub(NULL)
 {
 
 }
@@ -69,35 +106,52 @@ UT_Error IE_Imp_EPUB::_loadFile(GsfInput* input)
         return UT_ERROR;
     }
 
+    UT_Error err = UT_OK;
+
     UT_DEBUGMSG(("Reading metadata\n"));
     if (readMetadata() != UT_OK)
     {
         UT_DEBUGMSG(("Failed to read metadata\n"));
-        return UT_ERROR;
+        err = UT_ERROR;
     }
 
-    UT_DEBUGMSG(("Reading package information\n"));
-    if (readPackage() != UT_OK)
+    if (err == UT_OK)
     {
-        UT_DEBUGMSG(("Failed to read package information\n"));
-        return UT_ERROR;
+        UT_DEBUGMSG(("Reading package information\n"));
+        if (readPackage() != UT_OK)
+        {
+            UT_DEBUGMSG(("Failed to read package information\n"));
+            err = UT_ERROR;
+        }
     }
 
-    UT_DEBUGMSG(("Uncompressing OPS data\n"));
-    if (uncompress() != UT_OK)
+    if (err == UT_OK)
     {
-        UT_DEBUGMSG(("Failed to uncompress data\n"));
-        return UT_ERROR;
+        UT_DEBUGMSG(("Uncompressing OPS data\n"));
+        if (uncompress() != UT_OK)
+        {
+            UT_DEBUGMSG(("Failed to uncompress data\n"));
+            err = UT_ERROR;
+        }
     }
 
-    UT_DEBUGMSG(("Reading OPS data\n"));
-    if (readStructure() != UT_OK)
+    if (err == UT_OK)
     {
-        UT_DEBUGMSG(("Failed to read OPS data\n"));
-        return UT_ERROR;
+        UT_DEBUGMSG(("Reading OPS data\n"));
+        if (readStructure() != UT_OK)
+        {
+            UT_DEBUGMSG(("Failed to read OPS data\n"));
+            err = UT_ERROR;
+        }
     }
 
-    return UT_OK;
+    removeUriDirectoryRecursive(m_tmpDir);
+    m_tmpDir.clear();
+
+    g_object_unref(G_OBJECT(m_epub));
+    m_epub = NULL;
+
+    return err;
 
 }
 
@@ -158,12 +212,7 @@ UT_Error IE_Imp_EPUB::readPackage()
 {
     gchar **aname = g_strsplit(m_rootfilePath.c_str(), G_DIR_SEPARATOR_S, 0);
     GsfInput* opf = gsf_infile_child_by_aname(m_epub, (const char**) aname);
-
-    UT_DEBUGMSG(("Getting parent\n"));
-    GsfInfile* opfParent = gsf_input_container(opf);
-    m_opsDir = std::string(gsf_input_name(GSF_INPUT(opfParent)));
-
-    UT_DEBUGMSG(("OPS dir: %s\n", m_opsDir.c_str()));
+    g_strfreev(aname);
 
     if (opf == NULL)
     {
@@ -171,13 +220,20 @@ UT_Error IE_Imp_EPUB::readPackage()
         return UT_ERROR;
     }
 
+    UT_DEBUGMSG(("Getting parent\n"));
+    GsfInfile* opfParent = gsf_input_container(opf);
+    const char* opsDirName = opfParent ? gsf_input_name(GSF_INPUT(opfParent)) : NULL;
+    m_opsDir = opsDirName ? std::string(opsDirName) : std::string();
+
+    UT_DEBUGMSG(("OPS dir: %s\n", m_opsDir.c_str()));
+
     size_t opfSize = gsf_input_size(opf);
     gchar* opfXml = (gchar*) gsf_input_read(opf, opfSize, NULL);
 
     UT_XML opfParser;
     OpfListener opfListener;
     opfParser.setListener(&opfListener);
-    if (opfParser.sniff(opfXml, opfSize, "package"))
+    if (opfXml && opfParser.sniff(opfXml, opfSize, "package"))
     {
         UT_DEBUGMSG(("Parsing opf file\n"));
         opfParser.parse(opfXml, opfSize);
@@ -185,10 +241,10 @@ UT_Error IE_Imp_EPUB::readPackage()
     else
     {
         UT_DEBUGMSG(("Incorrect opf file found \n"));
+        g_object_unref(G_OBJECT(opf));
         return UT_ERROR;
     }
 
-    g_strfreev(aname);
     g_object_unref(G_OBJECT(opf));
     //g_object_unref(G_OBJECT(opfParent));
 
@@ -200,7 +256,14 @@ UT_Error IE_Imp_EPUB::readPackage()
 
 UT_Error IE_Imp_EPUB::uncompress()
 {
-    m_tmpDir = UT_go_filename_to_uri(g_get_tmp_dir());
+    gchar *tmpUri = UT_go_filename_to_uri(g_get_tmp_dir());
+    if (!tmpUri)
+    {
+        UT_DEBUGMSG(("Can`t get temporary directory URI\n"));
+        return UT_ERROR;
+    }
+    m_tmpDir = tmpUri;
+    g_free(tmpUri);
     m_tmpDir += G_DIR_SEPARATOR_S;
     m_tmpDir += getDoc()->getDocUUIDString();
 
@@ -209,8 +272,15 @@ UT_Error IE_Imp_EPUB::uncompress()
         UT_DEBUGMSG(("Can`t create temporary directory\n"));
         return UT_ERROR;
     }
-    GsfInput *opsDirInput = gsf_infile_child_by_name(m_epub,
-            m_opsDir.c_str());
+    GsfInput *opsDirInput = NULL;
+    if (m_opsDir.empty())
+    {
+        opsDirInput = GSF_INPUT(g_object_ref(G_OBJECT(m_epub)));
+    }
+    else
+    {
+        opsDirInput = gsf_infile_child_by_name(m_epub, m_opsDir.c_str());
+    }
     UT_DEBUGMSG(("Child count : %d", gsf_infile_num_children(m_epub)));
     if (opsDirInput == NULL)
     {
@@ -233,13 +303,24 @@ UT_Error IE_Imp_EPUB::uncompress()
 
         GsfInput* itemInput = gsf_infile_child_by_aname(
                 GSF_INFILE(opsDirInput), (const char**) aname);
-        GsfOutput* itemOutput = createFileByPath(itemFileName);
+        g_strfreev(aname);
+        if (itemInput == NULL)
+        {
+            g_free(itemFileName);
+            continue;
+        }
+        GsfOutput* itemOutput = itemFileName ? createFileByPath(itemFileName) : NULL;
+        g_free(itemFileName);
+        if (itemOutput == NULL)
+        {
+            g_object_unref(G_OBJECT(itemInput));
+            continue;
+        }
         gsf_input_seek(itemInput, 0, G_SEEK_SET);
         gsf_input_copy(itemInput, itemOutput);
-        g_strfreev(aname);
-        g_free(itemFileName);
         g_object_unref(G_OBJECT(itemInput));
         gsf_output_close(itemOutput);
+        g_object_unref(G_OBJECT(itemOutput));
     }
 
     g_object_unref(G_OBJECT(opsDirInput));
@@ -283,12 +364,14 @@ UT_Error IE_Imp_EPUB::readStructure()
 
         PD_Document *currentDoc = new PD_Document();
         currentDoc->createRawDocument();
-        const char *suffix = strchr(itemPath.c_str(), '.');
+        const char *suffix = strrchr(itemPath.c_str(), '.');
         XAP_App::getApp()->getPrefs()->setIgnoreNextRecent();
         if (currentDoc->importFile(itemPath.c_str(),
-                IE_Imp::fileTypeForSuffix(suffix), true, false, NULL) != UT_OK)
+                IE_Imp::fileTypeForSuffix(suffix ? suffix : ""), true, false, NULL) != UT_OK)
         {
             UT_DEBUGMSG(("Failed to import file %s\n", itemPath.c_str()));
+            UNREFP(currentDoc);
+            g_object_unref(G_OBJECT(itemInput));
             return UT_ERROR;
         }
 
@@ -339,6 +422,7 @@ GsfOutput* IE_Imp_EPUB::createFileByPath(const char* path)
             if (!fileExists)
             {
                 output = UT_go_file_create(uri, NULL);
+                g_free(uri);
                 break;
             }
         }
@@ -359,8 +443,12 @@ void ContainerListener::startElement(const gchar* name, const gchar** atts)
 {
     if (!UT_go_utf8_collate_casefold(name, "rootfile"))
     {
-        m_rootFilePath = std::string(UT_getAttribute("full-path", atts));
-        UT_DEBUGMSG(("Found rootfile%s\n", m_rootFilePath.c_str()));
+        const gchar* fullPath = UT_getAttribute("full-path", atts);
+        if (fullPath)
+        {
+            m_rootFilePath = std::string(fullPath);
+            UT_DEBUGMSG(("Found rootfile%s\n", m_rootFilePath.c_str()));
+        }
     }
 }
 
@@ -383,7 +471,8 @@ const std::string & ContainerListener::getRootFilePath() const
  */
 
 OpfListener::OpfListener() :
-    m_inManifest(false)
+    m_inManifest(false),
+    m_inSpine(false)
 {
 
 }
@@ -404,10 +493,14 @@ void OpfListener::startElement(const gchar* name, const gchar** atts)
     {
         if (!UT_go_utf8_collate_casefold(name, "item"))
         {
-            m_manifestItems.insert(
-				   make_pair(std::string(UT_getAttribute("id", atts)),
-					     std::string(UT_getAttribute("href", atts))));
-            UT_DEBUGMSG(("Found manifest item: %s\n", UT_getAttribute("href", atts)));
+            const gchar* id = UT_getAttribute("id", atts);
+            const gchar* href = UT_getAttribute("href", atts);
+            if (id && href)
+            {
+                m_manifestItems.insert(
+                       make_pair(std::string(id), std::string(href)));
+                UT_DEBUGMSG(("Found manifest item: %s\n", href));
+            }
         }
     }
 
@@ -416,16 +509,28 @@ void OpfListener::startElement(const gchar* name, const gchar** atts)
         if (!UT_go_utf8_collate_casefold(name, "itemref"))
         {
             // We can ignore "linear" attribute as it said in specification
-	    m_spine.push_back(std::string(UT_getAttribute("idref", atts)));
-            UT_DEBUGMSG(("Found spine itemref: %s\n", UT_getAttribute("idref", atts)));
+            const gchar* idref = UT_getAttribute("idref", atts);
+            if (idref)
+            {
+                m_spine.push_back(std::string(idref));
+                UT_DEBUGMSG(("Found spine itemref: %s\n", idref));
+            }
         }
     }
 
 }
 
-void OpfListener::endElement(const gchar* /*name*/)
+void OpfListener::endElement(const gchar* name)
 {
+    if (!UT_go_utf8_collate_casefold(name, "manifest"))
+    {
+        m_inManifest = false;
+    }
 
+    if (!UT_go_utf8_collate_casefold(name, "spine"))
+    {
+        m_inSpine = false;
+    }
 }
 
 void OpfListener::charData(const gchar* /*buffer*/, int /*length*/)

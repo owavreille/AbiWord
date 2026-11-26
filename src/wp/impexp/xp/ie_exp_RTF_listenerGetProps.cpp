@@ -613,12 +613,16 @@ void s_RTF_ListenerGetProps::_check_revs_for_color(const PP_AttrProp * pAP1,
 
 						m_pie->_findOrAddColor(s);
 					}
+					else
+					{
+						p = nullptr;
+					}
 				}
 			
 			}while(p);
 		}
 		else
-			return;
+			continue;
 
 		if(pDup)
 		{
@@ -722,12 +726,16 @@ void s_RTF_ListenerGetProps::_check_revs_for_font(const PP_AttrProp * pAP1,
 							}
 						}
 					}
+					else
+					{
+						p = nullptr;
+					}
 				}
 			
 			}while(p);
 		}
 		else
-			return;
+			continue;
 
 		if(pDup)
 		{

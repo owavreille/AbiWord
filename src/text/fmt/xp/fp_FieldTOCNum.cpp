@@ -124,6 +124,7 @@ bool fp_FieldTOCNumRun::calculateValue(void)
 			psz++;
 		}
 	}
+	sz_ucs_FieldValue[i] = 0;
 	return _setValue(sz_ucs_FieldValue);
 }
 
@@ -159,7 +160,7 @@ bool fp_FieldTOCListLabelRun::calculateValue(void)
 	UT_ASSERT(getLength() == 0);
 	fl_TOCLayout * pTOCL = static_cast<fl_TOCLayout *>(getBlock()->myContainingLayout());
 	UT_ASSERT(pTOCL->getContainerType() == FL_CONTAINER_TOC);
-	UT_String str = pTOCL->getTOCListLabel(getBlock()).utf8_str();
+	UT_UCS4String str = pTOCL->getTOCListLabel(getBlock()).ucs4_str();
 	if(str.size() == 0)
 	{
 		sz_ucs_FieldValue[0] = 0;
@@ -175,6 +176,7 @@ bool fp_FieldTOCListLabelRun::calculateValue(void)
 			bStop = true;
 		}
 	}
+	sz_ucs_FieldValue[i] = 0;
 	return _setValue(sz_ucs_FieldValue);
 }
 
@@ -228,6 +230,7 @@ bool fp_FieldTOCHeadingRun::calculateValue(void)
 			bStop = true;
 		}
 	}
+	sz_ucs_FieldValue[i] = 0;
 	return _setValue(sz_ucs_FieldValue);
 }
 

@@ -1098,7 +1098,7 @@ void s_RTF_ListenerWriteDoc::_openFrame(PT_AttrPropIndex apiFrame)
 	std::string sFrameProps, esc;
 	const gchar * szName = nullptr;
 	const gchar * szValue = nullptr;
-	while (pSectionAP->getNthProperty (kk++, szName, szValue))
+	while (pSectionAP && pSectionAP->getNthProperty (kk++, szName, szValue))
 	{
 		if (kk != 1)
 		{
@@ -1226,6 +1226,10 @@ void s_RTF_ListenerWriteDoc::_openFrame(PT_AttrPropIndex apiFrame)
 			if (!bFoundDataItem)
 			{
 				UT_DEBUGMSG(("RTF_Export: cannot get dataitem for image\n"));
+				m_pie->_rtf_close_brace();
+				m_pie->_rtf_close_brace();
+				m_bInFrame = false;
+				m_bTextBox = false;
 				return;
 			}
 
@@ -1250,7 +1254,7 @@ void s_RTF_ListenerWriteDoc::_openFrame(PT_AttrPropIndex apiFrame)
 				
 				// get the width/height of the image from the image itself.
 
-				UT_sint32 iImageWidth, iImageHeight;
+				UT_sint32 iImageWidth = 0, iImageHeight = 0;
 
 				if(mimetype == "image/png") 
 				{
@@ -1283,13 +1287,13 @@ void s_RTF_ListenerWriteDoc::_openFrame(PT_AttrPropIndex apiFrame)
 
 				m_pie->_rtf_keyword("picwgoal",iWidth);
 				double dWidth = static_cast<double>(iWidth)/1440.;
-				double scalex = 100.0*dWidth/dImageWidth;
+				double scalex = (dImageWidth > 0.0) ? (100.0*dWidth/dImageWidth) : 100.0;
 				UT_uint32 iscalex = static_cast<UT_uint32>(scalex);
 				m_pie->_rtf_keyword("picscalex",iscalex);
 					
 				m_pie->_rtf_keyword("pichgoal",iHeight);
 				double dHeight = static_cast<double>(iHeight)/1440.;
-				double scaley = 100.0*dHeight/dImageHeight;
+				double scaley = (dImageHeight > 0.0) ? (100.0*dHeight/dImageHeight) : 100.0;
 				UT_uint32 iscaley = static_cast<UT_uint32>(scaley);
 				m_pie->_rtf_keyword("picscaley",iscaley);
 
@@ -1713,7 +1717,7 @@ void s_RTF_ListenerWriteDoc::_outputData(const UT_UCS4Char * data, UT_uint32 len
 					// TODO polluting the global context w/r/t \uc.
 
 					m_pie->_rtf_keyword("uc",0);
-					unsigned short ui = ((unsigned short)(*pData));	// RTF is limited to +/-32K ints
+					unsigned short ui = ((unsigned short)(c));	// RTF is limited to +/-32K ints
 					signed short si = *((signed short *)(&ui));		// so we need to write negative
 					m_pie->_rtf_keyword("u",si);					// numbers for large unicode values.
 				}
@@ -1992,7 +1996,8 @@ bool s_RTF_ListenerWriteDoc::populate(fl_ContainerLayout* /*sfh*/,
 //
 					m_pie->_rtf_open_brace();
 					m_pie->_rtf_keyword("*");
-					m_pie->_rtf_keyword("atnauthor",m_sAnnAuthor.utf8_str());
+					m_pie->_rtf_keyword("atnauthor");
+					m_pie->_rtf_pcdata(m_sAnnAuthor);
 					m_pie->_rtf_close_brace();
 					m_pie->_rtf_keyword("chatn");
 
@@ -2007,11 +2012,11 @@ bool s_RTF_ListenerWriteDoc::populate(fl_ContainerLayout* /*sfh*/,
 
 					m_pie->_rtf_open_brace();
 					m_pie->_rtf_keyword("*");
-					m_pie->_rtf_keyword("atndate",m_sAnnDate.utf8_str());
+					m_pie->_rtf_keyword("atndate");
+					m_pie->_rtf_pcdata(m_sAnnDate);
 					m_pie->_rtf_close_brace();
 					m_pie->write(reinterpret_cast<const char *>(m_pAnnContent->getPointer(0)),m_pAnnContent->getLength());
 					DELETEP(m_pAnnContent);
-					m_pie->_rtf_close_brace();
 					m_pie->_rtf_close_brace();
 
 			}
@@ -2230,7 +2235,7 @@ void	 s_RTF_ListenerWriteDoc::_openTag(const char * szPrefix, const char * szSuf
 			 _writeFieldPreamble(pSpanAP);
 			 m_pie->write("TIME \\");
 			 m_pie->_rtf_keyword("@");
-			 m_pie->write(" ""m/d/yy"" ");
+			 m_pie->write(" \"d/m/yy\" ");
              m_pie->_rtf_close_brace();
              m_pie->_rtf_close_brace();
 			 _writeFieldTrailer();
@@ -3721,15 +3726,19 @@ void s_RTF_ListenerWriteDoc::_newRow(void)
 		while(i < sizes)
 		{
 			for (j=i; (j<sizes) && (sProps[j] != '/') ; j++) {}
+			if (j >= sizes)
+			{
+				break;
+			}
 			if((j+1)>i && sProps[j] == '/')
 			{
 				UT_String sSub = sProps.substr(i,(j-i));
 				double colWidth = UT_convertToInches(sSub.c_str())* 10000.0;
-				i = j + 1;
 				fl_ColProps * pColP = new fl_ColProps;
 				pColP->m_iColWidth = static_cast<UT_sint32>(colWidth);
 				vecColProps.addItem(pColP);
 			}
+			i = j + 1;
 		}
 	}
 	else
@@ -4132,7 +4141,7 @@ void s_RTF_ListenerWriteDoc::_fillTableProps(PT_AttrPropIndex api, std::string &
 	if (pszBorderWidth && *pszBorderWidth)
 	{
 		sProp = "bot-thickness";
-		sPropVal= pszBorderStyle;
+		sPropVal= pszBorderWidth;
 		UT_std_string_setProperty(sTableProps, sProp, sPropVal);
 	}
 	pszBorderColor = nullptr;
@@ -4158,7 +4167,7 @@ void s_RTF_ListenerWriteDoc::_fillTableProps(PT_AttrPropIndex api, std::string &
 	if (pszBorderWidth && *pszBorderWidth)
 	{
 		sProp = "left-thickness";
-		sPropVal= pszBorderStyle;
+		sPropVal= pszBorderWidth;
 		UT_std_string_setProperty(sTableProps, sProp, sPropVal);
 	}
 
@@ -4185,7 +4194,7 @@ void s_RTF_ListenerWriteDoc::_fillTableProps(PT_AttrPropIndex api, std::string &
 	if (pszBorderWidth && *pszBorderWidth)
 	{
 		sProp = "right-thickness";
-		sPropVal= pszBorderStyle;
+		sPropVal= pszBorderWidth;
 		UT_std_string_setProperty(sTableProps, sProp, sPropVal);
 	}
 
@@ -4211,7 +4220,7 @@ void s_RTF_ListenerWriteDoc::_fillTableProps(PT_AttrPropIndex api, std::string &
 	if (pszBorderWidth && *pszBorderWidth)
 	{
 		sProp = "top-thickness";
-		sPropVal= pszBorderStyle;
+		sPropVal= pszBorderWidth;
 		UT_std_string_setProperty(sTableProps, sProp, sPropVal);
 	}
 
@@ -4599,8 +4608,8 @@ bool s_RTF_ListenerWriteDoc::populateStrux(pf_Frag_Strux* sdh,
 		}
 	case PTX_EndAnnotation:
 	    {
-	                m_pie->setByteBuf(m_pSavedBuf);
 			_closeSpan();
+			m_pie->setByteBuf(m_pSavedBuf);
 			_setTabEaten(false);
 			m_sdh = m_sdhSavedBlock;
 			m_apiThisBlock = m_apiSavedBlock;
@@ -5141,7 +5150,7 @@ void s_RTF_ListenerWriteDoc::_writeBookmark(const PX_ChangeRecord_Object * pcro)
 		else if (strcmp (szType, "end") == 0) {
 			m_pie->_rtf_keyword("bkmkend");
 		}
-		m_pie->_rtf_chardata(szName, strlen(szName));
+		m_pie->_rtf_pcdata(szName);
 		m_pie->_rtf_close_brace();
 	}
 }
@@ -5213,13 +5222,15 @@ void s_RTF_ListenerWriteDoc::_writeHyperlink(const PX_ChangeRecord_Object * pcro
 	_writeFieldPreamble(pHyperlinkAP);
 	m_pie->write("HYPERLINK ");
 	m_pie->write("\"");
-	m_pie->write(szHyper);
+	UT_UTF8String sEscapedHyper;
+	IE_Exp_RTF::s_escapeString(sEscapedHyper, szHyper, 0, 1);
+	sEscapedHyper.escape("\"", "\\\"");
+	m_pie->write(sEscapedHyper.utf8_str());
 	m_pie->write("\"");
 	m_bHyperLinkOpen = true;
 	m_pie->_rtf_close_brace();
 	m_pie->_rtf_close_brace();
 	m_pie->_rtf_open_brace();
-	m_pie->_rtf_keyword("*");
 	m_pie->_rtf_keyword("fldrslt");
 }
 
@@ -5245,6 +5256,7 @@ void s_RTF_ListenerWriteDoc::_writeAnnotation(const PX_ChangeRecord_Object * pcr
 	m_pie->_rtf_open_brace();
 	m_pie->_rtf_keyword("*");
 	m_pie->_rtf_keyword_space("atrfstart",m_iAnnotationNumber);
+	m_pie->_rtf_close_brace();
 	m_bAnnotationOpen = true;
 }
 
@@ -5346,7 +5358,7 @@ void s_RTF_ListenerWriteDoc::_writeImageInRTF(const PX_ChangeRecord_Object * pcr
 
 			m_pie->_rtf_keyword("picw",iImageWidth);
 			m_pie->_rtf_keyword("pich",iImageHeight);
-			if (bFoundWidthProperty)
+			if (bFoundWidthProperty && dImageWidth > 0.0)
 			{
 			        double dWidth = UT_convertToInches(szWidthProp);   // Our "goal" width is _before_ scaling
 				double scalex = dWidth/dImageWidth;                // How intuitive!
@@ -5356,7 +5368,7 @@ void s_RTF_ListenerWriteDoc::_writeImageInRTF(const PX_ChangeRecord_Object * pcr
 				m_pie->_rtf_keyword("picscalex",iscalex);
 
 			}
-			if (bFoundHeightProperty)
+			if (bFoundHeightProperty && dImageHeight > 0.0)
 			{
 			        double dHeight = UT_convertToInches(szHeightProp);
 				double scaley = dHeight/dImageHeight;

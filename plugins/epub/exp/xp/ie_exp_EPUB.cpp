@@ -59,23 +59,47 @@ UT_Error IE_Exp_EPUB::_writeDocument()
         return UT_ERROR;
     }
 
+    // mimetype must be the first file in archive (OCF spec)
+    GsfOutput *mimetype = gsf_outfile_new_child_full(m_root, "mimetype", FALSE,
+        "compression-level", 0, NULL);
+    if (mimetype == NULL)
+    {
+        UT_DEBUGMSG(("Can`t create mimetype output object\n"));
+        gsf_output_close(GSF_OUTPUT(m_root));
+        g_object_unref(G_OBJECT(m_root));
+        m_root = NULL;
+        return UT_ERROR;
+    }
+    gsf_output_write(mimetype, strlen(EPUB_MIMETYPE),
+            (const guint8*) EPUB_MIMETYPE);
+    gsf_output_close(mimetype);
+    g_object_unref(G_OBJECT(mimetype));
+
     m_oebps = gsf_outfile_new_child(m_root, "OEBPS", TRUE);
     if (m_oebps == NULL)
     {
         UT_DEBUGMSG(("Can`t create oebps output object\n"));
+        gsf_output_close(GSF_OUTPUT(m_root));
+        g_object_unref(G_OBJECT(m_root));
+        m_root = NULL;
         return UT_ERROR;
     }
 
-    // mimetype must a first file in archive
-    GsfOutput *mimetype = gsf_outfile_new_child_full(m_root, "mimetype", FALSE,
-        "compression-level", 0, NULL);
-    gsf_output_write(mimetype, strlen(EPUB_MIMETYPE),
-            (const guint8*) EPUB_MIMETYPE);
-    gsf_output_close(mimetype);
-
     // We need to create temporary directory to which
     // HTML plugin will export our document
-    m_baseTempDir = UT_go_filename_to_uri(g_get_tmp_dir());
+    gchar *tmpUri = UT_go_filename_to_uri(g_get_tmp_dir());
+    if (!tmpUri)
+    {
+        gsf_output_close(m_oebps);
+        g_object_unref(G_OBJECT(m_oebps));
+        m_oebps = NULL;
+        gsf_output_close(GSF_OUTPUT(m_root));
+        g_object_unref(G_OBJECT(m_root));
+        m_root = NULL;
+        return UT_ERROR;
+    }
+    m_baseTempDir = tmpUri;
+    g_free(tmpUri);
     m_baseTempDir += G_DIR_SEPARATOR_S;
 
     // To generate unique directory name we`ll use document UUID
@@ -85,33 +109,38 @@ UT_Error IE_Exp_EPUB::_writeDocument()
     UT_go_file_remove(m_baseTempDir.c_str(), NULL);
     UT_go_directory_create(m_baseTempDir.c_str(), NULL);
 
+    UT_Error err = UT_OK;
     if (writeContainer() != UT_OK)
     {
         UT_DEBUGMSG(("Failed to write container\n"));
-        return UT_ERROR;
+        err = UT_ERROR;
     }
-    if (writeStructure() != UT_OK)
+    if (err == UT_OK && writeStructure() != UT_OK)
     {
         UT_DEBUGMSG(("Failed to write document structure\n"));
-        return UT_ERROR;
+        err = UT_ERROR;
     }
-    if (writeNavigation() != UT_OK)
+    if (err == UT_OK && writeNavigation() != UT_OK)
     {
         UT_DEBUGMSG(("Failed to write navigation\n"));
-        return UT_ERROR;
+        err = UT_ERROR;
     }
-    if (package() != UT_OK)
+    if (err == UT_OK && package() != UT_OK)
     {
         UT_DEBUGMSG(("Failed to package document\n"));
-        return UT_ERROR;
+        err = UT_ERROR;
     }
 
     gsf_output_close(m_oebps);
+    g_object_unref(G_OBJECT(m_oebps));
+    m_oebps = NULL;
     gsf_output_close(GSF_OUTPUT(m_root));
+    g_object_unref(G_OBJECT(m_root));
+    m_root = NULL;
     
     // After doing all job we should delete temporary files
     UT_go_file_remove(m_baseTempDir.c_str(), NULL);
-    return UT_OK;
+    return err;
 }
 
 
@@ -130,6 +159,7 @@ UT_Error IE_Exp_EPUB::writeContainer()
     {
         UT_DEBUGMSG(("Can`t create container.xml\n"));
         gsf_output_close(metaInf);
+        g_object_unref(G_OBJECT(metaInf));
         return UT_ERROR;
     }
     GsfXMLOut * containerXml = gsf_xml_out_new(container);
@@ -151,8 +181,11 @@ UT_Error IE_Exp_EPUB::writeContainer()
     // </container>
     gsf_xml_out_end_element(containerXml);
 
+    g_object_unref(G_OBJECT(containerXml));
     gsf_output_close(container);
+    g_object_unref(G_OBJECT(container));
     gsf_output_close(metaInf);
+    g_object_unref(G_OBJECT(metaInf));
     return UT_OK;
 }
 
@@ -306,10 +339,6 @@ UT_Error IE_Exp_EPUB::EPUB2_writeNavigation()
                 {
                     itemFilename = "index.xhtml";
                 }
-                else
-                {
-                    itemFilename +=   + ".xhtml";
-                }
             } else
             {
                 itemFilename = "index.xhtml";
@@ -384,7 +413,9 @@ UT_Error IE_Exp_EPUB::EPUB2_writeNavigation()
 
     // </ncx>
     gsf_xml_out_end_element(ncxXml);
+    g_object_unref(G_OBJECT(ncxXml));
     gsf_output_close(ncx);
+    g_object_unref(G_OBJECT(ncx));
 
     return UT_OK;
 }
@@ -450,9 +481,6 @@ UT_Error IE_Exp_EPUB::EPUB3_writeNavigation()
                 if ((itemFilename == "") || itemFilename.length() == 0)
                 {
                     itemFilename = "index.xhtml";
-                } else
-                {
-                    itemFilename +=  ".xhtml";
                 }
             } else
             {
@@ -533,7 +561,9 @@ UT_Error IE_Exp_EPUB::EPUB3_writeNavigation()
     
     
     gsf_xml_out_end_element(navXHTML);
+    g_object_unref(G_OBJECT(navXHTML));
     gsf_output_close(nav);
+    g_object_unref(G_OBJECT(nav));
     return UT_OK;
 }
 
@@ -683,7 +713,9 @@ UT_Error IE_Exp_EPUB::package()
 
     // </package>
     gsf_xml_out_end_element(opfXml);
+    g_object_unref(G_OBJECT(opfXml));
     gsf_output_close(opf);
+    g_object_unref(G_OBJECT(opf));
     return compress();
 }
 
@@ -700,6 +732,8 @@ std::vector<std::string> IE_Exp_EPUB::getFileList(
       std::string currentDir = dirs.back();
         dirs.pop_back();
         GDir* baseDir = g_dir_open(currentDir.c_str(), 0, NULL);
+        if (!baseDir)
+            continue;
 
         gchar const *entryName = NULL;
         while ((entryName = g_dir_read_name(baseDir)) != NULL)
@@ -734,36 +768,43 @@ std::vector<std::string> IE_Exp_EPUB::getFileList(
 
 UT_Error IE_Exp_EPUB::compress()
 {
-
-    GsfInfile* oebpsDir = gsf_infile_stdio_new(
-            UT_go_filename_from_uri(m_oebpsDir.c_str()), NULL);
-
-    if (oebpsDir == NULL)
+    gchar *oebpsPath = UT_go_filename_from_uri(m_oebpsDir.c_str());
+    if (oebpsPath == NULL)
     {
-        UT_DEBUGMSG(("RUDYJ: Can`t open temporary OEBPS directory\n"));
+        UT_DEBUGMSG(("RUDYJ: Can`t resolve temporary OEBPS directory\n"));
         return UT_ERROR;
     }
 
-    std::vector<std::string> listing = getFileList(
-            UT_go_filename_from_uri(m_oebpsDir.c_str()));
+    std::vector<std::string> listing = getFileList(oebpsPath);
+    g_free(oebpsPath);
+
     for (std::vector<std::string>::iterator i = listing.begin(); i
             != listing.end(); i++)
     {
         GsfOutput* item = gsf_outfile_new_child(GSF_OUTFILE(m_oebps),
                 (*i).c_str(), FALSE);
+        if (item == NULL)
+        {
+            UT_DEBUGMSG(("RUDYJ: Can`t create output child\n"));
+            return UT_ERROR;
+        }
 	std::string fullPath = m_oebpsDir + G_DIR_SEPARATOR_S + *i;
         GsfInput* file = UT_go_file_open(fullPath.c_str(), NULL);
 
         if (file == NULL)
         {
             UT_DEBUGMSG(("RUDYJ: Can`t open file\n"));
+            gsf_output_close(item);
+            g_object_unref(G_OBJECT(item));
             return UT_ERROR;
         }
 
         gsf_output_seek(item, 0, G_SEEK_SET);
         gsf_input_seek(file, 0, G_SEEK_SET);
         gsf_input_copy(file, item);
+        g_object_unref(G_OBJECT(file));
         gsf_output_close(item);
+        g_object_unref(G_OBJECT(item));
         // Time to delete temporary file
         UT_go_file_remove(fullPath.c_str(), NULL);
     }
@@ -790,7 +831,7 @@ std::string IE_Exp_EPUB::escapeForId(const std::string& src)
 
 std::string IE_Exp_EPUB::getMimeType(const std::string &uri)
 {
-    const gchar *extension = strchr(uri.c_str(), '.');
+    const gchar *extension = strrchr(uri.c_str(), '.');
 
     if (extension == NULL)
     {

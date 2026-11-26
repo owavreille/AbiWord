@@ -137,19 +137,19 @@ bool IE_Exp_HTML_Listener::populate(fl_ContainerLayout* /*sfh*/, const PX_Change
         
         if (m_bInEndnote)
         {
-            m_endnotes.push_back(utf8String);
-            m_bInEndnote = false;
+            utf8String.escapeXML();
+            m_currentEndnote += utf8String;
         } else
         if (m_bInFootnote)
         {
-            m_footnotes.push_back(utf8String);
-            m_bInFootnote = false;
+            utf8String.escapeXML();
+            m_currentFootnote += utf8String;
         } else
         if (m_bInAnnotationSection)
-        { 
-            m_annotationContents.push_back(utf8String);
-            m_bInAnnotationSection = false;
-        }else
+        {
+            utf8String.escapeXML();
+            m_currentAnnotation += utf8String;
+        } else
         {
             _openSpan(api);
             _outputData(m_pDocument->getPointer(bi), pcrs->getLength());
@@ -434,6 +434,7 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
         _closeBookmark();
         _closeHyperlink();
         // _openAnnotation(api);
+        m_currentAnnotation.clear();
         m_bInAnnotationSection = true;
         _handleAnnotationData(api);
     }
@@ -544,7 +545,12 @@ bool IE_Exp_HTML_Listener::populateStrux(pf_Frag_Strux* sdh,
         _closeHeading();
         _closeLists();*/
         // _closeAnnotation();
-        m_bInAnnotationSection = false;
+        if (m_bInAnnotationSection)
+        {
+            m_annotationContents.push_back(m_currentAnnotation);
+            m_currentAnnotation.clear();
+            m_bInAnnotationSection = false;
+        }
     }
         break;
 
@@ -976,11 +982,11 @@ void IE_Exp_HTML_Listener::_openSpan(PT_AttrPropIndex api)
 			tmp  = "";
 			if (bUnderline) tmp += "underline";
 			if (bLineThrough) {
-				if (bUnderline) tmp += ", ";
+				if (bUnderline) tmp += " ";
 				tmp += "line-through";
 			}
 			if (bOverline) {
-				if (bUnderline || bLineThrough) style += ", ";
+				if (bUnderline || bLineThrough) tmp += " ";
 				tmp += "overline";
 			}
 			//if (!compareStyle("text-decoration", style.utf8_str())) {
@@ -1295,6 +1301,7 @@ void IE_Exp_HTML_Listener::_openFootnote(PT_AttrPropIndex api)
         pAP = nullptr;
     }
 
+    m_currentFootnote.clear();
     m_bInFootnote = true;
 }
 
@@ -1305,7 +1312,12 @@ void IE_Exp_HTML_Listener::_closeFootnote()
 {
     m_bInBlock = true;
 
-    m_bInFootnote = false;
+    if (m_bInFootnote)
+    {
+        m_footnotes.push_back(m_currentFootnote);
+        m_currentFootnote.clear();
+        m_bInFootnote = false;
+    }
 }
 
 /**
@@ -1323,6 +1335,7 @@ void IE_Exp_HTML_Listener::_openEndnote(PT_AttrPropIndex api)
     }
 
 
+    m_currentEndnote.clear();
     m_bInEndnote = true;
 }
 
@@ -1331,7 +1344,12 @@ void IE_Exp_HTML_Listener::_openEndnote(PT_AttrPropIndex api)
  */
 void IE_Exp_HTML_Listener::_closeEndnote()
 {
-    m_bInEndnote = false;
+    if (m_bInEndnote)
+    {
+        m_endnotes.push_back(m_currentEndnote);
+        m_currentEndnote.clear();
+        m_bInEndnote = false;
+    }
 }
 
 /**
@@ -1443,11 +1461,11 @@ void IE_Exp_HTML_Listener::_openTable(PT_AttrPropIndex api, bool recursiveCall)
 			styles += "width:";
 			double tMM = UT_convertToDimension(pszWidth, DIM_MM);
 			double totWidth = m_dPageWidthInches - m_dSecLeftMarginInches - m_dSecRightMarginInches;
-			UT_UTF8String tws = UT_UTF8String_sprintf("%d", totWidth);
+			UT_UTF8String tws = UT_UTF8String_sprintf("%.0f", totWidth);
 			double pMM = UT_convertToDimension(tws.utf8_str(), DIM_MM);
-			double dPCT = tMM / pMM;
+			double dPCT = (pMM > 0.0) ? (tMM / pMM) : 1.0;
 			UT_UTF8String t2;
-			UT_UTF8String_sprintf(t2, "%d%%", dPCT);
+			UT_UTF8String_sprintf(t2, "%.0f%%", dPCT * 100.0);
 			styles += t2;
 		}
 	} 
@@ -1618,7 +1636,7 @@ void IE_Exp_HTML_Listener::_openTable(PT_AttrPropIndex api, bool recursiveCall)
 
 	for(i = 1; i < 4; i++)
 	{
-		if(iBMaxIndx < iBCount[i])
+		if(iBCount[iBMaxIndx] < iBCount[i])
 			iBMaxIndx = i;
 	}
 
@@ -1636,7 +1654,7 @@ void IE_Exp_HTML_Listener::_openTable(PT_AttrPropIndex api, bool recursiveCall)
 
 	for(i = 1; i < 4; i++)
 	{
-		if(iCMaxIndx < iCCount[i])
+		if(iCCount[iCMaxIndx] < iCCount[i])
 			iCMaxIndx = i;
 	}
 
@@ -1654,7 +1672,7 @@ void IE_Exp_HTML_Listener::_openTable(PT_AttrPropIndex api, bool recursiveCall)
 
 	for(i = 1; i < 4; i++)
 	{
-		if(iSMaxIndx < iSCount[i])
+		if(iSCount[iSMaxIndx] < iSCount[i])
 			iSMaxIndx = i;
 	}
 	
@@ -1681,6 +1699,7 @@ void IE_Exp_HTML_Listener::_openTable(PT_AttrPropIndex api, bool recursiveCall)
 	// only add the border style if we didn't already add it in the "border shortcut"
 	if (!sS[iSMaxIndx].size()) styles += ";border-style:solid";
 	
+	if(styles.size() != 0) styles += ";";
 	if(iBCount[iBMaxIndx] != 3)
 	{
 		for(i = 0; i < 4; ++i)
@@ -1994,7 +2013,7 @@ void IE_Exp_HTML_Listener::_openCell(PT_AttrPropIndex api, bool recursiveCall)
 	}
 
 	for (i = 1; i < 4; i++) {
-		if (iBMaxIndx < iBCount[i])
+		if (iBCount[iBMaxIndx] < iBCount[i])
 			iBMaxIndx = i;
 	}
 
@@ -2008,7 +2027,7 @@ void IE_Exp_HTML_Listener::_openCell(PT_AttrPropIndex api, bool recursiveCall)
 	}
 
 	for (i = 1; i < 4; i++) {
-		if (iCMaxIndx < iCCount[i])
+		if (iCCount[iCMaxIndx] < iCCount[i])
 			iCMaxIndx = i;
 	}
 
@@ -2022,7 +2041,7 @@ void IE_Exp_HTML_Listener::_openCell(PT_AttrPropIndex api, bool recursiveCall)
 	}
 
 	for (i = 1; i < 4; i++) {
-		if (iSMaxIndx < iSCount[i])
+		if (iSCount[iSMaxIndx] < iSCount[i])
 			iSMaxIndx = i;
 	}
 
@@ -2223,7 +2242,15 @@ void IE_Exp_HTML_Listener::_openList(PT_AttrPropIndex api, bool recursiveCall)
                 {
                     _closeList();
                 }
-                _openList(api, true);
+                if ((m_listInfoStack.size() > 0) && szListId && m_listInfoStack.back().szId
+                    && (g_ascii_strcasecmp(szListId, m_listInfoStack.back().szId) == 0))
+                {
+                    _openListItem();
+                }
+                else
+                {
+                    _openList(api, true);
+                }
             }
         }
     }
@@ -2983,8 +3010,12 @@ void IE_Exp_HTML_Listener::_handleAnnotationData(PT_AttrPropIndex api)
         pAP->getProperty("annotation-author", szAuthor);
     }
     
-    m_annotationTitles.push_back(szTitle);
-    m_annotationAuthors.push_back(szAuthor);
+    UT_UTF8String title = szTitle ? szTitle : "";
+    title.escapeXML();
+    UT_UTF8String author = szAuthor ? szAuthor : "";
+    author.escapeXML();
+    m_annotationTitles.push_back(title);
+    m_annotationAuthors.push_back(author);
 }
 
 void IE_Exp_HTML_Listener::_makeStylesheet(PT_AttrPropIndex api)
@@ -3004,7 +3035,8 @@ void IE_Exp_HTML_Listener::_makeStylesheet(PT_AttrPropIndex api)
     
     m_stylesheet = sStyleSheet; // Stylesheet for TOC`s and so on
 	if( const char* p = reinterpret_cast<const char*>(buffer.getPointer(0)))
-		m_stylesheet += p;
+		if (buffer.getLength() > 0)
+			m_stylesheet.append(p, buffer.getLength());
 
 	UT_UTF8String bodyStyle = "body{\n";
 	const gchar* szName = nullptr;

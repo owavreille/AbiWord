@@ -72,12 +72,12 @@ bool fp_FieldListLabelRun::calculateValue(void)
 		// This code is here because UT_UCS_copy_char is broken
 		//
 		i = 0;
-		UT_uint32 len = UT_MIN( UT_UCS4_strlen(listlabel),FPFIELD_MAX_LENGTH + 1)  ;
-		for(i=0; i<=len;i++)
+		UT_uint32 len = UT_MIN(UT_UCS4_strlen(listlabel), static_cast<UT_uint32>(FPFIELD_MAX_LENGTH));
+		for(i = 0; i < len; i++)
 		{
-			sz_ucs_FieldValue[i] =  *listlabel++;
+			sz_ucs_FieldValue[i] = *listlabel++;
 		}
-//		sz_ucs_FieldValue[len] = 0;
+		sz_ucs_FieldValue[len] = 0;
 //		m_sFieldValue[0] =  0; // Force an update!!!
 	}
 	return _setValue(sz_ucs_FieldValue);

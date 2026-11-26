@@ -287,23 +287,22 @@ void fp_FootnoteContainer::layout(void)
 		UT_sint32 iContainerHeight = pContainer->getHeight();
 		UT_sint32 iContainerMarginAfter = pContainer->getMarginAfter();
 
+		if (pPrevContainer)
+		{
+			pPrevContainer->setAssignedScreenHeight(iY - iPrevY);
+		}
+		iPrevY = iY;
+
 		iY += iContainerHeight;
 		iY += iContainerMarginAfter;
 		//iY +=  0.5;
 		if(iY > iMaxFootHeight)
 		{
 			iY = iMaxFootHeight;
+			pPrevContainer = pContainer;
 			break;
 		}
-		else
-		{
-			if (pPrevContainer)
-			{
-				pPrevContainer->setAssignedScreenHeight(iY - iPrevY);
-			}
-		}
 		pPrevContainer = pContainer;
-		iPrevY = iY;
 	}
 
 	// Correct height position of the last line
@@ -781,7 +780,10 @@ void fp_AnnotationContainer::layout(void)
 	fl_DocSectionLayout * pDSL = getDocSectionLayout();
 	UT_sint32 iMaxFootHeight = 0;
 	iMaxFootHeight = pDSL->getActualColumnHeight();
-	iMaxFootHeight -= getGraphics()->tlu(20)*3;
+	if (getGraphics())
+	{
+		iMaxFootHeight -= getGraphics()->tlu(20)*3;
+	}
 	UT_uint32 iCountContainers = countCons();
 	fp_Container *pContainer, *pPrevContainer = nullptr;
 	for (UT_uint32 i=0; i < iCountContainers; i++)
@@ -803,6 +805,12 @@ void fp_AnnotationContainer::layout(void)
 		UT_sint32 iContainerHeight = pContainer->getHeight();
 		UT_sint32 iContainerMarginAfter = pContainer->getMarginAfter();
 
+		if (pPrevContainer)
+		{
+			pPrevContainer->setAssignedScreenHeight(iY - iPrevY);
+		}
+		iPrevY = iY;
+
 		iY += iContainerHeight;
 		iY += iContainerMarginAfter;
 		//iY +=  0.5;
@@ -810,15 +818,7 @@ void fp_AnnotationContainer::layout(void)
 		{
 			iY = iMaxFootHeight;
 		}
-		else
-		{
-			if (pPrevContainer)
-			{
-				pPrevContainer->setAssignedScreenHeight(iY - iPrevY);
-			}
-		}
 		pPrevContainer = pContainer;
-		iPrevY = iY;
 	}
 
 	// Correct height position of the last line
@@ -984,9 +984,13 @@ void fp_EndnoteContainer::setContainer(fp_Container * pContainer)
 fl_DocSectionLayout * fp_EndnoteContainer::getDocSectionLayout(void)
 {
 	fl_EndnoteLayout * pFL = static_cast<fl_EndnoteLayout *>(getSectionLayout());
-	fl_DocSectionLayout * pDSL = static_cast<fl_DocSectionLayout *>(pFL->myContainingLayout());
+	fl_ContainerLayout * pDSL = pFL->myContainingLayout();
+	while(pDSL && pDSL->getContainerType() != FL_CONTAINER_DOCSECTION)
+	{
+		pDSL = pDSL->myContainingLayout();
+	}
 	UT_ASSERT(pDSL && (pDSL->getContainerType() == FL_CONTAINER_DOCSECTION));
-	return pDSL;
+	return static_cast<fl_DocSectionLayout *>(pDSL);
 }
 
 /*!

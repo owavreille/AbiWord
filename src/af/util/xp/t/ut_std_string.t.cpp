@@ -146,21 +146,18 @@ TFTEST_MAIN("PropVal")
 
   UT_std_string_removeProperty(mutablePropString, "table-height");
   UT_String_removeProperty(mutableUTString, "table-height");
-//  printf("std = %s / UT = %s\n", mutablePropString.c_str(), mutableUTString.c_str());
-//  TFPASS(mutablePropString == "table-width:1.0in");
+  TFPASS(mutablePropString == "table-width:1.0in");
   TFPASS(mutablePropString == mutableUTString);
 
   // set property
   UT_std_string_setProperty(mutablePropString, "fred", "nerk");
   UT_String_setProperty(mutableUTString, "fred", "nerk");
-//  printf("std = %s / UT = %s\n", mutablePropString.c_str(), mutableUTString.c_str());
-//  TFPASS(mutablePropString == "table-width:1.0in; fred:nerk");
+  TFPASS(mutablePropString == "table-width:1.0in; fred:nerk");
   TFPASS(mutablePropString == mutableUTString);
 
   UT_std_string_setProperty(mutablePropString, "table-width", "2.0in");
   UT_String_setProperty(mutableUTString, "table-width", "2.0in");
-//  printf("std = %s / UT = %s\n", mutablePropString.c_str(), mutableUTString.c_str());
-//  TFPASS(mutablePropString == "fred:nerk; table-width:2.0in");
+  TFPASS(mutablePropString == "fred:nerk; table-width:2.0in");
   TFPASS(mutablePropString == mutableUTString);
 
   // add property string

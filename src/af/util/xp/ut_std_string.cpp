@@ -500,9 +500,11 @@ void UT_std_string_removeProperty(std::string & sPropertyString, const std::stri
 		sNew.clear();
 	}
 
-	// Look for ";" to get right part
-
-	const char * szDelim = strchr(szLoc,';');
+	// When the match is not the first property, szLoc points at the
+	// semicolon of "; prop:". Skip it so the following value is removed,
+	// the same way UT_String_removeProperty and UT_UTF8String_removeProperty do.
+	const size_t delimOffset = (szLoc != szProps) ? 1 : 0;
+	const char * szDelim = strchr(szLoc + delimOffset, ';');
 	if(szDelim == nullptr)
 	{
 		// No properties after this, just assign and return

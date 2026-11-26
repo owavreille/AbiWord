@@ -325,6 +325,9 @@ private:
     std::vector<UT_UTF8String> m_annotationTitles;
     std::vector<UT_UTF8String> m_annotationAuthors;
     std::vector<UT_UTF8String> m_annotationContents;
+    UT_UTF8String m_currentEndnote;
+    UT_UTF8String m_currentFootnote;
+    UT_UTF8String m_currentAnnotation;
 
     IE_Exp_HTML_DataExporter *m_pDataExporter;
 

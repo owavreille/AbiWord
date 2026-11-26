@@ -30,6 +30,7 @@ void IE_Exp_EPUB_EPUB3Writer::openDocument()
 {
     m_pTagWriter->openTag("html", false, false);
     m_pTagWriter->addAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+    m_pTagWriter->addAttribute("xmlns:epub", "http://www.idpf.org/2007/ops");
     m_pTagWriter->addAttribute("profile", EPUB3_CONTENT_PROFILE);
 }
 
@@ -42,6 +43,7 @@ void IE_Exp_EPUB_EPUB3Writer::openAnnotation()
 			m_iAnnotationCount + 1).utf8_str());
 	
 	m_pTagWriter->addAttribute("epub:type", "annoref");
+	m_iAnnotationCount++;
 }
 
 void IE_Exp_EPUB_EPUB3Writer::closeAnnotation()

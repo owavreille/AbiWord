@@ -263,8 +263,7 @@ bool fp_PageSize::Set(const PP_PropertyVector & attributes)
 
 	Set(szPageSize.c_str());
 
-	if (!szWidth.empty() && !szHeight.empty() && !szUnits.empty()
-	    && !szPageScale.empty())
+	if (!szWidth.empty() && !szHeight.empty() && !szUnits.empty())
 	{
 		if(g_ascii_strcasecmp(szPageSize.c_str(),"Custom") == 0)
 		{
@@ -278,7 +277,10 @@ bool fp_PageSize::Set(const PP_PropertyVector & attributes)
 				u = DIM_IN;
 			Set(width, height, u);
 		}
+	}
 
+	if (!szPageScale.empty())
+	{
 		scale =	 UT_convertDimensionless(szPageScale.c_str());
 		setScale(scale);
 	}
@@ -321,12 +323,9 @@ bool fp_PageSize::Set(const PP_PropertyVector & attributes)
 	if (fileUnit != DIM_none && getDims() != fileUnit)
 	{
 		const bool portrait = isPortrait();
-		const double fileWidth = Width(fileUnit);
-		const double fileHeight = Height(fileUnit);
-		if (portrait)
-			Set(fileWidth, fileHeight, fileUnit);
-		else
-			Set(fileHeight, fileWidth, fileUnit);
+		const double fileWidth = UT_convertDimensions(m_iWidth, FUND, fileUnit);
+		const double fileHeight = UT_convertDimensions(m_iHeight, FUND, fileUnit);
+		Set(fileWidth, fileHeight, fileUnit);
 		if (portrait)
 			setPortrait();
 		else

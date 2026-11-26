@@ -1147,6 +1147,8 @@ const UT_RGBColor fp_Run::getFGColor(void) const
 		r = m_pRevisions->getLastRevision();
 
 		UT_return_val_if_fail(r != nullptr, _getColorFG());
+		iId = r->getId();
+		UT_uint32 iRevIdx = iId > 0 ? iId - 1 : 0;
 
 		bool bRevColor = false;
 
@@ -1167,7 +1169,7 @@ const UT_RGBColor fp_Run::getFGColor(void) const
 			bRevColor = true;
 		}
 		
-		if(bMark && iShowId != 0 && (iId-1 == iShowId))
+		if(bMark && iShowId != 0 && (iRevIdx == iShowId))
 		{
 			// this is the case when we are in marking mode, and are
 			// supposed to reveal id > iShowId
@@ -1177,7 +1179,7 @@ const UT_RGBColor fp_Run::getFGColor(void) const
 		if(!bRevColor)
 			return _getColorFG();
 
-		s_fgColor = _getView()->getColorRevisions(iId-1);
+		s_fgColor = _getView()->getColorRevisions(iRevIdx);
 	}
 	else if(m_pHyperlink && getGraphics()->queryProperties(GR_Graphics::DGP_SCREEN) && 
 			(m_pHyperlink->getHyperlinkType() ==  HYPERLINK_NORMAL))
@@ -1451,7 +1453,7 @@ void fp_Run::draw(dg_DrawArgs* pDA)
                     }
                     break;
                 case HYPERLINK_ANNOTATION:
-                    if(displayAnnotations() || pG->queryProperties(GR_Graphics::DGP_SCREEN))
+                    if(displayAnnotations())
                     {
                         display = true;
                         pG->setColor(_getView()->getColorAnnotation(this));
@@ -2995,9 +2997,9 @@ void fp_BookmarkRun::_clearScreen(bool /* bFullLineHeightRect */)
 	getLine()->getScreenOffsets(this, xoff, yoff);
 
 	if(m_bIsStart)
-		Fill(getGraphics(), xoff, yoff, 4, 8);
+		Fill(getGraphics(), xoff - 4, yoff, 4, 8);
 	else
-		Fill(getGraphics(),xoff - 4, yoff, 4, 8);
+		Fill(getGraphics(), xoff - 4, yoff, 4, 8);
 
 }
 
@@ -4198,7 +4200,7 @@ void fp_FieldRun::_lookupProperties(const PP_AttrProp * pSpanAP,
 		UT_parseColor(pszFieldColor, r);
 		_setColorHL(r);
 	} 
-	else if (pszBGColor && strcmp(pszFieldColor,"transparent") != 0)
+	else if (pszBGColor && strcmp(pszBGColor,"transparent") != 0)
 	{
 		UT_RGBColor r;
 		UT_parseColor(pszBGColor, r);
@@ -4367,7 +4369,7 @@ void fp_FieldRun::mapXYToPosition(UT_sint32 x, UT_sint32 /*y*/, PT_DocPosition& 
 	{
 		bEOL = true;
 	}
-	if(getNextRun()->getType() == FPRUN_ENDOFPARAGRAPH)
+	else if(getNextRun()->getType() == FPRUN_ENDOFPARAGRAPH)
 	{
 		bEOL = true;
 	}
@@ -5099,20 +5101,21 @@ bool fp_FieldFootnoteRefRun::calculateValue(void)
 		UT_DEBUGMSG(("fp_FieldFootnoteRefRun::calculateValue: Missing footnote-id attribute. Probably a malformed file.\n"));
 		return false;
 	}
-	FV_View * pView = _getView();
+	FL_DocLayout * pLayout = getBlock()->getDocLayout();
+	UT_return_val_if_fail(pLayout, false);
 	UT_uint32 iPID = atoi(footid);
         const gchar *szCitation = nullptr;
         bool bHaveCitation = pp->getAttribute("text:note-citation", szCitation);
 	UT_sint32 footnoteNo = bHaveCitation ? 
-            atoi(szCitation) : pView->getLayout()->getFootnoteVal(iPID);
+            atoi(szCitation) : pLayout->getFootnoteVal(iPID);
 
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
 	UT_String sFieldValue;
-	FootnoteType iFootType = pView->getLayout()->getFootnoteType();
-	pView->getLayout()->getStringFromFootnoteVal(sFieldValue,footnoteNo,iFootType);
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, sFieldValue.c_str());
+	FootnoteType iFootType = pLayout->getFootnoteType();
+	pLayout->getStringFromFootnoteVal(sFieldValue,footnoteNo,iFootType);
+	setFieldFromUtf8(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), sFieldValue.c_str());
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5156,20 +5159,21 @@ bool fp_FieldFootnoteAnchorRun::calculateValue(void)
 		return false;
 	}
 	UT_uint32 iPID = atoi(footid);
-	FV_View * pView = _getView();
+	FL_DocLayout * pLayout = getBlock()->getDocLayout();
+	UT_return_val_if_fail(pLayout, false);
         const gchar *szCitation = nullptr;
         bool bHaveCitation = pp->getAttribute("text:note-citation", szCitation);
 	UT_sint32 footnoteNo = bHaveCitation ? 
-            atoi(szCitation) : pView->getLayout()->getFootnoteVal(iPID);
+            atoi(szCitation) : pLayout->getFootnoteVal(iPID);
 
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	FootnoteType iFootType = pView->getLayout()->getFootnoteType();
+	FootnoteType iFootType = pLayout->getFootnoteType();
 
 	UT_String sFieldValue;
-	pView->getLayout()->getStringFromFootnoteVal(sFieldValue,footnoteNo,iFootType);
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, sFieldValue.c_str());
+	pLayout->getStringFromFootnoteVal(sFieldValue,footnoteNo,iFootType);
+	setFieldFromUtf8(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), sFieldValue.c_str());
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5209,17 +5213,18 @@ bool fp_FieldEndnoteAnchorRun::calculateValue(void)
 		return false;
 	}
 	UT_uint32 iPID = atoi(footid);
-	FV_View * pView = _getView();
-	UT_sint32 endnoteNo = pView->getLayout()->getEndnoteVal(iPID);
+	FL_DocLayout * pLayout = getBlock()->getDocLayout();
+	UT_return_val_if_fail(pLayout, false);
+	UT_sint32 endnoteNo = pLayout->getEndnoteVal(iPID);
 
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	FootnoteType iEndType = pView->getLayout()->getEndnoteType();
+	FootnoteType iEndType = pLayout->getEndnoteType();
 
 	UT_String sFieldValue;
-	pView->getLayout()->getStringFromFootnoteVal(sFieldValue,endnoteNo,iEndType);
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, sFieldValue.c_str());
+	pLayout->getStringFromFootnoteVal(sFieldValue,endnoteNo,iEndType);
+	setFieldFromUtf8(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), sFieldValue.c_str());
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5259,17 +5264,18 @@ bool fp_FieldEndnoteRefRun::calculateValue(void)
 		return false;
 	}
 	UT_uint32 iPID = atoi(footid);
-	FV_View * pView = _getView();
-	UT_sint32 endnoteNo = pView->getLayout()->getEndnoteVal(iPID);
+	FL_DocLayout * pLayout = getBlock()->getDocLayout();
+	UT_return_val_if_fail(pLayout, false);
+	UT_sint32 endnoteNo = pLayout->getEndnoteVal(iPID);
 
 	UT_UCS4Char sz_ucs_FieldValue[FPFIELD_MAX_LENGTH + 1];
 	sz_ucs_FieldValue[0] = 0;
 
-	FootnoteType iEndType = pView->getLayout()->getEndnoteType();
+	FootnoteType iEndType = pLayout->getEndnoteType();
 
 	UT_String sFieldValue;
-	pView->getLayout()->getStringFromFootnoteVal(sFieldValue,endnoteNo,iEndType);
-	UT_UCS4_strcpy_char(sz_ucs_FieldValue, sFieldValue.c_str());
+	pLayout->getStringFromFootnoteVal(sFieldValue,endnoteNo,iEndType);
+	setFieldFromUtf8(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), sFieldValue.c_str());
 
 	return _setValue(sz_ucs_FieldValue);
 }
@@ -5349,11 +5355,9 @@ bool fp_FieldShortFileNameRun::calculateValue(void)
 	UT_return_val_if_fail(pDoc, false);
 
 	//copy in the name or some wierd char instead
-	const char * name = UT_go_basename_from_uri(pDoc->getFilename().c_str());
-	if (!name)
-		name = "*";
-
-	setFieldFromUtf8(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), name);
+	gchar * base = UT_go_basename_from_uri(pDoc->getFilename().c_str());
+	setFieldFromUtf8(getField(), sz_ucs_FieldValue, G_N_ELEMENTS(sz_ucs_FieldValue), base ? base : "*");
+	g_free(base);
 
 	return _setValue(sz_ucs_FieldValue);
 }

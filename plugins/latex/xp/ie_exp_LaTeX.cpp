@@ -400,6 +400,8 @@ void s_LaTeX_Listener::_closeParagraph(void)
         
 void s_LaTeX_Listener::_closeList(void)
 {
+	if (list_stack.empty())
+		return;
 	switch (list_type) {
 		case NUMBERED_LIST:
 			m_pie->write("\\end{enumerate}\n");
@@ -419,9 +421,10 @@ void s_LaTeX_Listener::_closeList(void)
 
 void s_LaTeX_Listener::_closeLists()
 {
-	do{
+	while(!list_stack.empty())
+	{
 		_closeList();
-	} while(!list_stack.empty());
+	}
 	m_bInList = false;
 }
 
@@ -805,8 +808,8 @@ void s_LaTeX_Listener::_openSection(PT_AttrPropIndex api)
 		const gchar* pszPageMarginRight = nullptr;
 
 		pAP->getProperty("columns", pszNbCols);
-		pAP->getProperty("page-margin-right", pszPageMarginLeft);
-		pAP->getProperty("page-margin-left", pszPageMarginRight);
+		pAP->getProperty("page-margin-left", pszPageMarginLeft);
+		pAP->getProperty("page-margin-right", pszPageMarginRight);
 
 		if (pszNbCols != nullptr && ((0 == strcmp(pszNbCols, "2"))
 						|| (0 == strcmp(pszNbCols, "3"))))
@@ -820,7 +823,7 @@ void s_LaTeX_Listener::_openSection(PT_AttrPropIndex api)
 			m_pie->write("-1in");
 			m_pie->write("}\n");
 		}
-		if (pszPageMarginRight != nullptr)
+		if (pszPageMarginLeft != nullptr && pszPageMarginRight != nullptr)
 		{
 			m_pie->write("\\setlength{\\textwidth}{\\paperwidth - ");
 			m_pie->write(static_cast<const char *> (pszPageMarginRight));
@@ -1316,12 +1319,10 @@ void s_LaTeX_Listener::_outputData(const UT_UCS4Char * data, UT_uint32 length)
 			}
 			else 
 			{
-				char buf[30];
-				int len;
-				if (m_wctomb.wctomb(buf,len,*pData++)) {
-				    for(int i=0;i<len;++i)
-						sBuf += buf[i];
-				};
+				gchar buf[6];
+				gint len = g_unichar_to_utf8(static_cast<gunichar>(*pData++), buf);
+				for (gint i = 0; i < len; ++i)
+					sBuf += buf[i];
 			}
 			break;
 		}
@@ -1508,7 +1509,7 @@ s_LaTeX_Listener::s_LaTeX_Listener(PD_Document * pDocument, IE_Exp_LaTeX * pie,
 	m_pie->write("]{article}\n");
 	// Better for ISO-8859-1 than previous: [T1] doesn't work very well
 	// TODO: Use inputenc from .abw.
-	m_pie->write("\\usepackage[latin1]{inputenc}\n");
+	m_pie->write("\\usepackage[utf8]{inputenc}\n");
 	m_pie->write("\\usepackage{calc}\n");
 	m_pie->write("\\usepackage{setspace}\n");
 	m_pie->write("\\usepackage{fixltx2e}\n");  // for \textsubscript
@@ -2033,7 +2034,7 @@ static int wvConvertUnicodeToLaTeX(U16 char16,const char*& out)
 		case 0xb9:
 			printf("$\\mathonesuperior$");
 			return(1);
-		case 0xdc:
+		case 0x2026:
 			printf("\\ldots{}");
 			return(1);
 		case 37:

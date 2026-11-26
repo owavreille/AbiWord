@@ -73,9 +73,9 @@ static void sFormatDouble(UT_UTF8String & sVal, double d)
 	double res = 0.0000000001;
 	if(fabs(d) > 0.0000000001)
 	{
-		res = res*d;
+		res = res * fabs(d);
 	}
-	if(d < 1e9 && !bUseCurrency)
+	if(fabs(d) < 1e9 && !bUseCurrency)
 	{
 		UT_sint32 iVal = static_cast<UT_sint32>(d);
 		if(iVal >= 0)
@@ -190,6 +190,10 @@ static void sFormatDouble(UT_UTF8String & sVal, double d)
 bool fp_FieldTableSumRows::calculateValue(void)
 {
 	FV_View * pView = _getView();
+	if (!pView)
+	{
+		return false;
+	}
 	const pf_Frag_Strux* tableSDH = nullptr;
 	UT_sint32 numRows =0;
 	UT_sint32 numCols = 0;
@@ -219,13 +223,13 @@ bool fp_FieldTableSumRows::calculateValue(void)
 	}
 	PT_DocPosition pos = pDoc->getStruxPosition(sdh)+1;
 	pDoc->getStruxOfTypeFromPosition(pos,PTX_SectionTable,&tableSDH);
-	pDoc->getRowsColsFromTableStrux(tableSDH, pView->isShowRevisions(), pView->getRevisionLevel(), &numRows, &numCols);
 	UT_UTF8String sValF;
-	if(!pView->isInTable(pos))
+	if(!pView->isInTable(pos) || !tableSDH)
 	{
 		sValF = "???";
 		return _setValue(sValF.ucs4_str().ucs4_str());
 	}
+	pDoc->getRowsColsFromTableStrux(tableSDH, pView->isShowRevisions(), pView->getRevisionLevel(), &numRows, &numCols);
 	fl_CellLayout * pCell = nullptr;
 	UT_sint32 myLeft,myRight,myTop,myBot;
 	pView->getCellParams(pos,&myLeft,&myRight,&myTop,&myBot);
@@ -236,9 +240,17 @@ bool fp_FieldTableSumRows::calculateValue(void)
 	for(row = 0; row < numRows; row++)
 	{
 		const pf_Frag_Strux* sdhCell = pDoc->getCellStruxFromRowCol(tableSDH, true, 99999, row, col);
+		if(!sdhCell)
+		{
+			continue;
+		}
 		UT_sint32 i = getBlock()->getDocLayout()->getLID();
 		fl_ContainerLayout* fmtCell = pDoc->getNthFmtHandle(sdhCell,i);
 		pCell = static_cast<fl_CellLayout *>(fmtCell);
+		if(!pCell)
+		{
+			continue;
+		}
 		if(pCell->getTopAttach() == lastRow)
 		{
 			continue;
@@ -263,6 +275,7 @@ bool fp_FieldTableSumRows::calculateValue(void)
 					}
 					if(pBL == nullptr)
 					{
+						pC = pC->getNext();
 						continue;
 					}
 					fp_Run * pRun = pBL->getFirstRun();
@@ -307,6 +320,10 @@ bool fp_FieldTableSumRows::calculateValue(void)
 bool fp_FieldTableSumCols::calculateValue(void)
 {
 	FV_View * pView = _getView();
+	if (!pView)
+	{
+		return false;
+	}
 	const pf_Frag_Strux* tableSDH = nullptr;
 	UT_sint32 numRows =0;
 	UT_sint32 numCols = 0;
@@ -336,14 +353,14 @@ bool fp_FieldTableSumCols::calculateValue(void)
 	}
 	PT_DocPosition pos = pDoc->getStruxPosition(sdh)+1;
 	pDoc->getStruxOfTypeFromPosition(pos,PTX_SectionTable,&tableSDH);
-	pDoc->getRowsColsFromTableStrux(tableSDH, pView->isShowRevisions(), pView->getRevisionLevel(), &numRows, &numCols);
 
 	UT_UTF8String sValF;
-	if(!pView->isInTable(pos))
+	if(!pView->isInTable(pos) || !tableSDH)
 	{
 		sValF = "???";
 		return _setValue(sValF.ucs4_str().ucs4_str());
 	}
+	pDoc->getRowsColsFromTableStrux(tableSDH, pView->isShowRevisions(), pView->getRevisionLevel(), &numRows, &numCols);
 
 	fl_CellLayout * pCell = nullptr;
 	UT_sint32 myLeft,myRight,myTop,myBot;
@@ -355,9 +372,17 @@ bool fp_FieldTableSumCols::calculateValue(void)
 	for(col = 0; col < numCols; col++)
 	{
 		const pf_Frag_Strux* sdhCell = pDoc->getCellStruxFromRowCol(tableSDH, true, 99999, row, col);
+		if(!sdhCell)
+		{
+			continue;
+		}
 		UT_sint32 i = getBlock()->getDocLayout()->getLID();
 		fl_ContainerLayout* fmtCell = pDoc->getNthFmtHandle(sdhCell,i);
 		pCell = static_cast<fl_CellLayout *>(fmtCell);
+		if(!pCell)
+		{
+			continue;
+		}
 		if(pCell->getLeftAttach() == lastCol)
 		{
 			continue;
@@ -382,6 +407,7 @@ bool fp_FieldTableSumCols::calculateValue(void)
 					}
 					if(pBL == nullptr)
 					{
+						pC = pC->getNext();
 						continue;
 					}
 					fp_Run * pRun = pBL->getFirstRun();

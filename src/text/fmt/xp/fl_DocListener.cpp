@@ -399,6 +399,10 @@ bool fl_DocListener::populateStrux(pf_Frag_Strux* sdh,
 					UT_DEBUGMSG(("Populating header/footer header strux \n"));
 					fl_DocSectionLayout* pDocSL = m_pLayout->findSectionForHdrFtr((char*)pszID);
 					UT_ASSERT(pDocSL);
+					if (!pDocSL)
+					{
+						return false;
+					}
 			
 					// Append a HdrFtrSectionLayout to this DocLayout
 					fl_HdrFtrSectionLayout* pSL = new fl_HdrFtrSectionLayout(hfType, m_pLayout, pDocSL, sdh, pcr->getIndexAP());
@@ -836,7 +840,7 @@ bool fl_DocListener::populateStrux(pf_Frag_Strux* sdh,
 		UT_ASSERT(m_pCurrentSL);
 		fl_ContainerLayout *  pCon = popContainerLayout();
 		UT_DEBUGMSG(("!!!! Append End Table \n"));
-		if(pCon->getContainerType() != FL_CONTAINER_TABLE)
+		if(pCon == nullptr || pCon->getContainerType() != FL_CONTAINER_TABLE)
 		{
 #ifndef NDEBUG
 			m_pDoc->miniDump(sdh,6);
@@ -919,6 +923,8 @@ void fl_DocListener::pushContainerLayout(fl_ContainerLayout * pCL)
  */
 fl_ContainerLayout * fl_DocListener::getTopContainerLayout(void)
 {
+	if (m_sLastContainerLayout.empty())
+		return nullptr;
 	return m_sLastContainerLayout.top();
 }
 
@@ -927,6 +933,8 @@ fl_ContainerLayout * fl_DocListener::getTopContainerLayout(void)
  */
 fl_ContainerLayout * fl_DocListener::popContainerLayout(void)
 {
+	if (m_sLastContainerLayout.size() <= 1)
+		return nullptr;
 	fl_ContainerLayout * pCL = m_sLastContainerLayout.top();
 	m_sLastContainerLayout.pop();
 	return pCL;
@@ -938,14 +946,10 @@ fl_ContainerLayout * fl_DocListener::popContainerLayout(void)
 bool fl_DocListener::change(fl_ContainerLayout* sfh,
 							const PX_ChangeRecord * pcr)
 {
-	UT_return_val_if_fail( sfh, false );
-	
 	bool bResult = false;
 	AV_ChangeMask chgMask = AV_CHG_NONE;
 
-	switch (pcr->getType())
-	{
-	case PX_ChangeRecord::PXT_GlobMarker:
+	if (pcr->getType() == PX_ChangeRecord::PXT_GlobMarker)
 	{
 		UT_ASSERT(sfh == nullptr);							// globs are not strux-relative
 		const PX_ChangeRecord_Glob * pcrg = static_cast<const PX_ChangeRecord_Glob *> (pcr);
@@ -973,6 +977,14 @@ bool fl_DocListener::change(fl_ContainerLayout* sfh,
 			goto finish_up;
 		}
 	}
+
+	if (pcr->getType() != PX_ChangeRecord::PXT_DeleteFmtMark)
+	{
+		UT_return_val_if_fail( sfh, false );
+	}
+
+	switch (pcr->getType())
+	{
 			
 	case PX_ChangeRecord::PXT_InsertSpan:
 	{
@@ -1271,10 +1283,11 @@ bool fl_DocListener::change(fl_ContainerLayout* sfh,
 			
 			bool bres = (m_pDoc->getAttrProp(indexAP, &pAP) && pAP);
 			UT_ASSERT(bres);
-			if(!bres)
+			if(!bres || !pAP)
 			{
 				UT_WARNINGMSG(("getAttrProp() failed in %s:%d",
 							   __FILE__, __LINE__));
+				return false;
 			}
 			pf_Frag_Strux* sdh = pL2->getStruxDocHandle();
 	
@@ -1302,6 +1315,10 @@ bool fl_DocListener::change(fl_ContainerLayout* sfh,
 
 				fl_DocSectionLayout* pDocSL = m_pLayout->findSectionForHdrFtr((char*)pszID);
 				UT_ASSERT(pDocSL); 
+				if (!pDocSL)
+				{
+					return false;
+				}
 			        
 				// Append a HdrFtrSectionLayout to this DocLayout
 				fl_HdrFtrSectionLayout* pHeadSL = new fl_HdrFtrSectionLayout(hfType, m_pLayout, pDocSL, sdh, pcr->getIndexAP());
@@ -1392,10 +1409,11 @@ bool fl_DocListener::change(fl_ContainerLayout* sfh,
 			
 			bool bres = (m_pDoc->getAttrProp(indexAP, &pHFAP) && pHFAP);
 			UT_ASSERT(bres);
-			if(!bres)
+			if(!bres || !pHFAP)
 			{
 				UT_WARNINGMSG(("getAttrProp() failed in %s:%d",
 							   __FILE__, __LINE__));
+				return false;
 			}
 	
 			const gchar* pszHFSectionType = nullptr;
@@ -1416,6 +1434,10 @@ bool fl_DocListener::change(fl_ContainerLayout* sfh,
 				fl_DocSectionLayout* pDocSL = m_pLayout->findSectionForHdrFtr((char*)pszHFID);
 				
 				UT_ASSERT(pDocSL); 
+				if (!pDocSL)
+				{
+					return false;
+				}
 			        
 				// Set the Headerness and overall docSectionLayout
 				//
@@ -1626,7 +1648,8 @@ bool fl_DocListener::change(fl_ContainerLayout* sfh,
 		fl_ContainerLayout * pCL = static_cast<fl_ContainerLayout *>(pL);
 		pCL->format();
 		FV_View* pView = m_pLayout->getView();
-		pView->updateScreen(true);
+		if (pView)
+			pView->updateScreen(true);
 		goto finish_up;
 	}
 	case PX_ChangeRecord::PXT_RemoveList:
@@ -1684,7 +1707,11 @@ bool fl_DocListener::change(fl_ContainerLayout* sfh,
 	{
 	        PT_AttrPropIndex iAP = pcr->getIndexAP();
 		const PP_AttrProp * pAP = nullptr;
-		m_pLayout->getDocument()->getAttrProp(iAP, &pAP);
+		if (!m_pLayout->getDocument()->getAttrProp(iAP, &pAP) || !pAP)
+		{
+		    bResult = false;
+		    goto finish_up;
+		}
 		const gchar * szValue=nullptr;
 		bool b= pAP->getAttribute( PT_DOCPROP_ATTRIBUTE_NAME,szValue);
 		UT_DEBUGMSG(("Doing DocProp change value %s \n",szValue));
@@ -1708,7 +1735,7 @@ bool fl_DocListener::change(fl_ContainerLayout* sfh,
 			FV_View * pView = m_pLayout->getView();
 			const gchar * szAuthorId = nullptr;
 			pAP->getProperty("id",szAuthorId);
-			if(szAuthorId && *szAuthorId)
+			if(pView && szAuthorId && *szAuthorId)
 			{
 			  UT_sint32 id = atoi(szAuthorId);
 			  pView->addCaret(0,id);
@@ -2505,13 +2532,15 @@ bool fl_DocListener::signal(UT_uint32 iSignal)
 #ifdef UPDATE_LAYOUT_ON_SIGNAL
 		m_pLayout->updateLayout();
 #endif
-		pView->updateScreen(true);
+		if (pView)
+			pView->updateScreen(true);
 		break;
 	case PD_SIGNAL_REFORMAT_LAYOUT:
 		m_pLayout->formatAll();
 		break;
 	case PD_SIGNAL_REVISION_MODE_CHANGED:
-		pView->updateRevisionMode();
+		if (pView)
+			pView->updateRevisionMode();
 		// fall through ...
 		
 	case PD_SIGNAL_DOCPROPS_CHANGED_REBUILD:
