@@ -262,8 +262,8 @@ UT_Error IE_ImpGraphic_WMF::convertGraphicToSVG(const UT_ConstByteBufPtr & pBBwm
 	if ((wmf_width <= 0) || (wmf_height <= 0))
 	{	fputs ("Bad image size - but this error shouldn't occur...\n",stderr);
 		status = 1;
-		wmf_api_destroy (API);
-		return UT_ERROR;
+		wmf_stream_destroy(API, ddata->out, &stream, &stream_len);
+		goto ErrorHandler;
 	}
 
 	if ((wmf_width  > (float) max_width )
@@ -457,19 +457,19 @@ UT_Error IE_ImpGraphic_WMF::convertGraphic(const UT_ConstByteBufPtr & pBBwmf,
 	ddata->sink.context = (void *) &write_info;
 	ddata->sink.function = AbiWord_WMF_function;
 
-	err = wmf_play(API,0,&bbox);
-	if (err != wmf_E_None) {
+	wmf_error_t play_err = wmf_play(API,0,&bbox);
+	if (play_err != wmf_E_None) {
 		UT_DEBUGMSG(("IE_ImpGraphic_WMF::convertGraphic Play failed\n"));
 	}
 
 	err = wmf_api_destroy(API);
 
-	if (err == wmf_E_None) {
+	if (play_err == wmf_E_None && err == wmf_E_None) {
 		pBBpng = std::move(bb);
 		return UT_OK;
 	}
 
-	UT_DEBUGMSG(("IE_ImpGraphic_WMF::convertGraphic Err. on destroy\n"));
+	UT_DEBUGMSG(("IE_ImpGraphic_WMF::convertGraphic Err. on play/destroy\n"));
 
 	return UT_ERROR;
 }
@@ -481,7 +481,7 @@ static int AbiWord_WMF_read (void * context)
 
 	const UT_Byte* pByte = nullptr;
 
-	if (info->pos == info->len)
+	if (info->pos >= info->len)
 		return EOF;
 
 	pByte = info->pByteBuf->getPointer(info->pos);
@@ -496,7 +496,10 @@ static int AbiWord_WMF_seek (void * context,long pos)
 {
 	bbuf_read_info * info = (bbuf_read_info *) context;
 
-	info->pos = (UT_uint32) pos;
+	if (pos < 0 || static_cast<UT_uint32>(pos) > info->len)
+		return -1;
+
+	info->pos = static_cast<UT_uint32>(pos);
 
 	return 0;
 }

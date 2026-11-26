@@ -266,7 +266,8 @@ void IE_Exp_WordPerfect::_handleGlobalOff()
 WordPerfect_Listener::WordPerfect_Listener(PD_Document * pDocument,
 										   IE_Exp_WordPerfect * pie)
 	: m_pDocument(pDocument),
-	  m_pie(pie)
+	  m_pie(pie),
+	  m_pAP_Span(nullptr)
 {
 	UT_DEBUGMSG(("WordPerfect Listener::constructor\n"));	
 
@@ -717,8 +718,10 @@ void WordPerfect_Listener::_closeSpan()
 			}
 
 			FREEP(p);
-		}		
+		}
 	}
+
+	m_pAP_Span = nullptr;
 }
 
 void WordPerfect_Listener::_handleVariableGroup(char group, char subgroup, char flags, short sizeNonDelData, char * /*nonDelData*/)

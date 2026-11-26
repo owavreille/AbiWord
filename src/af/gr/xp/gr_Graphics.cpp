@@ -216,6 +216,11 @@ void        AllCarets::setPendingBlink(void)
 {
 	if((*m_pLocalCaret))
 		(*m_pLocalCaret)->setPendingBlink();
+	for(UT_sint32 i = 0; i < m_vecCarets->getItemCount(); i++)
+	{
+		if(GR_Caret * pCaret = m_vecCarets->getNthItem(i))
+			pCaret->setPendingBlink();
+	}
 }
 
 void		AllCarets::setCoords(UT_sint32 x, UT_sint32 y, UT_uint32 h,
@@ -272,6 +277,7 @@ GR_Graphics::GR_Graphics()
 	  m_bDoMerge(false),
 	  m_iPrevYOffset(0),
 	  m_iPrevXOffset(0),
+	  m_iNextCaretNumber(1),
 	  m_AllCarets(this,&m_pCaret,&m_vecCarets),
 	  m_bAntiAliasAlways(false)
 {
@@ -633,6 +639,8 @@ UT_uint32 GR_Graphics::measureString(const UT_UCS4Char* s, int iOffset,
 void GR_Graphics::setZoomPercentage(UT_uint32 iZoom)
 {
 	UT_ASSERT(iZoom > 0);
+	if (iZoom == 0)
+		return;
 
 	m_iZoomPercentage = iZoom;
 
@@ -780,10 +788,12 @@ bool GR_Graphics::_PtInPolygon(const UT_Point * pts, UT_uint32 nPoints,
 void GR_Graphics::polygon(const UT_RGBColor& c, const UT_Point *pts,
                           UT_uint32 nPoints)
 {
+    if (!pts || nPoints == 0)
+        return;
     UT_sint32 minX,maxX,minY,maxY,x,y;
     minX = maxX = pts[0].x;
     minY = maxY = pts[0].y;
-    for(UT_uint32 i = 0;i < nPoints - 1;i++){
+    for(UT_uint32 i = 1;i < nPoints;i++){
         minX = UT_MIN(minX,pts[i].x);
         maxX = UT_MAX(maxX,pts[i].x);
         minY = UT_MIN(minY,pts[i].y);
@@ -1684,7 +1694,7 @@ bool GR_GraphicsFactory::unregisterClass(UT_uint32 iClassId)
 
 	// cannot unregister the default graphics class, hopefully the
 	// rogue plugin will pay attention to the return value
-	UT_return_val_if_fail(iClassId == m_iDefaultScreen || iClassId == m_iDefaultPrinter, false);
+	UT_return_val_if_fail(iClassId != m_iDefaultScreen && iClassId != m_iDefaultPrinter, false);
 	
 	UT_sint32 indx = m_vClassIds.findItem(iClassId);
 

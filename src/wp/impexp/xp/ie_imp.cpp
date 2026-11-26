@@ -213,9 +213,14 @@ IE_ImpSniffer::~IE_ImpSniffer()
 
 UT_Confidence_t IE_ImpSniffer::recognizeContents (GsfInput * input)
 {
+	gsf_off_t sz = gsf_input_size(input);
+	if (sz <= 0)
+		return UT_CONFIDENCE_ZILCH;
+
 	char szBuf[4097] = "";  // 4096+nul ought to be enough
-	UT_uint32 iNumbytes = UT_MIN(4096, gsf_input_size(input));
-	gsf_input_read(input, iNumbytes, (guint8 *)(szBuf));
+	UT_uint32 iNumbytes = static_cast<UT_uint32>(UT_MIN(static_cast<gsf_off_t>(4096), sz));
+	if (gsf_input_read(input, iNumbytes, (guint8 *)(szBuf)) == nullptr)
+		return UT_CONFIDENCE_ZILCH;
 	szBuf[iNumbytes] = '\0';
 
 	return recognizeContents(szBuf, iNumbytes);
@@ -696,6 +701,7 @@ const char * IE_Imp::descriptionForFileType(IEFileType ieft)
 	IEFileType ieftDummy;
 
 	IE_ImpSniffer * pSniffer = snifferForFileType(ieft);
+	UT_return_val_if_fail(pSniffer != nullptr, nullptr);
 
 	if (pSniffer->getDlgLabels(&szDescription,&szDummy,&ieftDummy))
 	{

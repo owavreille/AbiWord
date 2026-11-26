@@ -213,7 +213,7 @@ static EV_EditBits MakeMouseEditBits( UT_uint32 button, UT_uint32 op, UT_uint32 
 
 static EV_EditBits MakeNVKEditBits( UT_uint32 mod, UT_uint32 nvk ) 
 {
-	return EV_EMS_FromNumberNoShift(mod) | nvk | EV_EKP_NAMEDKEY;
+	return EV_EMS_FromNumber(mod) | nvk | EV_EKP_NAMEDKEY;
 }
 				
 static EV_EditBits MakeKeyPressEditBits( UT_uint32 mod, UT_uint32 key ) 
@@ -547,21 +547,35 @@ bool EV_EditBindingMap::removeBinding(EV_EditBits eb)
 
 void EV_EditBindingMap::resetAll()
 {
-	// NOTE: this to me seems like a memory leak,
-	// but since removeBinding is so seemingly easy with leaking
-	// memory as well, I just copy it's MO.
 	for (size_t i=0; i<sizeof(m_pebMT)/sizeof(m_pebMT[0]); ++i) {
-		m_pebMT[i]->reset();
+		if (m_pebMT[i]) {
+			for (UT_uint32 op=0; op < EV_COUNT_EMO; ++op)
+				for (UT_uint32 mod=0; mod < EV_COUNT_EMS; ++mod)
+					for (UT_uint32 ctx=0; ctx < EV_COUNT_EMC; ++ctx)
+						if (m_pebMT[i]->m_peb[op][mod][ctx])
+							delete m_pebMT[i]->m_peb[op][mod][ctx];
+			m_pebMT[i]->reset();
+		}
 	}
-	m_pebNVK->reset();
-	m_pebChar->reset();
+	if (m_pebNVK) {
+		for (UT_sint32 i=0; i < static_cast<UT_sint32>(EV_COUNT_NVK); ++i)
+			for (UT_sint32 j=0; j < EV_COUNT_EMS; ++j)
+				if (m_pebNVK->m_peb[i][j])
+					delete m_pebNVK->m_peb[i][j];
+		m_pebNVK->reset();
+	}
+	if (m_pebChar) {
+		for (UT_sint32 i=0; i < 256; ++i)
+			for (UT_sint32 j=0; j < EV_COUNT_EMS_NoShift; ++j)
+				if (m_pebChar->m_peb[i][j])
+					delete m_pebChar->m_peb[i][j];
+		m_pebChar->reset();
+	}
 }
 
 const char * EV_EditBindingMap::getShortcutFor(const EV_EditMethod * pEM) const
 {
 	UT_ASSERT(pEM);
-	if(!m_pebChar)
-	  return nullptr;
 	// lookup the keyboard shortcut bound to pEM, if any
 
 	EV_EditModifierState ems = 0;
@@ -655,7 +669,7 @@ const char * EV_EditBindingMap::getShortcutFor(const EV_EditMethod * pEM) const
 			}
 		}
 		 else
-			shortcut = toupper (shortcut); 
+			shortcut = static_cast<char>(toupper(static_cast<unsigned char>(shortcut)));
 	            
 		int len = strlen(buf);
 		buf[len] = shortcut;

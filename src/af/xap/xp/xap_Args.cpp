@@ -98,6 +98,11 @@ XAP_Args::XAP_Args(const char * szCmdLine)
 	int count = 10;	// start with 10 and g_try_realloc if necessary
 	int k = 0;
 	char ** argv = (char **)UT_calloc(count,sizeof(char *));
+	if (!argv)
+	{
+		FREEP(m_szBuf);
+		return;
+	}
 
 	enum: uint8_t { S_START, S_INTOKEN, S_INDQUOTE, S_INSQUOTE } state;
 	state = S_START;
@@ -105,7 +110,14 @@ XAP_Args::XAP_Args(const char * szCmdLine)
 #define GrowArrayIfNecessary()								\
 	do	{	if (k==count)									\
 			{	int newsize = (count+10)*sizeof(char *);	\
-				argv = (char **)g_try_realloc(argv,newsize);	\
+				char ** newargv = (char **)g_try_realloc(argv,newsize);	\
+				if (!newargv)								\
+				{											\
+					FREEP(argv);							\
+					FREEP(m_szBuf);							\
+					return;									\
+				}											\
+				argv = newargv;								\
 				count += 10;								\
 		}} while (0)
 
@@ -125,11 +137,17 @@ XAP_Args::XAP_Args(const char * szCmdLine)
 			{
 				state=S_INSQUOTE;
 				*p++=0;					// don't include starting quote in token
+				GrowArrayIfNecessary();
+				argv[k++] = p;
+				break;
 			}
 			else if (*p=='"')
 			{
 				state=S_INDQUOTE;
 				*p++=0;					// don't include starting quote in token
+				GrowArrayIfNecessary();
+				argv[k++] = p;
+				break;
 			}
 			else
 				state=S_INTOKEN;
@@ -175,6 +193,7 @@ XAP_Args::XAP_Args(const char * szCmdLine)
 	
 	if (k==0)
 	{
+		FREEP(argv);
 		FREEP(m_szBuf);
 		return;
 	}

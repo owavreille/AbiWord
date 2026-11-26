@@ -133,6 +133,8 @@ private:
 	long long                                               m_iLastDrawTime;
 	UT_sint32                                               m_iRetry;
 	bool                                                    m_bPendingBlink;
+	bool                                                    m_bR1Saved;
+	bool                                                    m_bR2Saved;
 };
 
 class ABI_EXPORT GR_CaretDisabler

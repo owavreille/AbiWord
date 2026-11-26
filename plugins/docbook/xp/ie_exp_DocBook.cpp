@@ -217,6 +217,12 @@ void s_DocBook_Listener::_tagClose(UT_uint32 tagID, const UT_UTF8String & conten
 	if(newline)
 		m_pie->write("\n");
 
+	if (m_utnsTagStack.empty())
+	{
+		UT_DEBUGMSG(("DocBook export: attempted to close tag %d with empty tag stack\n", tagID));
+		return;
+	}
+
 	i = m_utnsTagStack.top();
 	m_utnsTagStack.pop();
 	m_iLastClosed = i;

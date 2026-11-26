@@ -79,12 +79,13 @@ EV_Menu::addMenuItem(const UT_String &path, const UT_String& description)
 	UT_uint32 last_pos = 1;
 	XAP_Menu_Id last_index = (XAP_Menu_Id)0;
 	XAP_Menu_Id index = (XAP_Menu_Id)0;
-	UT_ASSERT(!names.empty());
+	UT_return_val_if_fail(!names.empty(), (XAP_Menu_Id)0);
 	UT_ASSERT(m_pMenuLabelSet);
 //	UT_ASSERT(pMenuActionSet);
 
 	// if need, we create submenus
 	UT_DEBUGMSG(("Gonna create submenus...\n"));
+	bool bCreatedSubmenu = false;
 	size_t end = names.size() - 1;
 	for (size_t i = 0; i < end; ++i)
 	{
@@ -118,13 +119,14 @@ EV_Menu::addMenuItem(const UT_String &path, const UT_String& description)
 				_doAddMenuItem(lpos);
 			}
 
+			bCreatedSubmenu = true;
 			break;
 		}
 
 		last_index = index;
 	}
 
-	if (index != 0)
+	if (!bCreatedSubmenu && index != 0)
 		last_pos = m_pMenuLayout->getLayoutIndex(last_index) + 1;
 
 	UT_DEBUGMSG(("Gonna add a menu item.\n"));
@@ -217,6 +219,7 @@ const char ** EV_Menu::getLabelName(XAP_App * pApp,
 		return data;	// which will be two nulls now
 
 	static char accelbuf[32];
+	accelbuf[0] = '\0';
 	{
 		// see if this has an associated keybinding
 		const char * szMethodName = pAction->getMethodName();
@@ -241,10 +244,7 @@ const char ** EV_Menu::getLabelName(XAP_App * pApp,
 
 			const char * string = pEEM->getShortcutFor(pEM);
 			if (string && *string)
-				strcpy(accelbuf, string);
-			else
-				// zero it out for this round
-				*accelbuf = 0;
+				g_strlcpy(accelbuf, string, sizeof(accelbuf));
 		}
 	}
 

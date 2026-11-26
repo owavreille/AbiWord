@@ -487,13 +487,14 @@ UT_Error IE_ImpGraphic::constructImporter(GsfInput * input,
 				const char * name = gsf_input_name (input);
 				// we can have an empty name (nullptr) because we can have a memory stream.
 				if(name) {
+					size_t nameLen = strlen(name);
 					const IE_SuffixConfidence * sc = s->getSuffixConfidence();
 					while (sc && !sc->suffix.empty() && suffix_confidence != UT_CONFIDENCE_PERFECT) {
 						/* suffixes do not have a leading '.' */
-						// we use g_str_has_suffix like this to make sure we properly autodetect the extensions
-						// of files that have dots in their names, like foo.bar.png
+						// Compare case-insensitively so files like PHOTO.JPG or foo.bar.PNG match properly
 						std::string suffix = std::string(".") + sc->suffix;
-						if (g_str_has_suffix(name, suffix.c_str()) && 
+						if (nameLen >= suffix.size() &&
+							g_ascii_strcasecmp(name + nameLen - suffix.size(), suffix.c_str()) == 0 &&
 							sc->confidence > suffix_confidence) {
 							suffix_confidence = sc->confidence;
 						}
@@ -639,9 +640,14 @@ UT_Error IE_ImpGraphic::loadGraphic(const UT_ConstByteBufPtr &pBB,
 
 UT_Confidence_t IE_ImpGraphicSniffer::recognizeContents (GsfInput * input)
 {
+	gsf_off_t sz = gsf_input_size(input);
+	if (sz <= 0)
+		return UT_CONFIDENCE_ZILCH;
+
 	char szBuf[4097] = "";  // 4096+nul ought to be enough
-	UT_uint32 iNumbytes = UT_MIN(4096, gsf_input_size(input));
-	gsf_input_read(input, iNumbytes, (guint8 *)(szBuf));
+	UT_uint32 iNumbytes = static_cast<UT_uint32>(UT_MIN(static_cast<gsf_off_t>(4096), sz));
+	if (gsf_input_read(input, iNumbytes, (guint8 *)(szBuf)) == nullptr)
+		return UT_CONFIDENCE_ZILCH;
 	szBuf[iNumbytes] = '\0';
 
 	return recognizeContents(szBuf, iNumbytes);

@@ -53,19 +53,23 @@ GR_Painter::~GR_Painter ()
 				   m_bDoubleBufferingToken ? 1 : 0, (void*)m_pGr);
 	UT_Win32TraceHeap("painter-delete");
 #endif
-	endDoubleBuffering();
+	if (m_pGr) {
+		if (m_bSuspendDrawingToken)
+			resumeDrawing();
+		endDoubleBuffering();
 #ifdef TOOLKIT_WIN
-	UT_Win32TraceHeap("painter-endbuf");
+		UT_Win32TraceHeap("painter-endbuf");
 #endif
 
-	m_pGr->endPaint ();
+		m_pGr->endPaint ();
 #ifdef TOOLKIT_WIN
-	UT_Win32Trace("painter-gone");
-	UT_Win32TraceHeap("painter-gone");
+		UT_Win32Trace("painter-gone");
+		UT_Win32TraceHeap("painter-gone");
 #endif
 
-	if (m_bCaretsDisabled)
-		m_pGr->enableAllCarets();
+		if (m_bCaretsDisabled)
+			m_pGr->enableAllCarets();
+	}
 }
 
 void GR_Painter::drawLine(UT_sint32 x1, UT_sint32 y1, UT_sint32 x2, UT_sint32 y2)

@@ -191,7 +191,10 @@ const char * AbiWordperfectInputStream::subStreamName(unsigned id)
 			std::map<unsigned, std::string>::iterator i = m_substreams.lower_bound(id);
 			if (i == m_substreams.end() || m_substreams.key_comp()(id, i->first))
 				{
-					std::string name = gsf_infile_name_by_index(m_ole, (int)id);
+					const char *szName = gsf_infile_name_by_index(m_ole, (int)id);
+					if (!szName)
+						return nullptr;
+					std::string name(szName);
 					i = m_substreams.insert(i, std::map<unsigned, std::string>::value_type(id, name));
 				}
 			return i->second.c_str();
@@ -401,6 +404,7 @@ IE_Imp_WordPerfect::IE_Imp_WordPerfect(PD_Document * pDocument)
 
 IE_Imp_WordPerfect::~IE_Imp_WordPerfect()
 {
+	DELETEP(m_pCurrentListDefinition);
 	//UT_HASH_PURGEDATA(ABI_ListDefinition *,&m_listStylesHash,delete); 
 }
 
@@ -569,6 +573,7 @@ void IE_Imp_WordPerfect::openParagraph(const librevenge::RVNGPropertyList &propL
 		lineSpacing = propList["fo:line-height"]->getDouble();
 	
 	UT_String tmpBuffer;
+	UT_LocaleTransactor lt(LC_NUMERIC, "C");
 	UT_String_sprintf(tmpBuffer, "; margin-top:%dpt; margin-bottom:%dpt; margin-left:%.4fin; margin-right:%.4fin; text-indent:%.4fin; line-height:%.4f",
 		(int)(m_topMargin*72), (int)(m_bottomMargin*72), m_leftMarginOffset, m_rightMarginOffset, m_textIndent, lineSpacing);
 	propBuffer += tmpBuffer;
@@ -955,6 +960,7 @@ void IE_Imp_WordPerfect::openListElement(const librevenge::RVNGPropertyList &pro
 	UT_String_sprintf(tempBuffer, "start-value:%i; ", 1);
 	propBuffer += tempBuffer;
 
+	UT_LocaleTransactor lt(LC_NUMERIC, "C");
 	UT_String_sprintf(tempBuffer, "margin-left:%.4fin; ", m_pCurrentListDefinition->getListLeftOffset(m_iCurrentListLevel)
 					+ m_pCurrentListDefinition->getListMinLabelWidth(m_iCurrentListLevel)
 					- (propList["fo:text-indent"] ? propList["fo:text-indent"]->getDouble() : 0.0f));
@@ -1113,7 +1119,7 @@ void IE_Imp_WordPerfect::openTableRow(const librevenge::RVNGPropertyList & /*pro
 void IE_Imp_WordPerfect::openTableCell(const librevenge::RVNGPropertyList &propList)
 {
 	if (m_bHdrFtrOpenCount) return; // HACK
-	int col =0,  row = 0, colSpan = 0, rowSpan = 0;
+	int col = 0, row = 0, colSpan = 1, rowSpan = 1;
 	if (propList["librevenge:column"])
 		col = propList["librevenge:column"]->getInt();
 	if (propList["librevenge:row"])

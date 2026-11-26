@@ -343,8 +343,10 @@ bool XAP_App::initialize(const char * szKeyBindingsKey, const char * szKeyBindin
 	if (getPrefsValue(szKeyBindingsKey, bindings) && !bindings.empty()) {
 		pBindingMap = m_pApp->getBindingMap(bindings.c_str());
 	}
-	if (!pBindingMap)
+	if (!pBindingMap) {
+		bindings = szKeyBindingsDefaultValue;
 		pBindingMap = m_pApp->getBindingMap(szKeyBindingsDefaultValue);
+	}
 	UT_ASSERT(pBindingMap);
 
 	if (!m_pInputModes)
@@ -430,11 +432,12 @@ bool XAP_App::addListener(AV_Listener * pListener,
  */
 bool XAP_App::removeListener(AV_ListenerId listenerId)
 {
-	if (listenerId == (AV_ListenerId) -1)
+	if (listenerId == (AV_ListenerId) -1 ||
+		listenerId >= static_cast<AV_ListenerId>(m_vecPluginListeners.getItemCount()))
 		return false;
 	
 	if (m_vecPluginListeners.getNthItem(listenerId)) {
-		m_vecPluginListeners.deleteNthItem(listenerId);
+		m_vecPluginListeners.setNthItem(listenerId, nullptr, nullptr);
 		return true;
 	}
 	return false;
@@ -1010,7 +1013,7 @@ void XAP_App::rememberModelessId(UT_sint32 id, XAP_Dialog_Modeless * pDialog)
 	for(i=0; (i<= NUM_MODELESSID) && (m_IdTable[i].id !=  -1); i++) {
 
 	}
-	UT_ASSERT( i <= NUM_MODELESSID );
+	UT_return_if_fail(i <= NUM_MODELESSID);
 // This assert cause a warning because array subscript is out of bounds.
 //	UT_ASSERT( m_IdTable[i].id == -1 );
 	UT_ASSERT( pDialog);
@@ -1365,7 +1368,7 @@ void XAP_App::setDefaultGraphicsId(UT_uint32 i)
 		UT_return_if_fail(pPrefsScheme);
 
 		UT_String s;
-		UT_String_sprintf(s, "%d", i);
+		UT_String_sprintf(s, "%x", i);
 		
 		pPrefsScheme->setValue(XAP_PREF_KEY_DefaultGraphics, s.c_str());
 	}

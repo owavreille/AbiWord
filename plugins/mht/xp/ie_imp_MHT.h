@@ -65,7 +65,7 @@ public:
 
 	bool				append (const char * buffer, UT_uint32 length);
 
-	const UT_ConstByteBufPtr & getBuffer() const { return m_buf; }
+	UT_ConstByteBufPtr  getBuffer() const { return m_buf; }
 	UT_ByteBufPtr && detachBuffer();
 
 	void				clear ();
@@ -127,13 +127,14 @@ public:
 
 	~IE_Imp_MHT ();
 
-	UT_Error		importFile (const char * szFilename);
+protected:
+	virtual UT_Error	_loadFile (GsfInput * input) override;
 
 private:
-	FG_ConstGraphicPtr	importImage(const gchar * szSrc);
+	virtual FG_ConstGraphicPtr	importImage(const gchar * szSrc) override;
 
-	UT_Error		importXHTML (const char * szFilename);
-	UT_Error		importHTML4 (const char * szFilename);
+	UT_Error		importXHTML ();
+	UT_Error		importHTML4 ();
 
 	UT_Multipart *	importMultipart ();
 

@@ -953,6 +953,7 @@ class ABI_EXPORT GR_Graphics
 	static UT_uint32        s_iInstanceCount;
 	static UT_UCS4Char      s_cDefaultGlyph;
 	UT_GenericVector<GR_Caret *>  m_vecCarets;
+	UT_sint32               m_iNextCaretNumber;
 	AllCarets               m_AllCarets;
 	bool                    m_bAntiAliasAlways;
 };

@@ -49,12 +49,16 @@ UT_Error OXML_Element_Table::serialize(IE_Exp_OpenXML* exporter)
 		return err;
 
 	//set the row numbers
-	std::vector<OXML_Element*>::size_type i;
+	OXML_ElementVector::size_type i;
+	unsigned int rowIdx = 0;
 	OXML_ElementVector children = getChildren();
 	for (i = 0; i < children.size(); i++)
 	{
-		OXML_Element_Row* r = static_cast<OXML_Element_Row*>(children[i].get());
-		r->setRowNumber(i);
+		if (children[i]->getTag() == TR_TAG)
+		{
+			OXML_Element_Row* r = static_cast<OXML_Element_Row*>(children[i].get());
+			r->setRowNumber(rowIdx++);
+		}
 	}
 
 	err = this->serializeChildren(exporter);
@@ -408,14 +412,19 @@ bool OXML_Element_Table::incrementRightHorizontalMergeStart(const OXML_SharedEle
 void OXML_Element_Table::addMissingCell(unsigned int rowNumber, const OXML_SharedElement_Cell& cell)
 {
 	OXML_ElementVector::size_type i;
+	unsigned int rowIdx = 0;
 	OXML_ElementVector children = getChildren();
 	for (i = 0; i < children.size(); i++)
 	{
-		OXML_Element_Row* r = static_cast<OXML_Element_Row*>(children[i].get());
-		if(i == rowNumber)
+		if (children[i]->getTag() == TR_TAG)
 		{
-			r->addMissingCell(cell);
-			return;
+			if(rowIdx == rowNumber)
+			{
+				OXML_Element_Row* r = static_cast<OXML_Element_Row*>(children[i].get());
+				r->addMissingCell(cell);
+				return;
+			}
+			rowIdx++;
 		}
 	}
 }

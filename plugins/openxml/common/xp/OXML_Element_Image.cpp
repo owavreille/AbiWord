@@ -44,7 +44,7 @@ OXML_Element_Image::~OXML_Element_Image()
 UT_Error OXML_Element_Image::serialize(IE_Exp_OpenXML* exporter)
 {
 	UT_Error err = UT_OK;
-	const gchar* szValue;
+	const gchar* szValue = nullptr;
 	const gchar* height = "1.0in";
 	const gchar* width = "1.0in";
 	const gchar* xpos = "0.0in";
@@ -54,9 +54,13 @@ UT_Error OXML_Element_Image::serialize(IE_Exp_OpenXML* exporter)
 
 	bPositionedImage = (getAttribute("strux-image-dataid", szValue) == UT_OK);
 
-	if (!bPositionedImage)
+	if (!bPositionedImage && (getAttribute("dataid", szValue) != UT_OK || !szValue))
 	{
-		getAttribute("dataid", szValue);
+		return UT_OK;
+	}
+	if (!szValue)
+	{
+		return UT_OK;
 	}
 
 	std::string sEscValue = UT_escapeXML(szValue);

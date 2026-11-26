@@ -252,7 +252,7 @@ UT_sint32 GR_EmbedManager::makeEmbedView(AD_Document * pDoc, UT_uint32  api, con
  */
 void GR_EmbedManager::makeSnapShot(UT_sint32 uid, UT_Rect & /*rec*/)
 {
-  if((m_vecSnapshots.getItemCount() == 0) || (uid >= m_vecSnapshots.getItemCount()))
+  if((uid < 0) || (uid >= m_vecSnapshots.getItemCount()))
     {
       UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
       return;
@@ -292,7 +292,7 @@ bool GR_EmbedManager::modify(UT_sint32 /*uid*/)
  */
 bool GR_EmbedManager::changeAPI(UT_sint32 uid, UT_uint32 /*api*/)
 {
-  if((m_vecSnapshots.getItemCount() == 0) || (uid >= m_vecSnapshots.getItemCount()))
+  if((uid < 0) || (uid >= m_vecSnapshots.getItemCount()))
     {
       UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
       return false;
@@ -339,11 +339,16 @@ void GR_EmbedManager::loadEmbedData(UT_sint32 )
  */
 UT_sint32 GR_EmbedManager::getWidth(UT_sint32 uid)
 {
+  if((uid < 0) || (uid >= m_vecSnapshots.getItemCount()))
+    {
+      UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+      return 0;
+    }
   GR_EmbedView * pEView = m_vecSnapshots.getNthItem(uid);
   UT_nonnull_or_return(pEView, 0);
   if( pEView->m_bHasPNGSnapshot)
   {
-    UT_sint32 iWidth,iHeight = 0;
+    UT_sint32 iWidth = 0, iHeight = 0;
     UT_PNG_getDimensions(pEView->m_PNGBuf, iWidth,iHeight);
     iWidth = getGraphics()->tlu(iWidth);
     return iWidth;
@@ -360,11 +365,16 @@ UT_sint32 GR_EmbedManager::getAscent(UT_sint32 uid)
 {
   // FIXME work out a way to write this into the document.
 
+  if((uid < 0) || (uid >= m_vecSnapshots.getItemCount()))
+    {
+      UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+      return 0;
+    }
   GR_EmbedView * pEView = m_vecSnapshots.getNthItem(uid);
   UT_nonnull_or_return(pEView, 0);
   if( pEView->m_bHasPNGSnapshot)
   {
-    UT_sint32 iWidth,iHeight = 0;
+    UT_sint32 iWidth = 0, iHeight = 0;
     UT_PNG_getDimensions(pEView->m_PNGBuf, iWidth,iHeight);
     iHeight = getGraphics()->tlu(iHeight);
     return iHeight;
@@ -401,7 +411,7 @@ void GR_EmbedManager::setColor(UT_sint32 , const UT_RGBColor & )
  */
 void GR_EmbedManager::render(UT_sint32 uid ,UT_Rect & rec )
 {
-  if((m_vecSnapshots.getItemCount() == 0) || (uid >= m_vecSnapshots.getItemCount()))
+  if((uid < 0) || (uid >= m_vecSnapshots.getItemCount()))
     {
       UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
       return;
@@ -421,7 +431,7 @@ void GR_EmbedManager::render(UT_sint32 uid ,UT_Rect & rec )
   }
  else if( pEView->m_bHasSVGSnapshot)
   {
-    UT_sint32 iWidth,iHeight = 0, iLayoutWidth, iLayoutHeight;
+    UT_sint32 iWidth = 0, iHeight = 0, iLayoutWidth = 0, iLayoutHeight = 0;
     if((rec.height <= 0) || (rec.width <= 0))
     { 
       UT_SVG_getDimensions(pEView->m_SVGBuf, getGraphics(), iWidth, iHeight, iLayoutWidth, iLayoutHeight);
@@ -436,12 +446,12 @@ void GR_EmbedManager::render(UT_sint32 uid ,UT_Rect & rec )
 
     pEView->m_pPreview = getGraphics()->createNewImage(pEView->m_sDataID.utf8_str(),pEView->m_SVGBuf,"image/svg+xml",iWidth,iHeight);
     GR_Painter painter(getGraphics());
-    painter.drawImage(pEView->m_pPreview,rec.top,rec.left);
+    painter.drawImage(pEView->m_pPreview, rec.left, rec.top);
     return;
   }
   else if( pEView->m_bHasPNGSnapshot)
   {
-    UT_sint32 iWidth,iHeight = 0;
+    UT_sint32 iWidth = 0, iHeight = 0;
     if((rec.height <= 0) || (rec.width <= 0))
     { 
       UT_PNG_getDimensions(pEView->m_PNGBuf, iWidth,iHeight);
@@ -470,7 +480,7 @@ void GR_EmbedManager::render(UT_sint32 uid ,UT_Rect & rec )
  */
 void GR_EmbedManager::releaseEmbedView(UT_sint32 uid)
 {
-  if((m_vecSnapshots.getItemCount() == 0) || (uid >= m_vecSnapshots.getItemCount()))
+  if((uid < 0) || (uid >= m_vecSnapshots.getItemCount()))
     {
       return;
     }

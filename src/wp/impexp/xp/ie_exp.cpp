@@ -325,7 +325,8 @@ UT_Error IE_Exp::writeFile(GsfOutput * fp)
 	s_lastWriteErrorDetail.clear();
 	m_fp = fp;
 
-	m_szFileName = gsf_output_name(fp);
+	const char * szName = gsf_output_name(fp);
+	m_szFileName = szName ? szName : "";
 	return _writeDocument();
 }
 
@@ -679,6 +680,7 @@ const char * IE_Exp::descriptionForFileType(IEFileType ieft)
 	IEFileType ieftDummy;
 
 	IE_ExpSniffer * pSniffer = snifferForFileType(ieft);
+	UT_return_val_if_fail(pSniffer != nullptr, nullptr);
 
 	if (pSniffer->getDlgLabels(&szDescription,&szDummy,&ieftDummy))
 	{

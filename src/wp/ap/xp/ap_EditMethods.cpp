@@ -2437,7 +2437,7 @@ UT_Error fileOpen(XAP_Frame * pFrame, const char * pNewFile, IEFileType ieft)
 		if (!pNewFrame)
 		{
 			s_StartStopLoadingCursor( false,nullptr);
-			return false;
+			return UT_ERROR;
 		}
 
 // Open a complete but blank frame, then load the document into it
@@ -2449,7 +2449,7 @@ UT_Error fileOpen(XAP_Frame * pFrame, const char * pNewFile, IEFileType ieft)
 		}
 	    else
 		{
-			return false;
+			return UT_ERROR;
 		}
 
 
@@ -2459,39 +2459,10 @@ UT_Error fileOpen(XAP_Frame * pFrame, const char * pNewFile, IEFileType ieft)
 		{
 			pNewFrame->show();
 		}
-#if 0
-		else
+		if (errorCode != UT_OK)
 		{
-			// TODO there is a problem with the way we create a
-			// TODO new frame and then load a documentent into
-			// TODO it.  if we try to load pNewFile and fail,
-			// TODO and then destroy the window, and raise a
-			// TODO message box (on the original window) we get
-			// TODO nasty race on UNIX.  raising the dialog and
-			// TODO waiting for input flushes out the show-windows
-			// TODO on the new (and not yet completely instantiated)
-			// TODO window.  this causes a view-less top-level
-			// TODO window to appear -- which causes lots of
-			// TODO expose-related problems... and then other
-			// TODO problems which appear to be related to having
-			// TODO multiple gtk_main()'s on the stack....
-			// TODO
-			// TODO for now, we force a new untitled document into
-			// TODO the new window and then raise the message on
-			// TODO this new window.
-			// TODO
-			// TODO long term, we may want to modified pApp->newFrame()
-			// TODO to take an 'bool bShowWindow' argument....
-
-			// the IEFileType here doesn't really matter since the file name is nullptr
-			errorCode = pNewFrame->loadDocument((const char *)nullptr, IEFT_Unknown);
-			if (UT_IS_IE_SUCCESS(errorCode)) {
-				pNewFrame->updateZoom();
-				pNewFrame->show();
-			}
-			s_CouldNotLoadFileMessage(pNewFrame,pNewFile, errorCode);
+			s_CouldNotLoadFileMessage(pNewFrame, pNewFile, errorCode);
 		}
-#endif
 		s_StartStopLoadingCursor( false,nullptr);
 		return errorCode;
 	}
@@ -2530,13 +2501,22 @@ Defun1(importStyles)
 	bool bOK = s_AskForPathname(pFrame,false, XAP_DIALOG_ID_FILE_OPEN, nullptr,&pFile,&ieft);
 
 	if (!bOK || !pFile)
+	{
+	  g_free(pFile);
 	  return false;
+	}
 
 	PD_Document * pDoc = static_cast<PD_Document *>(pFrame->getCurrentDoc());
 
-	UT_return_val_if_fail(pDoc,false);
+	if (!pDoc)
+	{
+	  g_free(pFile);
+	  UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+	  return false;
+	}
 
 	error = pDoc->importStyles(pFile,ieft);
+	g_free(pFile);
 
 	return E2B(error);
 }
@@ -2594,7 +2574,7 @@ s_importFile (XAP_Frame * pFrame, const char * pNewFile, IEFileType ieft)
 		if (!pNewFrame)
 		{
 			s_StartStopLoadingCursor( false,nullptr);
-			return false;
+			return UT_ERROR;
 		}
 
 		// treat import as creating a new, dirty document that
@@ -2608,8 +2588,8 @@ s_importFile (XAP_Frame * pFrame, const char * pNewFile, IEFileType ieft)
 		else
 		{
 			// see problem documented in ::fileOpen()
-			errorCode = pNewFrame->loadDocument((const char *)nullptr, IEFT_Unknown);
-			if (!errorCode)
+			UT_Error blankError = pNewFrame->loadDocument((const char *)nullptr, IEFT_Unknown);
+			if (!blankError)
 				pNewFrame->show();
 			s_CouldNotLoadFileMessage(pNewFrame,pNewFile, errorCode);
 		}
@@ -3963,7 +3943,14 @@ Defun1(fileRevert)
   if (XAP_Dialog_MessageBox::a_YES == pFrame->showMessageBox(AP_STRING_ID_MSG_RevertFile,
 								 XAP_Dialog_MessageBox::b_YN,
 								 XAP_Dialog_MessageBox::a_NO))
-	  pView->cmdUndo ( pView->undoCount(true) - pView->undoCount(false) );
+  {
+	  UT_uint32 undoPos = pView->undoCount(true);
+	  UT_uint32 savePos = pView->undoCount(false);
+	  if (undoPos > savePos)
+		  pView->cmdUndo(undoPos - savePos);
+	  else if (undoPos < savePos)
+		  pView->cmdRedo(savePos - undoPos);
+  }
 
   return true;
 }
@@ -6546,7 +6533,7 @@ Defun1(insertColsAfter)
 	{
 		insPoint = pView->getPoint();
 		insAnchor = pView->getSelectionAnchor();
-		if(insAnchor < insPoint)
+		if(insAnchor > insPoint)
 		{
 			insPoint = insAnchor;
 		}
@@ -10153,6 +10140,12 @@ Defun1(viewWebLayout)
 	UT_return_val_if_fail(pAV_View, false);
 	XAP_Frame * pFrame = static_cast<XAP_Frame *> ( pAV_View->getParentData());
 	UT_return_val_if_fail(pFrame, false);
+	FV_View * pView = static_cast<FV_View *>(pAV_View);
+	if(pView->isHdrFtrEdit())
+	{
+		pView->clearHdrFtrEdit();
+		pView->warpInsPtToXY(0,0,false);
+	}
 
 	AP_FrameData *pFrameData = static_cast<AP_FrameData *>(pFrame->getFrameData());
 UT_return_val_if_fail(pFrameData, false);
@@ -10164,7 +10157,6 @@ UT_return_val_if_fail(pFrameData, false);
 	//
 	//pFrame->setZoomType(XAP_Frame::z_PAGEWIDTH);
 
-	FV_View * pView = static_cast<FV_View *>(pAV_View);
 	pView->setViewMode (VIEW_WEB);
 	// Paper-based zoom modes (Whole Page / Page Width) scale against the
 	// paper sheet instead of letting web layout reflow at 100% across the
@@ -10307,7 +10299,7 @@ Defun1(viewFullScreen)
 	if(!pFrameData->m_bIsFullScreen) // we're hiding stuff
 	{
 		pFrameData->m_bIsFullScreen = true;
-		for (UT_uint32 i = 0; i < 20; i++) // should never have more than 20 toolbars
+		for (UT_uint32 i = 0; i < G_N_ELEMENTS(pFrameData->m_bShowBar); i++)
 		{
 			if (!pFrame->getToolbar(i))
 				break;
@@ -10327,7 +10319,7 @@ Defun1(viewFullScreen)
 			pFrame->toggleRuler(pFrameData->m_bShowRuler);
 		if (pFrameData->m_bShowStatusBar)
 			pFrame->toggleStatusBar(pFrameData->m_bShowStatusBar);
-		for (UT_uint32 i = 0; i < 4; i++)
+		for (UT_uint32 i = 0; i < G_N_ELEMENTS(pFrameData->m_bShowBar); i++)
 		{
 			if (!pFrame->getToolbar(i))
 				break;
@@ -10682,7 +10674,7 @@ Defun1(insFile)
 	    UT_DEBUGMSG(("DOM: insertFile %s\n", pathName));
 	    
 	    PD_Document * newDoc = new PD_Document();
-	    UT_Error err = newDoc->readFromFile(pathName, IEFT_Unknown);
+	    UT_Error err = newDoc->readFromFile(pathName, fType);
 	    
 		if (!UT_IS_IE_SUCCESS(err))
 		{
@@ -10775,8 +10767,12 @@ void insertAnnotation(FV_View * pView, bool bDescr)
 	{
 		UT_UCS4Char* text = nullptr;
 		pView->getSelectionText(text);
-		UT_UCS4String sUCS4(static_cast<const UT_UCS4Char *>(text));
-		pDialog->setDescription(sUCS4.utf8_str());
+		if (text)
+		{
+			UT_UCS4String sUCS4(static_cast<const UT_UCS4Char *>(text));
+			pDialog->setDescription(sUCS4.utf8_str());
+			FREEP(text);
+		}
 	}
 	
 	// run the dialog	
@@ -10809,7 +10805,12 @@ void insertAnnotation(FV_View * pView, bool bDescr)
 		{  
 			pView->setAnnotationText(iAnnotation, pDialog->getDescription());  
 			pAL = pView->insertAnnotationDescription(iAnnotation, pDialog);
-			UT_return_if_fail(pAL);        
+			if (!pAL)
+			{
+				pDialogFactory->releaseDialog(pDialog);
+				UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+				return;
+			}
 		}
 		
 		pAL = pView->getAnnotationLayout(iAnnotation);
@@ -10876,8 +10877,8 @@ Defun1(editAnnotation)
 	UT_return_val_if_fail(pView,false);
 	UT_DEBUGMSG(("editAnnotation\n"));
 
-	fp_AnnotationRun * pA = static_cast<fp_AnnotationRun *>(pView->getHyperLinkRun(pView->getPoint()));
-	UT_ASSERT(pA);
+	fp_AnnotationRun * pA = dynamic_cast<fp_AnnotationRun *>(pView->getHyperLinkRun(pView->getPoint()));
+	UT_return_val_if_fail(pA != nullptr, false);
 	
 	pView->cmdEditAnnotationWithDialog(pA->getPID());
 	return true;

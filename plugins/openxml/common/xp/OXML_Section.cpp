@@ -661,7 +661,7 @@ UT_Error OXML_Section::addToPTAsFootnote(PD_Document * pDocument)
 	OXML_ElementVector::size_type i;
 	i = 0;
 
-	if(m_children[0].get() && ((m_children[0].get())->getTag() == P_TAG))
+	if(!m_children.empty() && m_children[0].get() && ((m_children[0].get())->getTag() == P_TAG))
 	{
 		//skip the first paragraph and directly add its children
 		ret = m_children[0]->addChildrenToPT(pDocument);
@@ -697,7 +697,7 @@ UT_Error OXML_Section::addToPTAsEndnote(PD_Document * pDocument)
 	OXML_ElementVector::size_type i;
 	i = 0;
 
-	if(m_children[0].get() && ((m_children[0].get())->getTag() == P_TAG))
+	if(!m_children.empty() && m_children[0].get() && ((m_children[0].get())->getTag() == P_TAG))
 	{
 		//skip the first paragraph and directly add its children
 		ret = m_children[0]->addChildrenToPT(pDocument);

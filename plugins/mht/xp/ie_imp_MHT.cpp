@@ -30,6 +30,8 @@
 #include <unistd.h>
 #endif
 
+#include <glib/gstdio.h>
+
 // AbiWord includes
 
 #include "ut_assert.h"
@@ -152,15 +154,59 @@ IE_Imp_MHT::~IE_Imp_MHT ()
 	DELETEP(m_parts);
 }
 
-UT_Error IE_Imp_MHT::importFile (const char * szFilename)
+UT_Error IE_Imp_MHT::_loadFile (GsfInput * input)
 {
-	int fd_in = open (szFilename, O_RDONLY);
-	if (fd_in < 0) return UT_ERROR;
+	UT_return_val_if_fail(input != nullptr, UT_ERROR);
+
+	gchar * szTempFile = nullptr;
+	int fd_in = g_file_open_tmp ("abiword-mht-XXXXXX", &szTempFile, nullptr);
+	if (fd_in < 0)
+		{
+			g_free (szTempFile);
+			return UT_ERROR;
+		}
+
+	while (gsf_input_remaining (input) > 0)
+		{
+			guint8 buf[4096];
+			gsf_off_t remaining = gsf_input_remaining (input);
+			size_t chunk = static_cast<size_t>(remaining > static_cast<gsf_off_t>(sizeof(buf)) ? sizeof(buf) : remaining);
+			if (gsf_input_read (input, chunk, buf) == nullptr)
+				{
+					close (fd_in);
+					g_unlink (szTempFile);
+					g_free (szTempFile);
+					return UT_ERROR;
+				}
+			size_t written = 0;
+			while (written < chunk)
+				{
+					ssize_t n = write (fd_in, buf + written, chunk - written);
+					if (n <= 0)
+						{
+							close (fd_in);
+							g_unlink (szTempFile);
+							g_free (szTempFile);
+							return UT_ERROR;
+						}
+					written += static_cast<size_t>(n);
+				}
+		}
+
+	if (lseek (fd_in, 0, SEEK_SET) < 0)
+		{
+			close (fd_in);
+			g_unlink (szTempFile);
+			g_free (szTempFile);
+			return UT_ERROR;
+		}
 
 	m_eps = eps_begin (INTERFACE_STREAM, &fd_in);
 	if (m_eps == 0)
 		{
 			close (fd_in);
+			g_unlink (szTempFile);
+			g_free (szTempFile);
 			return UT_ERROR;
 		}
 
@@ -221,6 +267,8 @@ UT_Error IE_Imp_MHT::importFile (const char * szFilename)
 		}
 	eps_end (m_eps);
 	close (fd_in);
+	g_unlink (szTempFile);
+	g_free (szTempFile);
 
 	if (m_document == 0)
 		{
@@ -231,11 +279,11 @@ UT_Error IE_Imp_MHT::importFile (const char * szFilename)
 		{
 			if (m_document->isXHTML ())
 				{
-					import_status = importXHTML (szFilename);
+					import_status = importXHTML ();
 				}
 			else if (m_document->isHTML4 ())
 				{
-					import_status = importHTML4 (szFilename);
+					import_status = importHTML4 ();
 				}
 			else import_status = UT_ERROR;
 		}
@@ -279,7 +327,7 @@ FG_ConstGraphicPtr IE_Imp_MHT::importImage(const gchar * szSrc)
 			return 0;
 		}
 
-	const UT_ConstByteBufPtr & pBB = part->getBuffer();
+	UT_ConstByteBufPtr pBB = part->getBuffer();
 	if (!pBB)
 		{
 			UT_DEBUGMSG(("Multipart HTML: importImage: `%s' - image in archive but not (or no longer?) loaded!\n",szSrc));
@@ -299,10 +347,8 @@ FG_ConstGraphicPtr IE_Imp_MHT::importImage(const gchar * szSrc)
 		}
 	if (pieg == 0) return 0;
 
-	UT_Multipart * vol_part = const_cast<UT_Multipart *>(part);
-
 	FG_ConstGraphicPtr pfg;
-	UT_Error import_status = pieg->importGraphic (vol_part->detachBuffer (), pfg);
+	UT_Error import_status = pieg->importGraphic (pBB, pfg);
 	delete pieg;
 	if (import_status != UT_OK)
 		{
@@ -314,7 +360,7 @@ FG_ConstGraphicPtr IE_Imp_MHT::importImage(const gchar * szSrc)
 	return pfg;
 }
 
-UT_Error IE_Imp_MHT::importXHTML (const char * szFilename)
+UT_Error IE_Imp_MHT::importXHTML ()
 {
 	const UT_Byte * buffer = m_document->getBuffer()->getPointer (0);
 	UT_uint32 length = m_document->getBuffer()->getLength ();
@@ -323,10 +369,19 @@ UT_Error IE_Imp_MHT::importXHTML (const char * szFilename)
 
 	setReader (&wrapper);
 
-	return IE_Imp_XHTML::importFile (szFilename);
+	GsfInput * docInput = gsf_input_memory_new (buffer, length, FALSE);
+	UT_Error e = UT_IE_NOMEMORY;
+	if (docInput)
+		{
+			e = IE_Imp_XHTML::_loadFile (docInput);
+			g_object_unref (G_OBJECT (docInput));
+		}
+
+	setReader (nullptr);
+	return e;
 }
 
-UT_Error IE_Imp_MHT::importHTML4 (const char * szFilename)
+UT_Error IE_Imp_MHT::importHTML4 ()
 {
 	UT_Error e = UT_ERROR;
 
@@ -337,9 +392,16 @@ UT_Error IE_Imp_MHT::importHTML4 (const char * szFilename)
 	TidyReader wrapper(buffer,length);
 	setReader (&wrapper);
 
-	e = IE_Imp_XHTML::importFile (szFilename);
+	GsfInput * docInput = gsf_input_memory_new (buffer, length, FALSE);
+	if (docInput)
+		{
+			e = IE_Imp_XHTML::_loadFile (docInput);
+			g_object_unref (G_OBJECT (docInput));
+		}
+	else
+		e = UT_IE_NOMEMORY;
 
-	setReader (0);
+	setReader (nullptr);
 #endif
 #ifdef XHTML_HTML_XML2_SUPPORTED
 	const UT_Byte * buffer = m_document->getBuffer()->getPointer (0);
@@ -351,10 +413,17 @@ UT_Error IE_Imp_MHT::importHTML4 (const char * szFilename)
 	UT_HTML parser;
 	setParser (&parser);
 
-	e = IE_Imp_XHTML::importFile (szFilename);
+	GsfInput * docInput = gsf_input_memory_new (buffer, length, FALSE);
+	if (docInput)
+		{
+			e = IE_Imp_XHTML::_loadFile (docInput);
+			g_object_unref (G_OBJECT (docInput));
+		}
+	else
+		e = UT_IE_NOMEMORY;
 
-	setParser (0);
-	setReader (0);
+	setParser (nullptr);
+	setReader (nullptr);
 #endif
 	return e;
 }
@@ -382,7 +451,11 @@ UT_Multipart * IE_Imp_MHT::importMultipart ()
 			char * line = reinterpret_cast<char *>(l);
 			UT_uint32 length = static_cast<UT_uint32>(strlen (line));
 
-			if (bLoad && length) part->append (line, length);
+			if (bLoad && length)
+				{
+					if (!part->append (line, length))
+						bLoad = false;
+				}
 		}
 	return part;
 }
@@ -501,9 +574,19 @@ bool UT_Multipart::append_Base64 (const char * buffer, UT_uint32 length)
 			bool bEnd = (c == '=');
 
 			unsigned char u = static_cast<unsigned char>(c);
-			if (!isspace ((int) u)) m_b64buffer[m_b64length++] = c;
+			if (!isspace ((int) u))
+				{
+					if (m_b64length >= sizeof(m_b64buffer))
+						{
+							UT_DEBUGMSG(("Multipart HTML: append_Base64: buffer overflow prevented!\n"));
+							m_b64length = 0;
+							success = false;
+							break;
+						}
+					m_b64buffer[m_b64length++] = c;
+				}
 
-			if (bEnd || (m_b64length == 80) || ((i + 1 == length) && m_b64length && ((m_b64length & 0x03) == 0)))
+			if (bEnd || (m_b64length == sizeof(m_b64buffer)) || ((i + 1 == length) && m_b64length && ((m_b64length & 0x03) == 0)))
 				{
 					const char * b64bufptr = m_b64buffer;
 
@@ -516,6 +599,7 @@ bool UT_Multipart::append_Base64 (const char * buffer, UT_uint32 length)
 					if (m_b64length > 3)
 						{
 							UT_DEBUGMSG(("Multipart HTML: append_Base64: oddness while decoding!\n"));
+							m_b64length = 0;
 							success = false;
 						}
 					if (binlength < 60)

@@ -26,6 +26,7 @@
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_string.h"
+#include "ut_string_class.h"
 #include "ut_growbuf.h"
 #include "ut_bytebuf.h"
 #include "ut_wctomb.h"
@@ -207,6 +208,7 @@ bool XAP_DiskStringSet::setValue(XAP_String_Id id, const gchar * szString)
 		UT_UCS4Char * p = reinterpret_cast<UT_UCS4Char*>(gb.getPointer(0));
 		UT_ByteBuf str;
 
+		bool bBidiReordered = false;
 		// now we run this string through fribidi
 		if(XAP_App::getApp()->theOSHasBidiSupport() == XAP_App::BIDI_SUPPORT_NONE)
 		{
@@ -234,9 +236,11 @@ bool XAP_DiskStringSet::setValue(XAP_String_Id id, const gchar * szString)
 
 				UT_ASSERT_HARMLESS(p[i] == 0);
 				delete[] fbdStr2;
+				bBidiReordered = true;
 			}
 		}				
 		
+		UT_UTF8String utf8Str;
 		if(strcmp(getEncoding(), "UTF-8"))
 		{
 			UT_Wctomb wctomb_conv(getEncoding());
@@ -250,6 +254,11 @@ bool XAP_DiskStringSet::setValue(XAP_String_Id id, const gchar * szString)
 			}
 			length = str.getLength();			
 			ptr = str.getPointer(0);
+		} else if (bBidiReordered)
+		{
+			utf8Str.appendUCS4(p, kLimit);
+			length = utf8Str.byteLength();
+			ptr = utf8Str.utf8_str();
 		} else
 		{	
 			length = strlen(szString);
@@ -265,6 +274,10 @@ bool XAP_DiskStringSet::setValue(XAP_String_Id id, const gchar * szString)
     gchar* pOldValue = nullptr;
 	bool bResult = (m_vecStringsXAP.setNthItem(id,szDup,&pOldValue) == 0);
 	UT_ASSERT(pOldValue == nullptr);		// duplicate string for this id
+	if (pOldValue)
+		g_free(pOldValue);
+	if (!bResult)
+		g_free(szDup);
 
 	if (bFoundMultiByte)
 	{

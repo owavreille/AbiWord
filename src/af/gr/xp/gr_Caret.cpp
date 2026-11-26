@@ -84,7 +84,9 @@ GR_Caret::GR_Caret(GR_Graphics * pG)
 		m_iCaretNumber(0),
 		m_iLastDrawTime(0),
 		m_iRetry(0),
-		m_bPendingBlink(false)
+		m_bPendingBlink(false),
+		m_bR1Saved(false),
+		m_bR2Saved(false)
 {
 	UT_WorkerFactory::ConstructMode outMode = UT_WorkerFactory::NONE;
 	m_worker = static_cast<UT_Timer *>(UT_WorkerFactory::static_constructor
@@ -133,7 +135,9 @@ GR_Caret::GR_Caret(GR_Graphics * pG, const std::string& sId)
 		m_iCaretNumber(0),
 		m_iLastDrawTime(0),
 		m_iRetry(0),
-		m_bPendingBlink(false)
+		m_bPendingBlink(false),
+		m_bR1Saved(false),
+		m_bR2Saved(false)
 {
 	UT_WorkerFactory::ConstructMode outMode = UT_WorkerFactory::NONE;
 	m_worker = static_cast<UT_Timer *>(UT_WorkerFactory::static_constructor
@@ -148,7 +152,7 @@ GR_Caret::GR_Caret(GR_Graphics * pG, const std::string& sId)
 		(s_blink_timeout, this, UT_WorkerFactory::TIMER, outMode));
 	m_blinkTimeout->set(_getCursorBlinkTimeout());
 
-	m_iCaretNumber = pG->m_vecCarets.getItemCount() + 1;
+	m_iCaretNumber = pG->m_iNextCaretNumber++;
 
 	setBlink (false);
 }
@@ -367,8 +371,16 @@ void GR_Caret::JustErase(UT_sint32 xPoint,UT_sint32 yPoint)
 	    m_pG->restoreRectangle(m_iCaretNumber*3+0);
 	    if(m_bSplitCaret)
 	    {
-	          m_pG->restoreRectangle(m_iCaretNumber*3+1);
-			  m_pG->restoreRectangle(m_iCaretNumber*3+2);
+	          if (m_bR1Saved)
+	          {
+	                m_pG->restoreRectangle(m_iCaretNumber*3+1);
+	                m_bR1Saved = false;
+	          }
+	          if (m_bR2Saved)
+	          {
+	                m_pG->restoreRectangle(m_iCaretNumber*3+2);
+	                m_bR2Saved = false;
+	          }
 			  m_bSplitCaret = false;
 	    }
 	    m_bCursorIsOn = false;
@@ -391,7 +403,7 @@ void GR_Caret::_blink(bool bExplicit)
 	}
 	if (!m_bPositionSet)
 		return;
-	if(!m_bPendingBlink)
+	if (!bExplicit && !m_bPendingBlink)
 		return;
 	struct timespec spec;
 
@@ -444,14 +456,24 @@ void GR_Caret::_blink(bool bExplicit)
 
 			if(m_bSplitCaret)
 			{
-				m_pG->restoreRectangle(m_iCaretNumber*3+1);
-				m_pG->restoreRectangle(m_iCaretNumber*3+2);
+				if (m_bR1Saved)
+				{
+					m_pG->restoreRectangle(m_iCaretNumber*3+1);
+					m_bR1Saved = false;
+				}
+				if (m_bR2Saved)
+				{
+					m_pG->restoreRectangle(m_iCaretNumber*3+2);
+					m_bR2Saved = false;
+				}
 				m_bSplitCaret = false;
 			}
 			m_bCursorIsOn = false;
 		}
 		else
 		{
+			m_bR1Saved = false;
+			m_bR2Saved = false;
 			// if neither caret is on screen, quit
 			if(!m_bCaret1OnScreen && !m_bCaret2OnScreen)
 			{
@@ -501,6 +523,7 @@ void GR_Caret::_blink(bool bExplicit)
 							   joinWidth,
 							   joinHeight);
 					m_pG->saveRectangle(r2,m_iCaretNumber*3+2);
+					m_bR2Saved = true;
 				}
 			}
 			else
@@ -585,9 +608,10 @@ void GR_Caret::_blink(bool bExplicit)
 					UT_Rect r1(m_xPoint2 - m_pG->tlu(2),
 							   m_yPoint2 + m_pG->tlu(1),
 							   m_pG->tlu(5),
-							   m_iPointHeight);
+							   m_iPointHeight + m_pG->tlu(2));
 					
 					m_pG->saveRectangle(r1,m_iCaretNumber*3+1);				
+					m_bR1Saved = true;
 
 					// draw the caret
 

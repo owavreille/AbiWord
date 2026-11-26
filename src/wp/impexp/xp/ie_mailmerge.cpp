@@ -254,6 +254,7 @@ const char * IE_MailMerge::suffixesForFileType(IEMergeType ieft)
 	IEMergeType ieftDummy;
 
 	IE_MergeSniffer * pSniffer = snifferForFileType(ieft);
+	UT_return_val_if_fail(pSniffer != nullptr, nullptr);
 	
 	if (pSniffer->getDlgLabels(&szDummy,&szSuffixes,&ieftDummy))
 	{
@@ -275,6 +276,7 @@ const char * IE_MailMerge::descriptionForFileType(IEMergeType ieft)
 	IEMergeType ieftDummy;
 
 	IE_MergeSniffer * pSniffer = snifferForFileType(ieft);
+	UT_return_val_if_fail(pSniffer != nullptr, nullptr);
 
 	if (pSniffer->getDlgLabels(&szDescription,&szDummy,&ieftDummy))
 	{
@@ -318,8 +320,10 @@ UT_Error IE_MailMerge::constructMerger(const char * szFilename,
 		if ( ( f = UT_go_file_open( szFilename, nullptr ) ) != nullptr )
 		{
 		  gsf_off_t stream_size = gsf_input_size(f);
-		  if (stream_size == -1)
+		  if (stream_size == -1) {
+				g_object_unref(G_OBJECT(f));
 				return UT_ERROR;
+		  }
 		  iNumbytes = UT_MIN(sizeof(szBuf) - 1, static_cast<UT_uint64>(stream_size));
 		  gsf_input_read(f, iNumbytes, (guint8*)szBuf);
 		  g_object_unref(G_OBJECT(f));
@@ -518,8 +522,15 @@ private:
 		if(bURI)
 		{
 			const gchar *filename = UT_go_filename_from_uri(szURI);
-			sFile = filename;
-			FREEP(filename);
+			if (filename)
+			{
+				sFile = filename;
+				FREEP(filename);
+			}
+			else
+			{
+				sFile.clear();
+			}
 		}
 		else
 		{
@@ -636,6 +647,17 @@ public:
 			  in_quotes = false;
 			  defineItem (item, lineno == 0);
 			  item.truncate (0);
+
+			  if (ch == '\r') {
+			    UT_Byte next_ch;
+			    if (nullptr != gsf_input_read (fp, 1, &next_ch)) {
+			      if (next_ch == '\n') {
+			        ch = '\n';
+			      } else {
+			        gsf_input_seek (fp, -1, G_SEEK_CUR);
+			      }
+			    }
+			  }
 			  
 			  if (ch == '\n') {
 			    if(justHeaders)
@@ -661,8 +683,12 @@ public:
 		  
 		  g_object_unref (G_OBJECT(fp));
 		  
-		  // if there's a non-empty line that wasn't terminated by a newline, fire it off
-		  if (m_items.size())
+		  // if there's a non-empty line that wasn't terminated by a newline, flush the final item and fire it off
+		  if (item.getLength () > 0) {
+		    defineItem (item, lineno == 0);
+		    item.truncate (0);
+		  }
+		  if (!justHeaders && m_items.size())
 		    fire ();
 		  
 		  return UT_OK;

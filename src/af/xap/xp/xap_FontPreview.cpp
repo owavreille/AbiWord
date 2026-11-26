@@ -67,6 +67,7 @@ void XAP_FontPreview::addOrReplaceVecProp(const std::string & pszProp,
 
 void XAP_FontPreview::setFontFamily(const gchar * pFontFamily)
 {
+	UT_return_if_fail(pFontFamily);
 	addOrReplaceVecProp("font-family",pFontFamily);
 }
 
@@ -75,7 +76,8 @@ void XAP_FontPreview::setText(const gchar * pFontFamily)
 	UT_return_if_fail(pFontFamily);
 	FREEP(m_drawString);
 	UT_UCS4_cloneString_char (&m_drawString, pFontFamily);
-	m_pFontPreview->setDrawString(m_drawString);
+	if (m_pFontPreview)
+		m_pFontPreview->setDrawString(m_drawString);
 }
 
 void XAP_FontPreview::draw()

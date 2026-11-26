@@ -94,5 +94,6 @@ UT_Error IE_Imp_HTML::_loadFile (GsfInput * input)
 
 	UT_Error e = IE_Imp_XHTML::_loadFile (input);
 
+	setReader (nullptr);
 	return e;
 }

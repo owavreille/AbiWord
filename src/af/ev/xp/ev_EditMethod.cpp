@@ -94,7 +94,7 @@ EV_EditMethodCallData::EV_EditMethodCallData(const char * pChar, UT_uint32 dataL
 			m_pData[0] = 0;
 		} else {
 			for (UT_uint32 k = 0; k < dataLength; k++) {
-				m_pData[k] = pChar[k];
+				m_pData[k] = static_cast<unsigned char>(pChar[k]);
 			}
 		}
 		m_dataLength = dataLength;
