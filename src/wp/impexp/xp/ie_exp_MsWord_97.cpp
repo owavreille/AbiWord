@@ -583,7 +583,7 @@ static Paragraph build_toc_paragraph(PD_Document * doc, const PP_AttrProp * ap)
 				const pf_Frag_Text * t = static_cast<const pf_Frag_Text *>(f);
 				const UT_UCS4Char * chars = doc->getPointer(t->getBufIndex());
 				for (UT_uint32 i = 0; i < t->getLength(); ++i)
-					append_utf16(entry, chars[i]);
+					append_code_unit(entry, chars[i]);
 			}
 		}
 		if (in_heading && !entry.empty())

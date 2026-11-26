@@ -2784,7 +2784,7 @@ TFTEST_MAIN("DOC export keeps footnotes, annotations and a second section")
 	std::remove(path.c_str());
 }
 
-TFTEST_MAIN("DOC export keeps TOC and frame text and drops a margin note")
+TFTEST_MAIN("DOC export keeps a TOC field, frame text and a margin note")
 {
 	if (!exporter_known(".doc"))
 		return;
@@ -2848,12 +2848,15 @@ TFTEST_MAIN("DOC export keeps TOC and frame text and drops a margin note")
 		? word.substr(fc_min, ccp_text * 2) : std::string();
 
 	TFPASS(main.find(utf16_ascii("CorpsToc")) != std::string::npos);
-	TFPASS(main.find(utf16_ascii("EntreeToc")) != std::string::npos);
+	TFPASS(main.find(utf16_ascii("TOC")) != std::string::npos);
+	TFPASS(main.find(std::string("\x13\x00", 2)) != std::string::npos);
+	TFPASS(main.find(std::string("\x15\x00", 2)) != std::string::npos);
 	TFPASS(main.find(utf16_ascii("CadreTexte")) != std::string::npos);
-	TFPASS(word.find(utf16_ascii("NoteMargeSeule")) == std::string::npos);
+	TFPASS(word.find(utf16_ascii("NoteMargeSeule")) != std::string::npos);
+	TFPASS(main.find(utf16_ascii("NoteMargeSeule")) == std::string::npos);
 	TFPASS(main.find(std::string("\x02\x00", 2)) == std::string::npos);
-	TFPASS(main.find(std::string("\x05\x00", 2)) == std::string::npos);
-	TFPASS(ccp_text > 0 && ccp_ftn == 0 && ccp_hdd == 0 && ccp_atn == 0 && ccp_edn == 0);
+	TFPASS(main.find(std::string("\x05\x00", 2)) != std::string::npos);
+	TFPASS(ccp_text > 0 && ccp_ftn == 0 && ccp_hdd == 0 && ccp_atn > 0 && ccp_edn == 0);
 	TFPASS(fc_mac > fc_min && (fc_mac - fc_min) / 2 == ccp_text);
 
 	package_close(input, ole);
