@@ -7306,11 +7306,18 @@ endif
 		}
 		else if ((getPoint() > m_Selection.getSelectionAnchor()) && (iNewPoint <   m_Selection.getSelectionAnchor()))
 		{
-			iNewPointWord = _getDocPosFromPoint(m_Selection.getSelectionAnchor(), FV_DOCPOS_BOW, false);			
+			iTmpPointWord = _getDocPosFromPoint(m_Selection.getSelectionAnchor(), FV_DOCPOS_BOW, false);
 			_clearSelection();
-			iNewPointWord = _getDocPosFromPoint(iNewPointWord, FV_DOCPOS_EOW_SELECT, false);			
-			m_Selection.setSelectionAnchor(iNewPointWord);
-			iNewPointWord = _getDocPosFromPoint(iNewPointWord, FV_DOCPOS_BOW, false);			
+			iTmpPointWord = _getDocPosFromPoint(iTmpPointWord, FV_DOCPOS_EOW_SELECT, false);
+			m_Selection.setSelectionAnchor(iTmpPointWord);
+			iNewPointWord = iNewPoint;
+			if(!m_pDoc->isBlockAtPos(iNewPointWord) &&
+			   !m_pDoc->isTableAtPos(iNewPointWord) &&
+			   !m_pDoc->isCellAtPos(iNewPointWord) &&
+			   !m_pDoc->isEndTableAtPos(iNewPointWord))
+			{
+				iNewPointWord = _getDocPosFromPoint(iNewPoint, FV_DOCPOS_BOW, false);
+			}
 		}
 		else if ((getPoint() <= m_Selection.getSelectionAnchor()) && (iNewPoint <   m_Selection.getSelectionAnchor()))
 		{
@@ -7338,17 +7345,24 @@ endif
 		}
 		else
 		{
+			iTmpPointWord = getSelectionAnchor();
+			if(!m_pDoc->isBlockAtPos(iTmpPointWord) &&
+			   !m_pDoc->isTableAtPos(iTmpPointWord) &&
+			   !m_pDoc->isCellAtPos(iTmpPointWord) &&
+			   !m_pDoc->isEndTableAtPos(iTmpPointWord))
+			{
+				iTmpPointWord = _getDocPosFromPoint(iTmpPointWord, FV_DOCPOS_BOW, false);
+			}
+			_clearSelection();
+			m_Selection.setSelectionAnchor(iTmpPointWord);
 			iNewPointWord = iNewPoint;
 			if(!m_pDoc->isBlockAtPos(iNewPointWord) &&
 			   !m_pDoc->isTableAtPos(iNewPointWord) &&
 			   !m_pDoc->isCellAtPos(iNewPointWord) &&
 			   !m_pDoc->isEndTableAtPos(iNewPointWord))
 			{
-				iNewPointWord = _getDocPosFromPoint(iNewPoint, FV_DOCPOS_BOW, false);			
+				iNewPointWord = _getDocPosFromPoint(iNewPoint, FV_DOCPOS_EOW_SELECT, false);
 			}
-			_clearSelection();
-			m_Selection.setSelectionAnchor(iNewPointWord);
-			iNewPointWord = _getDocPosFromPoint(iNewPointWord, FV_DOCPOS_EOW_SELECT, false);			
 		}
 	}
 
@@ -9430,6 +9444,15 @@ void FV_View::reflowWebPageToWindow(void)
 
 void FV_View::setViewMode (ViewMode vm)
 {
+	if (vm != VIEW_PRINT && isHdrFtrEdit())
+	{
+		clearHdrFtrEdit();
+		PT_DocPosition posBOD = 0;
+		if (getEditableBounds(false, posBOD, true))
+		{
+			_setPoint(posBOD);
+		}
+	}
 	bool bPrevWeb= (m_viewMode == VIEW_WEB);
 	m_viewMode = vm;
 	
@@ -11696,7 +11719,23 @@ void FV_View::RestoreSavedPieceTableState(void)
  */
 void FV_View::removeThisHdrFtr(HdrFtrType hfType, bool bSkipPTSaves)
 {
+	fl_BlockLayout * pCurBlock = getCurrentBlock();
+	if (!pCurBlock)
+	{
+		return;
+	}
+	fl_DocSectionLayout * pDSL = static_cast<fl_DocSectionLayout *>(pCurBlock->getDocSectionLayout());
+	if (!pDSL)
+	{
+		return;
+	}
+
 	setCursorWait();
+	bool bWasHdrFtrEdit = isHdrFtrEdit();
+	if (bWasHdrFtrEdit)
+	{
+		clearHdrFtrEdit();
+	}
 	if(!bSkipPTSaves)
 	{
 //
@@ -11713,8 +11752,6 @@ void FV_View::removeThisHdrFtr(HdrFtrType hfType, bool bSkipPTSaves)
 // Save current document position.
 //
 	PT_DocPosition curPoint = getPoint();
-
-	fl_DocSectionLayout * pDSL = static_cast<fl_DocSectionLayout *>(getCurrentBlock()->getDocSectionLayout());
 
 	if(hfType == FL_HDRFTR_HEADER)
 	{
@@ -11755,6 +11792,22 @@ void FV_View::removeThisHdrFtr(HdrFtrType hfType, bool bSkipPTSaves)
 //
 // After erarsing the cursor, Restore to the point before all this mess started.
 //
+	PT_DocPosition posBOD = 0;
+	PT_DocPosition posEOD = 0;
+	if (bWasHdrFtrEdit)
+	{
+		if (getEditableBounds(false, posBOD, true))
+		{
+			curPoint = posBOD;
+		}
+	}
+	else if (getEditableBounds(false, posBOD, true) && getEditableBounds(true, posEOD, true))
+	{
+		if (curPoint < posBOD || curPoint > posEOD)
+		{
+			curPoint = posBOD;
+		}
+	}
 	_setPoint(curPoint);
 
 	if(!bSkipPTSaves)
@@ -12305,6 +12358,13 @@ void FV_View::insertHeaderFooter(HdrFtrType hfType)
 //	edit mode.
 //
 	setCursorWait();
+	struct CursorWaitGuard {
+		FV_View * m_pView;
+		bool m_bActive;
+		explicit CursorWaitGuard(FV_View * pView) : m_pView(pView), m_bActive(true) {}
+		void release() { if (m_bActive) { m_bActive = false; m_pView->clearCursorWait(); } }
+		~CursorWaitGuard() { release(); }
+	} waitGuard(this);
 	UT_uint32 iPageNo = getCurrentPageNumber() - 1;
 
 	m_pDoc->beginUserAtomicGlob(); // Begin the big undo block
@@ -12359,7 +12419,7 @@ void FV_View::insertHeaderFooter(HdrFtrType hfType)
 	_fixInsertionPointCoords();
 	_ensureInsertionPointOnScreen();
 	_fixInsertionPointCoords();
-	clearCursorWait();
+	waitGuard.release();
 	notifyListeners(AV_CHG_MOTION | AV_CHG_HDRFTR );
 }
 

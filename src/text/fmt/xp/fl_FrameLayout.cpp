@@ -490,13 +490,16 @@ bool fl_FrameLayout::doclistener_deleteStrux(const PX_ChangeRecord_Strux * pcrx)
 #endif
 	fp_FrameContainer * pFrameC = static_cast<fp_FrameContainer *>(getFirstContainer());
 	UT_GenericVector<fl_BlockLayout *> vecBlocks;
-	pFrameC->getBlocksAroundFrame(vecBlocks);
 	UT_sint32 i = 0;
-	for(i=0; i< vecBlocks.getItemCount();i++)
+	if (pFrameC)
 	{
-	  fl_BlockLayout * pBL = vecBlocks.getNthItem(i);
-	  pBL->collapse();
-	  xxx_UT_DEBUGMSG(("Collapse block %x \n",pBL));
+		pFrameC->getBlocksAroundFrame(vecBlocks);
+		for(i=0; i< vecBlocks.getItemCount();i++)
+		{
+		  fl_BlockLayout * pBL = vecBlocks.getNthItem(i);
+		  pBL->collapse();
+		  xxx_UT_DEBUGMSG(("Collapse block %x \n",pBL));
+		}
 	}
 
 //
@@ -706,8 +709,8 @@ void fl_FrameLayout::format(void)
 		if(m_bIsOnPage)
 			bPlacedOnPage = true;
 	}
-	m_bNeedsFormat = m_bIsOnPage;
-	m_bNeedsReformat = m_bIsOnPage;
+	m_bNeedsFormat = !m_bIsOnPage;
+	m_bNeedsReformat = !m_bIsOnPage;
 	if(!m_bIsOnPage)
 	{
 		setNeedsReformat(this);

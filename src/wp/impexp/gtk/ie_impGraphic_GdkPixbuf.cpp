@@ -273,7 +273,11 @@ GdkPixbuf * IE_ImpGraphic_GdkPixbuf::_loadXPM(const UT_ConstByteBufPtr & pBB)
 	// Find dimension line to start with.
 	//
 	UT_sint32 length = static_cast<UT_sint32>(pBB->getLength());
-	for(k =0; (*(pBC+k) != '"') &&( k < length); k++)
+	if (!pBC || length <= 0)
+	{
+		return nullptr;
+	}
+	for(k =0; (k < length) && (*(pBC+k) != '"'); k++)
 		;
 
 	if(k >= length)
@@ -283,7 +287,7 @@ GdkPixbuf * IE_ImpGraphic_GdkPixbuf::_loadXPM(const UT_ConstByteBufPtr & pBB)
 
 	k++;
 	iBase = k;
-	for(; (*(pBC+k) != '"') && (k < length); k++)
+	for(; (k < length) && (*(pBC+k) != '"'); k++)
 		;
 	if(k >= length)
 	{
@@ -293,6 +297,10 @@ GdkPixbuf * IE_ImpGraphic_GdkPixbuf::_loadXPM(const UT_ConstByteBufPtr & pBB)
 	char * sz = nullptr;
 	UT_sint32 kLen = k-iBase+1;
 	sz = static_cast<char *>(UT_calloc(kLen,sizeof(char)));
+	if (!sz)
+	{
+		return nullptr;
+	}
 	UT_sint32 i =0;
 
 	for(i=0; i< (kLen -1); i++)
@@ -305,9 +313,13 @@ GdkPixbuf * IE_ImpGraphic_GdkPixbuf::_loadXPM(const UT_ConstByteBufPtr & pBB)
 	//
 	// Now loop through all the lines until we get to "}" outside the
 	// '"'
-	while((*(pBC+k) != '}')  && (k < length) )
+	while((k < length) && (*(pBC+k) != '}'))
 	{
 		k++;
+		if (k >= length)
+		{
+			break;
+		}
 
 		//
 		// Load a single string of data into our vector.
@@ -319,16 +331,25 @@ GdkPixbuf * IE_ImpGraphic_GdkPixbuf::_loadXPM(const UT_ConstByteBufPtr & pBB)
 			//
 			k++;
 			iBase = k;
-			for(; (*(pBC+k) != '"') && (k < length); k++) 
+			for(; (k < length) && (*(pBC+k) != '"'); k++) 
 			{
 			}
 			if(k >= length)
 			{
-				return nullptr;
+				break;
 			}
 			sz = nullptr;
 			kLen = k-iBase+1;
 			sz = static_cast<char *>(UT_calloc(kLen,sizeof(char)));
+			if (!sz)
+			{
+				for(i=0; i< vecStr.getItemCount(); i++)
+				{
+					char * psz = vecStr.getNthItem(i);
+					FREEP(psz);
+				}
+				return nullptr;
+			}
 			for(i=0; i<(kLen -1); i++)
 			{
 				*(sz+i) = *(pBC+iBase+i);
@@ -704,14 +725,16 @@ bool IE_ImpGraphicGdkPixbuf_Sniffer::getDlgLabels(const char ** pszDesc,
 		gchar		 	*tmp = nullptr;
 		while (*suffixIter) {
 			tmp = suffixString;
-			suffixString = g_strdup_printf ("%s*.%s;", suffixString, *suffixIter);
+			suffixString = g_strdup_printf ("%s*.%s;", suffixString ? suffixString : "", *suffixIter);
 			if (tmp) {
 				g_free (tmp);
 			}
 			suffixIter++;
 		}
 		// cut off trailing ';'
-		suffixString[g_utf8_strlen(suffixString,-1)-1] = '\0';
+		if (suffixString && *suffixString) {
+			suffixString[strlen(suffixString) - 1] = '\0';
+		}
 	}
 	*pszDesc = "All platform supported image formats";
 	*pszSuffixList = suffixString;

@@ -39,23 +39,18 @@ struct _bb
 static void _png_read(png_structp png_ptr, png_bytep data, png_size_t length)
 {
 	struct _bb* p = static_cast<struct _bb*>(png_get_io_ptr(png_ptr));
-	const UT_Byte* pBytes = p->pBB->getPointer(0);
 
-	// make sure that we don't read outside of pBytes
-	if (p->iCurPos >= p->pBB->getLength() - length) {
+	// make sure that we don't read outside of pBytes (and avoid unsigned underflow)
+	if (!p || !p->pBB || p->iCurPos > p->pBB->getLength() || length > p->pBB->getLength() - p->iCurPos) {
 		UT_WARNINGMSG(("PNG: Reading past buffer bounds. cur = %u, buflen = %u, length = %lu\n",
-					   p->iCurPos, p->pBB->getLength(), length));
-		length = p->pBB->getLength() - p->iCurPos;
-		if (length == 0) {
-			UT_WARNINGMSG(("PNG: Truncating to ZERO length.\n"));
-			png_error(png_ptr, "Premature end of buffer");
-			return;
-		} else {
-			UT_WARNINGMSG(("PNG: Truncating to %lu.\n", length));
-		}
+					   p ? p->iCurPos : 0, (p && p->pBB) ? p->pBB->getLength() : 0,
+					   static_cast<unsigned long>(length)));
+		png_error(png_ptr, "Premature end of buffer");
+		return;
 	}
+	const UT_Byte* pBytes = p->pBB->getPointer(0);
 	memcpy(data, pBytes + p->iCurPos, length);
-	p->iCurPos += length;
+	p->iCurPos += static_cast<UT_uint32>(length);
 }
 
 bool UT_PNG_getDimensions(const UT_ConstByteBufPtr & pBB, UT_sint32& iImageWidth, UT_sint32& iImageHeight)

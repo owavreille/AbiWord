@@ -121,7 +121,12 @@ bool fp_FrameContainer::isAbove(void)
  */
 bool fp_FrameContainer::overlapsRect(const UT_Rect & rec)
 {
-     UT_Rect pMyFrameRec = getScreenRect().value();
+     auto optRect = getScreenRect();
+     if (!optRect.has_value())
+     {
+          return false;
+     }
+     UT_Rect pMyFrameRec = optRect.value();
      fl_FrameLayout * pFL = static_cast<fl_FrameLayout *>(getSectionLayout());
      UT_sint32 iextra = pFL->getBoundingSpace() -2;
      pMyFrameRec.left -= iextra;
@@ -235,7 +240,12 @@ UT_sint32 fp_FrameContainer::getLeftPad(UT_sint32 y, UT_sint32 height) const
 {
   auto pFL = static_cast<const fl_FrameLayout *>(getSectionLayout());
   UT_sint32 pad = pFL->getBoundingSpace();	
-  UT_Rect pRect = getScreenRect().value();
+  auto optRect = getScreenRect();
+  if (!optRect.has_value())
+  {
+    return pad;
+  }
+  UT_Rect pRect = optRect.value();
   UT_sint32 yC = pRect.top;
   if(!isTightWrapped() || !isWrappingSet())
   {
@@ -268,7 +278,12 @@ UT_sint32 fp_FrameContainer::getRightPad(UT_sint32 y, UT_sint32 height) const
 {
   auto pFL = static_cast<const fl_FrameLayout *>(getSectionLayout());
   UT_sint32 pad = pFL->getBoundingSpace();
-  UT_Rect pRect = getScreenRect().value();
+  auto optRect = getScreenRect();
+  if (!optRect.has_value())
+  {
+    return pad;
+  }
+  UT_Rect pRect = optRect.value();
   UT_sint32 yC = pRect.top;
   if(!isTightWrapped() || !isWrappingSet())
   {
@@ -524,7 +539,7 @@ void  fp_FrameContainer::drawBoundaries(dg_DrawArgs * pDA)
 		if(iBot > iMaxHeight)
 		{
 		        iFullHeight = iFullHeight - (iBot-iMaxHeight);
-			iYhigh = iFullHeight;
+			iYhigh = iYlow + iFullHeight;
 		}
 	}
 	_drawLine(m_lineTop,iXlow,iYlow,iXhigh,iYlow,pDA->pG); // top

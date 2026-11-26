@@ -911,7 +911,7 @@ PT_DocPosition FV_View::_getDocPosFromPoint(PT_DocPosition iPoint, FV_DocPos dp,
 		if(pDSL)
 		{
 			fl_ContainerLayout * pCL = pDSL->getFirstLayout();
-			if(pCL->getContainerType() == FL_CONTAINER_TABLE)
+			if(pCL && pCL->getContainerType() == FL_CONTAINER_TABLE)
 			{
 				iPos = pCL->getPosition(true);
 			}
@@ -1096,14 +1096,22 @@ PT_DocPosition FV_View::_getDocPosFromPoint(PT_DocPosition iPoint, FV_DocPos dp,
 			// above if(offset == 0)
 			return iPoint;
 		}
+		if (pgb.getLength() == 0)
+		{
+			break;
+		}
 		
-		UT_uint32 iUseOffset = bKeepLooking ? offset-1 : offset;
+		UT_uint32 iUseOffset = (bKeepLooking || offset >= pgb.getLength()) ? offset - 1 : offset;
 
-		bool bInWord = !UT_isWordDelimiter(pSpan[iUseOffset], UCS_UNKPUNK, iUseOffset > 0 ? pSpan[iUseOffset - 1] : UCS_UNKPUNK);
+		bool bInWord = !UT_isWordDelimiter(pSpan[iUseOffset],
+			((iUseOffset + 1) < pgb.getLength()) ? pSpan[iUseOffset + 1] : UCS_UNKPUNK,
+			iUseOffset > 0 ? pSpan[iUseOffset - 1] : UCS_UNKPUNK);
 
 		for (offset--; offset > 0; offset--)
 		{
-			if (UT_isWordDelimiter(pSpan[offset], UCS_UNKPUNK,pSpan[offset-1]))
+			if (UT_isWordDelimiter(pSpan[offset],
+				((offset + 1) < pgb.getLength()) ? pSpan[offset + 1] : UCS_UNKPUNK,
+				pSpan[offset - 1]))
 			{
 				if (bInWord)
 					break;
@@ -1880,8 +1888,16 @@ void FV_View::_moveInsPtNextPrevLine(bool bNext)
 			if( (i> 0) && (i < count))
 			{
 				// Move to prev container
-				yPoint = pOldPage->getNthColumnLeader(i-1)->getLastContainer()->getY();
-				yPoint +=  pOldPage->getNthColumnLeader(i-1)->getY()+2;
+				fp_Column * pPrevCol = pOldPage->getNthColumnLeader(i-1);
+				auto * pLastCon = pPrevCol ? pPrevCol->getLastContainer() : nullptr;
+				if (pLastCon)
+				{
+					yPoint = pLastCon->getY() + pPrevCol->getY() + 2;
+				}
+				else if (pPrevCol)
+				{
+					yPoint = pPrevCol->getY() + 2;
+				}
 			}
 			else
 			{
@@ -2275,6 +2291,7 @@ void FV_View::_moveInsPtNextPrevScreen(bool bMovingDown, bool bClearSelection)
 
     // get Screen coordinates of the top of the page and add the y location to this.
 	getPageScreenOffsets(pPage, xoff,yoff);
+	UT_sint32 xPage = x - xoff;
 	yoff = y - yoff;
 
 	UT_sint32 iDir = bMovingDown ? 1 : -1;
@@ -2310,7 +2327,7 @@ void FV_View::_moveInsPtNextPrevScreen(bool bMovingDown, bool bClearSelection)
 	if (pPage == nullptr) pPage = pLine->getPage ();
 	if (iYnext < 0) iYnext = 0;
 	// convert the iYnext back into a point position, namely iNewPoint.
-	pPage->mapXYToPosition(x, iYnext, iNewPoint, bBOL, bEOL,isTOC);
+	pPage->mapXYToPosition(xPage, iYnext, iNewPoint, bBOL, bEOL,isTOC);
 	if (bMovingDown)
 	{
 		int delta = pPage->getHeight()/4;
@@ -2323,7 +2340,7 @@ void FV_View::_moveInsPtNextPrevScreen(bool bMovingDown, bool bClearSelection)
 			}
 			if (pPage)
 			{
-				pPage->mapXYToPosition(x, iYnext+delta, 
+				pPage->mapXYToPosition(xPage, iYnext+delta, 
 									   iNewPoint, bBOL, bEOL,isTOC);
 				delta += pPage->getHeight()/4;
 			}
@@ -2334,14 +2351,14 @@ void FV_View::_moveInsPtNextPrevScreen(bool bMovingDown, bool bClearSelection)
 		int delta = pPage->getHeight()/4;
 		while (iNewPoint >= getPoint() && pPage)
 		{
-			if (iYnext+delta < 0)
+			if (iYnext - delta < 0)
 			{
-				delta += pPage->getHeight();
+				delta -= pPage->getHeight();
 				pPage = pPage->getPrev();
 			}
 			if (pPage)
 			{
-				pPage->mapXYToPosition(x, iYnext-delta, 
+				pPage->mapXYToPosition(xPage, iYnext-delta, 
 									   iNewPoint, bBOL, bEOL,isTOC);
 				delta += pPage->getHeight()/4;
 			}
@@ -2378,6 +2395,8 @@ void FV_View::_moveInsPtNextPrevScreen(bool bMovingDown, bool bClearSelection)
 		{
 			pPage->mapXYToPosition(x, iYnext, iNewPoint, bBOL, bEOL,isTOC);
 			_findPositionCoords(iNewPoint,false,newX,newY,x2,y2,newHeight,bDirection,&pBlock,&pRun);
+			if (!pRun)
+				continue;
 			pNewLine = static_cast<fp_Line *>(pRun->getLine());
 			if(pLine != pNewLine)
 				break;

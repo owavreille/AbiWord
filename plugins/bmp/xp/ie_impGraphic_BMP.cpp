@@ -113,9 +113,9 @@ const IE_SuffixConfidence * IE_ImpGraphicBMP_Sniffer::getSuffixConfidence ()
 	return IE_ImpGraphicBMP_Sniffer__SuffixConfidence;
 }
 
-UT_Confidence_t IE_ImpGraphicBMP_Sniffer::recognizeContents(const char * szBuf, UT_uint32 /*iNumbytes*/)
+UT_Confidence_t IE_ImpGraphicBMP_Sniffer::recognizeContents(const char * szBuf, UT_uint32 iNumbytes)
 {
-	if ( !(strncmp(szBuf, "BM", 2)) )
+	if ( szBuf && iNumbytes >= 2 && !(strncmp(szBuf, "BM", 2)) )
 	  return UT_CONFIDENCE_PERFECT;
 	return UT_CONFIDENCE_ZILCH;
 }
@@ -153,7 +153,11 @@ UT_Error IE_ImpGraphic_BMP::_convertGraphic(const UT_ConstByteBufPtr & pBB)
 	/* Read Palette, if no palette set Header accordingly */
 	if(m_iBitsPerPlane < 24) 
 	{
-		if ((err = Convert_BMP_Pallet(pBB))) return err;
+		if ((err = Convert_BMP_Pallet(pBB))) {
+			if (m_pPNG || m_pPNGInfo)
+				png_destroy_write_struct(&m_pPNG, &m_pPNGInfo);
+			return err;
+		}
 	}
 	else
 	{
@@ -175,13 +179,21 @@ UT_Error IE_ImpGraphic_BMP::_convertGraphic(const UT_ConstByteBufPtr & pBB)
 		   // wow! this is one impression graphic coming at us.
 		   // i would have though 64 bits of RGBA glory would 
 		   // hold us for a while, but alas, we are obsolete...
+		   if (m_pPNG || m_pPNGInfo)
+			   png_destroy_write_struct(&m_pPNG, &m_pPNGInfo);
 		   return UT_ERROR;
 		}
 
+		if (setjmp(png_jmpbuf(m_pPNG))) {
+			png_destroy_write_struct(&m_pPNG, &m_pPNGInfo);
+			return UT_ERROR;
+		}
+
+		UT_uint32 uHeight = (m_iHeight < 0) ? static_cast<UT_uint32>(-m_iHeight) : static_cast<UT_uint32>(m_iHeight);
 	   	png_set_IHDR ( m_pPNG,
 			       m_pPNGInfo,
-			       m_iWidth,
-			       m_iHeight,
+			       static_cast<png_uint_32>(m_iWidth),
+			       static_cast<png_uint_32>(uHeight),
 			       bitsPerChannel,
 			       colorType,
 			       PNG_INTERLACE_NONE,
@@ -189,7 +201,11 @@ UT_Error IE_ImpGraphic_BMP::_convertGraphic(const UT_ConstByteBufPtr & pBB)
 			       PNG_FILTER_TYPE_DEFAULT );
 
 	}
-	if ((err = Convert_BMP(pBB))) return err;
+	if ((err = Convert_BMP(pBB))) {
+		if (m_pPNG || m_pPNGInfo)
+			png_destroy_write_struct(&m_pPNG, &m_pPNGInfo);
+		return err;
+	}
 
 	/* Clean Up Memory Used */
 		
@@ -230,6 +246,8 @@ UT_Error IE_ImpGraphic_BMP::Read_BMP_Header(const UT_ConstByteBufPtr & pBB)
 	 * Then the Image Info until reached the end of the image Header Size
 	 * Note some simple checks for data out of bounds are included
 	 */
+	if (!pBB || pBB->getLength() < 26)
+		return UT_IE_BOGUSDOCUMENT;
 
 	/* File Info Starts Here */
 	m_iBytesRead  = 0;
@@ -243,6 +261,7 @@ UT_Error IE_ImpGraphic_BMP::Read_BMP_Header(const UT_ConstByteBufPtr & pBB)
 	/* Image Info Starts Here */
 	m_iHeaderSize = Read4Bytes(pBB,m_iBytesRead);
 		if (m_bHeaderDone) return UT_IE_BOGUSDOCUMENT; /* More Header Info Needed */
+		if (m_iHeaderSize < 12 || m_iHeaderSize > pBB->getLength() - 14) return UT_IE_BOGUSDOCUMENT;
 	m_bOldBMPFormat = (m_iHeaderSize <=12) ? true : false;
 	m_iWidth  = (m_bOldBMPFormat) ?
 				static_cast<UT_sint32>(Read2Bytes(pBB,m_iBytesRead) ):
@@ -251,10 +270,16 @@ UT_Error IE_ImpGraphic_BMP::Read_BMP_Header(const UT_ConstByteBufPtr & pBB)
 				static_cast<UT_sint32>(Read2Bytes(pBB,m_iBytesRead) ):
 	            static_cast<UT_sint32>(Read4Bytes(pBB,m_iBytesRead) );
 		if (m_bHeaderDone) return UT_IE_BOGUSDOCUMENT; /* More Header Info Needed */
+		if (m_iWidth <= 0 || m_iHeight == 0 || m_iHeight == static_cast<UT_sint32>(0x80000000U))
+			return UT_IE_BOGUSDOCUMENT;
 	m_iPlanes		    = Read2Bytes(pBB,m_iBytesRead);
 		if (m_bHeaderDone) return UT_IE_BOGUSDOCUMENT; /* More Header Info Needed */
 		if (m_iPlanes != 1) return UT_IE_BOGUSDOCUMENT;
 	m_iBitsPerPlane     = Read2Bytes(pBB,m_iBytesRead);
+		if (m_iBitsPerPlane != 1 && m_iBitsPerPlane != 4 && m_iBitsPerPlane != 8 &&
+			m_iBitsPerPlane != 24 && m_iBitsPerPlane != 32 &&
+			m_iBitsPerPlane != 48 && m_iBitsPerPlane != 64)
+			return UT_IE_BOGUSDOCUMENT;
 		if (m_bHeaderDone) return UT_OK;
 
 	/* This rest of the header is read but not normally required */
@@ -328,31 +353,47 @@ UT_Error IE_ImpGraphic_BMP::Initialize_PNG()
 	return UT_OK;
 }
 
-	UT_Error IE_ImpGraphic_BMP::Convert_BMP_Pallet(const UT_ConstByteBufPtr & pBB)
+UT_Error IE_ImpGraphic_BMP::Convert_BMP_Pallet(const UT_ConstByteBufPtr & pBB)
+{
+	if (!pBB || (m_iBitsPerPlane != 1 && m_iBitsPerPlane != 4 && m_iBitsPerPlane != 8))
+		return UT_IE_BOGUSDOCUMENT;
+
+	UT_uint32 iOffset = m_iHeaderSize + 14;
+	UT_uint32 entrySize = m_bOldBMPFormat ? 3 : 4;
+	if (m_iOffset < iOffset || m_iOffset > pBB->getLength())
+		return UT_IE_BOGUSDOCUMENT;
+
+	UT_uint32 numClrs = (m_iClrUsed > 0) ?
+						m_iClrUsed :
+						(m_iOffset - iOffset) / entrySize;
+	if (numClrs == 0 || numClrs > 256)
+		return UT_IE_BOGUSDOCUMENT;
+	if (numClrs > (m_iOffset - iOffset) / entrySize || numClrs * entrySize > pBB->getLength() - iOffset)
+		return UT_IE_BOGUSDOCUMENT;
+
+	png_colorp palette = nullptr;
+
+	/* Reset error handling for libpng */
+	if (setjmp(png_jmpbuf(m_pPNG)))
 	{
-		/* Reset error handling for libpng */
-		if (setjmp(png_jmpbuf(m_pPNG)))
-		{
-			png_destroy_write_struct(&m_pPNG, &m_pPNGInfo);
-			return UT_ERROR;
-		}
+		if (palette)
+			png_free(m_pPNG, palette);
+		png_destroy_write_struct(&m_pPNG, &m_pPNGInfo);
+		return UT_ERROR;
+	}
 
-		png_set_IHDR ( m_pPNG,
-					   m_pPNGInfo,
-					   m_iWidth,
-					   m_iHeight,
-					   m_iBitsPerPlane,
-					   PNG_COLOR_TYPE_PALETTE,
-					   PNG_INTERLACE_NONE,
-					   PNG_COMPRESSION_TYPE_DEFAULT,
-					   PNG_FILTER_TYPE_DEFAULT );
+	UT_uint32 uHeight = (m_iHeight < 0) ? static_cast<UT_uint32>(-m_iHeight) : static_cast<UT_uint32>(m_iHeight);
+	png_set_IHDR ( m_pPNG,
+				   m_pPNGInfo,
+				   static_cast<png_uint_32>(m_iWidth),
+				   static_cast<png_uint_32>(uHeight),
+				   m_iBitsPerPlane,
+				   PNG_COLOR_TYPE_PALETTE,
+				   PNG_INTERLACE_NONE,
+				   PNG_COMPRESSION_TYPE_DEFAULT,
+				   PNG_FILTER_TYPE_DEFAULT );
 
-		UT_uint32 iOffset = m_iHeaderSize + 14;
-		UT_uint32 numClrs = (m_iClrUsed > 0) ?
-							m_iClrUsed :
-							(m_iOffset - iOffset)/((m_bOldBMPFormat)?3:4);
-
-	png_colorp palette = static_cast<png_colorp>(png_malloc(m_pPNG, numClrs * sizeof(png_color)));
+	palette = static_cast<png_colorp>(png_malloc(m_pPNG, numClrs * sizeof(png_color)));
 
 	for (UT_uint32 i=0; i < numClrs; i++)
 	{
@@ -361,84 +402,139 @@ UT_Error IE_ImpGraphic_BMP::Initialize_PNG()
 		palette[i].red   = ReadByte(pBB,iOffset++);
 		if(!m_bOldBMPFormat) iOffset++;
 	}
-	if (iOffset > m_iOffset) return UT_IE_BOGUSDOCUMENT;
+	if (iOffset > m_iOffset)
+	{
+		png_free(m_pPNG, palette);
+		return UT_IE_BOGUSDOCUMENT;
+	}
 
-	png_set_PLTE( m_pPNG, m_pPNGInfo, palette, numClrs );
+	png_set_PLTE( m_pPNG, m_pPNGInfo, palette, static_cast<int>(numClrs) );
+	png_free(m_pPNG, palette);
 
 	return UT_OK;
 }
 
 UT_Error IE_ImpGraphic_BMP::Convert_BMP(const UT_ConstByteBufPtr & pBB)
 {
+	if (!pBB || m_iWidth <= 0 || m_iHeight == 0 || m_iHeight == static_cast<UT_sint32>(0x80000000U))
+		return UT_IE_BOGUSDOCUMENT;
+
+	const bool bTopDown = (m_iHeight < 0);
+	const UT_uint32 uHeight = bTopDown ? static_cast<UT_uint32>(-m_iHeight) : static_cast<UT_uint32>(m_iHeight);
+	const UT_uint64 row_width_64 = ((static_cast<UT_uint64>(m_iWidth) * m_iBitsPerPlane + 31) / 32) * 4;
+	const UT_uint32 bufLen = pBB->getLength();
+	if (row_width_64 == 0 || m_iOffset > bufLen || row_width_64 > bufLen - m_iOffset ||
+		static_cast<UT_uint64>(uHeight) > (bufLen - m_iOffset) / row_width_64)
+	{
+		return UT_IE_BOGUSDOCUMENT;
+	}
+	const UT_uint32 row_width = static_cast<UT_uint32>(row_width_64);
+	UT_Byte* row_transformed_data = new UT_Byte[row_width];
+
 	/* Reset error handling for libpng */
 	if (setjmp(png_jmpbuf(m_pPNG)))
 	{
+		delete [] row_transformed_data;
 		png_destroy_write_struct(&m_pPNG, &m_pPNGInfo);
 		return UT_ERROR;
 	}
 	png_write_info(m_pPNG,m_pPNGInfo);
 
-	const UT_Byte*  row_data;
-	UT_sint32 row;
+	const UT_Byte* row_data;
 	UT_uint32 position;
-	UT_uint32 row_width = m_iWidth * m_iBitsPerPlane / 8;
-	while ((row_width & 3) != 0) row_width++;
-	UT_Byte* row_transformed_data = new UT_Byte[row_width];
 
 	switch (m_iBitsPerPlane)
 	{
 	case 1:
 	case 4:
 	case 8:
-	case 16:
-		for (row=m_iHeight-1; row >= 0; row--)
+		for (UT_uint32 rowIdx = 0; rowIdx < uHeight; rowIdx++)
 		{
-			/* Calculating the start of each row */
-			position=m_iOffset + row*row_width;
-			row_data = reinterpret_cast<const unsigned char *>(pBB->getPointer(position));
+			UT_uint32 srcRow = bTopDown ? rowIdx : (uHeight - 1 - rowIdx);
+			position = m_iOffset + srcRow * row_width;
+			row_data = pBB->getPointer(position);
 			png_write_rows(m_pPNG,const_cast<png_byte **>(reinterpret_cast<const png_byte **>(&row_data)),1);
 		}	
 		break;
 	case 24:
-	case 48:
-		for (row=m_iHeight-1; row >= 0; row--)
+		for (UT_uint32 rowIdx = 0; rowIdx < uHeight; rowIdx++)
 		{
-			/* Calculating the start of each row */
-			position=m_iOffset + row*row_width;
-			/* Transforming the b/r to r/b */
-			for (UT_sint32 i=0, col=0; i < m_iWidth; i++,col+=3)
+			UT_uint32 srcRow = bTopDown ? rowIdx : (uHeight - 1 - rowIdx);
+			position = m_iOffset + srcRow * row_width;
+			row_data = pBB->getPointer(position);
+			/* Transforming BGR to RGB */
+			for (UT_sint32 i=0, col=0; i < m_iWidth; i++, col+=3)
 			{
-				row_transformed_data[col+0] = (UT_Byte)*pBB->getPointer(position+col+2);
-				row_transformed_data[col+1] = (UT_Byte)*pBB->getPointer(position+col+1);
-				row_transformed_data[col+2] = (UT_Byte)*pBB->getPointer(position+col+0);
+				row_transformed_data[col+0] = row_data[col+2];
+				row_transformed_data[col+1] = row_data[col+1];
+				row_transformed_data[col+2] = row_data[col+0];
 			}
 			png_write_rows(m_pPNG,&row_transformed_data,1);
 		}	
+		break;
+	case 48:
+		for (UT_uint32 rowIdx = 0; rowIdx < uHeight; rowIdx++)
+		{
+			UT_uint32 srcRow = bTopDown ? rowIdx : (uHeight - 1 - rowIdx);
+			position = m_iOffset + srcRow * row_width;
+			row_data = pBB->getPointer(position);
+			/* Transforming 16-bit LE BGR to 16-bit BE RGB */
+			for (UT_sint32 i=0, col=0; i < m_iWidth; i++, col+=6)
+			{
+				row_transformed_data[col+0] = row_data[col+5];
+				row_transformed_data[col+1] = row_data[col+4];
+				row_transformed_data[col+2] = row_data[col+3];
+				row_transformed_data[col+3] = row_data[col+2];
+				row_transformed_data[col+4] = row_data[col+1];
+				row_transformed_data[col+5] = row_data[col+0];
+			}
+			png_write_rows(m_pPNG,&row_transformed_data,1);
+		}
 		break;
 	case 32: 
-	case 64:
-		for (row=m_iHeight-1; row >= 0; row--)
+		for (UT_uint32 rowIdx = 0; rowIdx < uHeight; rowIdx++)
 		{
-			/* Calculating the start of each row */
-			position=m_iOffset + row*row_width;
-			/* Transforming the b/r to r/b */
-			for (UT_sint32 i=0, col=0; i < m_iWidth; i++,col+=4)
+			UT_uint32 srcRow = bTopDown ? rowIdx : (uHeight - 1 - rowIdx);
+			position = m_iOffset + srcRow * row_width;
+			row_data = pBB->getPointer(position);
+			/* Transforming BGRA to RGBA */
+			for (UT_sint32 i=0, col=0; i < m_iWidth; i++, col+=4)
 			{
-				row_transformed_data[col+0] = (UT_Byte)*pBB->getPointer(position+col+2);
-				row_transformed_data[col+1] = (UT_Byte)*pBB->getPointer(position+col+1);
-				row_transformed_data[col+2] = (UT_Byte)*pBB->getPointer(position+col+0);
-				row_transformed_data[col+3] = (UT_Byte)*pBB->getPointer(position+col+3);				
+				row_transformed_data[col+0] = row_data[col+2];
+				row_transformed_data[col+1] = row_data[col+1];
+				row_transformed_data[col+2] = row_data[col+0];
+				row_transformed_data[col+3] = row_data[col+3];
 			}
 			png_write_rows(m_pPNG,&row_transformed_data,1);
 		}	
-		break;			
-	default:
-		return UT_IE_BOGUSDOCUMENT;
 		break;
+	case 64:
+		for (UT_uint32 rowIdx = 0; rowIdx < uHeight; rowIdx++)
+		{
+			UT_uint32 srcRow = bTopDown ? rowIdx : (uHeight - 1 - rowIdx);
+			position = m_iOffset + srcRow * row_width;
+			row_data = pBB->getPointer(position);
+			/* Transforming 16-bit LE BGRA to 16-bit BE RGBA */
+			for (UT_sint32 i=0, col=0; i < m_iWidth; i++, col+=8)
+			{
+				row_transformed_data[col+0] = row_data[col+5];
+				row_transformed_data[col+1] = row_data[col+4];
+				row_transformed_data[col+2] = row_data[col+3];
+				row_transformed_data[col+3] = row_data[col+2];
+				row_transformed_data[col+4] = row_data[col+1];
+				row_transformed_data[col+5] = row_data[col+0];
+				row_transformed_data[col+6] = row_data[col+7];
+				row_transformed_data[col+7] = row_data[col+6];
+			}
+			png_write_rows(m_pPNG,&row_transformed_data,1);
+		}
+		break;
+	default:
+		delete [] row_transformed_data;
+		return UT_IE_BOGUSDOCUMENT;
 	}
-	delete [] row_transformed_data;
-
 	png_write_end(m_pPNG,m_pPNGInfo);
+	delete [] row_transformed_data;
 	return UT_OK;
 }
 
@@ -467,6 +563,11 @@ UT_uint32 IE_ImpGraphic_BMP::ReadBytes(const UT_ConstByteBufPtr & pBB,
 									   UT_uint32 num_bytes)
 {
 	UT_ASSERT(num_bytes <= 4);
+	if (!pBB || num_bytes > 4 || offset > pBB->getLength() || num_bytes > pBB->getLength() - offset)
+	{
+		m_bHeaderDone = true;
+		return 0;
+	}
 	m_iBytesRead+=num_bytes;
 
 	if (m_iHeaderSize)
@@ -481,13 +582,15 @@ UT_uint32 IE_ImpGraphic_BMP::ReadBytes(const UT_ConstByteBufPtr & pBB,
 	for (UT_uint32 i=0; i<num_bytes; i++)
 	{
 		pByte   =  pBB->getPointer(offset+i);
-		result |=  *pByte << (i*8);
+		result |=  static_cast<UT_uint32>(*pByte) << (i*8);
 	}
 	return (result);
 }
 
 void IE_ImpGraphic_BMP::InitializePrivateClassData()
 {
+	m_pPNG=nullptr;
+	m_pPNGInfo=nullptr;
 	m_iFileType=0;
 	m_iFileSize=0;
 	m_iXHotspot=0;

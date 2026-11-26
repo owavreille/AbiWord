@@ -95,6 +95,9 @@ const char * UT_dimensionName(UT_Dimension dim)
 
 UT_Dimension UT_determineDimension(const char * sz, UT_Dimension fallback)
 {
+  if (!sz || !*sz)
+    return fallback;
+
   char * p = nullptr ;
   char normalized[128];
   const char * parse = s_usePeriodDecimal(sz, normalized, sizeof(normalized));
@@ -108,7 +111,7 @@ UT_Dimension UT_determineDimension(const char * sz, UT_Dimension fallback)
   if (p && *p)
     {
       // trim off leading spaces
-      while (*p && isspace(*p))
+      while (*p && isspace(static_cast<unsigned char>(*p)))
 	p++;
 
       if (g_ascii_strcasecmp(p,"in") == 0 || g_ascii_strcasecmp(p, "inch") == 0)
@@ -198,46 +201,46 @@ const char * UT_formatDimensionString(UT_Dimension dim, double value, const char
 		// let them enter (via the TopRuler), so let's
 		// set the precision so that we get nice roundoff.
 		// TODO we may need to improve this later.
-		sprintf(bufFormat,"%%%sfin",((szPrecision && *szPrecision) ? szPrecision : ".4"));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sfin", ((szPrecision && *szPrecision) ? szPrecision : ".4"));
 		break;
 
 	case DIM_CM:
-		sprintf(bufFormat,"%%%sfcm",((szPrecision && *szPrecision) ? szPrecision : ".2"));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sfcm", ((szPrecision && *szPrecision) ? szPrecision : ".2"));
 		break;
 
 	case DIM_MM:
-		sprintf(bufFormat,"%%%sfmm",((szPrecision && *szPrecision) ? szPrecision : ".1"));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sfmm", ((szPrecision && *szPrecision) ? szPrecision : ".1"));
 		break;
 
 	case DIM_PI:
-		sprintf(bufFormat,"%%%sfpi",((szPrecision && *szPrecision) ? szPrecision : ".0"));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sfpi", ((szPrecision && *szPrecision) ? szPrecision : ".0"));
 		break;
 
 	case DIM_PT:
-		sprintf(bufFormat,"%%%sfpt",((szPrecision && *szPrecision) ? szPrecision : ".0"));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sfpt", ((szPrecision && *szPrecision) ? szPrecision : ".0"));
 		break;
 
 	case DIM_PX:
-	  sprintf(bufFormat,"%%%sfpx",((szPrecision && *szPrecision) ? szPrecision : ".0"));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sfpx", ((szPrecision && *szPrecision) ? szPrecision : ".0"));
 		break;
 
  	case DIM_none:
-		sprintf(bufFormat,"%%%sf",((szPrecision && *szPrecision) ? szPrecision : ""));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sf", ((szPrecision && *szPrecision) ? szPrecision : ""));
 		break;
 
 	case DIM_PERCENT:
-		sprintf(bufFormat,"%%%sf%%%%",((szPrecision && *szPrecision) ? szPrecision : ""));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sf%%%%", ((szPrecision && *szPrecision) ? szPrecision : ""));
 		break;
 
 	default:
 		UT_ASSERT(UT_NOT_IMPLEMENTED);
-		sprintf(bufFormat,"%%%sf",((szPrecision && *szPrecision) ? szPrecision : ""));
+		snprintf(bufFormat, sizeof(bufFormat), "%%%sf", ((szPrecision && *szPrecision) ? szPrecision : ""));
 		break;
 	}
 
 	{
 		UT_LocaleTransactor t(LC_NUMERIC, "C");
-		sprintf(buf,bufFormat,value);
+		snprintf(buf, sizeof(buf), bufFormat, value);
 	}
 
 	return buf;
@@ -416,11 +419,11 @@ const char * UT_convertToDimensionlessString(double value, const char * szPrecis
 	static char buf[100];
 
 	char bufFormat[100];
-	sprintf(bufFormat,"%%%sf",((szPrecision && *szPrecision) ? szPrecision : ""));
+	snprintf(bufFormat, sizeof(bufFormat), "%%%sf", ((szPrecision && *szPrecision) ? szPrecision : ""));
 
 	{
 		UT_LocaleTransactor t(LC_NUMERIC, "C");
-		sprintf(buf,bufFormat,value);
+		snprintf(buf, sizeof(buf), bufFormat, value);
 	}
 
 	return buf;
@@ -532,7 +535,7 @@ const char * UT_formatDimensionedValue(double value,
 
 	const char * szValue = UT_convertToDimensionlessString(value,szPrecision);
 
-	sprintf(buf,"%s%s",szValue,szUnits);
+	snprintf(buf, sizeof(buf), "%s%s", szValue, szUnits ? szUnits : "");
 
 	return buf;
 }
@@ -559,28 +562,43 @@ double UT_convertToDimension(const char* s, UT_Dimension dim)
 bool UT_isValidDimensionString(const char * sz, size_t max_length)
 {
 	// Check for validity of the input: the first part (before the dimension specifier)
-	// should only contain the characters '0'..'9' and/or at most one '.'. The last part possibly
-	// containing the dim specifier is not checked.
+	// should only contain an optional leading '-', the characters '0'..'9', and/or at most one '.' or ','.
+	// At least one digit is required. The last part possibly containing the dim specifier is not checked.
 	// This is not perfect, but good enough for most purposes. Feel g_free to improve the test.
-	
+	if (!sz || !*sz)
+		return false;
+
 	UT_LocaleTransactor t(LC_NUMERIC, "C");
 
 	if (max_length > 0 && (strlen(sz) > max_length))
 		return false;
 
 	const gchar* p = sz;
+	if (*p == '-')
+		p++;
+
 	bool valid = true;
 	bool seenDecSep = false;
-	int valChars = 0;
+	int digitCount = 0;
 	while (*p && valid)
 	{
+		const unsigned char uc = static_cast<unsigned char>(*p);
 		const bool decimal = (*p == '.') || (*p == ',');
-		valid = isdigit(*p) || (decimal && seenDecSep == false);
-		if (decimal) seenDecSep = true;
-		if (valid) valChars++;
+		if (isdigit(uc))
+		{
+			digitCount++;
+		}
+		else if (decimal && !seenDecSep)
+		{
+			seenDecSep = true;
+		}
+		else
+		{
+			valid = false;
+		}
 		p++;
 	}
-	return valChars > 0;
+	return digitCount > 0;
 }
 
 /*!

@@ -335,7 +335,15 @@ UT_String UT_String_getPropVal(const UT_String & sPropertyString, const UT_Strin
 
 	const char * szWork = sWork.c_str();
 	const char * szProps = sPropertyString.c_str();
-	const char * szLoc = strstr(szProps,szWork);
+	const char * szLoc = szProps;
+	while ((szLoc = strstr(szLoc, szWork)) != nullptr)
+	{
+		if (szLoc == szProps || szLoc[-1] == ';' || isspace(static_cast<unsigned char>(szLoc[-1])))
+		{
+			break;
+		}
+		szLoc += strlen(szWork);
+	}
 	if(szLoc == nullptr)
 	{
 		return UT_String();
@@ -359,6 +367,10 @@ UT_String UT_String_getPropVal(const UT_String & sPropertyString, const UT_Strin
 //
 		UT_sint32 offset = static_cast<UT_sint32>(reinterpret_cast<size_t>(szLoc) - reinterpret_cast<size_t>(szProps));
 		offset += strlen(szWork);
+		if (iSLen <= offset)
+		{
+			return UT_String();
+		}
 		return UT_String(sPropertyString.substr(offset,(iSLen - offset)));
 	}
 	else
@@ -375,7 +387,7 @@ UT_String UT_String_getPropVal(const UT_String & sPropertyString, const UT_Strin
 //
 // Remove trailing spaces.
 //
-		while(*szDelim == ';' || *szDelim == ' ')
+		while(szDelim > szProps && (*szDelim == ';' || *szDelim == ' '))
 		{
 			szDelim--;
 		}
@@ -385,6 +397,10 @@ UT_String UT_String_getPropVal(const UT_String & sPropertyString, const UT_Strin
 		UT_sint32 offset = static_cast<UT_sint32>(reinterpret_cast<size_t>(szLoc) - reinterpret_cast<size_t>(szProps));
 		offset += strlen(szWork);
 		UT_sint32 iLen = static_cast<UT_sint32>(reinterpret_cast<size_t>(szDelim) - reinterpret_cast<size_t>(szProps)) + 1;
+		if (iLen <= offset)
+		{
+			return UT_String();
+		}
 		return UT_String(sPropertyString.substr(offset,(iLen - offset)));
 	}
 }
@@ -525,7 +541,8 @@ void UT_String_removeProperty(UT_String & sPropertyString, const UT_String & sPr
 	}
 
 	// Look for ";" to get right part
-	const char * szDelim = strchr(szLoc,';');
+	const size_t delimOffset = (szLoc != szProps) ? 1 : 0;
+	const char * szDelim = strchr(szLoc + delimOffset, ';');
 	if(szDelim == nullptr)
 	{
 		// No properties after this, just assign and return
@@ -914,7 +931,15 @@ UT_UTF8String UT_UTF8String_getPropVal(const UT_UTF8String & sPropertyString, co
 
 	const char * szWork = sWork.utf8_str();
 	const char * szProps = sPropertyString.utf8_str();
-	const char * szLoc = strstr(szProps,szWork);
+	const char * szLoc = szProps;
+	while ((szLoc = strstr(szLoc, szWork)) != nullptr)
+	{
+		if (szLoc == szProps || szLoc[-1] == ';' || isspace(static_cast<unsigned char>(szLoc[-1])))
+		{
+			break;
+		}
+		szLoc += strlen(szWork);
+	}
 	if(szLoc == nullptr)
 	{
 		return UT_UTF8String();
@@ -938,6 +963,10 @@ UT_UTF8String UT_UTF8String_getPropVal(const UT_UTF8String & sPropertyString, co
 //
 		UT_sint32 offset = static_cast<UT_sint32>(reinterpret_cast<size_t>(szLoc) - reinterpret_cast<size_t>(szProps));
 		offset += strlen(szWork);
+		if (iSLen <= offset)
+		{
+			return UT_UTF8String();
+		}
 		return UT_UTF8String(sPropertyString.substr(offset,(iSLen - offset)));
 	}
 	else
@@ -954,7 +983,7 @@ UT_UTF8String UT_UTF8String_getPropVal(const UT_UTF8String & sPropertyString, co
 //
 // Remove trailing spaces.
 //
-		while(*szDelim == ';' || *szDelim == ' ')
+		while(szDelim > szProps && (*szDelim == ';' || *szDelim == ' '))
 		{
 			szDelim--;
 		}
@@ -964,6 +993,10 @@ UT_UTF8String UT_UTF8String_getPropVal(const UT_UTF8String & sPropertyString, co
 		UT_sint32 offset = static_cast<UT_sint32>(reinterpret_cast<size_t>(szLoc) - reinterpret_cast<size_t>(szProps));
 		offset += strlen(szWork);
 		UT_sint32 iLen = static_cast<UT_sint32>(reinterpret_cast<size_t>(szDelim) - reinterpret_cast<size_t>(szProps)) + 1;
+		if (iLen <= offset)
+		{
+			return UT_UTF8String();
+		}
 		return UT_UTF8String(sPropertyString.substr(offset,(iLen - offset)));
 	}
 }
@@ -1323,7 +1356,7 @@ UT_UCS4String::UT_UCS4String(const char * _utf8_str, size_t bytelength /* 0 == z
 		UT_UCS4Char ucs4b = UT_Unicode::UTF8_to_UCS4 (_utf8_str, bytelength);
 		if ((UCS_NBSP != ucs4a) && UT_UCS4_isspace (ucs4a)) {
 			if (strip_whitespace) {
-				if (!UT_UCS4_isspace (ucs4b)) {
+				if ((UCS_NBSP == ucs4b) || !UT_UCS4_isspace (ucs4b)) {
 					ucs4a = UCS_SPACE;
 					pimpl->append (&ucs4a, 1);
 					ucs4a = ucs4b;

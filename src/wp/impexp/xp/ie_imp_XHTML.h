@@ -119,6 +119,7 @@ private:
 	UT_uint16	m_iNewImage;
 
 	std::stack<UT_uint16>	m_utsParents;
+	std::stack<listType>	m_utsListTypes;
 	std::string m_szBookMarkName;
 
 	bool        m_addedPTXSection;

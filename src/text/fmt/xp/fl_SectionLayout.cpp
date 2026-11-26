@@ -1129,7 +1129,7 @@ UT_sint32 fl_DocSectionLayout::getActualColumnWidth(void) const
 	width -= (getLeftMargin() + getRightMargin());
 	if(m_iNumColumns > 1)
 	{
-		width -= m_iNumColumns*m_iColumnGap;
+		width -= (m_iNumColumns - 1) * m_iColumnGap;
 		width = width/m_iNumColumns;
 	}
 	return width;
@@ -1297,7 +1297,7 @@ void fl_DocSectionLayout::_HdrFtrChangeCallback(UT_Worker * pWorker)
 		{
 			return;
 		}
-		fl_DocSectionLayout * pPPrev = static_cast<fl_DocSectionLayout *>(pDSL->getPrev());
+		fl_DocSectionLayout * pPPrev = static_cast<fl_DocSectionLayout *>(pPrev->getPrev());
 		if(pPPrev != pPrev)
 		{
 			pPrev = pPPrev;
@@ -1313,8 +1313,12 @@ void fl_DocSectionLayout::_HdrFtrChangeCallback(UT_Worker * pWorker)
 	PP_PropertyVector atts = {
 		"props", pProps
 	};
-	pDoc->notifyPieceTableChangeStart();
 	FV_View * pView =  pDSL->m_pLayout->getView();
+	if (!pView)
+	{
+		return;
+	}
+	pDoc->notifyPieceTableChangeStart();
 	pf_Frag_Strux* sdh = pDSL->getStruxDocHandle();
     PT_DocPosition insPos = pView->getPoint();
 	fl_HdrFtrShadow * pShadow = pView->getEditShadow();
@@ -1353,8 +1357,11 @@ void fl_DocSectionLayout::_HdrFtrChangeCallback(UT_Worker * pWorker)
 		if(pPage)
 		{
 			fp_ShadowContainer* pShadowC = pPage->getHdrFtrP(hfType);
-			pShadow = pShadowC->getShadow();
-			pView->setHdrFtrEdit(pShadow);
+			if(pShadowC)
+			{
+				pShadow = pShadowC->getShadow();
+				pView->setHdrFtrEdit(pShadow);
+			}
 		}
 	}
     pView->setPoint(insPos);
@@ -1580,7 +1587,7 @@ fp_Container* fl_DocSectionLayout::getNewContainer(const fp_Container* pFirstCon
 		//
 		bool bColAlready = false;
 		UT_sint32 iCol = 0;
-		for(iCol =0; pTmpPage->countColumnLeaders(); iCol++)
+		for(iCol = 0; iCol < pTmpPage->countColumnLeaders(); iCol++)
 		{
 		    if(pTmpPage->getNthColumnLeader(iCol)->getDocSectionLayout() == this)
 		    {
@@ -2596,11 +2603,7 @@ void fl_DocSectionLayout::deleteBrokenTablesFromHere(fl_ContainerLayout * pTL)
 	        return;
 	}
 	m_bDeleteingBrokenContainers = true;
-	if(pTL == nullptr)
-	{
-		pTL = getFirstLayout();
-	}
-	fl_ContainerLayout * pCL = pTL->getNext();
+	fl_ContainerLayout * pCL = (pTL == nullptr) ? getFirstLayout() : pTL->getNext();
 	while(pCL != nullptr)
 	{
 		if(pCL->getContainerType() == FL_CONTAINER_TABLE)
@@ -3214,7 +3217,7 @@ bool fl_DocSectionLayout::isThisPageValid(HdrFtrType hfType, fp_Page * pThisPage
 	if((hfType == FL_HDRFTR_HEADER_EVEN) ||
 	   (hfType == FL_HDRFTR_FOOTER_EVEN))
 	{
-		if(i % 2 == 0)
+		if((i % 2) == 1)
 			return true;
 		else
 			return false;
@@ -3222,7 +3225,7 @@ bool fl_DocSectionLayout::isThisPageValid(HdrFtrType hfType, fp_Page * pThisPage
 //
 // If there is an Even SL defined and this is an even page in the SL page bail now!
 //
-	if ((i % 2 == 0) &&
+	if (((i % 2) == 1) &&
 		((m_pHeaderEvenSL && hfType < FL_HDRFTR_FOOTER) ||
 		 (m_pFooterEvenSL && hfType >= FL_HDRFTR_FOOTER)))
 		return false;

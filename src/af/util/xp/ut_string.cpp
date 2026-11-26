@@ -93,7 +93,8 @@ bool UT_XML_cloneConvAmpersands(gchar *& rszDest, const gchar * szSource)
 			*n = *o;
 		} else {
 			if (o[1] == '&') {
-				*n++ = '&';
+				*n = '&';
+				o++;
 			}
 			else *n = '_';
 		}
@@ -284,43 +285,51 @@ void UT_decodeUTF8string(const gchar * pString, UT_uint32 len, UT_GrowBuf * pRes
 	{
 		if (p[k] < 0x80)						// plain us-ascii part of latin-1
 		{
-			UT_ASSERT(bytesInSequence == 0);
+			bytesInSequence = 0;
+			bytesExpectedInSequence = 0;
 			UT_UCS4Char c = p[k];
 			pResult->append(reinterpret_cast<UT_GrowBufElement *>(&c),1);
 		}
-		else if ((p[k] & 0xf0) == 0xf0)			// lead byte in 4-byte surrogate pair
+		else if ((p[k] & 0xf8) == 0xf0)			// lead byte in 4-byte sequence
 		{
-			// surrogate pairs are defined in section 3.7 of the
-			// unicode standard version 2.0 as an extension
-			// mechanism for rare characters in future extensions
-			// of the unicode standard.
-			UT_ASSERT(bytesInSequence == 0);
+			bytesInSequence = 0;
 			bytesExpectedInSequence = 4;
 			buf[bytesInSequence++] = p[k];
 		}
-		else if ((p[k] & 0xe0) == 0xe0)			// lead byte in 3-byte sequence
+		else if ((p[k] & 0xf0) == 0xe0)			// lead byte in 3-byte sequence
 		{
-			UT_ASSERT(bytesInSequence == 0);
+			bytesInSequence = 0;
 			bytesExpectedInSequence = 3;
 			buf[bytesInSequence++] = p[k];
 		}
-		else if ((p[k] & 0xc0) == 0xc0)			// lead byte in 2-byte sequence
+		else if ((p[k] & 0xe0) == 0xc0)			// lead byte in 2-byte sequence
 		{
-			UT_ASSERT(bytesInSequence == 0);
+			bytesInSequence = 0;
 			bytesExpectedInSequence = 2;
 			buf[bytesInSequence++] = p[k];
 		}
-		else if ((p[k] & 0x80) == 0x80)			// trailing byte in multi-byte sequence
+		else if ((p[k] & 0xc0) == 0x80)			// trailing byte in multi-byte sequence
 		{
-			UT_ASSERT(bytesInSequence > 0);
+			if (bytesInSequence == 0 || bytesInSequence >= bytesExpectedInSequence || bytesInSequence >= 4)
+			{
+				bytesInSequence = 0;
+				bytesExpectedInSequence = 0;
+				continue;
+			}
 			buf[bytesInSequence++] = p[k];
 			if (bytesInSequence == bytesExpectedInSequence)		// final byte in multi-byte sequence
 			{
+				buf[bytesInSequence] = '\0';
 				UT_UCS4Char c = g_utf8_get_char(buf);
 				pResult->append(reinterpret_cast<UT_GrowBufElement *>(&c),1);
 				bytesInSequence = 0;
 				bytesExpectedInSequence = 0;
 			}
+		}
+		else
+		{
+			bytesInSequence = 0;
+			bytesExpectedInSequence = 0;
 		}
 	}
 }
@@ -509,11 +518,11 @@ UT_sint32 UT_UCS2_strcmp(const UT_UCS2Char* left, const UT_UCS2Char* right)
 
 	if (*left)
 	{
-		return -1;
+		return 1;
 	}
 	else if (*right)
 	{
-		return 1;
+		return -1;
 	}
 	else
 	{
@@ -729,11 +738,11 @@ bool UT_UCS2_isupper(UT_UCS2Char c)
 
 bool UT_UCS2_islower(UT_UCS2Char c)
 {
-	if(c < 127)
-		return islower(c)!=0;
+	if (c < 128)
+		return islower(c) != 0;
 
     case_entry * letter = static_cast<case_entry *>(bsearch(&c, &case_table, G_N_ELEMENTS(case_table),sizeof(case_entry),s_cmp_case));
-    if(!letter || letter->type == 0)
+    if (letter && letter->type == 0)
         return true;
     return false;
 };
@@ -891,11 +900,11 @@ bool UT_UCS4_isupper(UT_UCS4Char c)
 
 bool UT_UCS4_islower(UT_UCS4Char c)
 {
-	if(c < 127)
-		return islower(c)!=0;
+	if (c < 128)
+		return islower(c) != 0;
 
     case_entry * letter = static_cast<case_entry *>(bsearch(&c, &case_table, G_N_ELEMENTS(case_table),sizeof(case_entry),s_cmp_case));
-    if(!letter || letter->type == 0)
+    if (letter && letter->type == 0)
         return true;
     return false;
 }
@@ -1093,11 +1102,11 @@ UT_sint32 UT_UCS4_strcmp(const UT_UCS4Char* left, const UT_UCS4Char* right)
 
 	if (*left)
 	{
-		return -1;
+		return 1;
 	}
 	else if (*right)
 	{
-		return 1;
+		return -1;
 	}
 	else
 	{
@@ -1582,8 +1591,7 @@ void UT_parse_attributes(const char * attributes,
 		if (name_start == name_end) 
 			break; // ?? stray equals?
 
-		name.clear();
-		std::copy(name_start, name_end, name.begin());
+		name.assign(name_start, name_end);
 
 		atstr++;
 		
@@ -1598,8 +1606,7 @@ void UT_parse_attributes(const char * attributes,
 
 		value_start++;
 
-		value.clear();
-		std::copy(value_start, value_end, value.begin());
+		value.assign(value_start, value_end);
 
 		map[name] = value;
 	}

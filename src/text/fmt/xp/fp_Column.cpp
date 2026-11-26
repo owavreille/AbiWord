@@ -507,7 +507,11 @@ std::optional<UT_Rect> fp_VerticalContainer::getScreenRect(void) const
 			return std::nullopt;
 		}
 		auto pFrameC = static_cast<const fp_FrameContainer *>(this);
-		getView()->getPageScreenOffsets(pPage,xoff,yoff);
+		FV_View * pView = getView();
+		if (!pView) {
+			return std::nullopt;
+		}
+		pView->getPageScreenOffsets(pPage,xoff,yoff);
 		xoff += pFrameC->getFullX();
 		yoff += pFrameC->getFullY();
 		return std::optional<UT_Rect>(std::in_place_t(), xoff, yoff, pFrameC->getFullWidth(), pFrameC->getFullHeight());
@@ -1177,7 +1181,7 @@ void fp_VerticalContainer::mapXYToPosition(UT_sint32 x, UT_sint32 y, PT_DocPosit
 			fp_ContainerObject * pContainerAbove = getNthCon(i - 1);
 			fp_ContainerObject * pContainerBelow = getNthCon(i);
 
-			if (pContainerAbove->getY() + pContainerAbove->getHeight() < y)
+			if (pContainerAbove->getY() + pContainerAbove->getHeight() >= y)
 			{
 				pContainer = pContainerAbove;
 			}
@@ -1221,7 +1225,7 @@ void fp_VerticalContainer::mapXYToPosition(UT_sint32 x, UT_sint32 y, PT_DocPosit
 		if (i > 0 && y < pContainer->getY())
 		{
 			fp_ContainerObject* pContainerUpper = static_cast<fp_ContainerObject*>(getNthCon(i-1));
-			iUHeight = pContainer->getHeight();
+			iUHeight = pContainerUpper->getHeight();
 
 			// Be careful with the signedness here - bug 172 leared us a
 			// lesson!
@@ -1273,7 +1277,7 @@ void fp_VerticalContainer::mapXYToPosition(UT_sint32 x, UT_sint32 y, PT_DocPosit
 			if(pNext && pNext->isSameYAsPrevious())
 			{
 				fp_ContainerObject *pBest = pContainer;
-				UT_sint32 xmin = UT_MIN(abs(pNext->getX() - x),abs(pNext->getX()+pNext->getMaxWidth() -x));
+				UT_sint32 xmin = UT_MIN(abs(pLine2->getX() - x), abs(pLine2->getX() + pLine2->getMaxWidth() - x));
 				while(pNext && pNext->isSameYAsPrevious())
 				{
 					if((pNext->getX() < x) && (x < pNext->getX() + pNext->getMaxWidth()))
@@ -1291,8 +1295,8 @@ void fp_VerticalContainer::mapXYToPosition(UT_sint32 x, UT_sint32 y, PT_DocPosit
 					}
 					pNext = static_cast<fp_Line *>(pNext->getNext());
 				}
-				pBest->mapXYToPosition(x - pContainer->getX(),
-									   y - pContainer->getY() ,
+				pBest->mapXYToPosition(x - pBest->getX(),
+									   y - pBest->getY() ,
 									   pos, bBOL, bEOL,isTOC);
 				return;
 			}

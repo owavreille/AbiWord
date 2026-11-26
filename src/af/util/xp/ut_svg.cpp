@@ -122,10 +122,25 @@ bool UT_SVG_getDimensions(const UT_ConstByteBufPtr & pBB, GR_Graphics* pG,
 	return bHave;
 }
 
-bool UT_SVG_recognizeContent(const char* szBuf,UT_uint32 iNumbytes)
+static bool s_contains_bytes(const char * buf, UT_uint32 len, const char * needle)
 {
-  UT_UNUSED(iNumbytes);
-  return (strstr(szBuf, "<svg") != nullptr || strstr(szBuf, "<!DOCTYPE svg") != nullptr);
+	size_t nlen = strlen(needle);
+	if (nlen == 0 || nlen > len)
+		return false;
+	for (UT_uint32 i = 0; i <= len - nlen; ++i)
+	{
+		if (buf[i] == needle[0] && memcmp(buf + i, needle, nlen) == 0)
+			return true;
+	}
+	return false;
+}
+
+bool UT_SVG_recognizeContent(const char* szBuf, UT_uint32 iNumbytes)
+{
+	if (!szBuf || iNumbytes == 0)
+		return false;
+	return (s_contains_bytes(szBuf, iNumbytes, "<svg") ||
+	        s_contains_bytes(szBuf, iNumbytes, "<!DOCTYPE svg"));
 }
 
 static bool _recognizeContent(const char* buffer,UT_uint32 buflen,UT_svg* data)

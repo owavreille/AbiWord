@@ -31,6 +31,7 @@
 // Please keep the "/**/" to stop MSVC dependency generator complaining.
 #include <libxml/parser.h>
 #include <libxml/parserInternals.h>
+#include <libxml/HTMLparser.h>
 
 // override typedef in ut_xml.h:
 #ifdef gchar
@@ -106,29 +107,45 @@ static void _errorSAXFunc(void *xmlp,
   std::string errorMessage;
   UT_std_string_vprintf(errorMessage, msg, args);
   va_end (args);
-  // Handle 'nbsp' here
+  // Resolve HTML/XHTML named entities (including nbsp and accented French entities)
   UT_XML * pXML = reinterpret_cast<UT_XML *>(xmlp);
   pXML->incMinorErrors();
-  char * szErr = g_strdup(errorMessage.c_str() );
-  if(strstr(szErr,"'nbsp' not defined") != nullptr)
+  const char * szMsg = errorMessage.c_str();
+  const char * szNotDef = strstr(szMsg, "' not defined");
+  if (szNotDef != nullptr)
   {
-    UT_DEBUGMSG(("nbsp found in stream errs %d \n",pXML->getNumMinorErrors()));
+      const char * szStart = szNotDef;
+      while (szStart > szMsg && szStart[-1] != '\'')
+          --szStart;
+      if (szStart > szMsg && szStart[-1] == '\'' && szStart < szNotDef)
+      {
+          std::string entName(szStart, static_cast<size_t>(szNotDef - szStart));
+          const htmlEntityDesc * ent = htmlEntityLookup(reinterpret_cast<const xmlChar *>(entName.c_str()));
+          if (ent != nullptr && ent->value != 0)
+          {
+              char utf8[8];
+              int len = g_unichar_to_utf8(static_cast<gunichar>(ent->value), utf8);
+              if (len > 0)
+              {
+                  pXML->incRecoveredErrors();
+                  pXML->charData(utf8, len);
+                  return;
+              }
+          }
+      }
       pXML->incRecoveredErrors();
-      const char nbsp[] = { (char)0xc2, (char)0xa0, 0 };
-      pXML->charData(nbsp, 2);
   }
-  else if(strstr(szErr,"not defined") != nullptr)
+  else if (strstr(szMsg, "not defined") != nullptr)
   {
       pXML->incRecoveredErrors();
   }
   else
   {
       UT_DEBUGMSG(("SAX function error here \n"));
-      UT_DEBUGMSG(("%s", errorMessage.c_str()));
+      UT_DEBUGMSG(("%s", szMsg));
 // This is a runtime error, an ASSERT is out of place.
 //      UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
   }
-  FREEP(szErr);
 }
 
 static void _fatalErrorSAXFunc(void *xmlp,
@@ -239,12 +256,15 @@ UT_Error UT_XML::parse (const char * szFilename)
 			}
 		}
 		if (ret == UT_OK)
-		  if (!m_bStopped && (getNumMinorErrors() == 0))
+		  if (!m_bStopped && (getNumMinorErrors() <= getNumRecoveredErrors()))
 			{
 				if (xmlParseChunk (ctxt, "", 0, 1))
 				{
-					UT_DEBUGMSG (("Error -2 parsing '%s' (Line: %d, Column: %d)\n", szFilename, xmlSAX2GetLineNumber(ctxt), xmlSAX2GetColumnNumber(ctxt)));
-					ret = UT_IE_IMPORTERROR;
+					if (getNumMinorErrors() > getNumRecoveredErrors())
+					{
+						UT_DEBUGMSG (("Error -2 parsing '%s' (Line: %d, Column: %d)\n", szFilename, xmlSAX2GetLineNumber(ctxt), xmlSAX2GetColumnNumber(ctxt)));
+						ret = UT_IE_IMPORTERROR;
+					}
 				}
 			}
 		if (ret == UT_OK && (getNumMinorErrors() == 0))

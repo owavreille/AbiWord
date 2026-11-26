@@ -113,6 +113,8 @@ UT_Confidence_t IE_Imp_XHTML_Sniffer::recognizeContents(const char * szBuf,
 	UT_uint32 iBytesScanned = 0 ;
 	const char *p ;
 	const char *magic ;
+	if (!szBuf)
+		return UT_CONFIDENCE_ZILCH;
 	p = szBuf ;
 	while( iLinesToRead-- )
 	{
@@ -127,16 +129,16 @@ UT_Confidence_t IE_Imp_XHTML_Sniffer::recognizeContents(const char * szBuf,
 		if ( (iNumbytes - iBytesScanned) < strlen(magic) ) return(UT_CONFIDENCE_ZILCH);
 		if ( strncmp(p, magic, strlen(magic)) == 0 ) return(UT_CONFIDENCE_PERFECT);
 		/*  Seek to the next newline:  */
-		while ( *p != '\n' && *p != '\r' )
+		while ( iBytesScanned < iNumbytes && *p != '\n' && *p != '\r' )
 		{
 			iBytesScanned++ ; p++ ;
-			if( iBytesScanned+2 >= iNumbytes ) return(UT_CONFIDENCE_ZILCH);
 		}
+		if ( iBytesScanned >= iNumbytes ) return(UT_CONFIDENCE_ZILCH);
 		/*  Seek past the next newline:  */
-		if ( *p == '\n' || *p == '\r' )
+		if ( iBytesScanned < iNumbytes && (*p == '\n' || *p == '\r') )
 		{
 			iBytesScanned++ ; p++ ;
-			if ( *p == '\n' || *p == '\r' )
+			if ( iBytesScanned < iNumbytes && (*p == '\n' || *p == '\r') )
 			{
 				iBytesScanned++ ; p++ ;
 			}
@@ -567,7 +569,9 @@ static void s_append_color (UT_UTF8String & style, const char * color, const cha
 							unsigned char g = static_cast<unsigned char>(uig|(uig<<4));
 							unsigned char b = static_cast<unsigned char>(uib|(uib<<4));
 
-							hex_color = hash_color.setColor (r, g, b) + 1;
+							const char * resolved = hash_color.setColor (r, g, b);
+							if (resolved && *resolved == '#')
+								hex_color = resolved + 1;
 						}
 				}
 			else hex_color = value + 1;
@@ -578,7 +582,9 @@ static void s_append_color (UT_UTF8String & style, const char * color, const cha
 		}
 	else
 		{
-			hex_color = hash_color.lookupNamedColor (color) + 1;
+			const char * named = hash_color.lookupNamedColor (value);
+			if (named && *named == '#')
+				hex_color = named + 1;
 		}
 	g_free (value);
 
@@ -602,6 +608,8 @@ static bool recognizeXHTML (const char * szBuf, UT_uint32 iNumbytes)
 	UT_uint32 iBytesScanned = 0 ;
 	const char *p ;
 	const char *magic ;
+	if (!szBuf)
+		return false;
 	p = szBuf ;
 	while( iLinesToRead-- )
 	{
@@ -614,16 +622,16 @@ static bool recognizeXHTML (const char * szBuf, UT_uint32 iNumbytes)
 		if ( strncmp(p, magic, strlen(magic)) == 0 ) return(true);
 
 		/*  Seek to the next newline:  */
-		while ( *p != '\n' && *p != '\r' )
+		while ( iBytesScanned < iNumbytes && *p != '\n' && *p != '\r' )
 		{
 			iBytesScanned++ ; p++ ;
-			if( iBytesScanned+2 >= iNumbytes ) return(false);
 		}
+		if ( iBytesScanned >= iNumbytes ) return(false);
 		/*  Seek past the next newline:  */
-		if ( *p == '\n' || *p == '\r' )
+		if ( iBytesScanned < iNumbytes && (*p == '\n' || *p == '\r') )
 		{
 			iBytesScanned++ ; p++ ;
-			if ( *p == '\n' || *p == '\r' )
+			if ( iBytesScanned < iNumbytes && (*p == '\n' || *p == '\r') )
 			{
 				iBytesScanned++ ; p++ ;
 			}
@@ -931,7 +939,13 @@ void IE_Imp_XHTML::startElement(const gchar *name,
 			// UT_String_sprintf(output, "color:%s; bgcolor: %s; font-family:%s; size:%spt", color.c_str(), bgcolor.c_str(), face.c_str(), size.c_str());
 			UT_DEBUGMSG(("Font properties: %s\n", style.utf8_str()));
 
-			X_CheckError(pushInline (style.utf8_str ()));
+			if (style.byteLength())
+				X_CheckError(pushInline (style.utf8_str ()));
+			else
+				{
+					X_CheckError(requireBlock ());
+					_pushInlineFmt(PP_NOPROPS);
+				}
 		}
 		return;
 
@@ -1009,6 +1023,7 @@ void IE_Imp_XHTML::startElement(const gchar *name,
 	case TT_UL:
 	case TT_DL:
 	{
+		m_utsListTypes.push(m_listType);
 		if(tokenIndex == TT_OL)
 	  		m_listType = L_OL;
 	  	else 
@@ -1059,7 +1074,7 @@ void IE_Imp_XHTML::startElement(const gchar *name,
 			m_parseState =  _PS_Sec;
 		X_CheckError (requireSection ());
 
-		if (m_listType != L_NONE)
+		if (m_listType != L_NONE && !m_utsParents.empty())
 		{
 			UT_uint16 thisID = m_iListID;
 			parentID = m_utsParents.top();
@@ -1580,10 +1595,22 @@ void IE_Imp_XHTML::endElement(const gchar *name)
 	case TT_OL:
 	case TT_UL:
 	case TT_DL:
-		m_iListID = m_utsParents.top();
-		m_utsParents.pop();
-
-		if(m_utsParents.empty()) {
+		if (!m_utsParents.empty())
+		{
+			m_iListID = m_utsParents.top();
+			m_utsParents.pop();
+		}
+		if (!m_utsListTypes.empty())
+		{
+			m_listType = m_utsListTypes.top();
+			m_utsListTypes.pop();
+		}
+		else
+		{
+			m_listType = L_NONE;
+		}
+		if (m_utsParents.empty())
+		{
 			m_listType = L_NONE;
 		}
 
@@ -1635,7 +1662,8 @@ void IE_Imp_XHTML::endElement(const gchar *name)
 	case TT_EM:
 	case TT_I:
 		UT_ASSERT_HARMLESS(m_lenCharDataSeen==0);
-		_popInlineFmt ();
+		if (_getInlineDepth () > 0)
+			_popInlineFmt ();
 		if (m_parseState == _PS_Block)
 			{
 				X_CheckError(appendFmt(m_vecInlineFmt));
@@ -1733,7 +1761,8 @@ void IE_Imp_XHTML::endElement(const gchar *name)
 	case TT_PRE:
 		UT_ASSERT_HARMLESS(m_lenCharDataSeen==0);
 		if (m_parseState == _PS_Block) m_parseState = _PS_Sec;
-		m_iPreCount--;
+		if (m_iPreCount > 0)
+			m_iPreCount--;
 		m_bWhiteSignificant = (m_iPreCount > 0);
 		return;
 
@@ -2383,6 +2412,21 @@ static void s_props_append (UT_UTF8String & props, UT_uint32 css_mask,
 									verbatim = value;
 								}
 						}
+					else if (*value)
+						{
+							char * value_end = value;
+							while (*value_end && *value_end != ',')
+								{
+									value_end++;
+								}
+							while (value_end > value && isspace(static_cast<unsigned char>(value_end[-1])))
+								{
+									value_end--;
+								}
+							*value_end = 0;
+							if (*value)
+								verbatim = value;
+						}
 				}
 			else if (strcmp (name, "text-decoration") == 0)
 				{
@@ -2445,14 +2489,18 @@ static void s_props_append (UT_UTF8String & props, UT_uint32 css_mask,
 							props += value;
 						}
 				}
-			else if ((strcmp (name, "color") == 0) || (strcmp (name, "background") == 0))
+			else if ((strcmp (name, "color") == 0) ||
+					 (strcmp (name, "background") == 0) ||
+					 (strcmp (name, "background-color") == 0))
 				{
 					/* AbiWord uses rgb hex-sequence w/o the # prefix used by CSS
 					 * and uses "bgcolor" instead of background
 					 */
 					static const char * bgcolor = "bgcolor";
 
-					if (strcmp (name, "background") == 0) name = bgcolor;
+					if ((strcmp (name, "background") == 0) ||
+						(strcmp (name, "background-color") == 0))
+						name = bgcolor;
 
 					if (*value == '#')
 						{
@@ -2470,7 +2518,9 @@ static void s_props_append (UT_UTF8String & props, UT_uint32 css_mask,
 									unsigned char g = static_cast<unsigned char>(uig|(uig<<4));
 									unsigned char b = static_cast<unsigned char>(uib|(uib<<4));
 
-									verbatim = color.setColor (r, g, b);
+									const char * resolved = color.setColor (r, g, b);
+									if (resolved && *resolved == '#')
+										verbatim = resolved + 1;
 								}
 							}
 							else if (strlen (value) == 6) verbatim = value;
@@ -2513,13 +2563,17 @@ static void s_props_append (UT_UTF8String & props, UT_uint32 css_mask,
 									unsigned char g = s_rgb_number (fg, b2pc);
 									unsigned char b = s_rgb_number (fb, b3pc);
 
-									verbatim = color.setColor (r, g, b);
+									const char * resolved = color.setColor (r, g, b);
+									if (resolved && *resolved == '#')
+										verbatim = resolved + 1;
 								}
 							}
 						}
 					else
 						{
-							verbatim = color.lookupNamedColor (value);
+							const char * resolved = color.lookupNamedColor (value);
+							if (resolved && *resolved == '#')
+								verbatim = resolved + 1;
 						}
 				}
 			else if (strcmp (name, "text-transform") == 0)
