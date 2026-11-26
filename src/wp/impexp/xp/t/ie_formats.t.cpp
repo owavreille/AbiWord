@@ -2857,7 +2857,8 @@ TFTEST_MAIN("DOC export keeps a TOC field, frame text and a margin note")
 	TFPASS(main.find(std::string("\x02\x00", 2)) == std::string::npos);
 	TFPASS(main.find(std::string("\x05\x00", 2)) != std::string::npos);
 	TFPASS(ccp_text > 0 && ccp_ftn == 0 && ccp_hdd == 0 && ccp_atn > 0 && ccp_edn == 0);
-	TFPASS(fc_mac > fc_min && (fc_mac - fc_min) / 2 == ccp_text);
+	// The annotation story follows the body, then one guard paragraph mark.
+	TFPASS(fc_mac > fc_min && (fc_mac - fc_min) / 2 == ccp_text + ccp_atn + 1);
 
 	package_close(input, ole);
 	std::remove(path.c_str());
