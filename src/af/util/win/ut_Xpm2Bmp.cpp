@@ -50,11 +50,13 @@ bool UT_Xpm2Bmp(UT_uint32 maxWidth,
 	UT_ASSERT(sizeofData > 0);
 	UT_ASSERT(pBackgroundColor);
 	UT_ASSERT(pBitmap);
+	if (!pIconData || !*pIconData || sizeofData == 0 || !pBackgroundColor || !pBitmap)
+		return false;
 
 	// first row contains: width height, number of colors, chars per pixel
 
-	UT_uint32 width, height, xpm_width = 0, xpm_height = 0, nrColors = 0, charsPerPixel = 0;
-	UT_uint32 cut_left, cut_top;
+	UT_uint32 width = 0, height = 0, xpm_width = 0, xpm_height = 0, nrColors = 0, charsPerPixel = 0;
+	UT_uint32 cut_left = 0, cut_top = 0;
 	if (sscanf(pIconData[0], "%u %u %u %u",
 			   &xpm_width, &xpm_height, &nrColors, &charsPerPixel) != 4)
 		return false;
@@ -63,7 +65,9 @@ bool UT_Xpm2Bmp(UT_uint32 maxWidth,
 
 	UT_ASSERT(charsPerPixel > 0);
 	// bufSymbol below is 10 bytes, including the terminator.
-	if (charsPerPixel == 0 || charsPerPixel > 9 || nrColors == 0 || nrColors > 4096)
+	// 8bpp DIB palette holds at most 256 colors.
+	if (xpm_width == 0 || xpm_height == 0 || maxWidth == 0 || maxHeight == 0 ||
+		charsPerPixel == 0 || charsPerPixel > 9 || nrColors == 0 || nrColors > 256)
 		return false;
 
 	width = xpm_width < maxWidth ? xpm_width : maxWidth;
@@ -113,20 +117,31 @@ bool UT_Xpm2Bmp(UT_uint32 maxWidth,
 	for (UT_uint32 k=0; (k < nrColors); k++)
 	{
 		char bufSymbol[10] = { 0 };
-		char bufKey[10];
-		char bufColorValue[100];
+		char bufKey[10] = { 0 };
+		char bufColorValue[100] = { 0 };
 
 		// we expect something of the form: ".. c #000000"
 		// or we can accpet ".. g #000000" for gray scale
 		// but we allow a space as a character in the symbol, so we
 		// get the first field the hard way.
 
+		if (!pIconDataPalette[k] || strlen(pIconDataPalette[k]) <= charsPerPixel)
+		{
+			g_free(pInfo);
+			return false;
+		}
+
 		for (UT_uint32 kPx=0; (kPx < charsPerPixel); kPx++)
 			bufSymbol[kPx] = pIconDataPalette[k][kPx];
 		UT_ASSERT(strlen(bufSymbol) == charsPerPixel);
 		
-		UT_DebugOnly<UT_uint32> nf = sscanf(&pIconDataPalette[k][charsPerPixel+1]," %9s %99s",bufKey,bufColorValue);
+		int nf = sscanf(&pIconDataPalette[k][charsPerPixel+1]," %9s %99s",bufKey,bufColorValue);
 		UT_ASSERT(nf == 2);
+		if (nf != 2)
+		{
+			g_free(pInfo);
+			return false;
+		}
 		UT_ASSERT(bufKey[0] == 'c' || bufKey[0] == 'g');
 
 		// make the ".." a hash key and store our color index as the data.
@@ -171,8 +186,8 @@ bool UT_Xpm2Bmp(UT_uint32 maxWidth,
 				bufPixel[kPx] = *p++;
 
 			sTmp = bufPixel;
-			guintptr pEntry = (guintptr) hash.pick(sTmp);
-			*pPixel++ = ((UT_Byte)(pEntry)) - 1;
+			guintptr pEntry = reinterpret_cast<guintptr>(hash.pick(sTmp));
+			*pPixel++ = (pEntry > 0 && pEntry <= nrColors) ? static_cast<UT_Byte>(pEntry - 1) : 0;
 		}
 
 		pPixel += rowPadding;

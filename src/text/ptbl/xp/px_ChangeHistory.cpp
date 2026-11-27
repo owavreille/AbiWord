@@ -250,10 +250,10 @@ bool px_ChangeHistory::getUndo(PX_ChangeRecord ** ppcr, bool bStatic) const
 		else
 		{
 			PT_DocPosition low, high;
-			PT_DocPosition lowWork = 0;
-            PT_DocPosition highWork;
-			UT_sint32 iAccumOffset = 0;
 			getCRRange(pcr, low, high);
+			PT_DocPosition lowWork = low;
+			PT_DocPosition highWork = high;
+			UT_sint32 iAccumOffset = 0;
 			for (UT_sint32 i = 0; i<m_iAdjustOffset;i++)
 			{
 				PX_ChangeRecord *pcrTmp = m_vecChangeRecords.getNthItem(m_undoPosition-i-1);
@@ -364,7 +364,7 @@ bool px_ChangeHistory::getNthUndo(PX_ChangeRecord ** ppcr, UT_uint32 undoNdx) co
 	bool bGotOne = false;
 	while(!bGotOne)
 	{
-		if (static_cast<UT_sint32>(iAdjust - iAdjIdx -1) <= static_cast<UT_sint32>(m_iMinUndo))
+		if (static_cast<UT_sint32>(iAdjust - iAdjIdx - 1) < static_cast<UT_sint32>(m_iMinUndo))
 			return false;
 	
 		PX_ChangeRecord * pcr = m_vecChangeRecords.getNthItem(iAdjust-iAdjIdx-1);
@@ -392,7 +392,7 @@ bool px_ChangeHistory::getRedo(PX_ChangeRecord ** ppcr) const
 		return false;
 	
 	UT_sint32 iRedoPos = m_undoPosition-m_iAdjustOffset;
-	if(iRedoPos <0)
+	if(iRedoPos < 0 || iRedoPos >= static_cast<UT_sint32>(m_vecChangeRecords.getItemCount()))
 		return false;
 	PX_ChangeRecord * pcr = m_vecChangeRecords.getNthItem(iRedoPos);
 	UT_return_val_if_fail(pcr, false);
@@ -416,11 +416,16 @@ bool px_ChangeHistory::getRedo(PX_ChangeRecord ** ppcr) const
 	
 	while (pcr && !pcr->isFromThisDoc() && (m_iAdjustOffset > 0))
 	{
-	    pcr = m_vecChangeRecords.getNthItem(iRedoPos);
 	    m_iAdjustOffset--;
-		iRedoPos++;
+	    iRedoPos++;
 	    bIncrementAdjust = true;
 	    xxx_UT_DEBUGMSG(("AdjustOffset decremented -1 %d ", m_iAdjustOffset));
+	    if (iRedoPos >= static_cast<UT_sint32>(m_vecChangeRecords.getItemCount()))
+	    {
+	        pcr = nullptr;
+	        break;
+	    }
+	    pcr = m_vecChangeRecords.getNthItem(iRedoPos);
 	}
 	
 	if (pcr && bIncrementAdjust)
@@ -495,9 +500,8 @@ bool px_ChangeHistory::didUndo(void)
 	if (m_iAdjustOffset == 0)
 		m_undoPosition--;
 	pcr = m_vecChangeRecords.getNthItem(m_undoPosition-m_iAdjustOffset);
-	if (pcr && !pcr->getPersistance())
+	if (pcr && !pcr->getPersistance() && m_savePosition > 0)
 	{
-		UT_return_val_if_fail(m_savePosition > 0,false);
 		m_savePosition--;
 	}
 	return true;
@@ -529,7 +533,7 @@ bool px_ChangeHistory::didRedo(void)
 		xxx_UT_DEBUGMSG(("Undo Position incremented in redo \n"));
 		m_undoPosition++;
 	}
-	if (pcr && !pcr->getPersistance())
+	if (pcr && !pcr->getPersistance() && m_savePosition >= 0)
 		m_savePosition++;
 	return true;
 }
@@ -571,29 +575,32 @@ void px_ChangeHistory::coalesceHistory(const PX_ChangeRecord * pcr)
 {
 	// coalesce this record with the current undo record.
 
-	UT_sint32 iAdj = m_iAdjustOffset;
-	PX_ChangeRecord * pcrUndo = m_vecChangeRecords.getNthItem(m_undoPosition-1);
-	UT_return_if_fail (pcrUndo);
-	UT_return_if_fail (pcr->getType() == pcrUndo->getType());
+	UT_return_if_fail (pcr);
+	UT_return_if_fail (m_undoPosition > m_iAdjustOffset);
 
 	switch (pcr->getType())
 	{
 		case PX_ChangeRecord::PXT_InsertSpan:
 		case PX_ChangeRecord::PXT_DeleteSpan:
 			{
+				UT_sint32 iAdj = m_iAdjustOffset;
+				if (pcr->isFromThisDoc())
+				{
+					_invalidateRedo();
+					m_iAdjustOffset = 0;
+				}
+				UT_return_if_fail (m_undoPosition > 0);
+				PX_ChangeRecord * pcrUndo = m_vecChangeRecords.getNthItem(m_undoPosition - 1);
+				UT_return_if_fail (pcrUndo);
+				UT_return_if_fail (pcr->getType() == pcrUndo->getType());
+
 				const PX_ChangeRecord_Span * pcrSpan = static_cast<const PX_ChangeRecord_Span *>(pcr);
 				PX_ChangeRecord_Span * pcrSpanUndo = static_cast<PX_ChangeRecord_Span *>(pcrUndo);
 
-				if(pcr->isFromThisDoc())
+				if (!pcr->isFromThisDoc() && iAdj > 0)
 				{
-				  _invalidateRedo();
-				  m_iAdjustOffset = 0;
-				}
-				else if(iAdj > 0) 
-				{
-				    m_iAdjustOffset = iAdj - 1;
-				    xxx_UT_DEBUGMSG(("AdjustOffset decremented - 3 %d ", m_iAdjustOffset));
-
+					m_iAdjustOffset = iAdj - 1;
+					xxx_UT_DEBUGMSG(("AdjustOffset decremented - 3 %d ", m_iAdjustOffset));
 				}
 				pcrSpanUndo->coalesce(pcrSpan);
 			}

@@ -726,7 +726,7 @@ make_full_uri_from_relative (const char *base_uri, const char *uri)
 		 */
 
 		base_uri_length = strlen (mutable_base_uri);
-		if ('/' == mutable_base_uri[base_uri_length-1]) {
+		if (base_uri_length > 0 && '/' == mutable_base_uri[base_uri_length-1]) {
 			/* Trim off '/' for the operation below */
 			mutable_base_uri[base_uri_length-1] = 0;
 		} else {
@@ -817,8 +817,16 @@ make_rel (const char *uri, const char *ref_uri,
 	if (!slash)
 		return nullptr;
 
+	const gsize slash_offset = static_cast<gsize>(slash - uri);
+	if (strlen (ref_uri) < slash_offset)
+		return nullptr;
+
 	if (uri_host != nullptr &&
-	    strncmp (uri_host, ref_uri + (uri_host - uri), slash - uri_host))
+	    (strncmp (uri_host, ref_uri + (uri_host - uri), slash - uri_host) != 0 ||
+	     ref_uri[slash_offset] != '/'))
+		return nullptr;
+
+	if (ref_uri[slash_offset] != '/')
 		return nullptr;
 
 	for (p = slash; *p; p++) {
@@ -829,9 +837,9 @@ make_rel (const char *uri, const char *ref_uri,
 	}
 	/* URI components agree until slash.  */
 
-	/* Find out the number of '/' in uri after slash.  */
+	/* Find out the number of '/' in ref_uri after slash.  */
 	n = 0;
-	q = slash;
+	q = ref_uri + (slash - uri);
 	while (1) {
 		q = strchr (q + 1, '/');
 		if (q)
@@ -852,6 +860,9 @@ UT_go_url_make_relative (const char *uri, const char *ref_uri)
 {
 	int i;
 
+	if (!uri || !ref_uri)
+		return nullptr;
+
 	/* Check that protocols are the same.  */
 	for (i = 0; 1; i++) {
 		char c = uri[i];
@@ -870,16 +881,20 @@ UT_go_url_make_relative (const char *uri, const char *ref_uri)
 			return nullptr;
 	}
 
-	if (g_ascii_strncasecmp (uri, "file:///", 8) == 0)
+	if (g_ascii_strncasecmp (uri, "file:///", 8) == 0 &&
+	    g_ascii_strncasecmp (ref_uri, "file:///", 8) == 0)
 		return make_rel (uri, ref_uri, nullptr, uri + 7);  /* Yes, 7.  */
 
-	if (g_ascii_strncasecmp (uri, "http://", 7) == 0)
+	if (g_ascii_strncasecmp (uri, "http://", 7) == 0 &&
+	    g_ascii_strncasecmp (ref_uri, "http://", 7) == 0)
 		return make_rel (uri, ref_uri, uri + 7, strchr (uri + 7, '/'));
 
-	if (g_ascii_strncasecmp (uri, "https://", 8) == 0)
+	if (g_ascii_strncasecmp (uri, "https://", 8) == 0 &&
+	    g_ascii_strncasecmp (ref_uri, "https://", 8) == 0)
 		return make_rel (uri, ref_uri, uri + 8, strchr (uri + 8, '/'));
 
-	if (g_ascii_strncasecmp (uri, "ftp://", 6) == 0)
+	if (g_ascii_strncasecmp (uri, "ftp://", 6) == 0 &&
+	    g_ascii_strncasecmp (ref_uri, "ftp://", 6) == 0)
 		return make_rel (uri, ref_uri, uri + 6, strchr (uri + 6, '/'));
 
 	return nullptr;
@@ -1067,6 +1082,8 @@ UT_go_file_open_impl (char const *uri, GError **err)
 		GsfInput *result;
 
 		if (!fil) {
+			if (fd2 != -1)
+				close (fd2);
 			g_set_error (err, gsf_output_error_id (), 0,
 				     "Unable to read from %s", uri);
 			return nullptr;
@@ -1111,13 +1128,17 @@ static GsfOutput *
 gsf_output_proxy_create (GsfOutput *wrapped, char const *uri, GError **err)
 {
 	if (!wrapped) {
-		g_set_error (err, gsf_output_error_id (), 0,
-			     "Unable to write to %s", uri);
+		if (err && !*err) {
+			g_set_error (err, gsf_output_error_id (), 0,
+				     "Unable to write to %s", uri);
+		}
 		return nullptr;
 	}
 	
 	/* guarantee that file descriptors will be seekable */
-	return gsf_output_proxy_new (wrapped);
+	GsfOutput *proxy = gsf_output_proxy_new (wrapped);
+	g_object_unref (wrapped);
+	return proxy;
 }
 
 static GsfOutput *
@@ -1146,7 +1167,15 @@ UT_go_file_create_impl (char const *uri, GError **err)
 #endif
 		int fd2 = dup (fd);
 		FILE *fil = fd2 != -1 ? fdopen (fd2, "wb") : nullptr;
-		GsfOutput *result = fil ? gsf_output_stdio_new_FILE (uri, fil, FALSE) : nullptr;
+		if (!fil) {
+			if (fd2 != -1)
+				close (fd2);
+			return gsf_output_proxy_create(nullptr, uri, err);
+		}
+		GsfOutput *result = gsf_output_stdio_new_FILE (uri, fil, FALSE);
+		if (!result) {
+			fclose (fil);
+		}
 
 		/* guarantee that file descriptors will be seekable */
 		return gsf_output_proxy_create(result, uri, err);
@@ -1247,6 +1276,9 @@ void
 UT_go_set_file_permissions (char const *uri, UT_GOFilePermissions * file_permissions)
 {
 #if ! defined (G_OS_WIN32)
+	g_return_if_fail (uri != nullptr);
+	g_return_if_fail (file_permissions != nullptr);
+
 	mode_t permissions = 0;
 	int result;
 	char *filename;
@@ -1282,6 +1314,10 @@ UT_go_set_file_permissions (char const *uri, UT_GOFilePermissions * file_permiss
 		permissions |= S_IXOTH;
 
 	filename = UT_go_filename_from_uri (uri);
+	if (!filename) {
+		g_warning ("Error setting permissions for %s.", uri);
+		return;
+	}
 
 #ifdef HAVE_G_CHMOD
 	result = g_chmod (filename, permissions);
@@ -1369,8 +1405,12 @@ check_program (char const *prog)
 	if (g_path_is_absolute (prog)) {
 		if (!g_file_test (prog, G_FILE_TEST_IS_EXECUTABLE))
 			return nullptr;
-	} else if (!g_find_program_in_path (prog))
-		return nullptr;
+	} else {
+		gchar *found = g_find_program_in_path (prog);
+		if (!found)
+			return nullptr;
+		g_free (found);
+	}
 	return g_strdup (prog);
 }
 
@@ -1600,6 +1640,7 @@ UT_go_url_show (gchar const *url)
 #else
 	GError *err = nullptr;
 	if (!gtk_show_uri_on_window(nullptr, url, GDK_CURRENT_TIME, &err)) {
+		g_clear_error (&err);
 		fallback_open_uri(url, &err);
 	}
 	return err;

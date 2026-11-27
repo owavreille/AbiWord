@@ -110,11 +110,12 @@ bool pt_PieceTable::insertObject(PT_DocPosition dpos,
 		_translateRevisionAttribute(Revisions, indexAP, PP_REVISION_ADDITION,
 									ppRevAttrs, ppRevProps, attributes, properties);
 
-		ppRevAttrs.insert(ppRevAttrs.end(), attributes.begin(), attributes.end());
+		PP_PropertyVector ppRevAttrib = attributes;
+		ppRevAttrib.insert(ppRevAttrib.end(), ppRevAttrs.begin(), ppRevAttrs.end());
 		// return _realChangeSpanFmt(PTC_AddFmt, dpos, dpos + length, ppRevAttrib, ppRevProps);
 		// NB: objects are not supposed to have props, and so do not
 		//inherit props ...
-		bool bRet = _realInsertObject(dpos, pto, ppRevAttrs, properties);
+		bool bRet = _realInsertObject(dpos, pto, ppRevAttrib, properties);
 		return bRet;
 	}
 	else
@@ -212,6 +213,10 @@ bool pt_PieceTable::_realInsertObject(PT_DocPosition dpos,
 	        UT_DEBUGMSG(("Object: szProps = |%s| \n",iter->c_str()));
 	        sProps += *iter + ":";
 	        ++iter;
+	        if (iter == properties.end())
+	        {
+	            break;
+	        }
 	        sProps += *iter;
 	        if(iter + 1 != properties.end())
 	        {
@@ -290,7 +295,11 @@ bool pt_PieceTable::_createObject(PTObjectType pto,
 			{
 				pfo = new pf_Frag_Object(this,pto,indexAP);
 				po_Bookmark * pB = pfo->getBookmark();
-				UT_return_val_if_fail (pB,false);
+				if (!pB)
+				{
+					delete pfo;
+					UT_return_val_if_fail (pB, false);
+				}
 				if(pB->getBookmarkType() == po_Bookmark::POBOOKMARK_START)
 					m_pDocument->addBookmark(pB->getName());
 			}
@@ -341,7 +350,12 @@ bool pt_PieceTable::_insertObject(pf_Frag * pf,
 		// split the current fragment and insert the object between
 		// them.
 
-		UT_return_val_if_fail (pf->getType() == pf_Frag::PFT_Text, false);
+		if (pf->getType() != pf_Frag::PFT_Text)
+		{
+			delete pfo;
+			pfo = nullptr;
+			UT_return_val_if_fail (pf->getType() == pf_Frag::PFT_Text, false);
+		}
 		pf_Frag_Text * pft = static_cast<pf_Frag_Text *>(pf);
 		UT_uint32 lenTail = pft->getLength() - fragOffset;
 		PT_BufIndex biTail = m_varset.getBufIndex(pft->getBufIndex(),fragOffset);

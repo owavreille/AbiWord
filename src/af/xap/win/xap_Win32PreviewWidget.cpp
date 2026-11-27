@@ -116,12 +116,15 @@ XAP_Win32PreviewWidget::~XAP_Win32PreviewWidget(void)
 		m_hwndPreview = nullptr;
 	}
 	
-	m_iInstanceCount--;
-	if(m_iInstanceCount == 0)
+	if (m_iInstanceCount > 0)
 	{
-		m_atomPreviewWidgetClass = 0;
-		UT_DebugOnly<bool> bResult = (UnregisterClassW(m_bufClassName,m_pWin32App->getInstance()) == TRUE);
-		UT_ASSERT_HARMLESS(bResult);
+		m_iInstanceCount--;
+		if (m_iInstanceCount == 0 && m_atomPreviewWidgetClass)
+		{
+			m_atomPreviewWidgetClass = 0;
+			UT_DebugOnly<bool> bResult = (UnregisterClassW(m_bufClassName,m_pWin32App->getInstance()) == TRUE);
+			UT_ASSERT_HARMLESS(bResult);
+		}
 	}
 }
 

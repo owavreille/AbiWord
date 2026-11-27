@@ -480,7 +480,7 @@ void XAP_Win32PropertySheet::destroy(void)
 void XAP_Win32PropertySheet::cleanup(void)
 {	
 	if (m_pages) {
-		delete m_pages;
+		delete[] m_pages;
 		m_pages = nullptr;
 	}	
 }

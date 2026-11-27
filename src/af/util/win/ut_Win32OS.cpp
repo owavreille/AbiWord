@@ -99,8 +99,12 @@ bool UT_IsWin95(void)
  */
 DLGTEMPLATE * WINAPI UT_LockDlgRes(HINSTANCE hinst, LPCWSTR lpszResName)
 {
-    HRSRC hrsrc = FindResourceW(nullptr, lpszResName,  (LPWSTR)RT_DIALOG);
+    HRSRC hrsrc = FindResourceW(hinst, lpszResName, (LPWSTR)RT_DIALOG);
+    if (!hrsrc)
+        return nullptr;
     HGLOBAL hglb = LoadResource(hinst, hrsrc);
+    if (!hglb)
+        return nullptr;
     return (DLGTEMPLATE *) LockResource(hglb);
 }
 

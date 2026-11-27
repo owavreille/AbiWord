@@ -338,12 +338,18 @@ static int parseColorToNextDelim ( const char * p, UT_uint32 & index )
 {
   char buffer[7] = "" ;
   index = 0 ;
+  UT_uint32 bufIdx = 0;
 
-  while (isdigit(*p))
+  while (isdigit(static_cast<unsigned char>(*p)))
     {
-      buffer[index++] = *p++;
+      if (bufIdx < sizeof(buffer) - 1)
+        {
+          buffer[bufIdx++] = *p;
+        }
+      ++p;
+      ++index;
     }
-  buffer[index] = 0;
+  buffer[bufIdx] = 0;
   return atoi(buffer);
 }
 
@@ -380,28 +386,32 @@ static void UT_parseCMYKColor(const char *p, UT_RGBColor& c)
   UT_uint32 index = 0;
 
   cyanVal = parseColorToNextDelim ( p, index ) ;
-  p+=(index+1); index = 0;
-
-  magentaVal = parseColorToNextDelim ( p, index ) ;
-  p+=(index+1); index = 0;
-
-  yellowVal = parseColorToNextDelim ( p, index ) ;
-  p+=(index+1); index = 0;
-
-  kVal = parseColorToNextDelim ( p, index ) ;
+  p += index;
+  if (*p != '\0')
+    {
+      ++p;
+      magentaVal = parseColorToNextDelim ( p, index ) ;
+      p += index;
+      if (*p != '\0')
+        {
+          ++p;
+          yellowVal = parseColorToNextDelim ( p, index ) ;
+          p += index;
+          if (*p != '\0')
+            {
+              ++p;
+              kVal = parseColorToNextDelim ( p, index ) ;
+            }
+        }
+    }
 
   int  cPlusK = cyanVal + kVal;
   int  mPlusK  = magentaVal + kVal;
   int  yPlusK = yellowVal + kVal;
   
-  if (cPlusK < 255)
-    c.m_red = 255 - cPlusK;
-  
-  if (mPlusK < 255)
-    c.m_grn = 255 - mPlusK;
-  
-  if (yPlusK < 255)
-    c.m_blu = 255 - yPlusK;
+  c.m_red = (cPlusK < 255) ? static_cast<unsigned char>(255 - cPlusK) : 0;
+  c.m_grn = (mPlusK < 255) ? static_cast<unsigned char>(255 - mPlusK) : 0;
+  c.m_blu = (yPlusK < 255) ? static_cast<unsigned char>(255 - yPlusK) : 0;
 
   UT_DEBUGMSG(("DOM: CMYK (%d %d %d %d) -> RGB (%d %d %d)!!\n",
 	       cyanVal, magentaVal, yellowVal, kVal,

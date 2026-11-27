@@ -19,6 +19,8 @@
  * 02110-1301 USA.
  */
  
+#include <stdint.h>
+
 #include "ut_assert.h"
 #include "ut_bytebuf.h"
 #include "ut_string.h"
@@ -87,7 +89,10 @@ bool UT_Base64Encode(const UT_ByteBufPtr & pDest, const UT_ConstByteBufPtr & pSr
 
 	// compute the amount of space needed in the destination and reserve space for it in advance.
 	
-	UT_uint32 lenDest = (lenSrc + 2) / 3 * 4;
+	if (lenSrc > (UINT32_MAX / 4) * 3)
+		return false;
+
+	UT_uint32 lenDest = ((lenSrc + 2) / 3) * 4;
 	if (!pDest->ins(0,lenDest))
 		return false;
 
@@ -121,6 +126,8 @@ bool UT_Base64Decode(const UT_ByteBufPtr & pDest, const UT_ConstByteBufPtr & pSr
 	// return false if error.
 
 	UT_ASSERT(pDest && pSrc);
+	if (!pDest || !pSrc)
+		return false;
 
 	pDest->truncate(0);
 
@@ -132,18 +139,30 @@ bool UT_Base64Decode(const UT_ByteBufPtr & pDest, const UT_ConstByteBufPtr & pSr
 
 	// compute the destination length and deal with pad bytes
 	
-	UT_uint32 lenDest = ((lenSrc + 3) / 4) * 3;
 	const UT_Byte * p = pSrc->getPointer(0);
-	if (p[lenSrc-1] == s_pad)
+	if (!p)
+		return false;
+
+	if (lenSrc > 0 && p[lenSrc-1] == s_pad)
 	{
-		lenDest--;
 		lenSrc--;
-		if (p[lenSrc-1] == s_pad)
+		if (lenSrc > 0 && p[lenSrc-1] == s_pad)
 		{
-			lenDest--;
 			lenSrc--;
 		}
 	}
+
+	if (lenSrc == 0)
+		return true;
+
+	if ((lenSrc % 4) == 1)
+		return false;
+
+	UT_uint32 lenDest = (lenSrc / 4) * 3;
+	if ((lenSrc % 4) == 2)
+		lenDest += 1;
+	else if ((lenSrc % 4) == 3)
+		lenDest += 2;
 
 	// reserve space in the destination in advance.
 	
@@ -354,26 +373,11 @@ bool ABI_EXPORT UT_UTF8_Base64Decode(char *& binptr, size_t & binlen, const char
 									decoded = false;
 									break;
 								case 2:
-									if (binlen == 0) decoded = false;
-									else
-										{
-											*binptr++ = static_cast<char>(byte1);
-											binlen--;
-											padding = true;
-										}
+									padding = true;
 									i++;
 									break;
 								default:
-									if (!padding)
-										{
-											if (binlen == 0) decoded = false;
-											else
-												{
-													*binptr++ = static_cast<char>(byte1);
-													binlen--;
-													padding = true;
-												}
-										}
+									padding = true;
 									i = 0;
 									break;
 								}

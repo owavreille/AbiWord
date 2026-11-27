@@ -305,13 +305,20 @@ bool pt_PieceTable::_insertSpan(pf_Frag * pf,
 	// if the change is in the middle of the fragment, we construct
 	// a second new text fragment for the portion after the insert.
 
-	UT_return_val_if_fail (pft,false);
+	if (!pft)
+	{
+		delete pftNew;
+		UT_return_val_if_fail (pft, false);
+	}
 
 	UT_uint32 lenTail = pft->getLength() - fragOffset;
 	PT_BufIndex biTail = m_varset.getBufIndex(pft->getBufIndex(),fragOffset);
 	pf_Frag_Text * pftTail = new pf_Frag_Text(this,biTail,lenTail,pft->getIndexAP(),pft->getField());
 	if (!pftTail)
+	{
+		delete pftNew;
 		return false;
+	}
 
 	pft->changeLength(fragOffset);
 	m_fragments.insertFrag(pft,pftNew);
@@ -439,7 +446,11 @@ bool pt_PieceTable::_realInsertSpan(PT_DocPosition dpos,
 				// the original insertFmtMark (this is the case if the user hit
 				// BOLD then ITALIC then UNDERLINE then typed a character).
 
-				do { undoCmd(); } while (_lastUndoIsThisFmtMark(dpos));
+				do
+				{
+					if (!undoCmd())
+						break;
+				} while (_lastUndoIsThisFmtMark(dpos));
 			}
 			else
 			{
@@ -470,15 +481,34 @@ bool pt_PieceTable::_realInsertSpan(PT_DocPosition dpos,
 			// but with a few shortcuts.
 
 			bFound = getMutFragFromPosition(dpos, &pf, &fragOffset);
-			UT_return_val_if_fail (bFound, false);
+			if (!bFound)
+			{
+				if (bNeedGlob)
+					endMultiStepGlob();
+				UT_return_val_if_fail (bFound, false);
+			}
 
 			bFoundStrux = _getStruxFromFrag(pf,&pfs);
-			UT_return_val_if_fail (bFoundStrux,false);
+			if (!bFoundStrux)
+			{
+				if (bNeedGlob)
+					endMultiStepGlob();
+				UT_return_val_if_fail (bFoundStrux, false);
+			}
 			if(isEndFootnote((pf_Frag *)pfs))
 			{
 				bFoundStrux = _getStruxFromFragSkip((pf_Frag *)pfs,&pfs);
 			}
-			UT_return_val_if_fail (bFoundStrux, false);
+			if (bFoundStrux && pfs && pfs->getStruxType() == PTX_EndFrame)
+			{
+				bFoundStrux = _getStruxFromFragSkip(pfs, &pfs);
+			}
+			if (!bFoundStrux || !pfs)
+			{
+				if (bNeedGlob)
+					endMultiStepGlob();
+				UT_return_val_if_fail (bFoundStrux && pfs, false);
+			}
 			xxx_UT_DEBUGMSG(("Got FragStrux at Pos %d \n",pfs->getPos()));
 
 			// with the FmtMark now gone, we make a minor adjustment so that we
@@ -574,7 +604,12 @@ bool pt_PieceTable::_realInsertSpan(PT_DocPosition dpos,
 	pcr = new PX_ChangeRecord_Span(PX_ChangeRecord::PXT_InsertSpan,
 								   dpos,indexAP,bi,length,
 								   blockOffset, pField);
-	UT_return_val_if_fail (pcr, false);
+	if (!pcr)
+	{
+		if (bNeedGlob)
+			endMultiStepGlob();
+		UT_return_val_if_fail (pcr, false);
+	}
 	
 	pcr->setDocument(m_pDocument);
 	bool canCoalesce = bAddChangeRec && _canCoalesceInsertSpan(pcr);
@@ -660,6 +695,8 @@ PT_AttrPropIndex pt_PieceTable::_chooseIndexAP(const pf_Frag * pf, PT_BlockOffse
 	// look to the previous fragment to see what to do.
 
 	const pf_Frag * pfPrev = pf->getPrev();
+	if (!pfPrev)
+		return 0;
 	switch (pfPrev->getType())
 	{
 	case pf_Frag::PFT_Text:
@@ -712,6 +749,7 @@ PT_AttrPropIndex pt_PieceTable::_chooseIndexAP(const pf_Frag * pf, PT_BlockOffse
 			// TODO: determine what we want to do about these guys
 			case PTO_Bookmark:
 			case PTO_Hyperlink:
+			case PTO_Annotation:
 			case PTO_RDFAnchor:
 				return 0;
 

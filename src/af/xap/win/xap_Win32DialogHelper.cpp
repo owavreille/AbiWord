@@ -83,9 +83,11 @@ void XAP_Win32DialogHelper::runModeless(XAP_Frame * pFrame, XAP_Dialog_Id dialog
 	HWND hWndDialog = CreateDialogParamW(pWin32App->getInstance(),lpTemplate,
 								static_cast<XAP_Win32FrameImpl*>(pFrame->getFrameImpl())->getTopLevelWindow(),
 								s_dlgProc,(LPARAM)this);
-	ShowWindow(hWndDialog, SW_SHOW);
 	UT_ASSERT((hWndDialog != nullptr));
+	if (!hWndDialog)
+		return;
 
+	ShowWindow(hWndDialog, SW_SHOW);
 	p_dialog->getApp()->rememberModelessId(dialog_id, p_dialog);
 
 }
@@ -115,6 +117,8 @@ INT_PTR CALLBACK XAP_Win32DialogHelper::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 
 	case WM_NOTIFY:
 		pThis = (XAP_Win32DialogHelper *)GetWindowLongPtrW(hWnd,DWLP_USER);
+		if (!pThis || !pThis->m_pDialog || !lParam)
+			return 0;
 		switch (((LPNMHDR)lParam)->code)
 		{
 			case UDN_DELTAPOS:
@@ -267,7 +271,22 @@ void XAP_Win32DialogHelper::selectListItem(UT_sint32 controlId, int index)
 void XAP_Win32DialogHelper::getListText(UT_sint32 controlId, int index, char *p_str) const
 {
 	_assertValidDlgHandle(m_hDlg);
-	SendDlgItemMessageW(m_hDlg, controlId, LB_GETTEXT, index, (LPARAM)p_str);
+	if (!p_str)
+		return;
+	p_str[0] = 0;
+
+	const LRESULT len = SendDlgItemMessageW(m_hDlg, controlId, LB_GETTEXTLEN, index, 0);
+	if (len == LB_ERR || len < 0)
+		return;
+
+	WCHAR * buf = g_new0(WCHAR, static_cast<gsize>(len) + 1);
+	if (SendDlgItemMessageW(m_hDlg, controlId, LB_GETTEXT, index, (LPARAM)buf) != LB_ERR)
+	{
+		UT_Win32LocaleString str;
+		str.fromLocale(buf);
+		strcpy(p_str, str.utf8_str().utf8_str());
+	}
+	g_free(buf);
 }
 
 
@@ -290,7 +309,7 @@ int XAP_Win32DialogHelper::getControlInt(UT_sint32 controlId) const
 {
 	_assertValidDlgHandle(m_hDlg);
 	BOOL translated = FALSE;
-	const int value = GetDlgItemInt(m_hDlg, controlId, &translated, FALSE);
+	const int value = GetDlgItemInt(m_hDlg, controlId, &translated, TRUE);
 	return translated ? value : 0;
 }
 
@@ -355,8 +374,12 @@ void XAP_Win32DialogHelper::setParentFrame(const XAP_Frame* pFrame)
 XAP_Frame* XAP_Win32DialogHelper::getParentFrame()
 {
 	_assertValidDlgHandle(m_hDlg);
-	return reinterpret_cast<XAP_Frame*>(
+	HWND hParent = reinterpret_cast<HWND>(
 			GetWindowLongPtrW(m_hDlg, GWLP_HWNDPARENT));
+	if (!hParent || !IsWindow(hParent))
+		return nullptr;
+	return reinterpret_cast<XAP_Frame*>(
+			GetWindowLongPtrW(hParent, GWLP_USERDATA));
 }
 
 void XAP_Win32DialogHelper::centerDialog()

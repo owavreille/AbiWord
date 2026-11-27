@@ -199,8 +199,11 @@ bool pt_PieceTable::insertStrux(PT_DocPosition dpos,
 		PP_PropertyVector ppRevAttrib = attributes;
 		ppRevAttrib.insert(ppRevAttrib.end(), ppRevAttrs.begin(), ppRevAttrs.end());
 
+		PP_PropertyVector ppMergedProps = ppRevProps;
+		ppMergedProps.insert(ppMergedProps.end(), properties.begin(), properties.end());
+
 		//return _realChangeStruxFmt(PTC_AddFmt, dpos, dpos + iLen, ppRevAttrib,nullptr,pts);
-		bool bRet = _realInsertStrux(dpos, pts, ppRevAttrib, properties, ppfs_ret);
+		bool bRet = _realInsertStrux(dpos, pts, ppRevAttrib, ppMergedProps, ppfs_ret);
 		return bRet;
 	} else {
 		return _realInsertStrux(dpos, pts, attributes, properties, ppfs_ret);
@@ -471,6 +474,7 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 	if(isEndFootnote(pfsContainer))
 	{
 		bFoundContainer = _getStruxFromFragSkip(pfsContainer,&pfsContainer);
+		UT_return_val_if_fail (bFoundContainer && pfsContainer, false);
 	}
 	// if we are inserting something similar to the previous strux,
 	// we will clone the attributes/properties; we assume that the
@@ -491,6 +495,7 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 //
 // Look to see if we're in the middle of a hyperlink span now.
 //
+	bool bNeedGlob = false;
 	pf_Frag * pHype = _findPrevHyperlink(pf);
 	if(pHype != nullptr && (pts != PTX_SectionFrame) // allow annotations in
 	                                              // hyperlinks
@@ -516,7 +521,13 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 		//
 		// OK now insert a new end of hyperlink at pf
 		//
-		insertObject(dpos, PTO_Hyperlink, PP_NOPROPS, PP_NOPROPS);
+		bNeedGlob = true;
+		beginMultiStepGlob();
+		if (!insertObject(dpos, PTO_Hyperlink, PP_NOPROPS, PP_NOPROPS))
+		{
+			endMultiStepGlob();
+			return false;
+		}
 		dpos++;
 		if(posEnd > 0)
 		{
@@ -532,7 +543,11 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 									offset,1,pfsContainer,&pfEnd,&newOff,true);
 		}
 		bFoundFrag = getMutFragFromPosition(dpos, &pf, &fragOffset);
-		UT_return_val_if_fail (bFoundFrag, false);
+		if (!bFoundFrag)
+		{
+			endMultiStepGlob();
+			UT_return_val_if_fail (bFoundFrag, false);
+		}
 	}
 
 //
@@ -550,7 +565,11 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 
 	pf_Frag_Strux * pfsNew = nullptr;
 	if (!_createStrux(pts,indexAP,&pfsNew))
+	{
+		if (bNeedGlob)
+			endMultiStepGlob();
 		return false;
+	}
 
 	pfsNew->setXID(getXID());
 
@@ -565,13 +584,16 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 	// Do not copy FmtMark if this is the first block of a footnote, 
 	// or an endnote
 
-	bool bNeedGlob = false;
+	bool bNeedFmtMark = false;
 	PT_AttrPropIndex apFmtMark = 0;
 	if (pfsNew->getStruxType() == PTX_Block && !isFootnote(pfsContainer))
 	{
-		bNeedGlob = _computeFmtMarkForNewBlock(pfsNew,pf,fragOffset,&apFmtMark);
-		if (bNeedGlob)
+		bNeedFmtMark = _computeFmtMarkForNewBlock(pfsNew,pf,fragOffset,&apFmtMark);
+		if (bNeedFmtMark && !bNeedGlob)
+		{
+			bNeedGlob = true;
 			beginMultiStepGlob();
+		}
 
 		// if we are leaving an empty block (are stealing all it's content) we should
 		// put a FmtMark in it to remember the active span fmt at the time.
@@ -636,20 +658,31 @@ bool pt_PieceTable::_realInsertStrux(PT_DocPosition dpos,
 	PX_ChangeRecord_Strux * pcrs
 		= new PX_ChangeRecord_Strux(PX_ChangeRecord::PXT_InsertStrux,
 									dpos,indexAP,pfsNew->getXID(), pts);
-	UT_return_val_if_fail (pcrs,false);
+	if (!pcrs)
+	{
+		if (bNeedGlob)
+			endMultiStepGlob();
+		UT_return_val_if_fail (pcrs, false);
+	}
 
 	// add record to history.  we do not attempt to coalesce these.
 	m_history.addChangeRecord(pcrs);
 	m_pDocument->notifyListeners(pfsContainer,pfsNew,pcrs);
 
-	if (bNeedGlob)
+	if (bNeedFmtMark)
 	{
 		// dpos might have shifted if a frame was moved in between the two blocks
 		dpos = pfsNew->getPos();
-		UT_return_val_if_fail (!pfsNew->getNext() || pfsNew->getNext()->getType()!=pf_Frag::PFT_FmtMark, false);
+		if (pfsNew->getNext() && pfsNew->getNext()->getType() == pf_Frag::PFT_FmtMark)
+		{
+			if (bNeedGlob)
+				endMultiStepGlob();
+			UT_return_val_if_fail (!pfsNew->getNext() || pfsNew->getNext()->getType()!=pf_Frag::PFT_FmtMark, false);
+		}
 		_insertFmtMarkAfterBlockWithNotify(pfsNew,dpos+pfsNew->getLength(),apFmtMark);
-		endMultiStepGlob();
 	}
+	if (bNeedGlob)
+		endMultiStepGlob();
 
 	return true;
 }

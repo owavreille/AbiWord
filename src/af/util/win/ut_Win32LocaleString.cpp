@@ -342,6 +342,11 @@ void UT_Win32LocaleString::fromUCS4 (const UT_UCS4Char* usc4_in)
 {
 #ifdef DEBUG
 	if (!usc4_in) usc4_in=ds;
+#else
+	if (!usc4_in) {
+		pimpl->clear ();
+		return;
+	}
 #endif
 	UT_UCS2Char * pText = (UT_UCS2Char *) UT_convert ((const char*) usc4_in,
 							  (UT_UCS4_strlen(usc4_in)+1) * 4,
@@ -349,11 +354,12 @@ void UT_Win32LocaleString::fromUCS4 (const UT_UCS4Char* usc4_in)
 							  "UTF-16LE",
 							  nullptr, nullptr);
 	if (!pText || !*pText) {
-    	pimpl->clear ();
-    	return;
-    }
+		g_free(pText);
+		pimpl->clear ();
+		return;
+	}
 
-    pimpl->assign(pText, wcslen((const wchar_t *)pText));
+	pimpl->assign(pText, wcslen((const wchar_t *)pText));
 	g_free(pText);
 }
 
@@ -370,6 +376,7 @@ void UT_Win32LocaleString::fromUTF8 (const char* utf8str)
 							  nullptr, nullptr);
 
 	if (!pText || !*pText) {
+		g_free(pText);
 		pimpl->clear ();
 		return;
 	}
@@ -382,10 +389,15 @@ void UT_Win32LocaleString::fromASCII (const char* szASCII, size_t sz)
 {
 #ifdef DEBUG
 	if (!szASCII) szASCII="FIXME: nullptr passed to UT_Win32LocaleString::fromASCII";
+#else
+	if (!szASCII) {
+		pimpl->clear ();
+		return;
+	}
 #endif
 	size_t len = (sz == static_cast<size_t>(-1)) ? strlen(szASCII) : sz;
 	UT_UCS2Char * src = new UT_UCS2Char [len + 1];
-	char *p_str = (char *)szASCII;
+	const unsigned char *p_str = reinterpret_cast<const unsigned char *>(szASCII);
 	for (size_t i = 0; i < len; i++)
 	{
 		src[i] = *p_str;
@@ -397,21 +409,31 @@ void UT_Win32LocaleString::fromASCII (const char* szASCII, size_t sz)
 
 void UT_Win32LocaleString::fromLocale (const wchar_t* szLocale)
 {
+	if (!szLocale) {
+		pimpl->clear ();
+		return;
+	}
 	size_t len = wcslen (szLocale);
 	pimpl->assign((UT_UCS2Char*)szLocale, len);
 }
 
 void UT_Win32LocaleString::appendLocale (const wchar_t* szLocale)
 {
+	if (!szLocale) {
+		return;
+	}
 	size_t len = wcslen (szLocale);
 	pimpl->append((UT_UCS2Char*)szLocale, len);
 }
 
 void UT_Win32LocaleString::appendASCII (const char* szASCII)
 {
+	if (!szASCII) {
+		return;
+	}
 	size_t len = strlen(szASCII);
 	UT_UCS2Char * src = new UT_UCS2Char [len + 1];
-	char *p_str = (char *)szASCII;
+	const unsigned char *p_str = reinterpret_cast<const unsigned char *>(szASCII);
 	for (size_t i = 0; i < len; i++)
 	{
 		src[i] = *p_str;

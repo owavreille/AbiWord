@@ -176,6 +176,15 @@ std::string UT_pathSuffix(std::string path)
  */
 bool UT_addOrReplacePathSuffix(std::string & sPath, const char * sSuffix)
 {
+  if (!sSuffix)
+  {
+      return false;
+  }
+  if (sPath.empty())
+  {
+      sPath += sSuffix;
+      return true;
+  }
   UT_sint32 i = sPath.length() - 1;
   const char *sSlash = "/";
   const char *sBSlash = "\\";
@@ -331,7 +340,7 @@ UT_uint32 UT_HeadingDepth(const char * szHeadingName)
 
 void * UT_calloc ( UT_uint32 nmemb, UT_uint32 size )
 {
-  return g_try_malloc0 ( nmemb * size ) ;
+  return g_try_malloc0_n ( nmemb, size ) ;
 }
 
 
@@ -440,18 +449,21 @@ const gchar ** UT_splitPropsToArray(gchar * pProps)
 {
 		UT_return_val_if_fail( pProps, nullptr);
 	
-		UT_uint32 iLen = strlen(pProps);
-	
-		UT_uint32 i = 1; // *props != 0 => at least one
-		if(pProps[iLen-1] == ';')
+		UT_uint32 iLen = static_cast<UT_uint32>(strlen(pProps));
+		while (iLen > 0 && pProps[iLen - 1] == ';')
 		{
-			// trailing ;
-			--i;
+			pProps[--iLen] = 0;
 		}
+		if (iLen == 0)
+		{
+			return nullptr;
+		}
+	
+		UT_uint32 i = 1; // *pProps != 0 => at least one
 
 		char * semi = nullptr;
-		const char * p = pProps;
- 		while((semi = (char *) strchr(p, ';')))
+		char * p = pProps;
+		while((semi = strchr(p, ';')) != nullptr)
 		{
 			*semi = 0;
 			p = semi + 1;
@@ -471,22 +483,32 @@ const gchar ** UT_splitPropsToArray(gchar * pProps)
 		{
 			if(pProps[i] == 0)
 			{
-				pPropsArray[j++] = pStart;
-				char * colon = (char *)  strchr(pStart, ':');
-				UT_return_val_if_fail( colon,nullptr );
+				char * colon = const_cast<char *>(strchr(pStart, ':'));
+				if (!colon)
+				{
+					delete [] pPropsArray;
+					UT_ASSERT(colon);
+					return nullptr;
+				}
 				*colon = 0;
+				pPropsArray[j++] = pStart;
 				pPropsArray[j++] = colon + 1;
 
 				if(i == iLen)
 					break;
 				
 				pStart = pProps + i + 1;
-				while(isspace(*pStart))
+				while(isspace(static_cast<unsigned char>(*pStart)))
 					pStart++;
 			}
 		}
 	
-		UT_return_val_if_fail( j == 2 * iPropCount, nullptr );
+		if (j != 2 * iPropCount)
+		{
+			delete [] pPropsArray;
+			UT_ASSERT(j == 2 * iPropCount);
+			return nullptr;
+		}
 
 		pPropsArray[j] = nullptr;
 		return pPropsArray;
@@ -510,11 +532,11 @@ UT_uint64 UT_hash64(const char * p, UT_uint32 bytelen)
 
 	UT_return_val_if_fail( bytelen, MYZERO );
 	
-	UT_uint64 h = (UT_uint64)*p;
+	UT_uint64 h = static_cast<unsigned char>(p[0]);
 	
-	for (UT_uint32 i = 1; i < bytelen; ++i, ++p)
+	for (UT_uint32 i = 1; i < bytelen; ++i)
 	{
-		h = (h << 5) - h + *p;
+		h = (h << 5) - h + static_cast<unsigned char>(p[i]);
 	}
 
 	return h;
@@ -531,11 +553,11 @@ UT_uint32 UT_hash32(const char * p, UT_uint32 bytelen)
 
 	UT_return_val_if_fail( bytelen, 0 );
 
-	UT_uint32 h = (UT_uint32)*p;
+	UT_uint32 h = static_cast<unsigned char>(p[0]);
 	
-	for (UT_uint32 i = 1; i < bytelen; ++i, ++p)
+	for (UT_uint32 i = 1; i < bytelen; ++i)
 	{
-		h = (h << 5) - h + *p;
+		h = (h << 5) - h + static_cast<unsigned char>(p[i]);
 	}
 
 	return h;

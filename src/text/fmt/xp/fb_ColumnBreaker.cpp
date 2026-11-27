@@ -123,7 +123,7 @@ fp_Page * fb_ColumnBreaker::needsRebreak(void)
 	else
 	{
 	    fp_Column * pCol = pPage->getNthColumnLeader(0);
-	    if(pCol->getHeight() >  m_pDocSec->getActualColumnHeight())
+	    if(!pCol || pCol->getHeight() >  m_pDocSec->getActualColumnHeight())
 	    {
 		return pPage;
 	    }
@@ -1136,7 +1136,7 @@ UT_sint32 fb_ColumnBreaker::_breakSection(fp_Page * pStartPage)
 			{
 				xxx_UT_DEBUGMSG(("Start of bump loop pNextColumn %x \n",pNextColumn));
 				bool isTOCTABLE = false;
-				if(pOuterContainer && ((pOuterContainer->getContainerType() == FP_CONTAINER_TABLE) || (pOuterContainer->getContainerType() == FP_CONTAINER_TABLE)))
+				if(pOuterContainer && ((pOuterContainer->getContainerType() == FP_CONTAINER_TABLE) || (pOuterContainer->getContainerType() == FP_CONTAINER_TOC)))
 				        isTOCTABLE= true;
 				pCurColumn->bumpContainers(pLastContainerToKeep);
 

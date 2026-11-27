@@ -46,13 +46,23 @@ FL_SelectionPreserver::~FL_SelectionPreserver ()
 bool FL_SelectionPreserver::cmdCharInsert(const UT_UCS4Char * text, UT_uint32 count, bool bForce)
 {
 	// TODO: how to handle bForce???
-	m_docRange.m_pos2 += count;
+	UT_uint32 selLen = 0;
 	if (!m_pView->isSelectionEmpty ())
 	{
 		// the code here used to call getSelectionText() to ascertain the length of the selection --
 		// that is very inefficient as the function clones the selection text.
-		m_docRange.m_pos2 -= m_pView->getSelectionLength();
+		selLen = m_pView->getSelectionLength();
 	}
-	
-	return m_pView->cmdCharInsert (text, count, bForce);
+
+	bool bRet = m_pView->cmdCharInsert (text, count, bForce);
+	if (bRet)
+	{
+		m_docRange.m_pos2 += count;
+		if (selLen >= m_docRange.m_pos2)
+			m_docRange.m_pos2 = 0;
+		else
+			m_docRange.m_pos2 -= selLen;
+	}
+
+	return bRet;
 }

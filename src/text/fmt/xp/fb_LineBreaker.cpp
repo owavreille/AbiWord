@@ -155,8 +155,15 @@ fb_LineBreaker::breakParagraph(fl_BlockLayout* pBlock,
 						}
 						// This run needs splitting.
 						xxx_UT_DEBUGMSG(("Break at 1 Trailing Space %d Wording width %d \n",iTrailingSpace,m_iWorkingLineWidth));
+						if (!pOffendingRun)
+						{
+							pOffendingRun = pArun ? pArun : m_pFirstRunToKeep;
+						}
 						UT_ASSERT(pOffendingRun);
-						_splitAtOrBeforeThisRun(pOffendingRun, iTrailingSpace);
+						if (pOffendingRun)
+						{
+							_splitAtOrBeforeThisRun(pOffendingRun, iTrailingSpace);
+						}
 						goto done_with_run_loop;
 					}
 					else if(pCurrentRun && (pCurrentRun->getWidth() > 0))
@@ -380,6 +387,7 @@ UT_sint32 fb_LineBreaker::_moveBackToFirstNonBlankData(fp_Run *pCurrentRun, fp_R
 
 bool fb_LineBreaker::_splitAtOrBeforeThisRun(fp_Run *pCurrentRun, UT_sint32 iTrailSpace)
 {
+	UT_return_val_if_fail(pCurrentRun, false);
 
 	// This run is past the end of the line.
 
@@ -538,7 +546,14 @@ bool fb_LineBreaker::_splitAtNextNonBlank(fp_Run *pCurrentRun)
 	{
 		// cannot split run so split before.
 		xxx_UT_DEBUGMSG(("Cannot split at next non-blank \n"));
-		m_pLastRunToKeep = pCurrentRun->getPrevRun();
+		if (pCurrentRun == m_pFirstRunToKeep)
+		{
+			m_pLastRunToKeep = pCurrentRun;
+		}
+		else
+		{
+			m_pLastRunToKeep = pCurrentRun->getPrevRun();
+		}
 	}
 
 	return true;

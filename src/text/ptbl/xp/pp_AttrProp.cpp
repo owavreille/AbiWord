@@ -173,11 +173,13 @@ bool	PP_AttrProp::setAttribute(const gchar * szName, const gchar * szValue)
 		{
 			// p will point to the property name.  q will be the property value.
 			char *p = z;
-			char *q = p;
 			// skip the whitespace before the property name
-			while (isspace(*p))
+			while (isspace(static_cast<unsigned char>(*p)))
 				p++;
+			if (!*p)
+				break;
 
+			char *q = p;
 			// skip to the colon to find the value
 			while (*q && (*q != ':'))
 				q++;
@@ -210,7 +212,7 @@ bool	PP_AttrProp::setAttribute(const gchar * szName, const gchar * szValue)
 			}
 
 			// skip the whitespace before the property value
-			while ((*q > 0) && isspace(*q))
+			while ((*q != '\0') && isspace(static_cast<unsigned char>(*q)))
 				q++;
 
 			setProperty(p, q);
@@ -1010,7 +1012,13 @@ UT_uint32 PP_AttrProp::getCheckSum(void) const
 
 PP_AttrProp & PP_AttrProp::operator=(const PP_AttrProp &other)
 {
+	if (this == &other)
+	{
+		return *this;
+	}
 	UT_ASSERT(!m_bIsReadOnly);
+	m_attributes.clear();
+	m_properties.clear();
 	for (const auto & attr : other.m_attributes)
 	{
 		setAttribute(attr.first.c_str(), attr.second.c_str());
@@ -1349,9 +1357,10 @@ PP_PropertyVector PP_std_setPropsToValue(const PP_PropertyVector & props,
 	for(auto iter = props.cbegin(); iter != props.cend(); ++iter) {
 		out.push_back(*iter);
 		++iter;
-		if (iter != props.cend()) {
-			out.push_back(svalue);
+		if (iter == props.cend()) {
+			break;
 		}
+		out.push_back(svalue);
 	}
 
 	return out;
@@ -1379,9 +1388,10 @@ PP_getAttribute(const char* name, const PP_PropertyVector & atts)
 		if (!(i % 2) && *iter == name) {
 			++iter;
 			++i;
-			if (iter != atts.cend()) {
-				return *iter;
+			if (iter == atts.cend()) {
+				break;
 			}
+			return *iter;
 		}
 	}
 	return _EMPTY_STRING;
@@ -1396,10 +1406,11 @@ bool PP_setAttribute(const char* name, const std::string & value, PP_PropertyVec
 		if (!(i % 2) && *iter == name) {
 			++iter;
 			++i;
-			if (iter != atts.end()) {
-				*iter = value;
-				changed = true;
+			if (iter == atts.end()) {
+				break;
 			}
+			*iter = value;
+			changed = true;
 		}
 	}
 	return changed;
