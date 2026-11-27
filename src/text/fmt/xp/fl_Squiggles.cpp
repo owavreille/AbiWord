@@ -210,9 +210,11 @@ fl_Squiggles::_move(UT_sint32 iOffset, UT_sint32 chg,
 		if (pNewBlock)
 		{
 			UT_ASSERT(pNewBlock != m_pOwner);
-			fl_Squiggles * pDestSq = (getSquiggleType() == FL_SQUIGGLE_GRAMMAR)
-				? pNewBlock->getGrammarSquiggles()
-				: pNewBlock->getSpellSquiggles();
+			fl_Squiggles * pDestSq = nullptr;
+			if (getSquiggleType() == FL_SQUIGGLE_GRAMMAR)
+				pDestSq = pNewBlock->getGrammarSquiggles();
+			else
+				pDestSq = pNewBlock->getSpellSquiggles();
 			if (pDestSq)
 				pDestSq->add(pPOB);
 			m_vecSquiggles.erase(m_vecSquiggles.begin() + j);
@@ -826,9 +828,11 @@ fl_Squiggles::join(UT_sint32 iOffset, fl_BlockLayout* pPrevBL)
 		// spell-checking. Clear all existing squiggles and do a check
 		// of the combined block.
 		deleteAll();
-		fl_Squiggles * pPrevSq = (getSquiggleType() == FL_SQUIGGLE_GRAMMAR)
-			? pPrevBL->getGrammarSquiggles()
-			: pPrevBL->getSpellSquiggles();
+		fl_Squiggles * pPrevSq = nullptr;
+		if (getSquiggleType() == FL_SQUIGGLE_GRAMMAR)
+			pPrevSq = pPrevBL->getGrammarSquiggles();
+		else
+			pPrevSq = pPrevBL->getSpellSquiggles();
 		if (pPrevSq)
 			pPrevSq->deleteAll();
 		if (getSquiggleType() == FL_SQUIGGLE_SPELL)
