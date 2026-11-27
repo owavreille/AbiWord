@@ -230,6 +230,10 @@ fp_Container* fl_TableLayout::getNewContainer(const fp_Container* /*pPrevTab*/)
 	UT_ASSERT(getFirstContainer() == nullptr);
 	createTableContainer();
 	fp_TableContainer * pNewTab = static_cast<fp_TableContainer *>(getFirstContainer());
+	if (!pNewTab)
+	{
+		return nullptr;
+	}
 //
 // Master Tables do not get linked into the container linked list.
 //
@@ -1846,7 +1850,10 @@ void fl_TableLayout::collapse(void)
 // Remove from the container it comes from
 //
 		fp_VerticalContainer * pUpCon = static_cast<fp_VerticalContainer *>(pTab->getContainer());
-		pUpCon->removeContainer(pTab);
+		if (pUpCon)
+		{
+			pUpCon->removeContainer(pTab);
+		}
 		delete pTab;
 	}
 	setFirstContainer(nullptr);
@@ -2134,9 +2141,12 @@ void fl_CellLayout::setCellContainerProperties(fp_CellContainer * pCell)
 			m_iDocImageWidth = iWidth;
 			m_iDocImageHeight = iHeight;
 			m_iGraphicTick = getDocLayout()->getGraphicTick();
-			UT_Rect rec(0,0,iWidth,iHeight);
-			pImage->scaleImageTo(pG,rec);
-			m_pImageImage = pImage;
+			if (pImage)
+			{
+				UT_Rect rec(0,0,iWidth,iHeight);
+				pImage->scaleImageTo(pG,rec);
+				m_pImageImage = pImage;
+			}
 		}
 		pCell->getFillType().setImagePointer(m_pGraphicImage, &m_pImageImage);
 	}

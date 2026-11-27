@@ -321,7 +321,8 @@ void    fl_AutoNum::findAndSetParentItem(void)
 		if(m_pParent != pClosestAuto)
 		{
 			_setParent(pClosestAuto);
-			_setParentID(m_pParent->getID());
+			if (m_pParent)
+				_setParentID(m_pParent->getID());
 		}
 	}
 	if(m_pParent != nullptr)
@@ -421,12 +422,15 @@ void    fl_AutoNum::_getLabelstr( UT_UCS4Char labelStr[], UT_uint32 * insPoint,
 		if(*insPoint != 0)
 		{
 			psz = strlen(m_pszDecimal);
-			for(i=0; i<=psz;i++)
+			const char * pSrc = m_pszDecimal;
+			const char * pLim = m_pszDecimal + psz;
+			while (pSrc < pLim)
 			{
-				abi_label_append(labelStr, insPoint, CONV_TO_UCS m_pszDecimal[i]);
+				UT_UCS4Char ch = g_utf8_get_char_validated(pSrc, pLim - pSrc);
+				if (((signed)ch) < 0) ch = UCS_REPLACECHAR;
+				abi_label_append(labelStr, insPoint, ch);
+				pSrc = g_utf8_next_char(pSrc);
 			}
-			if (*insPoint > 0)
-				(*insPoint)--;
 		}
 	}
 
@@ -765,6 +769,8 @@ void fl_AutoNum::prependItem(pf_Frag_Strux* pItem, const pf_Frag_Strux* pNext, b
 	}
 	m_bDirty = true;
 	ndx = m_items.findItem(pNext);
+	if (ndx < 0)
+		ndx = 0;
 	if(ndx > 0)
 	{
 		pPrev = m_items.at(ndx - 1);

@@ -800,7 +800,7 @@ bool pt_PieceTable::deleteSpan(PT_DocPosition dpos1,
 		if(!m_pDocument->isVDNDinProgress())
 		{
 			pf_Frag * pLast = getFragments().getLast();
-			bWholeDoc = (dpos1 <= 2 && pLast->getPos() == dpos2);
+			bWholeDoc = (dpos1 <= 2 && pLast && (pLast->getPos() + pLast->getLength() == dpos2));
 		}
 		
 		iRealDeleteCount = 0;
@@ -847,6 +847,21 @@ bool pt_PieceTable::deleteSpan(PT_DocPosition dpos1,
 		// to use the doc position to keep track of where we are and
 		// retrieve the fragments afresh in each step of the loop
 		// Tomas, Oct 28, 2003
+
+		struct MultiStepGlobGuard
+		{
+			pt_PieceTable * m_pPT;
+			explicit MultiStepGlobGuard(pt_PieceTable * pPT) : m_pPT(pPT)
+			{
+				if (m_pPT)
+					m_pPT->beginMultiStepGlob();
+			}
+			~MultiStepGlobGuard()
+			{
+				if (m_pPT)
+					m_pPT->endMultiStepGlob();
+			}
+		} globGuard(bDontGlob ? nullptr : this);
 
 		bool bRet = false;
 		while(dpos1 < dpos2)
@@ -1849,64 +1864,71 @@ bool pt_PieceTable::_tweakDeleteSpan(PT_DocPosition & dpos1,
 // OK these frags are entirely contained by dpos1  and dpos2
 // OK now look to see if there is a hyperlink or annotation just before and after these
 //
-			if(pf_End->getType() != pf_Frag::PFT_Object)
+			pf_Frag * pfAfter = pf_End;
+			if(pfAfter->getType() != pf_Frag::PFT_Object)
 			{
-				pf_End = pf_End->getNext();
+				pfAfter = pfAfter->getNext();
 			}
-			while(pf_End && (pf_End->getLength() == 0))
+			while(pfAfter && (pfAfter->getLength() == 0))
 			{
-				pf_End = pf_End->getNext();
+				pfAfter = pfAfter->getNext();
 			}
-			if(pf_First->getType() != pf_Frag::PFT_Object)
+			pf_Frag * pfBefore = pf_First;
+			if(pfBefore->getType() != pf_Frag::PFT_Object)
 			{
-				pf_First = pf_First->getPrev();
+				pfBefore = pfBefore->getPrev();
 			}
-			while(pf_First && (pf_First->getLength() == 0))
+			while(pfBefore && (pfBefore->getLength() == 0))
 			{
-				pf_First = pf_First->getPrev();
+				pfBefore = pfBefore->getPrev();
 			}
-			if(pf_First && (pf_First->getType() == pf_Frag::PFT_Object))
+			if(pfBefore && (pfBefore->getType() == pf_Frag::PFT_Object) &&
+			   pfAfter && (pfAfter->getType() == pf_Frag::PFT_Object) && (pfAfter != pfBefore))
 			{
-				pf_Frag_Object *pFO = static_cast<pf_Frag_Object *>(pf_First);
-				bool bFoundBook = false;
-				bool bFoundHype = false;
-				bool bFoundAnn = false;
-				if(pFO->getObjectType() == PTO_Bookmark)
+				pf_Frag_Object * pFOBefore = static_cast<pf_Frag_Object *>(pfBefore);
+				pf_Frag_Object * pFOAfter = static_cast<pf_Frag_Object *>(pfAfter);
+				PTObjectType objType = pFOBefore->getObjectType();
+				if (pFOAfter->getObjectType() == objType)
 				{
-					bFoundBook = true;
-				}
-				if(pFO->getObjectType() == PTO_Hyperlink)
-				{
-					bFoundHype = true;
-				}
-				if(pFO->getObjectType() == PTO_Annotation)
-				{
-					bFoundAnn = true;
-				}
-				if(pf_End && (pf_End->getType() == pf_Frag::PFT_Object) && (pf_End != pf_First))
-				{
-					pFO = static_cast<pf_Frag_Object *>(pf_End);
-					if(pFO->getObjectType() == PTO_Bookmark && bFoundBook)
+					bool bMatchedPair = false;
+					if (objType == PTO_Bookmark)
 					{
-//
-// Found a bookmark which will have all contents deleted so delete it too
-//
-						dpos1--;
-						dpos2++;
+						po_Bookmark * pB1 = pFOBefore->getBookmark();
+						po_Bookmark * pB2 = pFOAfter->getBookmark();
+						if (pB1 && pB2 &&
+							pB1->getBookmarkType() == po_Bookmark::POBOOKMARK_START &&
+							pB2->getBookmarkType() == po_Bookmark::POBOOKMARK_END &&
+							pB1->getName() && pB2->getName() &&
+							strcmp(pB1->getName(), pB2->getName()) == 0)
+						{
+							bMatchedPair = true;
+						}
 					}
-					else if(pFO->getObjectType() == PTO_Hyperlink && bFoundHype)
+					else if (objType == PTO_Hyperlink || objType == PTO_Annotation)
 					{
-//
-// Found a Hyperlink which will have all contents deleted so delte it too
-//
-						dpos1--;
-						dpos2++;
+						const char * szStartAttr = (objType == PTO_Hyperlink) ? "xlink:href" : "annotation";
+						const char * szStartAttrCap = (objType == PTO_Hyperlink) ? "Xlink:href" : "Annotation";
+						auto hasStartAttr = [this, szStartAttr, szStartAttrCap](pf_Frag_Object * pFO) -> bool {
+							const PP_AttrProp * pAP = nullptr;
+							if (!getAttrProp(pFO->getIndexAP(), &pAP) || !pAP)
+								return false;
+							const gchar * pszName = nullptr;
+							const gchar * pszVal = nullptr;
+							UT_uint32 k = 0;
+							while (pAP->getNthAttribute(k++, pszName, pszVal))
+							{
+								if (pszName && ((strcmp(pszName, szStartAttr) == 0) || (strcmp(pszName, szStartAttrCap) == 0)))
+									return true;
+							}
+							return false;
+						};
+						if (hasStartAttr(pFOBefore) && !hasStartAttr(pFOAfter))
+						{
+							bMatchedPair = true;
+						}
 					}
-					else if(pFO->getObjectType() == PTO_Annotation && bFoundAnn)
+					if (bMatchedPair && dpos1 > 0)
 					{
-//
-// Found a Annotation which will have all contents deleted so delte it too
-//
 						dpos1--;
 						dpos2++;
 					}
@@ -2048,8 +2070,9 @@ bool pt_PieceTable::_StruxIsNotTable(const pf_Frag_Strux * pfs) const
  */
 bool
 pt_PieceTable::_deleteComplexSpanHAR( pf_Frag_Object *pO,
-                                      PT_DocPosition dpos1,
+                                      PT_DocPosition& dpos1,
                                       PT_DocPosition /*dpos2*/,
+                                      PT_DocPosition& origPos1,
                                       UT_uint32& length,
                                       PT_BlockOffset& fragOffset_First,
                                       UT_uint32& lengthThisStep,
@@ -2102,6 +2125,10 @@ pt_PieceTable::_deleteComplexSpanHAR( pf_Frag_Object *pO,
                 if( pOb->getObjectType() == objType )
                 {
                     posComrade = getFragPosition(pOb);
+                    if (posComrade < origPos1)
+                    {
+                        origPos1--;
+                    }
                     bFoundStrux2 = _getStruxFromFragSkip(pOb,&pfsContainer2);
                     UT_return_val_if_fail (bFoundStrux2, false);
 
@@ -2135,6 +2162,7 @@ pt_PieceTable::_deleteComplexSpanHAR( pf_Frag_Object *pO,
         // in this case we are looking for the end marker,
         // so we have to be careful to get rid of the start
         // marker first
+        bool bFoundEnd = false;
         pF = pO->getNext();
         while(pF)
         {
@@ -2144,6 +2172,7 @@ pt_PieceTable::_deleteComplexSpanHAR( pf_Frag_Object *pO,
                 pf_Frag_Object *pOb = static_cast<pf_Frag_Object*>(pF);
                 if( pOb->getObjectType() == objType )
                 {
+                    bFoundEnd = true;
                     posComrade = getFragPosition(pOb);
                     bFoundStrux2 = _getStruxFromFragSkip(pOb,&pfsContainer2);
                     UT_return_val_if_fail (bFoundStrux2, false);
@@ -2194,6 +2223,12 @@ pt_PieceTable::_deleteComplexSpanHAR( pf_Frag_Object *pO,
                 }
             }
             pF = pF->getNext();
+        }
+        if (!bFoundEnd)
+        {
+            bResult
+                = _deleteObjectWithNotify(dpos1,pO,fragOffset_First,lengthThisStep,
+                                          pfsContainer,&pfNewEnd,&fragOffsetNewEnd);
         }
     }
                 
@@ -2414,6 +2449,8 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
 			PT_DocPosition dpp;
 			if(pfs->getStruxType() == PTX_EndTable)
 			{
+				if (iTable == 0)
+					return false;
 				iTable--;
 				if(iTable==0)
 				{
@@ -2427,6 +2464,8 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
 //
 // First delete the EndTable Strux
 //
+					if (stDelayStruxDelete.empty())
+						return false;
 					pfs = stDelayStruxDelete.top();
 					stDelayStruxDelete.pop();
 					PT_DocPosition myPos2 = pfs->getPos();
@@ -2435,7 +2474,7 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
 					bResult = _deleteStruxWithNotify(myPos2, pfs,
 													  &pfNewEnd,
 													  &fragOffsetNewEnd);
-					while(bResult && myTable > 0)
+					while(bResult && myTable > 0 && !stDelayStruxDelete.empty())
 					{
 						pfs = stDelayStruxDelete.top();
 						stDelayStruxDelete.pop();
@@ -2473,6 +2512,8 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
 // First delete the EndFootnote Strux
 //
 				UT_DEBUGMSG(("Doing Footnote delete immediately \n"));
+				if (stDelayStruxDelete.empty())
+					return false;
 				pfs = stDelayStruxDelete.top();
 				stDelayStruxDelete.pop();
 
@@ -2487,7 +2528,7 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
 // deleted first) and for
 // undo where we want the Footnote Strux inserted first.
 //
-				while(bResult && iFootnoteCount > 0)
+				while(bResult && iFootnoteCount > 0 && !stDelayStruxDelete.empty())
 				{
 					pfs = stDelayStruxDelete.top();
 					stDelayStruxDelete.pop();
@@ -2533,6 +2574,8 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
 // First delete the EndFrame Strux
 //
 				UT_DEBUGMSG(("Doing Frame delete now \n"));
+				if (stDelayStruxDelete.empty())
+					return false;
 				pfs = stDelayStruxDelete.top();
 				stDelayStruxDelete.pop();
 				PT_DocPosition myPos2 = pfs->getPos();
@@ -2552,7 +2595,7 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
 // deleted first) and for
 // undo where we want the Frame Strux inserted first.
 //
-				while(bResult && !isFrame)
+				while(bResult && !isFrame && !stDelayStruxDelete.empty())
 				{
 					pfs = stDelayStruxDelete.top();
 					stDelayStruxDelete.pop();
@@ -2711,6 +2754,7 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
                     bResult = _deleteComplexSpanHAR( pO,
                                                       dpos1,
                                                       dpos2,
+                                                      origPos1,
                                                       length,
                                                       fragOffset_First,
                                                       lengthThisStep,
@@ -2856,6 +2900,7 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
                     bResult = _deleteComplexSpanHAR( pO,
                                                       dpos1,
                                                       dpos2,
+                                                      origPos1,
                                                       length,
                                                       fragOffset_First,
                                                       lengthThisStep,
@@ -2991,6 +3036,7 @@ bool pt_PieceTable::_deleteComplexSpan(PT_DocPosition & origPos1,
                     bResult = _deleteComplexSpanHAR( pO,
                                                      dpos1,
                                                      dpos2,
+                                                     origPos1,
                                                      length,
                                                      fragOffset_First,
                                                      lengthThisStep,
@@ -3181,20 +3227,20 @@ bool pt_PieceTable::_realDeleteSpan(PT_DocPosition dpos1,
 	PP_AttrProp AttrProp_Before;
 
 	{
-		const pf_Frag * pf1;
-		PT_BlockOffset Offset1;
-		getFragFromPosition(dpos1, &pf1, &Offset1);
-		if(pf1->getType() == pf_Frag::PFT_Text)
+		const pf_Frag * pf1 = nullptr;
+		PT_BlockOffset Offset1 = 0;
+		if (getFragFromPosition(dpos1, &pf1, &Offset1) && pf1 && pf1->getType() == pf_Frag::PFT_Text)
 		{
-			const PP_AttrProp *p_AttrProp;
-			getAttrProp(static_cast<const pf_Frag_Text *>(pf1)->getIndexAP(), &p_AttrProp);
+			const PP_AttrProp *p_AttrProp = nullptr;
+			if (getAttrProp(static_cast<const pf_Frag_Text *>(pf1)->getIndexAP(), &p_AttrProp) && p_AttrProp)
+			{
+				AttrProp_Before = *p_AttrProp;
+				if(p_AttrProp_Before)
+					*p_AttrProp_Before = *p_AttrProp;
 
-			AttrProp_Before = *p_AttrProp;
-			if(p_AttrProp_Before)
-				*p_AttrProp_Before = *p_AttrProp;
-
-			// we do not want to inherit revision attribute
-			AttrProp_Before.setAttribute("revision", "");
+				// we do not want to inherit revision attribute
+				AttrProp_Before.setAttribute("revision", "");
+			}
 		}
 	}
 
@@ -3282,15 +3328,16 @@ bool pt_PieceTable::_realDeleteSpan(PT_DocPosition dpos1,
 
 	// Have we deleted all the text in a paragraph.
 
-	const pf_Frag * p_frag_before;
-	PT_BlockOffset Offset_before;
-	getFragFromPosition(dpos1 - 1, &p_frag_before, &Offset_before);
+	const pf_Frag * p_frag_before = nullptr;
+	PT_BlockOffset Offset_before = 0;
+	bool bHasBefore = bSuccess && dpos1 > 0 && getFragFromPosition(dpos1 - 1, &p_frag_before, &Offset_before) && p_frag_before;
 
-	const pf_Frag * p_frag_after;
-	PT_BlockOffset Offset_after;
-	getFragFromPosition(dpos1, &p_frag_after, &Offset_after);
+	const pf_Frag * p_frag_after = nullptr;
+	PT_BlockOffset Offset_after = 0;
+	bool bHasAfter = bSuccess && getFragFromPosition(dpos1, &p_frag_after, &Offset_after) && p_frag_after;
 
-	if(((p_frag_before->getType() == pf_Frag::PFT_Strux) ||
+	if(bHasBefore && bHasAfter &&
+	   ((p_frag_before->getType() == pf_Frag::PFT_Strux) ||
 		(p_frag_before->getType() == pf_Frag::PFT_EndOfDoc)) &&
 	   ((p_frag_after->getType() == pf_Frag::PFT_Strux) ||
 		(p_frag_after->getType() == pf_Frag::PFT_EndOfDoc)))
@@ -3379,13 +3426,13 @@ void pt_PieceTable::_tweakFieldSpan(PT_DocPosition & dpos1,
         auto pft = static_cast<const pf_Frag_Text *>(pf_First);
         // we can't delete part of a field so widen deletion to
         // include object at start
-        while (pft->getPrev()->getType() == pf_Frag::PFT_Text)
+        while (pft->getPrev() != nullptr &&
+               pft->getPrev()->getType() == pf_Frag::PFT_Text &&
+               static_cast<const pf_Frag_Text *>(pft->getPrev())->getField() == pft->getField())
         {
-            auto pft2 = static_cast<const pf_Frag_Text *>(pft->getPrev());
-            UT_ASSERT_HARMLESS(pft->getField() == pft2->getField());
-            pft = pft2;
+            pft = static_cast<const pf_Frag_Text *>(pft->getPrev());
         }
-        UT_return_if_fail (pft->getPrev()->getType() == pf_Frag::PFT_Object);
+        UT_return_if_fail (pft->getPrev() != nullptr && pft->getPrev()->getType() == pf_Frag::PFT_Object);
         auto pfo = static_cast<const pf_Frag_Object *>(pft->getPrev());
         UT_return_if_fail (pfo->getObjectType()==PTO_Field);
         UT_return_if_fail (pfo->getField()==pft->getField());

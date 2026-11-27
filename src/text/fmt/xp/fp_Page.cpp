@@ -479,40 +479,45 @@ fp_Container * fp_Page::updatePageForWrapping(fp_Column *& pNextCol)
  								pLine->setSameYAsPrevious(true);
  							}
  						}
-						if(pLine->isSameYAsPrevious())
+						if(pPrev && pLine->isSameYAsPrevious())
 						{
 						  //
 						  // Look for a gap between lines.
 						  //
-						  UT_Rect recBetween;
-						  UT_Rect pPrevRec = pPrev->getScreenRect().value();
-						  UT_Rect pCurRec = pLine->getScreenRect().value();
-						  recBetween.left = pPrevRec.left + pPrevRec.width;
-						  recBetween.width = pCurRec.left - recBetween.left;
-						  if(pPrevRec.height != pCurRec.height)
+						  auto optPrevRec = pPrev->getScreenRect();
+						  auto optCurRec = pLine->getScreenRect();
+						  if (optPrevRec.has_value() && optCurRec.has_value())
 						  {
-							 pLine = pPrev;
-							 j--;
-							 bFoundOne = true;
-						  }
-						  else
-						  {
-							 recBetween.height = pPrevRec.height;
-							 recBetween.top = pPrevRec.top;
-							 if(!overlapsWrappedFrame(recBetween))
-							 {
-							      UT_DEBUGMSG(("Found a gap! \n"));
-							      pLine = pPrev;
-							      j--;
-							      bFoundOne = true;
-							 }
-							 else if(recBetween.width < 60)
-							 {
-							      UT_DEBUGMSG(("Found a tiny gap! %d \n",recBetween.width));
-							      pLine = pPrev;
-							      j--;
-							      bFoundOne = true;
-							 }
+						    UT_Rect recBetween;
+						    UT_Rect pPrevRec = optPrevRec.value();
+						    UT_Rect pCurRec = optCurRec.value();
+						    recBetween.left = pPrevRec.left + pPrevRec.width;
+						    recBetween.width = pCurRec.left - recBetween.left;
+						    if(pPrevRec.height != pCurRec.height)
+						    {
+							   pLine = pPrev;
+							   j--;
+							   bFoundOne = true;
+						    }
+						    else
+						    {
+							   recBetween.height = pPrevRec.height;
+							   recBetween.top = pPrevRec.top;
+							   if(!overlapsWrappedFrame(recBetween))
+							   {
+							        UT_DEBUGMSG(("Found a gap! \n"));
+							        pLine = pPrev;
+							        j--;
+							        bFoundOne = true;
+							   }
+							   else if(recBetween.width < 60)
+							   {
+							        UT_DEBUGMSG(("Found a tiny gap! %d \n",recBetween.width));
+							        pLine = pPrev;
+							        j--;
+							        bFoundOne = true;
+							   }
+						    }
 						  }
 						}
 					}
@@ -605,26 +610,31 @@ fp_Container * fp_Page::updatePageForWrapping(fp_Column *& pNextCol)
 								  //
 								  // Look for a gap between lines.
 								  //
-								  UT_Rect recBetween;
-								  UT_Rect pPrevRec = pPrev->getScreenRect().value();
-								  UT_Rect pCurRec = pLine->getScreenRect().value();
-								  recBetween.left = pPrevRec.left + pPrevRec.width;
-								  recBetween.width = pCurRec.left - recBetween.left;
-								  if(pPrevRec.height != pCurRec.height)
+								  auto optPrevRec = pPrev->getScreenRect();
+								  auto optCurRec = pLine->getScreenRect();
+								  if (optPrevRec.has_value() && optCurRec.has_value())
 								  {
-								    pLine = pPrev;
-								    j--;
-								    bFoundOne = true;
-								  }
-								  else
-								  {
-								    recBetween.height = pPrevRec.height;
-								    recBetween.top = pPrevRec.top;
-								    if(!overlapsWrappedFrame(recBetween))
+								    UT_Rect recBetween;
+								    UT_Rect pPrevRec = optPrevRec.value();
+								    UT_Rect pCurRec = optCurRec.value();
+								    recBetween.left = pPrevRec.left + pPrevRec.width;
+								    recBetween.width = pCurRec.left - recBetween.left;
+								    if(pPrevRec.height != pCurRec.height)
 								    {
 								      pLine = pPrev;
 								      j--;
 								      bFoundOne = true;
+								    }
+								    else
+								    {
+								      recBetween.height = pPrevRec.height;
+								      recBetween.top = pPrevRec.top;
+								      if(!overlapsWrappedFrame(recBetween))
+								      {
+								        pLine = pPrev;
+								        j--;
+								        bFoundOne = true;
+								      }
 								    }
 								  }
 								}
@@ -759,7 +769,12 @@ fp_Container * fp_Page::updatePageForWrapping(fp_Column *& pNextCol)
  */
 bool fp_Page::overlapsWrappedFrame(const fp_Line* pLine) const
 {
-	return overlapsWrappedFrame(pLine->getScreenRect().value());
+	auto optRect = pLine->getScreenRect();
+	if (!optRect.has_value())
+	{
+		return false;
+	}
+	return overlapsWrappedFrame(optRect.value());
 }
 /*!
  * Returns true if the supplied rectangle overlaps with one wrapped frame
@@ -1401,7 +1416,12 @@ void   fp_Page::expandDamageRect(UT_sint32 x, UT_sint32 y,
  */
 bool   fp_Page::intersectsDamagedRect(fp_ContainerObject * pObj) const
 {
-	UT_Rect pRec = pObj->getScreenRect().value();
+	auto optRec = pObj->getScreenRect();
+	if (!optRec.has_value())
+	{
+		return false;
+	}
+	UT_Rect pRec = optRec.value();
 	bool bIntersects = m_rDamageRect.intersectsRect(&pRec);
 	return bIntersects;
 }

@@ -370,6 +370,11 @@ void fp_VerticalContainer::getOffsets(const fp_ContainerObject* pContainer, UT_s
 // move it up the correct broken table line when we come across a cell
 //
 			pVCon = getCorrectBrokenTable(static_cast<const fp_Container *>(pContainer));
+			if(pVCon == nullptr)
+			{
+				pCon = nullptr;
+				break;
+			}
 			if(pPrev && pPrev->getContainerType() == FP_CONTAINER_CELL)
 			{
 				UT_sint32 iTable =  getYoffsetFromTable(pCon, pPrev, pContainer);
@@ -380,22 +385,17 @@ void fp_VerticalContainer::getOffsets(const fp_ContainerObject* pContainer, UT_s
 					my_yoff = my_yoff + pVCon->getY() -iycon;
 				}
 			}
-			if(pVCon && pVCon->getContainer() && (pVCon->getContainer()->getContainerType() == FP_CONTAINER_CELL))
+			if(pVCon->getContainer() && (pVCon->getContainer()->getContainerType() == FP_CONTAINER_CELL))
 			{
 				pContainer = static_cast<const fp_Container *>(pVCon);
 				xxx_UT_DEBUGMSG(("pContainer set to %p height %d \n",pContainer,pContainer->getHeight()));
 			}
-			else if(pVCon && (pVCon->getContainer() == nullptr))
+			else if(pVCon->getContainer() == nullptr)
 			{
 			  //
 			  // Just bail out for now
 			  //
 			        return;
-			}
-			if(pVCon == nullptr)
-			{
-			        pCon = nullptr;
-				break;
 			}
 			pCon = static_cast<const fp_Container *>(pVCon);
 		}
@@ -410,6 +410,10 @@ void fp_VerticalContainer::getOffsets(const fp_ContainerObject* pContainer, UT_s
 //
 			pVCon = getCorrectBrokenTOC(static_cast<const fp_Container *>(pContainer));
 			pCon = static_cast<const fp_Container *>(pVCon);
+			if(pCon == nullptr)
+			{
+				break;
+			}
 		}
 		pPrev = pCon;
 		pCon = pCon->getContainer();
@@ -669,6 +673,12 @@ void fp_VerticalContainer::getScreenOffsets(const fp_ContainerObject* pContainer
 
 			pVCon = getCorrectBrokenTOC(static_cast<const fp_Container *>(pContainer));
 			pCon = static_cast<const fp_Container *>(pVCon);
+			if (pCon == nullptr)
+			{
+				xoff = 0;
+				yoff = 0;
+				return;
+			}
 		}
 		pPrev = pCon;
 		pCon = pCon->getContainer();
@@ -1192,7 +1202,7 @@ void fp_VerticalContainer::mapXYToPosition(UT_sint32 x, UT_sint32 y, PT_DocPosit
 				// closest to y.
 				fp_TableContainer * pBrokeAbove = pCell->getBrokenTable(static_cast<fp_Container*>(pContainerAbove));
 				fp_TableContainer * pBrokeBelow = pCell->getBrokenTable(static_cast<fp_Container*>(pContainerBelow));
-				if (pBrokeAbove != pBrokeBelow)
+				if (pBrokeAbove && pBrokeAbove != pBrokeBelow)
 				{
 					pContainer = ((y + getY() < pBrokeAbove->getYBottom()) ? pContainerAbove : pContainerBelow);
 				}

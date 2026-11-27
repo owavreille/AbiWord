@@ -486,8 +486,9 @@ protected:
 											  PT_DocPosition dpos2);
 
     bool                     _deleteComplexSpanHAR( pf_Frag_Object *pO,
-                                                    PT_DocPosition dpos1,
+                                                    PT_DocPosition& dpos1,
                                                     PT_DocPosition dpos2,
+                                                    PT_DocPosition& origPos1,
                                                     UT_uint32& length,
                                                     PT_BlockOffset& fragOffset_First,
                                                     UT_uint32& lengthThisStep,

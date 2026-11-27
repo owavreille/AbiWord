@@ -513,7 +513,7 @@ void fp_CellContainer::_getBrokenRect(fp_TableContainer * pBroke, fp_Page * &pPa
 //
 // Now correct for printing
 //
-	if(pG->queryProperties(GR_Graphics::DGP_PAPER))
+	if(pPage && pPage->getDocLayout() && pPage->getDocLayout()->getView() && pG->queryProperties(GR_Graphics::DGP_PAPER))
 	{
 		UT_sint32 xdiff,ydiff;
 		pPage->getDocLayout()->getView()->getPageScreenOffsets(pPage, xdiff, ydiff);
@@ -1667,12 +1667,12 @@ fp_TableContainer * fp_CellContainer::getTopmostTable() const
 {
 	fp_Container * pUp = getContainer();
 	fp_Container * pPrev = pUp;
-	while(pUp->getContainerType() != FP_CONTAINER_COLUMN)
+	while(pUp && !pUp->isColumnType())
 	{
 		pPrev = pUp;
 		pUp = pUp->getContainer();
 	}
-	if(pPrev->getContainerType() == FP_CONTAINER_TABLE)
+	if(pPrev && pPrev->getContainerType() == FP_CONTAINER_TABLE)
 	{
 		return static_cast<fp_TableContainer *>(pPrev);
 	}
@@ -2078,7 +2078,7 @@ void fp_CellContainer::draw(fp_Line * pLine)
 		//
 		// Have to account for the bit of the cell on the previous page
 		//
-		da.yoff = yoff - pBroke->getYBreak();
+		yoff -= pBroke->getYBreak();
 	}
 	da.xoff = xoff;
 	da.yoff = yoff;
@@ -2921,24 +2921,23 @@ void fp_CellContainer::layout(void)
 			xxx_UT_DEBUGMSG(("Doing Nested table layout Y 2 is %d height is %d YBottom %d \n",pTab->getY(),pTab->getHeight(),pTab->getYBottom()));
 		}
 
-		iY += iContainerHeight;
-		iY += iContainerMarginAfter;
-		//iY +=  0.5;
-
 		// Update height of previous line now we know the gap between
 		// it and the current line.
 		if (pPrevContainer && pPrevContainer->getContainerType() != FP_CONTAINER_TABLE)
 		{
 			pPrevContainer->setAssignedScreenHeight(iY - iPrevY);
 		}
-		pPrevContainer = pContainer;
 		iPrevY = iY;
+		iY += iContainerHeight;
+		iY += iContainerMarginAfter;
+		//iY +=  0.5;
+		pPrevContainer = pContainer;
 	}
 
 	// Correct height position of the last line
 	if (pPrevContainer)
 	{
-		pPrevContainer->setAssignedScreenHeight(iY - iPrevY + 1);
+		pPrevContainer->setAssignedScreenHeight(iY - iPrevY);
 	}
 
 	if (getHeight() == iY)
@@ -5387,7 +5386,7 @@ void  fp_TableContainer::_size_request_pass3(void)
 	       */
 	      if (width < child_requisition.width + child->getLeftPad() + child->getRightPad())
 		  {
-			  width = child_requisition.width + child->getLeftPad() + child->getRightPad();
+			  width = (child_requisition.width + child->getLeftPad() + child->getRightPad()) - width;
 		  
 			  for (col = child->getLeftAttach(); col < child->getRightAttach(); col++)
 			  {
@@ -5493,7 +5492,7 @@ void  fp_TableContainer::_size_allocate_init(void)
 	  
 	  if (child->getTopAttach() == (child->getBottomAttach() - 1))
 	  {
-		  if (child->getYshrink())
+		  if (child->getYexpand())
 		  {
 			  getNthRow(child->getTopAttach())->expand = true;
 		  }
@@ -5557,50 +5556,50 @@ void  fp_TableContainer::_size_allocate_init(void)
 				  }
 			  }
 		  }
-	  
-		  if (child->getTopAttach() != (child->getBottomAttach() - 1))
+	  }
+
+	  if (child->getTopAttach() != (child->getBottomAttach() - 1))
+	  {
+		  for (row = child->getTopAttach(); row < child->getBottomAttach(); row++)
 		  {
+			  getNthRow(row)->empty = false;
+		  }
+		  if (child->getYexpand())
+		  {
+			  has_expand = false;
 			  for (row = child->getTopAttach(); row < child->getBottomAttach(); row++)
 			  {
-				  getNthRow(row)->empty = false;
-			  }
-			  if (child->getYexpand())
+				  if (getNthRow(row)->expand)
+				  {
+					  has_expand = true;
+					  break;
+				  }
+			  }		  
+			  if (!has_expand)
 			  {
-				  has_expand = false;
 				  for (row = child->getTopAttach(); row < child->getBottomAttach(); row++)
 				  {
-					  if (getNthRow(row)->expand)
-					  {
-						  has_expand = true;
-						  break;
-					  }
-				  }		  
-				  if (!has_expand)
-				  {
-					  for (row = child->getTopAttach(); row < child->getBottomAttach(); row++)
-						{
-							getNthRow(row)->need_expand = true;
-						}
+					  getNthRow(row)->need_expand = true;
 				  }
 			  }
+		  }
 	      
-			  if (!child->getYshrink())
+		  if (!child->getYshrink())
+		  {
+			  has_shrink = true;
+			  for (row = child->getTopAttach(); row < child->getBottomAttach(); row++)
 			  {
-				  has_shrink = true;
+				  if (!getNthRow(row)->shrink)
+				  {
+					  has_shrink = false;
+					  break;
+				  }
+			  }
+			  if (has_shrink)
+			  {
 				  for (row = child->getTopAttach(); row < child->getBottomAttach(); row++)
 				  {
-					  if (!getNthRow(row)->shrink)
-					  {
-						  has_shrink = false;
-						  break;
-					  }
-				  }
-				  if (has_shrink)
-				  {
-					  for (row = child->getTopAttach(); row < child->getBottomAttach(); row++)
-					  {
-						  getNthRow(row)->need_shrink = false;
-					  }
+					  getNthRow(row)->need_shrink = false;
 				  }
 			  }
 		  }

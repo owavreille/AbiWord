@@ -302,7 +302,10 @@ bool UT_ByteBuf::insertFromInput(UT_uint32 iPosition, GsfInput * fp)
   UT_Byte *pBuf = m_pBuf + iPosition;	
 
   if (!gsf_input_read(fp, iLengthOfFile, pBuf))
+  {
+    this->del(iPosition, iLengthOfFile);
     return false;
+  }
 
   return true;
 }
@@ -338,7 +341,10 @@ bool UT_ByteBuf::insertFromFile(UT_uint32 iPosition, FILE * fp)
 		size_t nRead = fread (pBuf + iBytesRead, sizeof(UT_Byte), 
 							  iLengthOfFile - iBytesRead, fp);
 		if (nRead == 0)
+		{
+			this->del(iPosition, iLengthOfFile);
 			return false;
+		}
 		iBytesRead += static_cast<UT_uint32>(nRead);
 	}
 	return true;

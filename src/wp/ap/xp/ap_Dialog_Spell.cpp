@@ -35,15 +35,30 @@
 
 #include "ap_FrameData.h"
 #include "fl_DocLayout.h"
+#include "pp_Property.h"
 #include "xap_Prefs.h"
 #include "ap_Prefs.h"
 
 #include "ap_Dialog_Spell.h"
 
-// important that you call makeWordVisible before you call this
 SpellChecker *
 AP_Dialog_Spell::_getDict (void)
 {
+	if (m_pCurrBlock && m_pDoc && m_iWordOffset >= 0)
+	{
+		const PP_AttrProp * pSpanAP = nullptr;
+		const PP_AttrProp * pBlockAP = nullptr;
+
+		m_pCurrBlock->getSpanAP(static_cast<UT_uint32>(m_iWordOffset), false, pSpanAP);
+		m_pCurrBlock->getAP(pBlockAP);
+
+		const gchar * pszLang = PP_evalProperty("lang", pSpanAP, pBlockAP, nullptr, m_pDoc, true);
+		if (pszLang && *pszLang)
+		{
+			return SpellManager::instance().requestDictionary(pszLang);
+		}
+		return SpellManager::instance().lastDictionary();
+	}
 	if (m_pView)
 	  return m_pView->getDictForSelection ();
 	return nullptr;
@@ -142,7 +157,10 @@ void AP_Dialog_Spell::runModal(XAP_Frame * pFrame)
    if (m_pView->isSelectionEmpty())
    {
 	   m_pCurrSection = frameData->m_pDocLayout->getFirstSection();
-	   m_pCurrBlock = static_cast<fl_BlockLayout *>(m_pCurrSection->getFirstLayout());
+	   if (m_pCurrSection)
+	   {
+		   m_pCurrBlock = m_pCurrSection->getFirstBlock();
+	   }
    }
    else
    {
@@ -152,16 +170,25 @@ void AP_Dialog_Spell::runModal(XAP_Frame * pFrame)
 	   m_pView->getDocumentRangeOfCurrentSelection(&range);
    
 	   m_pStartBlock = m_pView->getBlockAtPosition(range.m_pos1);
+	   m_pEndBlock = m_pView->getBlockAtPosition(range.m_pos2);
+	   if (!m_pStartBlock || !m_pEndBlock)
+	   {
+		   return;
+	   }
 	   m_pStartSection = m_pStartBlock->getDocSectionLayout();
 	   m_iStartIndex = range.m_pos1 - m_pStartBlock->getPosition();
 
-	   m_pEndBlock = m_pView->getBlockAtPosition(range.m_pos2);
 	   m_pEndSection = m_pEndBlock->getDocSectionLayout();
 	   m_iEndLength = range.m_pos2 - m_pEndBlock->getPosition();
 
 	   m_pCurrBlock = m_pStartBlock;
 	   m_pCurrSection = m_pStartSection;
 	   m_bIsSelection = true;
+   }
+
+   if (!m_pCurrSection || !m_pCurrBlock)
+   {
+	   return;
    }
 
    m_pWordIterator = new fl_BlockSpellIterator(m_pCurrBlock, 0);

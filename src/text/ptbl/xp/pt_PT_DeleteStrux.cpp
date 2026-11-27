@@ -318,6 +318,69 @@ bool pt_PieceTable::_unlinkStrux_Section(pf_Frag_Strux * pfs,
 		return false;
 	}
 
+	switch (pfsPrev->getStruxType())
+	{
+	case PTX_Block:
+		// if there is a paragraph before us, we can delete this
+		// section knowing that our paragraphs will be assimilated
+		// in to the previous section (that is, the container of
+		// this block).
+	case PTX_SectionTable:
+	case PTX_SectionFrame:
+	case PTX_EndFrame:
+	case PTX_SectionCell:
+	case PTX_EndCell:
+	case PTX_EndTable:
+	case PTX_SectionEndnote:
+	case PTX_EndEndnote:
+	case PTX_SectionTOC:
+	case PTX_EndTOC:
+	case PTX_SectionFootnote:
+	case PTX_EndFootnote:
+	case PTX_SectionAnnotation:
+	case PTX_EndAnnotation:
+		break;
+
+	case PTX_Section:
+		//
+		// We can delete Tables provided there is a block to take it's place later
+		//
+		if((pfs->getStruxType() == PTX_SectionTable) || (pfs->getStruxType() == PTX_EndTable))
+		{
+			break;
+		}
+		// there are no blocks (paragraphs) between this section
+		// and the previous section.  this is not possible.
+		// TODO decide if this should assert or just fail...
+		UT_DEBUGMSG(("No blocks between sections ??\n"));
+		UT_ASSERT_HARMLESS(0);
+		return false;
+
+
+	case PTX_SectionHdrFtr:
+		if((pfs->getStruxType() == PTX_SectionTable) || (pfs->getStruxType() == PTX_EndTable))
+		{
+			break;
+		}
+		// there are no blocks (paragraphs) between this section
+		// and the previous section.  this is not possible.
+		// TODO decide if this should assert or just fail...
+		//
+		// Actually this is OK if it's a hdrFtr that has not been
+		// "realized" yet. Like an even hdrftr that has been defined
+		// but no even pages exist yet.
+		UT_DEBUGMSG(("No blocks between sections ??\n"));
+//		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
+		UT_ASSERT_HARMLESS(0);
+		return false;
+
+	default:
+		UT_ASSERT_HARMLESS(0);
+		return false;
+	}
+
+	_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
+
 	// delete frag from the embedded_strux list if needed
 	if ((pfs->getStruxType() == PTX_SectionFootnote) || 
 		(pfs->getStruxType() == PTX_SectionEndnote) || 
@@ -360,164 +423,7 @@ bool pt_PieceTable::_unlinkStrux_Section(pf_Frag_Strux * pfs,
 		}
 	}
 
-	switch (pfsPrev->getStruxType())
-	{
-	case PTX_Block:
-		// if there is a paragraph before us, we can delete this
-		// section knowing that our paragraphs will be assimilated
-		// in to the previous section (that is, the container of
-		// this block).
-
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-	case PTX_SectionTable:
-        //
-        // deleting tables is a multi-step process that can't make assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-	case PTX_SectionFrame:
-        //
-        // deleting Frames is a multi-step process that can't make assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-	case PTX_EndFrame:
-        //
-        // deleting Frames is a multi-step process that can't make assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-	case PTX_SectionCell:
-        //
-        // deleting tables is a multi-step process that can't make assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-	case PTX_EndCell:
-        //
-        // deleting tables is a multi-step process that can't make assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-	case PTX_EndTable:
-        //
-        // deleting tables is a multi-step process that can't make assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-	case PTX_SectionEndnote:
-        //
-        // deleting Endnotes is a multi-step process that can't make 
-        // assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-	case PTX_EndEndnote:
-        //
-        // deleting Endnotes is a multi-step process that can't make 
-        // assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-
-	case PTX_SectionTOC:
-        //
-        // deleting TOC is a multi-step process that can't make 
-        // assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-	case PTX_EndTOC:
-        //
-        // deleting TOC is a multi-step process that can't make 
-        // assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-
-	case PTX_SectionFootnote:
-        //
-        // deleting Footnotes is a multi-step process that can't make 
-        // assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-	case PTX_EndFootnote:
-        //
-        // deleting Footnotes is a multi-step process that can't make 
-        // assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-
-
-	case PTX_SectionAnnotation:
-        //
-        // deleting Annotations is a multi-step process that can't make 
-        // assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-	case PTX_EndAnnotation:
-        //
-        // deleting Annotations is a multi-step process that can't make 
-        // assumptions
-        // on a single step
-		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		return true;
-
-
-	case PTX_Section:
-	  //
-	  // We can delete Tables provided there is a block to take it's place later
-	  //
-	        if((pfs->getStruxType() == PTX_SectionTable) || (pfs->getStruxType() == PTX_EndTable))
-		{
-		    _unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		    return true;
-		}
-		// there are no blocks (paragraphs) between this section
-		// and the previous section.  this is not possible.
-		// TODO decide if this should assert or just fail...
-		UT_DEBUGMSG(("No blocks between sections ??\n"));
-		UT_ASSERT_HARMLESS(0);
-		return false;
-
-
-	case PTX_SectionHdrFtr:
-	        if((pfs->getStruxType() == PTX_SectionTable) || (pfs->getStruxType() == PTX_EndTable))
-		{
-		    _unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		    return true;
-		}
-		// there are no blocks (paragraphs) between this section
-		// and the previous section.  this is not possible.
-		// TODO decide if this should assert or just fail...
-        //
-        // Actually this is OK if it's a hdrFtr that has not been
-		// "realized" yet. Like an even hdrftr that has been defined
-        // but no even pages exist yet.
-		UT_DEBUGMSG(("No blocks between sections ??\n"));
-//		_unlinkFrag(pfs,ppfEnd,pfragOffsetEnd);
-		UT_ASSERT_HARMLESS(0);
-		return false;
-
-	default:
-		UT_ASSERT_HARMLESS(0);
-		return false;
-	}
+	return true;
 }
 
 bool pt_PieceTable::_deleteStruxWithNotify(PT_DocPosition dpos,
@@ -568,7 +474,10 @@ bool pt_PieceTable::_deleteHdrFtrsFromSectionStruxIfPresent(pf_Frag_Strux_Sectio
 	// FIXME: Handle all the new header/footer types.
 	PT_AttrPropIndex indexAP = pfStruxSec->getIndexAP();
 	const PP_AttrProp * pAP = nullptr;
-	getAttrProp(indexAP, &pAP);
+	if (!getAttrProp(indexAP, &pAP) || !pAP)
+	{
+		return false;
+	}
 	std::vector<const char*> vecHdrFtr;
 	UT_String HeaderV,HeaderEvenV,HeaderLastV,HeaderFirstV;
 	UT_String FooterV,FooterEvenV,FooterLastV,FooterFirstV;
@@ -661,7 +570,11 @@ bool pt_PieceTable::_deleteHdrFtrsFromSectionStruxIfPresent(pf_Frag_Strux_Sectio
 //
 					PT_AttrPropIndex indexAPHdr = curStrux->getIndexAP();
 					const PP_AttrProp * pAPHdr = nullptr;
-					getAttrProp(indexAPHdr, &pAPHdr);
+					if (!getAttrProp(indexAPHdr, &pAPHdr) || !pAPHdr)
+					{
+						curFrag = curFrag->getNext();
+						continue;
+					}
 					const gchar * szID = nullptr;
 					bres = pAPHdr->getAttribute("id",szID);
 					UT_DEBUGMSG(("SEVIOR: Found candidate id = %s \n",szID));
@@ -712,7 +625,7 @@ void pt_PieceTable::_deleteHdrFtrStruxWithNotify( pf_Frag_Strux * pfFragStruxHdr
 	bool bStop = false;
 	bool bIsTable = false;
 	PT_DocPosition posLastStrux = 0;
-	while((pfFrag->getType() == pf_Frag::PFT_Strux) && (pfFrag != getFragments().getLast()) && !bStop)
+	while(pfFrag != nullptr && (pfFrag->getType() != pf_Frag::PFT_EndOfDoc) && (pfFrag->getType() == pf_Frag::PFT_Strux) && !bStop)
 	{
 		auto * pfs = static_cast<pf_Frag_Strux *>(pfFrag);
 		if(pfs != pfFragStruxHdrFtr && (pfs->getStruxType() != PTX_Block))
@@ -731,7 +644,7 @@ void pt_PieceTable::_deleteHdrFtrStruxWithNotify( pf_Frag_Strux * pfFragStruxHdr
 			pfFrag = pfFrag->getNext();
 		}
 	}
-	PT_DocPosition TextStartPos = getFragPosition(pfFrag);
+	PT_DocPosition TextStartPos = pfFrag ? getFragPosition(pfFrag) : posLastStrux;
 	if(TextStartPos == posLastStrux && !bIsTable)
 	{
 		TextStartPos++;
@@ -743,7 +656,7 @@ void pt_PieceTable::_deleteHdrFtrStruxWithNotify( pf_Frag_Strux * pfFragStruxHdr
 	bool foundEnd = false;
 	while(!foundEnd)
 	{
-		foundEnd = pfFrag == getFragments().getLast();
+		foundEnd = (pfFrag == nullptr || pfFrag->getType() == pf_Frag::PFT_EndOfDoc);
 		if(!foundEnd && pfFrag->getType() == pf_Frag::PFT_Strux)
 		{
 			const pf_Frag_Strux * pfFragStrux = static_cast<const pf_Frag_Strux *>(pfFrag);
@@ -759,10 +672,9 @@ void pt_PieceTable::_deleteHdrFtrStruxWithNotify( pf_Frag_Strux * pfFragStruxHdr
 		}
 	}
 	PT_DocPosition TextEndPos = 0;
-	TextEndPos = getFragPosition(pfFrag);
-	if(pfFrag == getFragments().getLast())
+	if (pfFrag != nullptr)
 	{
-		TextEndPos = getFragPosition(pfFrag->getPrev()) + pfFrag->getPrev()->getLength();
+		TextEndPos = getFragPosition(pfFrag);
 	}
 	UT_DEBUGMSG(("SEVIOR: Deleting hdrftr Text End Pos = %d \n",TextEndPos));
 //

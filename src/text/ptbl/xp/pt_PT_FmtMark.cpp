@@ -47,14 +47,11 @@ bool pt_PieceTable::_insertFmtMarkFragWithNotify(PTChangeFmt ptc,
 {
 	UT_return_val_if_fail (m_pts==PTS_Editing, false);
 
-	pf_Frag * pf;
-	PT_BlockOffset fo;
+	pf_Frag * pf = nullptr;
+	PT_BlockOffset fo = 0;
 
-	// The return value of getFragFromPosition was never checked (sterwill)
-	// bool bFound =
-	getMutFragFromPosition(dpos, &pf, &fo);
-
-	UT_return_val_if_fail (pf, false);
+	if (!getMutFragFromPosition(dpos, &pf, &fo) || !pf)
+		return false;
 	
 	if ((fo==0) && (pf->getPrev()))
 	{
@@ -83,10 +80,11 @@ bool pt_PieceTable::_insertFmtMarkFragWithNotify(PTChangeFmt ptc,
 	}
 
 	PT_AttrPropIndex indexOldAP = _chooseIndexAP(pf,fo);
-	PT_AttrPropIndex indexNewAP;
-	UT_DebugOnly<bool> bMerged;
-	bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
+	PT_AttrPropIndex indexNewAP = 0;
+	bool bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 		return true;
@@ -155,7 +153,10 @@ bool pt_PieceTable::_insertFmtMark(pf_Frag * pf, UT_uint32 fragOffset, PT_AttrPr
 	{
 		// we are at the beginning of a fragment, insert the
 		// new FmtMark immediately prior to it.
-		m_fragments.insertFrag(pf->getPrev(),pffm);
+		if (pf->getPrev())
+			m_fragments.insertFrag(pf->getPrev(), pffm);
+		else
+			m_fragments.insertFragBefore(pf, pffm);
 	}
 	else if (fragOffset == pf->getLength())
 	{
@@ -312,11 +313,12 @@ bool pt_PieceTable::_fmtChangeFmtMarkWithNotify(PTChangeFmt ptc, pf_Frag_FmtMark
 	// apply a span-level change to the given FmtMark.
 	// create a change record for this change and put it in the history.
 
-	PT_AttrPropIndex indexNewAP;
+	PT_AttrPropIndex indexNewAP = 0;
 	PT_AttrPropIndex indexOldAP = pffm->getIndexAP();
-	UT_DebugOnly<bool> bMerged;
-	bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
+	bool bMerged = m_varset.mergeAP(ptc, indexOldAP, attributes, properties, &indexNewAP, getDocument());
 	UT_ASSERT_HARMLESS(bMerged);
+	if (!bMerged)
+		return false;
 
 	if (indexOldAP == indexNewAP)		// the requested change will have no effect on this fragment.
 	{

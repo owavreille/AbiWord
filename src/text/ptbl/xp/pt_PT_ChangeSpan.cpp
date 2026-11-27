@@ -68,6 +68,21 @@ bool pt_PieceTable::changeSpanFmt(PTChangeFmt ptc,
 		// retrieve the fragments afresh in each step of the loop
 		// Tomas, Dec 29, 2004
 
+		struct MultiStepGlobGuard
+		{
+			pt_PieceTable * m_pPT;
+			explicit MultiStepGlobGuard(pt_PieceTable * pPT) : m_pPT(pPT)
+			{
+				if (m_pPT)
+					m_pPT->beginMultiStepGlob();
+			}
+			~MultiStepGlobGuard()
+			{
+				if (m_pPT)
+					m_pPT->endMultiStepGlob();
+			}
+		} globGuard(this);
+
 		bool bRet = false;
 		while(dpos1 < dpos2)
 		{
@@ -638,7 +653,7 @@ bool pt_PieceTable::_realChangeSpanFmt(PTChangeFmt ptc,
 				bResult	= _fmtChangeObjectWithNotify(ptc,static_cast<pf_Frag_Object *>(pf_First),
 												 fragOffset_First,dpos1,lengthThisStep,
 												 attributes,lProps,
-												 pfsContainer,&pfNewEnd,&fragOffsetNewEnd,false);
+												 pfsContainer,&pfNewEnd,&fragOffsetNewEnd,bRevisionDelete);
 				UT_return_val_if_fail (bResult,false);
 			}
 			break;

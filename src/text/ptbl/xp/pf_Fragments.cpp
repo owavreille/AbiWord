@@ -131,21 +131,14 @@ void pf_Fragments::appendFrag(pf_Frag * pf)
 	else 
 	{
 		//Since this fragment is at the end of the document,
-		//we find the last piece and insert it to its right.
-		PT_DocPosition lastPos = sizeDocument();
-		Iterator lastIt = find(lastPos == 0 ? 0 : lastPos - 1);
-		if (!lastIt.value())
+		//we find the last node in the tree and insert it to its right.
+		Node * pLast = _last();
+		if (!pLast)
 		{
 			insertRoot(pf);
 			return;
 		}
-		// Find returns the first fragment before the position
-		// requested. If we have zero length frags, these are
-		// not accounted for. So we itterate to find the truley last
-		// fragment
-		while( lastIt.value()->getNext() != nullptr)
-		  lastIt++;
-		insertRight(pf, lastIt);
+		insertRight(pf, Iterator(this, pLast));
 	}
 
 	return;
@@ -227,6 +220,8 @@ void pf_Fragments::unlinkFrag(const pf_Frag * pf)
 */
 pf_Frag * pf_Fragments::findFirstFragBeforePos(PT_DocPosition pos) const
 {       
+	if (sizeDocument() == 0)
+		return nullptr;
 	if (pos >= sizeDocument())
 	  pos = sizeDocument()-1;
 	Iterator it = find(pos);
