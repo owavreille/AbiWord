@@ -70,17 +70,50 @@ XAP_Win32Dialog_About::~XAP_Win32Dialog_About(void)
 	DELETEP(m_pGrImageSidebar);
 }
 
-const int ABOUT_WIDTH		= 500;
-const int ABOUT_HEIGHT		= 398;
-const int BUTTON_WIDTH		= 64;
-const int BUTTON_HEIGHT		= 24;
-const int BUTTON_GAP		= 10;
-const int HEADING_HEIGHT	= 36;
-const int VERSION_HEIGHT	= 24;
-const int COPYRIGHT_HEIGHT	= 24;
-const int GPL_HEIGHT		= 180;
+const int ABOUT_MIN_TEXT_W	= 340;
+const int BUTTON_WIDTH		= 84;
+const int BUTTON_HEIGHT		= 28;
+const int BUTTON_GAP		= 12;
 
 const int ID_BUTTON_URL		= 3000;
+
+static HBRUSH s_aboutBgBrush(COLORREF color)
+{
+	static HBRUSH brush = nullptr;
+	static COLORREF cached = CLR_INVALID;
+	if (!brush || cached != color)
+	{
+		if (brush)
+			DeleteObject(brush);
+		brush = CreateSolidBrush(color);
+		cached = color;
+	}
+	return brush;
+}
+
+static int s_measureWrappedTextHeight(HDC hdc, HFONT hfont, const wchar_t * text, int maxWidth)
+{
+	if (!hdc || !text || !*text || maxWidth <= 0)
+		return 0;
+	HGDIOBJ prev = hfont ? SelectObject(hdc, hfont) : nullptr;
+	RECT rc = { 0, 0, maxWidth, 0 };
+	DrawTextW(hdc, text, -1, &rc, DT_CALCRECT | DT_WORDBREAK | DT_NOPREFIX);
+	if (prev)
+		SelectObject(hdc, prev);
+	return rc.bottom - rc.top;
+}
+
+static int s_measureSingleLineWidth(HDC hdc, HFONT hfont, const wchar_t * text)
+{
+	if (!hdc || !text || !*text)
+		return 0;
+	HGDIOBJ prev = hfont ? SelectObject(hdc, hfont) : nullptr;
+	RECT rc = { 0, 0, 0, 0 };
+	DrawTextW(hdc, text, -1, &rc, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
+	if (prev)
+		SelectObject(hdc, prev);
+	return rc.right - rc.left;
+}
 
 // Windows 11 draws themed static controls with their own fill. A blank
 // theme makes them use the brush we return from WM_CTLCOLORSTATIC.
@@ -106,7 +139,7 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 {
 	// raise the dialog
 	XAP_Win32App * pWin32App = static_cast<XAP_Win32App *>(XAP_App::getApp());
-    UT_Win32LocaleString str, strbis;
+	UT_Win32LocaleString strbis;
 	m_pFrame = pFrame;
 
 	UT_ByteBufPtr pBB(new UT_ByteBuf(g_pngSidebar_sizeof));
@@ -148,28 +181,129 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 		}
 	}
 
-	const int aboutW     = MulDiv(ABOUT_WIDTH, scale, 96);
-	const int aboutH     = MulDiv(ABOUT_HEIGHT, scale, 96);
-	const int btnW       = MulDiv(BUTTON_WIDTH, scale, 96);
+	const int btnMinW    = MulDiv(BUTTON_WIDTH, scale, 96);
 	const int btnH       = MulDiv(BUTTON_HEIGHT, scale, 96);
 	const int btnGap     = MulDiv(BUTTON_GAP, scale, 96);
-	const int headingH   = MulDiv(HEADING_HEIGHT, scale, 96);
-	const int versionH   = MulDiv(VERSION_HEIGHT, scale, 96);
-	const int copyrightH = MulDiv(COPYRIGHT_HEIGHT, scale, 96);
-	const int gplH       = MulDiv(GPL_HEIGHT, scale, 96);
 	const int sidebarW   = MulDiv(iImageWidth, scale, 96);
 	const int sidebarH   = MulDiv(iImageHeight, scale, 96);
-	
+	const int padSmall   = MulDiv(6, scale, 96);
+	const int textColW   = MulDiv(ABOUT_MIN_TEXT_W, scale, 96);
+
+	LOGFONTW lf;
+	memset(&lf, 0, sizeof(lf));
+	wcscpy(lf.lfFaceName, L"Segoe UI");
+	lf.lfQuality = CLEARTYPE_QUALITY;
+
+	// A point size is a negative character height. 9 pt is the Windows UI size.
+	lf.lfHeight = -MulDiv(9, scale, 72);
+	lf.lfWeight = FW_NORMAL;
+	HFONT hfontPrimary = CreateFontIndirectW(&lf);
+
+	lf.lfHeight = -MulDiv(9, scale, 72);
+	lf.lfWeight = FW_NORMAL;
+	HFONT hfontSmall = CreateFontIndirectW(&lf);
+
+	lf.lfHeight = -MulDiv(20, scale, 72);
+	lf.lfWeight = FW_SEMIBOLD;
+	HFONT hfontHeading = CreateFontIndirectW(&lf);
+
+	const XAP_StringSet* pSS = XAP_App::getApp()->getStringSet();
+
+	UT_Win32LocaleString strTitleFmt, strAppName, strOK, strHeading, strVersion, strCopyright, strUSP;
+	strTitleFmt.fromUTF8(pSS->getValue(XAP_STRING_ID_DLG_ABOUT_Title));
+	strAppName.fromASCII(XAP_App::getApp()->getApplicationName());
+	wchar_t titleBuf[1024];
+	// The Microsoft swprintf has no size argument. The format comes from
+	// the translation catalog, so keep the write inside titleBuf.
+	_snwprintf(titleBuf, G_N_ELEMENTS(titleBuf), strTitleFmt.c_str(), strAppName.c_str());
+	titleBuf[G_N_ELEMENTS(titleBuf) - 1] = 0;
+
+	strOK.fromUTF8(pSS->getValue(XAP_STRING_ID_DLG_OK));
+	strHeading.fromUTF8(XAP_App::getApp()->getApplicationName());
+
+	const char * versiontext = pSS->getValue(XAP_STRING_ID_DLG_ABOUT_Version);
+	UT_UTF8String version = UT_UTF8String_sprintf(versiontext, XAP_App::s_szBuild_Version);
+	strVersion.fromUTF8(version.utf8_str());
+
+	strCopyright.fromASCII(XAP_ABOUT_COPYRIGHT);
+
+	wchar_t gplBuf[1024];
+	strbis.fromASCII(XAP_ABOUT_GPL_LONG);
+	_snwprintf(gplBuf, G_N_ELEMENTS(gplBuf), strbis.c_str(), strAppName.c_str());
+	gplBuf[G_N_ELEMENTS(gplBuf) - 1] = 0;
+
+	XAP_Frame * pLastFrame = pWin32App->getLastFocussedFrame();
+	AV_View * pLastView = pLastFrame ? pLastFrame->getCurrentView() : nullptr;
+	GR_Graphics * pLastG = pLastView ? pLastView->getGraphics() : nullptr;
+	const bool haveUSP = (pLastG && pLastG->getClassId() == GRID_WIN32_UNISCRIBE);
+	if (haveUSP)
+	{
+		GR_Win32USPGraphics * pUSP = static_cast<GR_Win32USPGraphics*>(pLastG);
+		strUSP.fromASCII(pUSP->getUSPVersion());
+	}
+
+	const wchar_t * const kUrlLabel = L"www.abisource.com";
+	int headingH   = MulDiv(36, scale, 96);
+	int versionH   = MulDiv(24, scale, 96);
+	int copyrightH = MulDiv(36, scale, 96);
+	int gplH       = MulDiv(220, scale, 96);
+	int uspH       = MulDiv(18, scale, 96);
+	int okBtnW     = btnMinW;
+	int urlBtnW    = btnMinW * 2;
+
+	HDC measureDc = GetDC(nullptr);
+	if (measureDc)
+	{
+		const int mHeading   = s_measureWrappedTextHeight(measureDc, hfontHeading, strHeading.c_str(), textColW);
+		const int mVersion   = s_measureWrappedTextHeight(measureDc, hfontPrimary, strVersion.c_str(), textColW);
+		const int mCopyright = s_measureWrappedTextHeight(measureDc, hfontPrimary, strCopyright.c_str(), textColW);
+		const int mGpl       = s_measureWrappedTextHeight(measureDc, hfontSmall, gplBuf, textColW);
+		if (mHeading > 0)   headingH   = mHeading + padSmall;
+		if (mVersion > 0)   versionH   = mVersion + padSmall;
+		if (mCopyright > 0) copyrightH = mCopyright + padSmall;
+		if (mGpl > 0)       gplH       = mGpl + padSmall;
+		if (haveUSP)
+		{
+			const int mUsp = s_measureWrappedTextHeight(measureDc, hfontSmall, strUSP.c_str(), sidebarW > btnGap ? (sidebarW - btnGap) : textColW);
+			if (mUsp > 0) uspH = mUsp + padSmall / 2;
+		}
+		const int mOkW  = s_measureSingleLineWidth(measureDc, hfontPrimary, strOK.c_str()) + 2 * btnGap;
+		const int mUrlW = s_measureSingleLineWidth(measureDc, hfontPrimary, kUrlLabel) + 2 * btnGap;
+		if (mOkW > okBtnW)   okBtnW  = mOkW;
+		if (mUrlW > urlBtnW) urlBtnW = mUrlW;
+		ReleaseDC(nullptr, measureDc);
+	}
+
+	const int minBtnRowW = okBtnW + urlBtnW + btnGap;
+	const int effectiveTextW = (textColW > minBtnRowW) ? textColW : minBtnRowW;
+	const int clientW = sidebarW + effectiveTextW + 2 * btnGap;
+	const int yHeading   = btnGap;
+	const int yVersion   = yHeading + headingH + padSmall;
+	const int yCopyright = yVersion + versionH + padSmall;
+	const int yGpl       = yCopyright + copyrightH + padSmall;
+	const int contentBottom = yGpl + gplH + btnGap + btnH + btnGap;
+	const int sidebarMinH   = sidebarH + 2 * btnGap;
+	const int clientH = (contentBottom > sidebarMinH) ? contentBottom : sidebarMinH;
+
+	const DWORD dwStyle = WS_OVERLAPPED | WS_CAPTION | WS_SYSMENU;
+	RECT rcAdjusted = { 0, 0, clientW, clientH };
+	AdjustWindowRectEx(&rcAdjusted, dwStyle, FALSE, 0);
+	const int aboutW = rcAdjusted.right - rcAdjusted.left;
+	const int aboutH = rcAdjusted.bottom - rcAdjusted.top;
+
 	m_pGrImageSidebar = new GR_Win32Image(nullptr);
 	m_pGrImageSidebar->convertFromBuffer(pBB, "image/png", sidebarW, sidebarH);
 
 	const wchar_t * pClassName = L"AbiSource_About";
 	
 	ATOM a = UT_RegisterClassEx(CS_HREDRAW | CS_VREDRAW, s_dlgProc, pWin32App->getInstance(),
-								nullptr, LoadCursorW(nullptr, (LPCWSTR)IDC_ARROW), GetSysColorBrush(COLOR_BTNFACE), nullptr,
+								nullptr, LoadCursorW(nullptr, (LPCWSTR)IDC_ARROW), nullptr, nullptr,
 								nullptr, pClassName);
 	if (!a)
 	{
+		DeleteObject(hfontHeading);
+		DeleteObject(hfontPrimary);
+		DeleteObject(hfontSmall);
 		::MessageBeep(MB_ICONEXCLAMATION);
 		return;
 	}
@@ -207,18 +341,9 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	BringWindowToTop(hWndFrame);
 	pWin32App->enableAllTopLevelWindows(FALSE);
 
-	wchar_t buf[1024];
-	const XAP_StringSet*  pSS = XAP_App::getApp()->getStringSet();
-	str.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_ABOUT_Title));
-	strbis.fromASCII (XAP_App::getApp()->getApplicationName());
-	// The Microsoft swprintf has no size argument. The format comes from
-	// the translation catalog, so keep the write inside buf.
-	_snwprintf(buf, G_N_ELEMENTS(buf), str.c_str(), strbis.c_str());
-	buf[G_N_ELEMENTS(buf) - 1] = 0;
-
 	HWND hwndAbout = UT_CreateWindowEx(	0L, pClassName,
-										buf,
-										WS_OVERLAPPED,
+										titleBuf,
+										dwStyle,
 										rcScreen.left + (iScreenWidth - aboutW) / 2,
 										rcScreen.top + (iScreenHeight - aboutH) / 2,
 										aboutW,
@@ -229,6 +354,9 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 										nullptr);
 	if (!hwndAbout)
 	{
+		DeleteObject(hfontHeading);
+		DeleteObject(hfontPrimary);
+		DeleteObject(hfontSmall);
 		UnregisterClassW(pClassName, pWin32App->getInstance());
 		pWin32App->enableAllTopLevelWindows(true);
 		::MessageBeep(MB_ICONEXCLAMATION);
@@ -236,50 +364,51 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	}
 
 	SetWindowLongPtrW(hwndAbout, GWLP_USERDATA, (LONG_PTR)this);
+	UT_Win32ApplyCaptionTheme(hwndAbout);
 
 	RECT rcClient = {};
-	// GetClientRect leaves the rectangle untouched on failure.
-	// aboutW and aboutH are the window size used to create it.
-	int iWidth = aboutW;
-	int iHeight = aboutH;
+	int iWidth = clientW;
+	int iHeight = clientH;
 	if (GetClientRect(hwndAbout, &rcClient) && rcClient.right > 0 && rcClient.bottom > 0)
 	{
 		iWidth = rcClient.right;
 		iHeight = rcClient.bottom;
 	}
+	const int textX = sidebarW + btnGap;
+	const int actualTextW = (iWidth > textX + btnGap) ? (iWidth - textX - btnGap) : effectiveTextW;
 	
-	str.fromUTF8 (pSS->getValue(XAP_STRING_ID_DLG_OK));		
 	HWND hwndOK = CreateWindowW(L"BUTTON",
-							   str.c_str(),
+							   strOK.c_str(),
 							   WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-							   iWidth - btnW - btnGap,
+							   iWidth - okBtnW - btnGap,
 							   iHeight - btnH - btnGap,
-							   btnW,
+							   okBtnW,
 							   btnH,
 							   hwndAbout,
 							   (HMENU) IDOK,
 							   pWin32App->getInstance(),
 							   nullptr);
+	UT_Win32ApplyWindowTheme(hwndOK);
 
 	HWND hwndURL = CreateWindowW(L"BUTTON",
-								L"www.abisource.com",
+								kUrlLabel,
 								WS_CHILD | WS_VISIBLE | WS_TABSTOP,
-								iWidth - btnW - btnGap - 2*btnW - btnGap,
+								iWidth - okBtnW - btnGap - urlBtnW - btnGap,
 								iHeight - btnH - btnGap,
-								btnW*2,
+								urlBtnW,
 								btnH,
 								hwndAbout,
 								(HMENU) ID_BUTTON_URL,
 								pWin32App->getInstance(),
 								nullptr);
+	UT_Win32ApplyWindowTheme(hwndURL);
 
-    str.fromUTF8 (XAP_App::getApp()->getApplicationName());
 	HWND hwndStatic_Heading = CreateWindowW(L"STATIC",
-										   str.c_str(),
+										   strHeading.c_str(),
 										   WS_CHILD | WS_VISIBLE | SS_CENTER,
-										   sidebarW,
-										   btnGap,
-										   iWidth - sidebarW,
+										   textX,
+										   yHeading,
+										   actualTextW,
 										   headingH,
 										   hwndAbout,
 										   (HMENU) 3001,
@@ -287,16 +416,12 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 										   nullptr);
 	turnOffVisualTheme(hwndStatic_Heading);
 
-	const char *versiontext=pSS->getValue(XAP_STRING_ID_DLG_ABOUT_Version);
-	UT_UTF8String version = UT_UTF8String_sprintf(versiontext,XAP_App::s_szBuild_Version);
-	str.fromUTF8(version.utf8_str());
-   
 	HWND hwndStatic_Version = CreateWindowW(L"STATIC",
-										   str.c_str(),
+										   strVersion.c_str(),
 										   WS_CHILD | WS_VISIBLE | SS_CENTER,
-										   sidebarW + btnGap,
-										   btnGap + headingH + btnGap,
-										   iWidth - 2*btnGap - sidebarW,
+										   textX,
+										   yVersion,
+										   actualTextW,
 										   versionH,
 										   hwndAbout,
 										   (HMENU) 3002,
@@ -304,13 +429,12 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 										   nullptr);
 	turnOffVisualTheme(hwndStatic_Version);
 
-    str.fromASCII (XAP_ABOUT_COPYRIGHT);
 	HWND hwndStatic_Copyright = CreateWindowW(L"STATIC",
-											 str.c_str(),
+											 strCopyright.c_str(),
 											 WS_CHILD | WS_VISIBLE | SS_LEFT,
-											 sidebarW + btnGap,
-											 btnGap + headingH + btnGap + versionH + btnGap,
-											 iWidth - 2*btnGap - sidebarW,
+											 textX,
+											 yCopyright,
+											 actualTextW,
 											 copyrightH,
 											 hwndAbout,
 											 (HMENU) 3003,
@@ -318,16 +442,12 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 											 nullptr);
 	turnOffVisualTheme(hwndStatic_Copyright);
 
-    str.fromASCII (XAP_App::getApp()->getApplicationName());
-	strbis.fromASCII (XAP_ABOUT_GPL_LONG);
-	_snwprintf(buf, G_N_ELEMENTS(buf), strbis.c_str(), str.c_str());
-	buf[G_N_ELEMENTS(buf) - 1] = 0;
 	HWND hwndStatic_GPL = CreateWindowW(L"STATIC",
-									   buf,
+									   gplBuf,
 									   WS_CHILD | WS_VISIBLE | SS_LEFT,
-									   sidebarW + btnGap,
-									   btnGap + headingH + btnGap + versionH + btnGap + copyrightH + btnGap,
-									   iWidth - 2*btnGap - sidebarW,
+									   textX,
+									   yGpl,
+									   actualTextW,
 									   gplH,
 									   hwndAbout,
 									   (HMENU) 3004,
@@ -336,49 +456,21 @@ void XAP_Win32Dialog_About::runModal(XAP_Frame * pFrame)
 	turnOffVisualTheme(hwndStatic_GPL);
 
 	HWND hwndStatic_USP_Version = nullptr;
-
-	XAP_Frame * pLastFrame = pWin32App->getLastFocussedFrame();
-	AV_View * pLastView = pLastFrame ? pLastFrame->getCurrentView() : nullptr;
-	GR_Graphics * pLastG = pLastView ? pLastView->getGraphics() : nullptr;
-	if (pLastG && pLastG->getClassId() == GRID_WIN32_UNISCRIBE)
+	if (haveUSP)
 	{
-		GR_Win32USPGraphics * pUSP = static_cast<GR_Win32USPGraphics*>(pLastG);
-
-		str.fromASCII (pUSP->getUSPVersion());
 		hwndStatic_USP_Version = CreateWindowW(L"STATIC",
-												   str.c_str(),
+												   strUSP.c_str(),
 												   WS_CHILD | WS_VISIBLE | SS_LEFT,
-												   btnGap/2,
- 				   								   iHeight - 3*btnH/4,
-												   sidebarW - btnGap/2,
-												   3*btnH/4,
+												   btnGap / 2,
+												   iHeight - uspH - padSmall,
+												   sidebarW > btnGap / 2 ? (sidebarW - btnGap / 2) : sidebarW,
+												   uspH,
 												   hwndAbout,
 												   (HMENU) 3005,
 												   pWin32App->getInstance(),
 												   nullptr);
 		turnOffVisualTheme(hwndStatic_USP_Version);
-	
-		
 	}
-	
-	LOGFONTW lf;
-	memset(&lf, 0, sizeof(lf));
-
-	wcscpy(lf.lfFaceName, L"Segoe UI");
-	lf.lfQuality = CLEARTYPE_QUALITY;
-
-	// A point size is a negative character height. 9 pt is the Windows UI size.
-	lf.lfHeight = -MulDiv(9, scale, 72);
-	lf.lfWeight = FW_NORMAL;
-	HFONT hfontPrimary = CreateFontIndirectW(&lf);
-
-	lf.lfHeight = -MulDiv(9, scale, 72);
-	lf.lfWeight = FW_NORMAL;
-	HFONT hfontSmall = CreateFontIndirectW(&lf);
-
-	lf.lfHeight = -MulDiv(20, scale, 72);
-	lf.lfWeight = FW_SEMIBOLD;
-	HFONT hfontHeading = CreateFontIndirectW(&lf);
 	
 	SendMessageW(hwndStatic_Heading, WM_SETFONT, (WPARAM) hfontHeading, 0);
 
@@ -566,14 +658,16 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 	{
 	case WM_ERASEBKGND:
 	{
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
 		RECT r = {};
 		if (wParam && GetClientRect(hWnd, &r))
-			FillRect((HDC)wParam, &r, GetSysColorBrush(COLOR_BTNFACE));
+			FillRect((HDC)wParam, &r, s_aboutBgBrush(tc.chromeBg));
 		return 1;
 	}
 
 	case WM_CTLCOLORSTATIC:
 	{
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
 		HDC hdcCtrl = (HDC)wParam;
 		HWND hwndCtrl = (HWND)lParam;
 		RECT rcCtrl = {};
@@ -582,7 +676,7 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 		if (placed)
 			MapWindowPoints(nullptr, hWnd, reinterpret_cast<POINT *>(&rcCtrl), 2);
 		int imageWidth = pThis->m_pGrImageSidebar ? pThis->m_pGrImageSidebar->getDisplayWidth() : 0;
-		SetTextColor(hdcCtrl, GetSysColor(COLOR_BTNTEXT));
+		SetTextColor(hdcCtrl, tc.text);
 		// The version string sits on the sidebar picture. The other
 		// labels use the same face color as the rest of the window.
 		if (placed && rcCtrl.left < imageWidth)
@@ -590,13 +684,14 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 			SetBkMode(hdcCtrl, TRANSPARENT);
 			return (LRESULT)GetStockObject(HOLLOW_BRUSH);
 		}
-		SetBkColor(hdcCtrl, GetSysColor(COLOR_BTNFACE));
+		SetBkColor(hdcCtrl, tc.chromeBg);
 		SetBkMode(hdcCtrl, OPAQUE);
-		return (LRESULT)GetSysColorBrush(COLOR_BTNFACE);
+		return (LRESULT)s_aboutBgBrush(tc.chromeBg);
 	}
 
 	case WM_PAINT:
 	{
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
 		if (!hdc)
@@ -611,7 +706,7 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 			EndPaint(hWnd, &ps);
 			return 0;
 		}
-		FillRect(hdc, &r, GetSysColorBrush(COLOR_BTNFACE));
+		FillRect(hdc, &r, s_aboutBgBrush(tc.chromeBg));
 		GR_Win32Image * pImage = pThis->m_pGrImageSidebar;
 		BITMAPINFO * pDIB = pImage ? pImage->getDIB() : nullptr;
 		if (pImage && pDIB)
@@ -656,6 +751,7 @@ LRESULT CALLBACK XAP_Win32Dialog_About::s_dlgProc(HWND hWnd,UINT msg,WPARAM wPar
 	case WM_COMMAND:
 		return pThis->_onCommand(hWnd,wParam,lParam);
 
+	case WM_CLOSE:
 	case WM_DESTROY:
 		s_bEventLoopDone = true;
 		return 0;

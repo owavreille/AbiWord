@@ -819,11 +819,12 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 				// get the current menu info for this item.
 				
 				MENUITEMINFOW mif;
+				memset(&mif, 0, sizeof(mif));
 				wchar_t bufMIF[128];
 				mif.cbSize = sizeof(mif);
 				mif.dwTypeData = bufMIF;
 				mif.cch = G_N_ELEMENTS(bufMIF)-1;
-				mif.fMask = MIIM_STATE | MIIM_TYPE | MIIM_ID;
+				mif.fMask = MIIM_STATE | MIIM_STRING | MIIM_ID;
 				BOOL bPresent = GetMenuItemInfoW(hMenuBar,cmd,FALSE,&mif);
 
 				// this item has a dynamic label...
@@ -860,10 +861,14 @@ bool EV_Win32Menu::onInitMenu(XAP_Frame * pFrame, AV_View * pView, HWND /*hWnd*/
 							//UT_DEBUGMSG(("Menu changing text->%s\n",szLabelName));
 							if (UT_IsWinVista()) 
 							{
-								mif.fState = uCheck | uEnable | uBold;
-								mif.fType = MFT_STRING;
-								mif.dwTypeData = (LPWSTR)szLabelName;
-								SetMenuItemInfoW (hMenuBar,cmd,FALSE,&mif);
+								// Use MIIM_STRING (not legacy MIIM_TYPE) so hbmpItem is preserved.
+								MENUITEMINFOW mifUpdate;
+								memset(&mifUpdate, 0, sizeof(mifUpdate));
+								mifUpdate.cbSize = sizeof(mifUpdate);
+								mifUpdate.fMask = MIIM_STATE | MIIM_STRING;
+								mifUpdate.fState = uCheck | uEnable | uBold;
+								mifUpdate.dwTypeData = (LPWSTR)szLabelName;
+								SetMenuItemInfoW (hMenuBar,cmd,FALSE,&mifUpdate);
 							}
 							break;
 						}
