@@ -1116,6 +1116,8 @@ bool EV_Win32Toolbar::synthesize(void)
 							SendMessageW(hwndEdit, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)0);
 						HFONT hComboFont = toolbarUIFont(dpi);
 						SendMessageW(hwndCombo, WM_SETFONT, (WPARAM)hComboFont, MAKELPARAM(TRUE, 0));
+						SendMessageW(hwndCombo, CB_SETITEMHEIGHT, static_cast<WPARAM>(-1),
+							UT_ui_px_at_dpi(18, dpi));
 						if (id == AP_TOOLBAR_ID_FMT_FONT)
 							SendMessageW(hwndCombo, CB_SETITEMHEIGHT, 0,
 								UT_ui_px_at_dpi(22, dpi));
@@ -1379,6 +1381,8 @@ void EV_Win32Toolbar::_placeControls(void)
 		UT_Win32ApplyWindowTheme(hwndCtrl);
 		const int dpi = toolbarIconDpi(m_hwnd);
 		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(dpi), TRUE);
+		SendMessageW(hwndCtrl, CB_SETITEMHEIGHT, static_cast<WPARAM>(-1),
+			UT_ui_px_at_dpi(18, dpi));
 		if (id == AP_TOOLBAR_ID_FMT_FONT)
 			SendMessageW(hwndCtrl, CB_SETITEMHEIGHT, 0,
 				UT_ui_px_at_dpi(22, dpi));
@@ -1677,15 +1681,11 @@ LRESULT EV_Win32Toolbar::onCustomDraw(LPNMTBCUSTOMDRAW lpcd)
 		}
 
 		const XAP_Toolbar_Id id = ItemIdFromWmCommand(cmd);
-		const bool isColorBtn = (id == AP_TOOLBAR_ID_COLOR_FORE || id == AP_TOOLBAR_ID_COLOR_BACK);
-		const int barH = isColorBtn ? UT_ui_px_at_dpi(3, dpi) : 0;
 
 		if (m_imageList && m_iconPx > 0 && tbb.iBitmap >= 0)
 		{
 			const int iconX = contentRc.left + ((contentRc.right - contentRc.left) - m_iconPx) / 2;
-			int iconY = contentRc.top + ((contentRc.bottom - contentRc.top) - m_iconPx) / 2;
-			if (isColorBtn)
-				iconY -= UT_ui_px_at_dpi(1, dpi);
+			const int iconY = contentRc.top + ((contentRc.bottom - contentRc.top) - m_iconPx) / 2;
 
 			HIMAGELIST himl = static_cast<HIMAGELIST>(m_imageList);
 			if (disabled)
@@ -1696,58 +1696,6 @@ LRESULT EV_Win32Toolbar::onCustomDraw(LPNMTBCUSTOMDRAW lpcd)
 			else
 			{
 				ImageList_Draw(himl, tbb.iBitmap, hdc, iconX, iconY, ILD_TRANSPARENT);
-			}
-
-			if (isColorBtn && m_pWin32Frame)
-			{
-				XAP_Win32FrameImpl * fimpl = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl());
-				const char * colorStr = nullptr;
-				if (fimpl)
-				{
-					colorStr = (id == AP_TOOLBAR_ID_COLOR_BACK)
-						? fimpl->m_sColorBack.utf8_str()
-						: fimpl->m_sColorFore.utf8_str();
-				}
-
-				bool transparent = false;
-				COLORREF indicator = (id == AP_TOOLBAR_ID_COLOR_BACK) ? RGB(0xFF, 0xF2, 0x00) : RGB(0x00, 0x00, 0x00);
-				if (colorStr && colorStr[0])
-				{
-					if (g_ascii_strcasecmp(colorStr, "transparent") == 0)
-					{
-						transparent = true;
-					}
-					else
-					{
-						UT_RGBColor rgb;
-						UT_parseColor(colorStr, rgb);
-						if (rgb.isTransparent())
-							transparent = true;
-						else
-							indicator = RGB(rgb.m_red, rgb.m_grn, rgb.m_blu);
-					}
-				}
-				else if (id == AP_TOOLBAR_ID_COLOR_BACK)
-				{
-					transparent = true;
-				}
-
-				RECT barRc;
-				barRc.left = iconX;
-				barRc.right = iconX + m_iconPx;
-				barRc.bottom = pillRc.bottom - UT_ui_px_at_dpi(2, dpi);
-				barRc.top = barRc.bottom - barH;
-				if (barRc.right > barRc.left && barRc.bottom > barRc.top)
-				{
-					COLORREF prevBarBrush = SetDCBrushColor(hdc, transparent ? tc.surfaceBg : indicator);
-					FillRect(hdc, &barRc, dcBrush);
-					if (transparent)
-					{
-						SetDCBrushColor(hdc, tc.controlBorder);
-						FrameRect(hdc, &barRc, dcBrush);
-					}
-					SetDCBrushColor(hdc, prevBarBrush);
-				}
 			}
 		}
 		else if (m_pToolbarLabelSet)
