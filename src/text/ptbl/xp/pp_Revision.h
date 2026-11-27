@@ -75,8 +75,14 @@ class ABI_EXPORT PP_Revision: public PP_AttrProp
 	const gchar * getPropsString() const;
 	const gchar * getAttrsString() const;
 
-	// this is intentionally not virtual (no need for that)
-	bool	setAttributes(const std::vector<std::string> & attributes);
+	// these are intentionally not virtual (matching PP_AttrProp)
+	bool	setAttributes(const PP_PropertyVector & attributes);
+	bool	setProperties(const PP_PropertyVector & properties);
+	bool	setAttribute(const gchar * szName, const gchar * szValue);
+	bool	setAttribute(const gchar * szName, const std::string & value) {
+		return setAttribute(szName, value.c_str());
+	}
+	bool	setProperty(const std::string & name, const std::string & value);
 
 	bool operator == (const PP_Revision &op2) const;
 

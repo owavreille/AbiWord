@@ -139,7 +139,38 @@ bool PP_Revision::setAttributes(const PP_PropertyVector & attributes)
 		return false;
 	}
 
+	m_bDirty = true;
 	return _handleNestedRevAttr();
+}
+
+bool PP_Revision::setProperties(const PP_PropertyVector & properties)
+{
+	if(!PP_AttrProp::setProperties(properties)) {
+		return false;
+	}
+
+	m_bDirty = true;
+	return true;
+}
+
+bool PP_Revision::setAttribute(const gchar * szName, const gchar * szValue)
+{
+	if(!PP_AttrProp::setAttribute(szName, szValue)) {
+		return false;
+	}
+
+	m_bDirty = true;
+	return true;
+}
+
+bool PP_Revision::setProperty(const std::string & name, const std::string & value)
+{
+	if(!PP_AttrProp::setProperty(name, value)) {
+		return false;
+	}
+
+	m_bDirty = true;
+	return true;
 }
 
 
@@ -371,6 +402,8 @@ bool PP_Revision::operator == (const PP_Revision &op2) const
 /*! create class instance from an XML attribute string
  */
 PP_RevisionAttr::PP_RevisionAttr(const gchar * r):
+	m_bDirty(true),
+	m_iSuperfluous(0),
 	m_pLastRevision(nullptr)
 {
 	_init(r);
@@ -452,7 +485,7 @@ void PP_RevisionAttr::_init(const gchar *r)
 
 	while(t)
 	{
-		next_s = next_s + strlen(t) + 1; // 1 for the token separator
+		next_s = t + strlen(t) + 1; // 1 for the token separator
 
 		if(*t == '!')
 		{
@@ -970,6 +1003,7 @@ void PP_RevisionAttr::addRevision(UT_uint32 iId, PP_RevisionType eType,
 				// the new ones
 				r->setProperties(pProps);
 				r->setAttributes(pAttrs);
+				r->setType(PP_REVISION_ADDITION_AND_FMT);
 			}
 			else if((eType == PP_REVISION_FMT_CHANGE) && (r_type == PP_REVISION_ADDITION_AND_FMT))
 			{

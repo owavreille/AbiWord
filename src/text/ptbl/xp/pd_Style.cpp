@@ -46,6 +46,8 @@ bool PD_Style::setIndexAP(PT_AttrPropIndex indexAP)
 	// TODO: may need to rebind, handle undo, clear caches, etc.
 
 	m_indexAP = indexAP;
+	m_pBasedOn = nullptr;
+	m_pFollowedBy = nullptr;
 
 	return true;
 }

@@ -158,7 +158,13 @@ XAP_Win32FrameImpl::~XAP_Win32FrameImpl(void)
 
 	// have to reset the window long, so our message functions do not
 	// try to derefernce it
-	SetWindowLongPtrW(m_hwndFrame, GWLP_USERDATA,0);
+	if (m_hwndFrame && IsWindow(m_hwndFrame))
+	{
+		RevokeDragDrop(m_hwndFrame);
+		SetWindowLongPtrW(m_hwndFrame, GWLP_USERDATA, 0);
+		DestroyWindow(m_hwndFrame);
+	}
+	m_hwndFrame = nullptr;
 }
 
 
@@ -233,16 +239,27 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 		iPosX = CW_USEDEFAULT;
 		iPosY = CW_USEDEFAULT;
 	} else {
-		// Ensure the window fits current desktop area
-		RECT rcDesktop, rcWindow;
-#if (_WIN32_WINNT >= 0x0500)
-		rcDesktop.left=rcDesktop.right=0;
+		// Ensure the window fits current desktop area.
+		// GetWindowPlacement stores workspace coordinates (offset from the
+		// primary monitor's work-area origin), whereas MonitorFromRect,
+		// MONITORINFO::rcWork, and SPI_GETWORKAREA use screen coordinates.
+		RECT rcDesktop = {}, rcPrimaryWork = {}, rcWindow = {};
+		const bool havePrimaryWork =
+			(SystemParametersInfoW(SPI_GETWORKAREA, 0, &rcPrimaryWork, 0) != 0);
+		const LONG workOffsetX = havePrimaryWork ? rcPrimaryWork.left : 0;
+		const LONG workOffsetY = havePrimaryWork ? rcPrimaryWork.top : 0;
 
+		LONG screenX = static_cast<LONG>(iPosX) + workOffsetX;
+		LONG screenY = static_cast<LONG>(iPosY) + workOffsetY;
+
+#if (_WIN32_WINNT >= 0x0500)
 		if (GetSystemMetrics(SM_CMONITORS)>1) {
 			HMONITOR m;
 			MONITORINFO mif;
-			SetRect(&rcWindow,iPosX,iPosY,iPosX+iWidth,iPosY+iHeight);
-			if ((m = MonitorFromRect(&rcWindow, MONITOR_DEFAULTTONEAREST))) {;
+			SetRect(&rcWindow, screenX, screenY,
+					screenX + static_cast<LONG>(iWidth),
+					screenY + static_cast<LONG>(iHeight));
+			if ((m = MonitorFromRect(&rcWindow, MONITOR_DEFAULTTONEAREST))) {
 				mif.cbSize=sizeof(MONITORINFO);
 				if (GetMonitorInfoW(m,&mif)) {
 					rcDesktop=mif.rcWork;
@@ -252,17 +269,25 @@ void XAP_Win32FrameImpl::_createTopLevelWindow(void)
 
 		if (rcDesktop.left==rcDesktop.right)
 #endif
-			if (!SystemParametersInfoW(SPI_GETWORKAREA,0,&rcDesktop,0))
+		{
+			if (havePrimaryWork)
+				rcDesktop = rcPrimaryWork;
+			else
 				SetRect(&rcDesktop,0,0,GetSystemMetrics(SM_CXSCREEN),GetSystemMetrics(SM_CYSCREEN));
+		}
 
 		if (static_cast<LONG>(iWidth) > (rcDesktop.right-rcDesktop.left)) iWidth=rcDesktop.right-rcDesktop.left;
 		if (static_cast<LONG>(iHeight) > (rcDesktop.bottom-rcDesktop.top)) iHeight=rcDesktop.bottom-rcDesktop.top;
 
-		if (static_cast<LONG>(iPosX)+static_cast<LONG>(iWidth) > rcDesktop.right) iPosX=rcDesktop.right-iWidth;
-		if (static_cast<LONG>(iPosY)+static_cast<LONG>(iHeight) > rcDesktop.bottom) iPosY=rcDesktop.bottom-iHeight;
+		if (screenX + static_cast<LONG>(iWidth) > rcDesktop.right) screenX = rcDesktop.right - static_cast<LONG>(iWidth);
+		if (screenY + static_cast<LONG>(iHeight) > rcDesktop.bottom) screenY = rcDesktop.bottom - static_cast<LONG>(iHeight);
 
-		if (iPosX < rcDesktop.left) iPosX=rcDesktop.left;
-		if (iPosY < rcDesktop.top)  iPosY=rcDesktop.top;
+		if (screenX < rcDesktop.left) screenX = rcDesktop.left;
+		if (screenY < rcDesktop.top)  screenY = rcDesktop.top;
+
+		// Convert clamped screen coordinates back to workspace coordinates for SetWindowPlacement.
+		iPosX = static_cast<UT_sint32>(screenX - workOffsetX);
+		iPosY = static_cast<UT_sint32>(screenY - workOffsetY);
 	}
 	/* let Windows(R) place the Window for all but 1st one, for stairstep effect */
 	// GetWindowPlacement stores workspace coordinates. CreateWindowEx
@@ -571,6 +596,10 @@ void XAP_Win32FrameImpl::_refreshChrome(void)
 	{
 		UT_Win32ApplyWindowTheme(m_hwndStatusBar);
 		UT_Win32RefreshStatusFont(m_hwndStatusBar);
+		SendMessageW(m_hwndStatusBar, WM_SIZE, 0, 0);
+		RECT statusRect = {};
+		if (GetClientRect(m_hwndStatusBar, &statusRect) && statusRect.bottom > statusRect.top)
+			m_iStatusBarHeight = statusRect.bottom - statusRect.top;
 		AP_Win32StatusBar * bar = reinterpret_cast<AP_Win32StatusBar *>(
 			GetWindowLongPtrW(m_hwndStatusBar, GWLP_USERDATA));
 		if (bar)
@@ -816,7 +845,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 			XAP_Win32App *pWin32App = static_cast<XAP_Win32App *>(XAP_App::getApp());
 			UT_ASSERT( pWin32App );
 
-			if(pWin32App)
+			if (pWin32App && pWin32App->getHKL())
 			{
 				ActivateKeyboardLayout(pWin32App->getHKL(),0);
 			}
@@ -1316,7 +1345,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 					if(uri)
 						errorCode = pNewFrame->loadDocument(uri, IEFT_Unknown);
 
-					if (errorCode != UT_OK)
+					if (!UT_IS_IE_SUCCESS(errorCode))
 					{
 						if (f != pNewFrame)
 						{
@@ -1333,7 +1362,8 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 
 				if (errorCode != UT_OK)
 				{
-				    s_CouldNotLoadFileMessage(f, uri ? uri : str.utf8_str().utf8_str(), errorCode);
+					XAP_Frame * pMsgFrame = (UT_IS_IE_SUCCESS(errorCode) && pNewFrame) ? pNewFrame : f;
+					s_CouldNotLoadFileMessage(pMsgFrame, uri ? uri : str.utf8_str().utf8_str(), errorCode);
 				}
 				g_free(uri);
 			}

@@ -1280,7 +1280,8 @@ bool	PD_Document::insertObject(PT_DocPosition dpos,
 	if (pField) {
 		pf_Frag_Object * pfo = nullptr;
 		bool b = m_pPieceTable->insertObject(dpos, pto, newattrs, properties, &pfo);
-		*pField = pfo->getField();
+		if (b && pfo)
+			*pField = pfo->getField();
 		return b;
 	}
 	return m_pPieceTable->insertObject(dpos, pto, newattrs, properties);
@@ -1792,7 +1793,7 @@ bool PD_Document::repairDoc(void)
 	for(i = 0; i< vecHdrFtrs.getItemCount(); i++)
 	{
 		pfs = vecHdrFtrs.getNthItem(i);
-		if(!_removeRepeatedHdrFtr(pfs,&vecHdrFtrs,i+1))
+		if(_removeRepeatedHdrFtr(pfs,&vecHdrFtrs,i+1))
 		{
 			bRepaired = true;
 		}
@@ -1879,6 +1880,7 @@ bool PD_Document::_removeRepeatedHdrFtr(pf_Frag_Strux * pfs ,UT_GenericVector<pf
 	const char * pszThisID = nullptr;
 	const char * pszThisHdrFtr = nullptr;
 	UT_sint32 i=0;
+	bool bRemoved = false;
 	pf_Frag_Strux * pfsS = nullptr;
 	getAttributeFromStrux(pfs, false, 0, "type", &pszMyHdrFtr);
 	getAttributeFromStrux(pfs, false, 0, "id", &pszMyID);
@@ -1896,12 +1898,14 @@ bool PD_Document::_removeRepeatedHdrFtr(pf_Frag_Strux * pfs ,UT_GenericVector<pf
 				{
 					_removeHdrFtr(pfsS);
 					vecHdrFtrs->deleteNthItem(i);
+					i--;
+					bRemoved = true;
 				}
 			}
 
 		}
 	}
-	return false;
+	return bRemoved;
 }
 
 
@@ -2022,10 +2026,14 @@ bool PD_Document::_removeHdrFtr(pf_Frag_Strux * pfs)
 		if(pf)
 		{
 			pfNext = pf->getNext();
+			if(pf->getType() == pf_Frag::PFT_EndOfDoc)
+			{
+				break;
+			}
 			if(pf->getType() == pf_Frag::PFT_Strux)
 			{
 				pfs = static_cast<pf_Frag_Strux *>(pf);
-				if(pfs->getStruxType() == PTX_SectionHdrFtr)
+				if(pfs->getStruxType() == PTX_SectionHdrFtr || pfs->getStruxType() == PTX_Section)
 					break;
 			}
 		}
@@ -2334,6 +2342,8 @@ bool PD_Document::insertStruxNoUpdateBefore(const pf_Frag_Strux* sdh, PTStruxTyp
 bool PD_Document::isStruxBeforeThis(const pf_Frag_Strux* pfs,  PTStruxType pts) const
 {
 	const pf_Frag * pfb = pfs->getPrev();
+	if(!pfb)
+		return false;
 	if(pfb->getType() != pf_Frag::PFT_Strux)
 		return false;
 	auto pfsb = static_cast<const pf_Frag_Strux *>(pfb);
@@ -4529,7 +4539,8 @@ const PP_AttrProp * PD_Document::explodeRevisions(std::unique_ptr<PP_RevisionAtt
 						UT_return_val_if_fail(pNewAP,nullptr);
 				
 						(*pNewAP) = *pAP;
-						(*pNewAP) = *pRev;
+						pNewAP->setAttributes(pRev->getAttributes());
+						pNewAP->setProperties(pRev->getProperties());
 					}
 					else
 					{
@@ -4643,7 +4654,8 @@ const PP_AttrProp * PD_Document::explodeRevisions(std::unique_ptr<PP_RevisionAtt
 					UT_return_val_if_fail(pNewAP, nullptr);
 				
 					(*pNewAP) = *pAP;
-					(*pNewAP) = *pRev;
+					pNewAP->setAttributes(pRev->getAttributes());
+					pNewAP->setProperties(pRev->getProperties());
 					bDeleted = false;
 				}
 				else
@@ -5603,7 +5615,7 @@ const pf_Frag_Strux* PD_Document::findForwardStyleStrux(const gchar * szStyle, P
 	const pf_Frag_Strux * pfs = nullptr;
 	const pf_Frag * currentFrag = sdh;
 	bool bFound = false;
-    while (currentFrag != m_pPieceTable->getFragments().getLast() && !bFound)
+    while (currentFrag && currentFrag != m_pPieceTable->getFragments().getLast() && !bFound)
 	{
 		if (currentFrag->getType()==pf_Frag::PFT_Strux)
 		{
@@ -6150,9 +6162,12 @@ bool PD_Document::convertPercentToInches(const char * szPercent, UT_UTF8String &
 	const char * szLeftMargin = nullptr;
 	const char * szRightMargin = nullptr;
 
-	// TODO -- probably needs to get revision settings from some view ...
-	getPropertyFromStrux(sdhSec,true,PD_MAX_REVISION,"page-margin-left",&szLeftMargin);
-	getPropertyFromStrux(sdhSec,true,PD_MAX_REVISION,"page-margin-right",&szRightMargin);
+	if(sdhSec)
+	{
+		// TODO -- probably needs to get revision settings from some view ...
+		getPropertyFromStrux(sdhSec,true,PD_MAX_REVISION,"page-margin-left",&szLeftMargin);
+		getPropertyFromStrux(sdhSec,true,PD_MAX_REVISION,"page-margin-right",&szRightMargin);
+	}
 	if(szLeftMargin == nullptr)
 	{
 		szLeftMargin = "0.5in";
@@ -6164,7 +6179,8 @@ bool PD_Document::convertPercentToInches(const char * szPercent, UT_UTF8String &
 	double dLeft = UT_convertToInches(szLeftMargin);
 	double dRight = UT_convertToInches(szRightMargin);
 	width = width - dLeft - dRight;
-	UT_String sVal = szPercent;
+	double pct = szPercent ? g_ascii_strtod(szPercent, nullptr) : 100.0;
+	width = width * pct / 100.0;
 	sInches = UT_convertInchesToDimensionString(DIM_IN,width);
 	return true;
 }
@@ -6650,7 +6666,6 @@ bool PD_Document::insertSpanBeforeFrag(const pf_Frag * pF, const UT_UCS4Char * p
 			// Append a block!
 			//
 			m_vecSuspectFrags.addItem(const_cast<pf_Frag*>(pF));
-			return true;
 		}
 	}
 
@@ -6677,7 +6692,7 @@ bool PD_Document::insertSpanBeforeFrag(const pf_Frag * pF, const UT_UCS4Char * p
 					result &= m_pPieceTable->insertSpanBeforeFrag(pF,pStart,p - pStart);
 
 				attrs[1] = "dir-override:ltr";
-				result &= m_pPieceTable->appendFmt(attrs);
+				result &= m_pPieceTable->insertFmtMarkBeforeFrag(pF, attrs);
 				pStart = p + 1;
 				m_iLastDirMarker = *p;
 				break;
@@ -6687,7 +6702,7 @@ bool PD_Document::insertSpanBeforeFrag(const pf_Frag * pF, const UT_UCS4Char * p
 					result &= m_pPieceTable->insertSpanBeforeFrag(pF,pStart,p - pStart);
 
 				attrs[1] = "dir-override:rtl";
-				result &= m_pPieceTable->appendFmt(attrs);
+				result &= m_pPieceTable->insertFmtMarkBeforeFrag(pF, attrs);
 
 				pStart = p + 1;
 				m_iLastDirMarker = *p;
@@ -6700,7 +6715,7 @@ bool PD_Document::insertSpanBeforeFrag(const pf_Frag * pF, const UT_UCS4Char * p
 				if((m_iLastDirMarker == UCS_RLO) || (m_iLastDirMarker == UCS_LRO))
 				{
 					attrs[1] = "dir-override:";
-					result &= m_pPieceTable->appendFmt(attrs);
+					result &= m_pPieceTable->insertFmtMarkBeforeFrag(pF, attrs);
 				}
 
 				pStart = p + 1;
@@ -6735,7 +6750,6 @@ bool PD_Document::insertObjectBeforeFrag(const pf_Frag * pF, PTObjectType pto,
 			// Append a block!
 			//
 			m_vecSuspectFrags.addItem(const_cast<pf_Frag*>(pF));
-			return true;
 		}
 	}
 
@@ -6756,7 +6770,6 @@ bool PD_Document::insertFmtMarkBeforeFrag(const pf_Frag * pF)
 			// Append a block!
 			//
 			m_vecSuspectFrags.addItem(const_cast<pf_Frag*>(pF));
-			return true;
 		}
 	}
 
@@ -6890,7 +6903,7 @@ bool PD_Document::areDocumentStylesheetsEqual(const AD_Document &D) const
 		return false;
 
 	PD_Document &d = (PD_Document &)D;
-	UT_return_val_if_fail(m_pPieceTable || d.m_pPieceTable, false);
+	UT_return_val_if_fail(m_pPieceTable && d.m_pPieceTable, false);
 
 	const std::map<std::string,PD_Style*> & hS1 = m_pPieceTable->getAllStyles();
 	const std::map<std::string,PD_Style*> & hS2 = d.m_pPieceTable->getAllStyles();
@@ -7592,7 +7605,7 @@ bool PD_Document::findWhereSimilarityResumes(PT_DocPosition &pos, UT_sint32 &iOf
 											 UT_uint32 & iKnownLength,
 											 const PD_Document &d) const
 {
-	UT_return_val_if_fail(m_pPieceTable || d.m_pPieceTable, true);
+	UT_return_val_if_fail(m_pPieceTable && d.m_pPieceTable, true);
 		
 	//  scroll through the documents comparing contents
 	PD_DocIterator t1(*this, pos);
@@ -7653,8 +7666,8 @@ bool PD_Document::findWhereSimilarityResumes(PT_DocPosition &pos, UT_sint32 &iOf
 	}
 	
 	// now do the same, but assuming our text is deleted from doc 2
-	t2.setPosition(pos);
-	t1.setPosition(pos + iOffset2);
+	t1.setPosition(pos);
+	t2.setPosition(pos + iOffset2);
 	iStep = 128;
 	
 	for(i = iTry; i >= iMinOverlap; i -= iStep)
@@ -7724,7 +7737,7 @@ bool PD_Document::findWhereSimilarityResumes(PT_DocPosition &pos, UT_sint32 &iOf
 bool PD_Document::findFirstDifferenceInContent(PT_DocPosition &pos, UT_sint32 &iOffset2,
 											   const PD_Document &d) const
 {
-	UT_return_val_if_fail(m_pPieceTable || d.m_pPieceTable, true);
+	UT_return_val_if_fail(m_pPieceTable && d.m_pPieceTable, true);
 		
 	//  scroll through the documents comparing contents
 	PD_DocIterator t1(*this, pos);
@@ -7835,7 +7848,7 @@ bool PD_Document::areDocumentContentsEqual(const AD_Document &D, UT_uint32 &pos)
 		return false;
 	
 	PD_Document &d = (PD_Document &)D;
-	UT_return_val_if_fail(m_pPieceTable || d.m_pPieceTable, false);
+	UT_return_val_if_fail(m_pPieceTable && d.m_pPieceTable, false);
 		
 	// test the docs for length
 	UT_uint32 end1, end2;
@@ -7927,7 +7940,7 @@ bool PD_Document::areDocumentContentsEqual(const AD_Document &D, UT_uint32 &pos)
 			{
 				if(t1.getChar() != t2.getChar())
 				{
-					pos = t1.getPosition() + i;
+					pos = t1.getPosition();
 					return false;
 				}
 				
@@ -7979,7 +7992,7 @@ bool PD_Document::areDocumentFormatsEqual(const AD_Document &D, UT_uint32 &pos) 
 		return false;
 	
 	PD_Document &d = (PD_Document &)D;
-	UT_return_val_if_fail(m_pPieceTable || d.m_pPieceTable, false);
+	UT_return_val_if_fail(m_pPieceTable && d.m_pPieceTable, false);
 		
 	//  scroll through the documents comparing fmt
 	PD_DocIterator t1(*this);

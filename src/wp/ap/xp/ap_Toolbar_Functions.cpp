@@ -455,7 +455,7 @@ Defun_EV_GetToolbarItemState_Fn(ap_ToolbarGetState_Indents)
 	{
 		case AP_TOOLBAR_ID_INDENT:
 			allowed = pView->getPageSize().Width (DIM_IN) - page_margin_left - page_margin_right;
-			if (margin_left >= allowed)
+			if ((iBlockDir == UT_BIDI_LTR ? margin_left : margin_right) >= allowed)
 				s = EV_TIS_Gray;
 			break;
 		case AP_TOOLBAR_ID_UNINDENT:
@@ -974,28 +974,25 @@ Defun_EV_GetToolbarItemState_Fn(ap_ToolbarGetState_CursorInSemItem)
 		return EV_TIS_Gray;
 
     xxx_UT_DEBUGMSG((" ap_ToolbarGetState_CursorInSemItem() pDoc:%p\n", pView->getDocument() ));
-	if( PD_Document * pDoc = pView->getDocument() )
+	PD_Document * pDoc = pView->getDocument();
+	if (!pDoc)
+		return EV_TIS_Gray;
+
+	PD_DocumentRDFHandle rdf = pDoc->getDocumentRDF();
+	if (!rdf || !rdf->haveSemItems())
+		return EV_TIS_Gray;
+
+	xxx_UT_DEBUGMSG((" ap_ToolbarGetState_CursorInSemItem(have rdf) point:%d\n", pView->getPoint() ));
+	std::set< std::string > col;
+	rdf->addRelevantIDsForPosition( col, pView->getPoint() );
+	if( col.empty() && pView->getPoint() > 0 )
+		rdf->addRelevantIDsForPosition( col, pView->getPoint()-1 );
+	xxx_UT_DEBUGMSG((" ap_ToolbarGetState_CursorInSemItem(d) point:%ld col.sz:%ld\n",
+					 pView->getPoint(), col.size() ));
+	if( col.empty() )
 	{
-		if( PD_DocumentRDFHandle rdf = pDoc->getDocumentRDF() )
-		{
-            if( !rdf->haveSemItems() )
-            {
-                return EV_TIS_Gray;
-            }
-            
-            xxx_UT_DEBUGMSG((" ap_ToolbarGetState_CursorInSemItem(have rdf) point:%d\n", pView->getPoint() ));
-            std::set< std::string > col;
-            rdf->addRelevantIDsForPosition( col, pView->getPoint() );
-            if( col.empty() )
-                rdf->addRelevantIDsForPosition( col, pView->getPoint()-1 );
-            xxx_UT_DEBUGMSG((" ap_ToolbarGetState_CursorInSemItem(d) point:%ld col.sz:%ld\n",
-                             pView->getPoint(), col.size() ));
-            if( col.empty() )
-            {
-                return EV_TIS_Gray;
-            }
-        }
-    }
-    
+		return EV_TIS_Gray;
+	}
+
 	return EV_TIS_ZERO;
 }

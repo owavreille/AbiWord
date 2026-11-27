@@ -69,7 +69,8 @@ XAP_Win32App::XAP_Win32App(HINSTANCE hInstance, const char * szAppName)
 	m_hInstance(hInstance),
 	m_dialogFactory(new AP_Win32DialogFactory(this)),
 	m_controlFactory(new AP_Win32Toolbar_ControlFactory),
-	m_pSlurp(nullptr)
+	m_pSlurp(nullptr),
+	m_hkl(GetKeyboardLayout(0))
 {
 	UT_return_if_fail(hInstance);
 
@@ -437,14 +438,20 @@ void XAP_Win32App::_setAbiSuiteLibDir(void)
 		size_t len, baselen;
 
 		utf8 = (char*) getUTF8String(buf);
+		if (!utf8)
+		{
+			XAP_App::_setAbiSuiteLibDir(getAbiSuiteHome());
+			return;
+		}
 
 		len = strlen(utf8);
 		base = g_path_get_basename(utf8);
 		baselen = strlen(base);
 		g_free (base), base = nullptr;
-		if (len+1 > baselen && utf8[len - baselen - 2] == '\\')
+		if (len >= baselen + 2 && utf8[len - baselen - 2] == '\\')
 			utf8[len - baselen - 2] = 0;
-		else utf8[len - baselen - 1] = '\0';
+		else if (len >= baselen + 1)
+			utf8[len - baselen - 1] = '\0';
 #ifdef _MSC_VER
 		XAP_App::_setAbiSuiteLibDir(utf8);
 #else

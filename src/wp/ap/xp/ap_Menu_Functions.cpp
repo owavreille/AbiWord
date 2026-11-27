@@ -875,6 +875,7 @@ Defun_EV_GetMenuItemState_Fn(ap_GetState_ScriptsActive)
 Defun_EV_GetMenuItemState_Fn(ap_GetState_Selection)
 {
         ABIWORD_VIEW;
+	UT_return_val_if_fail (pView, EV_MIS_Gray);
 	XAP_App * pApp = XAP_App::getApp();
 	UT_return_val_if_fail (pApp, EV_MIS_Gray);
 

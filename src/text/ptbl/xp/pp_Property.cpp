@@ -335,7 +335,8 @@ void PP_resetInitialBiDiValues(const gchar * pszValue)
 
 void PP_setDefaultFontFamily(const char* pszFamily)
 {
-	static std::string family(pszFamily ? pszFamily : "");
+	static std::string family;
+	family = pszFamily ? pszFamily : "";
 	PP_Property* prop = static_cast<PP_Property*>(bsearch ("font-family", _props, G_N_ELEMENTS(_props), sizeof(_props[0]), s_compare));
 	UT_nonnull_or_return(prop, );
 	prop->m_pszInitial = family.c_str();
@@ -400,6 +401,25 @@ static const gchar * s_evalProperty (const PP_Property * pProp,
 			i++;
 		}
 	return nullptr;
+}
+
+static void s_getDocProperty(const PD_Document * pDoc, const gchar * pszName, const gchar *& szValue)
+{
+	if (!pDoc)
+		return;
+	const PP_AttrProp * pDocAP = pDoc->getAttrProp ();
+	if (pDocAP)
+	{
+		pDocAP->getProperty (pszName, szValue);
+
+		// dom-dir requires special treatment at document level
+		if(szValue && strcmp(pszName, "dom-dir") == 0)
+		{
+			if(   strcmp(szValue, "logical-ltr") == 0
+			   || strcmp(szValue, "logical-rtl") == 0)
+				szValue += 8;
+		}
+	}
 }
 
 const gchar * PP_evalProperty (const gchar *  pszName,
@@ -481,9 +501,7 @@ const gchar * PP_evalProperty (const gchar *  pszName,
 							}
 						if ((szValue == nullptr) && (bInherit || pProp->canInherit ()))
 						{
-							const PP_AttrProp * pDocAP = pDoc->getAttrProp ();
-							if (pDocAP)
-								pDocAP->getProperty (pszName, szValue);
+							s_getDocProperty (pDoc, pszName, szValue);
 						}
 					}
 				}
@@ -516,9 +534,7 @@ const gchar * PP_evalProperty (const gchar *  pszName,
 					}
 				if ((szValue == nullptr) && (bInherit || pProp->canInherit ()))
 				{
-					const PP_AttrProp * pDocAP = pDoc->getAttrProp ();
-					if (pDocAP)
-						pDocAP->getProperty (pszName, szValue);
+					s_getDocProperty (pDoc, pszName, szValue);
 				}
 			}
 		}
@@ -535,26 +551,12 @@ const gchar * PP_evalProperty (const gchar *  pszName,
 			}
 		if ((szValue == nullptr) && (bInherit || pProp->canInherit ()))
 		{
-			const PP_AttrProp * pDocAP = pDoc->getAttrProp ();
-			if (pDocAP)
-				pDocAP->getProperty (pszName, szValue);
+			s_getDocProperty (pDoc, pszName, szValue);
 		}
 	}
 	else
 	{
-		const PP_AttrProp * pDocAP = pDoc->getAttrProp ();
-		if (pDocAP)
-		{
-			pDocAP->getProperty (pszName, szValue);
-
-			// dom-dir requires special treatment at document level
-			if(szValue && strcmp(pszName, "dom-dir") == 0)
-			{
-				if(   strcmp(szValue, "logical-ltr") == 0
-				   || strcmp(szValue, "logical-rtl") == 0)
-					szValue += 8;
-			}
-		}
+		s_getDocProperty (pDoc, pszName, szValue);
 	}
 	if (szValue)
 		if (strcmp (szValue, "inherit") == 0) // shouldn't happen, but doesn't hurt to check
@@ -580,11 +582,7 @@ const gchar * PP_evalProperty (const gchar *  pszName,
 	if(szValue == nullptr && pDoc && (bInherit || pProp->canInherit ()))
 	{
 		// see if the doc has a value for this prop
-		const PP_AttrProp *  pAP = pDoc->getAttrProp();
-		if(pAP)
-		{
-			pAP->getProperty(pszName, szValue);
-		}
+		s_getDocProperty (pDoc, pszName, szValue);
 	}
 	
 	if (szValue == nullptr)
@@ -764,7 +762,7 @@ PP_PropertyTypeColor::PP_PropertyTypeColor(const gchar *p_init)
 
 PP_PropertyTypeBool::PP_PropertyTypeBool(const gchar *p_init)
 {
-	State = (strcmp("yes", p_init) != 0);
+	State = (p_init && strcmp("yes", p_init) == 0);
 }
 
 PP_PropertyTypeInt::PP_PropertyTypeInt(const gchar *p_init)

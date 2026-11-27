@@ -98,6 +98,10 @@ AP_Win32FrameImpl::AP_Win32FrameImpl(AP_Frame *pFrame) :
 
 AP_Win32FrameImpl::~AP_Win32FrameImpl(void)
 {
+	if (m_hwndDocument && IsWindow(m_hwndDocument))
+		SetWindowLongPtrW(m_hwndDocument, GWLP_USERDATA, 0);
+	if (m_hwndContainer && IsWindow(m_hwndContainer))
+		SetWindowLongPtrW(m_hwndContainer, GWLP_USERDATA, 0);
 }
 
 
@@ -544,6 +548,8 @@ void AP_Win32FrameImpl::_toggleLeftRuler(AP_Win32Frame *pFrame, bool bRulerOn)
 		FV_View * pFV = static_cast<FV_View *>(pFrame->getCurrentView());
 		if (pFV)
 			pFV->setLeftRuler(nullptr);
+		if (pFrameData->m_pTopRuler)
+			pFrameData->m_pTopRuler->setOffsetLeftRuler(0);
 	}
 
 	// repack the child windows
@@ -588,7 +594,8 @@ void AP_Win32FrameImpl::_setXScrollRange(AP_FrameData * pData, AV_View *pView)
 	// The view has to follow that clamp, or the page sits above the window.
 	// A failed read leaves si as requested.
 	GetScrollInfo(m_hWndHScroll, SB_CTL, &si);
-	pView->sendHorizontalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
+	const int xLimit = (si.nMax > static_cast<int>(si.nPage)) ? (si.nMax - static_cast<int>(si.nPage)) : 0;
+	pView->sendHorizontalScrollEvent(pView->getGraphics()->tlu(si.nPos), pView->getGraphics()->tlu(xLimit));
 
 	// hide the horizontal scrollbar if the scroll range is such that the window can contain it all
 	// show it otherwise
@@ -643,7 +650,8 @@ void AP_Win32FrameImpl::_setYScrollRange(AP_FrameData * pData, AV_View *pView)
 	// past the end of the shorter normal or web layout.
 	// A failed read leaves si as requested.
 	_getVerticalScrollInfo(&si);
-	pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
+	const int yLimit = (si.nMax > static_cast<int>(si.nPage)) ? (si.nMax - static_cast<int>(si.nPage)) : 0;
+	pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos), pView->getGraphics()->tlu(yLimit));
 }
 
 // scroll event came in (probably from an EditMethod (like a PageDown
@@ -1407,9 +1415,9 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 				(keyboardState[VK_CONTROL]), (keyboardState[VK_MENU])	));
 
 	    
-			if (!pWin32Keyboard->onKeyDown(pView,hwnd,iMsg,wParam,lParam))
+			if (pWin32Keyboard->onKeyDown(pView,hwnd,iMsg,wParam,lParam))
 				return UT_DefWindowProc(hwnd,iMsg,wParam,lParam);
-			return UT_DefWindowProc(hwnd,iMsg,wParam,lParam);
+			return 0;
 		
 		}
 
@@ -1597,32 +1605,48 @@ LRESULT CALLBACK AP_Win32FrameImpl::_DocumentWndProc(HWND hwnd, UINT iMsg, WPARA
 					pFVSize->reflowWebPageToWindow();
 
 				// when resizing, set the rulers to their new height/width
-				if ((f->getAPFrameData()->m_pTopRuler) && (f->getAPFrameData()->m_pLeftRuler))
+				AP_FrameData * pData = f->getAPFrameData();
+				GR_Graphics * pG = pView->getGraphics();
+				if (pData)
 				{
-					f->getAPFrameData()->m_pTopRuler->setWidth(nWidth + pView->getGraphics()->tdu(f->getAPFrameData()->m_pLeftRuler->getWidth()));
-					f->getAPFrameData()->m_pLeftRuler->setHeight(nHeight + pView->getGraphics()->tdu(f->getAPFrameData()->m_pTopRuler->getHeight()));
-				} else {
-					if (f->getAPFrameData()->m_pTopRuler)
-						f->getAPFrameData()->m_pTopRuler->setWidth(nWidth);
-					if (f->getAPFrameData()->m_pLeftRuler)
-						f->getAPFrameData()->m_pLeftRuler->setHeight(nHeight);
+					if (pData->m_pTopRuler && pData->m_pLeftRuler && pG)
+					{
+						pData->m_pTopRuler->setWidth(nWidth + pG->tdu(pData->m_pLeftRuler->getWidth()));
+						pData->m_pLeftRuler->setHeight(nHeight);
+					}
+					else
+					{
+						if (pData->m_pTopRuler)
+							pData->m_pTopRuler->setWidth(nWidth);
+						if (pData->m_pLeftRuler)
+							pData->m_pLeftRuler->setHeight(nHeight);
+					}
 				}
 
 				// may need to scroll to keep everything in sync.
 				// the following is necessary to make sure that the
 				// window de-scrolls as it gets larger.
 
-				SCROLLINFO si;
-				memset(&si, 0, sizeof(si));
+				if (pG)
+				{
+					SCROLLINFO si;
+					memset(&si, 0, sizeof(si));
 
-				si.cbSize = sizeof(si);
-				si.fMask = SIF_ALL;
+					si.cbSize = sizeof(si);
+					si.fMask = SIF_ALL;
 
-				if (fImpl->_getVerticalScrollInfo(&si))
-					pView->sendVerticalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
+					if (fImpl->_getVerticalScrollInfo(&si))
+					{
+						const int yLimit = (si.nMax > static_cast<int>(si.nPage)) ? (si.nMax - static_cast<int>(si.nPage)) : 0;
+						pView->sendVerticalScrollEvent(pG->tlu(si.nPos), pG->tlu(yLimit));
+					}
 
-				if (GetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si))
-					pView->sendHorizontalScrollEvent(pView->getGraphics()->tlu(si.nPos),pView->getGraphics()->tlu(si.nMax-si.nPage));
+					if (GetScrollInfo(fImpl->m_hWndHScroll, SB_CTL, &si))
+					{
+						const int xLimit = (si.nMax > static_cast<int>(si.nPage)) ? (si.nMax - static_cast<int>(si.nPage)) : 0;
+						pView->sendHorizontalScrollEvent(pG->tlu(si.nPos), pG->tlu(xLimit));
+					}
+				}
 			}
 			return 0;
 		}

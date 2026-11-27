@@ -461,8 +461,7 @@ void FL_DocLayout::_lookupProperties(void)
 	m_EndnoteType = FootnoteTypeFromString(pszEndnoteType);
 
 	const gchar * pszTmp = nullptr;
-	pDocAP->getProperty("document-footnote-initial", (const gchar *&)pszTmp);
-	if(pszTmp && pszTmp[0])
+	if(pDocAP->getProperty("document-footnote-initial", (const gchar *&)pszTmp) && pszTmp && pszTmp[0])
 	{
 		m_iFootnoteVal =  atoi(pszTmp);
 	}
@@ -471,8 +470,8 @@ void FL_DocLayout::_lookupProperties(void)
 		m_iFootnoteVal = 1;
 	}
 
-	pDocAP->getProperty("document-footnote-restart-section", (const gchar *&)pszTmp);
-	if(pszTmp && pszTmp[0])
+	pszTmp = nullptr;
+	if(pDocAP->getProperty("document-footnote-restart-section", (const gchar *&)pszTmp) && pszTmp && pszTmp[0])
 	{
 		if(strcmp(pszTmp,"1") == 0)
 		{
@@ -488,8 +487,8 @@ void FL_DocLayout::_lookupProperties(void)
 		m_bRestartFootSection = false;
 	}
 
-	pDocAP->getProperty("document-footnote-restart-page", (const gchar *&)pszTmp);
-	if(pszTmp && pszTmp[0])
+	pszTmp = nullptr;
+	if(pDocAP->getProperty("document-footnote-restart-page", (const gchar *&)pszTmp) && pszTmp && pszTmp[0])
 	{
 		if(strcmp(pszTmp,"1") == 0)
 		{
@@ -505,8 +504,8 @@ void FL_DocLayout::_lookupProperties(void)
 		m_bRestartFootPage = false;
 	}
 
-	pDocAP->getProperty("document-endnote-initial", (const gchar *&)pszTmp);
-	if(pszTmp && pszTmp[0])
+	pszTmp = nullptr;
+	if(pDocAP->getProperty("document-endnote-initial", (const gchar *&)pszTmp) && pszTmp && pszTmp[0])
 	{
 		m_iEndnoteVal =  atoi(pszTmp);
 	}
@@ -515,8 +514,8 @@ void FL_DocLayout::_lookupProperties(void)
 		m_iEndnoteVal = 1;
 	}
 
-	pDocAP->getProperty("document-endnote-restart-section", (const gchar *&)pszTmp);
-	if(pszTmp && pszTmp[0])
+	pszTmp = nullptr;
+	if(pDocAP->getProperty("document-endnote-restart-section", (const gchar *&)pszTmp) && pszTmp && pszTmp[0])
 	{
 		if(strcmp(pszTmp,"1") == 0)
 		{
@@ -532,8 +531,8 @@ void FL_DocLayout::_lookupProperties(void)
 		m_bRestartEndSection = false;
 	}
 
-	pDocAP->getProperty("document-endnote-place-endsection", (const gchar *&)pszTmp);
-	if(pszTmp && pszTmp[0])
+	pszTmp = nullptr;
+	if(pDocAP->getProperty("document-endnote-place-endsection", (const gchar *&)pszTmp) && pszTmp && pszTmp[0])
 	{
 		if(strcmp(pszTmp,"1") == 0)
 		{
@@ -549,8 +548,8 @@ void FL_DocLayout::_lookupProperties(void)
 		m_bPlaceAtDocEnd = false;
 	}
 
-	pDocAP->getProperty("document-endnote-place-enddoc", (const gchar *&)pszTmp);
-	if(pszTmp && pszTmp[0])
+	pszTmp = nullptr;
+	if(pDocAP->getProperty("document-endnote-place-enddoc", (const gchar *&)pszTmp) && pszTmp && pszTmp[0])
 	{
 		if(strcmp(pszTmp,"1") == 0)
 		{
@@ -2171,16 +2170,29 @@ UT_sint32 FL_DocLayout::getHeight() const
 	UT_sint32 iHeight = 0;
 	FV_View * pView = getView(); // add page view dimensions
 	UT_uint32 count = m_vecPages.getItemCount();
-	UT_uint32 numRows = count / pView->getNumHorizPages();
-	if (count > (pView->getNumHorizPages() * numRows))
+	if (pView && pView->getNumHorizPages() > 0)
 	{
-		numRows++;
-	}
+		UT_uint32 numRows = count / pView->getNumHorizPages();
+		if (count > (pView->getNumHorizPages() * numRows))
+		{
+			numRows++;
+		}
 
-	for (unsigned int i = 0; i<numRows; i++)
+		for (unsigned int i = 0; i < numRows; i++)
+		{
+			iHeight += pView->getMaxHeight(i);
+		}
+	}
+	else
 	{
-		UT_uint32 iRow = i / pView->getNumHorizPages();			
-		iHeight += pView->getMaxHeight(iRow);
+		for (UT_uint32 i = 0; i < count; i++)
+		{
+			fp_Page * p = m_vecPages.getNthItem(i);
+			if (p)
+			{
+				iHeight += p->getHeight();
+			}
+		}
 	}
 	
 	if (m_pG->queryProperties(GR_Graphics::DGP_SCREEN))
@@ -3878,7 +3890,10 @@ void FL_DocLayout::addHdrFtrSection(fl_SectionLayout* pHdrFtrSL)
 	fl_SectionLayout * pnext = static_cast<fl_SectionLayout *>(pLSL->getNext());
 
 	while (pnext && pnext->getType() == FL_SECTION_ENDNOTE)
+	{
+		pLSL = pnext;
 		pnext = static_cast<fl_SectionLayout *>(pnext->getNext());
+	}
 
 	if(pnext)
 	{
@@ -4828,6 +4843,11 @@ void FL_DocLayout::notifyBlockIsBeingDeleted(fl_BlockLayout *pBlock)
 	if(pBlock == m_pPendingBlockForSmartQuote)
 	{
 		m_pPendingBlockForSmartQuote = nullptr;
+	}
+
+	if(pBlock == m_PendingBlockForGrammar)
+	{
+		m_PendingBlockForGrammar = nullptr;
 	}
 #ifdef ENABLE_SPELL
 	pBlock->dequeueFromSpellCheck();

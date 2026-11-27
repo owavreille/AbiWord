@@ -330,6 +330,7 @@ bool AP_Win32App::initialize(void)
 		err.fromUTF8 (m_pStringSet->getValue(AP_STRING_ID_WINDOWS_COMCTL_WARNING));		
 		MessageBoxW(nullptr, err.c_str(), nullptr, MB_OK);
 	}
+	FreeLibrary(hinstCC);
 
 	//////////////////////////////////////////////////////////////////
 	// load the all Plugins from the correct directory
@@ -444,28 +445,20 @@ const char * AP_Win32App::getAbiSuiteAppDir(void) const
 
 HICON AP_Win32App::getIcon(void)
 {
-
 	int sy = GetSystemMetrics(SM_CYICON);
 	int sx = GetSystemMetrics(SM_CXICON);
 	UT_DEBUGMSG(("GetIcon(): system metrics [%d %d]\n",sx,sy));
-	
-	if ((sx==32) && (sy==32))
-		return LoadIconW(getInstance(), MAKEINTRESOURCEW(AP_RID_ICON_APPLICATION_32));
-	else
-		return (HICON) LoadImageW(getInstance(), MAKEINTRESOURCEW(AP_RID_ICON_APPLICATION_32), IMAGE_ICON, 0,0,0);
+
+	return static_cast<HICON>(LoadImageW(getInstance(), MAKEINTRESOURCEW(AP_RID_ICON_APPLICATION_32), IMAGE_ICON, sx, sy, LR_SHARED));
 }
 
 HICON AP_Win32App::getSmallIcon(void)
 {
+	int sy = GetSystemMetrics(SM_CYSMICON);
+	int sx = GetSystemMetrics(SM_CXSMICON);
+	UT_DEBUGMSG(("GetSmallIcon(): system metrics [%d %d]\n",sx,sy));
 
-	int sy = GetSystemMetrics(SM_CYICON);
-	int sx = GetSystemMetrics(SM_CXICON);
-	UT_DEBUGMSG(("GetIcon(): system metrics [%d %d]\n",sx,sy));
-
-	if ((sx==16) && (sy==16))
-		return LoadIconW(getInstance(), MAKEINTRESOURCEW(AP_RID_ICON_APPLICATION_16));
-	else
-		return (HICON) LoadImageW(getInstance(), MAKEINTRESOURCEW(AP_RID_ICON_APPLICATION_16), IMAGE_ICON, 0,0,0);
+	return static_cast<HICON>(LoadImageW(getInstance(), MAKEINTRESOURCEW(AP_RID_ICON_APPLICATION_16), IMAGE_ICON, sx, sy, LR_SHARED));
 }
 
 const XAP_StringSet * AP_Win32App::getStringSet(void) const
@@ -1702,21 +1695,15 @@ bool AP_Win32App::handleModelessDialogMessage( MSG * msg )
 	int iCounter;
 	HWND hWnd = nullptr;
 
-	// Try to knock off the easy case quickly
-	if( m_IdTable[ 0 ].id == -1 )
-		return false;
-
     for( iCounter = 0; iCounter <= NUM_MODELESSID; iCounter++ )
 	{
-		if( m_IdTable[ iCounter ].id != -1 )
+		if( m_IdTable[ iCounter ].id != -1 && m_IdTable[ iCounter ].pDialog )
 		{
 			hWnd = (HWND) m_IdTable[ iCounter ].pDialog->pGetWindowHandle();
 
 			if( hWnd && IsDialogMessageW( hWnd, msg ) )
 				return true;
 		}
-		else
-			break;
 	}
 
 	return false;
@@ -1760,7 +1747,7 @@ bool AP_Win32App::doWindowlessArgs(const AP_Args *Args, bool & bSuccess)
 	else
 	if (Args->m_sPrintTo) 
 	{
-		if (Args->m_sFiles[0])
+		if (Args->m_sFiles && Args->m_sFiles[0])
 		{
 			UT_DEBUGMSG(("DOM: Printing file %s\n", Args->m_sFiles[0]));
 			AP_Convert conv ;

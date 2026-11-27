@@ -296,7 +296,18 @@ AP_Win32StatusBar::AP_Win32StatusBar(XAP_Frame * pFrame)
 
 AP_Win32StatusBar::~AP_Win32StatusBar(void)
 {
-	
+	if (m_hwndStatusBar && IsWindow(m_hwndStatusBar))
+	{
+		if (m_pOrgStatusbarWndProc)
+		{
+			SetWindowLongPtrW(m_hwndStatusBar, GWLP_WNDPROC,
+							  reinterpret_cast<LONG_PTR>(m_pOrgStatusbarWndProc));
+			m_pOrgStatusbarWndProc = nullptr;
+		}
+		SetWindowLongPtrW(m_hwndStatusBar, GWLP_USERDATA, 0);
+		DestroyWindow(m_hwndStatusBar);
+	}
+	m_hwndStatusBar = nullptr;
 }
 
 void AP_Win32StatusBar::setView(AV_View * pView)

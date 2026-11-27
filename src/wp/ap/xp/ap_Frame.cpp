@@ -355,7 +355,7 @@ UT_Error AP_Frame::loadDocument(AD_Document* pDoc) {
 	for(j=0; j<vClones.getItemCount();j++)
 	{
 		AP_Frame * pFrame = static_cast<AP_Frame *>(vClones.getNthItem(j));
-		if(pApp->findFrame(pFrame) < 0)
+		if(pFrame != this)
 		{
 			pFrame->_replaceDocument(pDoc);
 		}
