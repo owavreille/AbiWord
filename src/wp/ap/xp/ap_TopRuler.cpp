@@ -448,6 +448,13 @@ void AP_TopRuler::drawImmediateLU(const UT_Rect *clip)
 	// draw the foreground
 
 	_draw(clip, nullptr);
+
+	// subtle 1px hairline divider along bottom edge separating ruler from workspace
+	{
+		UT_sint32 yBottom = getHeight() - m_pG->tlu(1);
+		m_pG->setColor3D(GR_Graphics::CLR3D_BevelDown);
+		painter.drawLine(0, yBottom, getWidth(), yBottom);
+	}
 #ifdef TOOLKIT_WIN
 	UT_Win32Trace("ruler-body-end");
 	UT_Win32TraceHeap("ruler-body");
@@ -1359,39 +1366,21 @@ void AP_TopRuler::_drawMarginProperties(const UT_Rect * /* pClipRect */,
 
 	GR_Painter painter(m_pG);
 
-#if !defined(TOOLKIT_GTK)
-	painter.fillRect(GR_Graphics::CLR3D_Background, rLeft);
-#else
 	painter.fillRect(GR_Graphics::CLR3D_BevelDown, rLeft);
-#endif
 
 	m_pG->setColor3D(GR_Graphics::CLR3D_Foreground);
 	painter.drawLine( rLeft.left,  rLeft.top, rLeft.left + rLeft.width, rLeft.top);
 	painter.drawLine( rLeft.left + rLeft.width,  rLeft.top, rLeft.left + rLeft.width, rLeft.top + rLeft.height);
 	painter.drawLine( rLeft.left + rLeft.width,  rLeft.top + rLeft.height, rLeft.left, rLeft.top + rLeft.height);
 	painter.drawLine( rLeft.left,  rLeft.top + rLeft.height, rLeft.left, rLeft.top);
-#if !defined(TOOLKIT_GTK)
-	m_pG->setColor3D(GR_Graphics::CLR3D_BevelUp);
-	painter.drawLine( rLeft.left + m_pG->tlu(1), rLeft.top + m_pG->tlu(1), rLeft.left + rLeft.width - m_pG->tlu(2), rLeft.top + m_pG->tlu(1));
-	painter.drawLine( rLeft.left + m_pG->tlu(1), rLeft.top + m_pG->tlu(1), rLeft.left + m_pG->tlu(1), rLeft.top + rLeft.height - m_pG->tlu(2));
-#endif
 
-#if !defined(TOOLKIT_GTK)
-	painter.fillRect(GR_Graphics::CLR3D_Background, rRight);
-#else
 	painter.fillRect(GR_Graphics::CLR3D_BevelDown, rRight);
-#endif
 
 	m_pG->setColor3D(GR_Graphics::CLR3D_Foreground);
 	painter.drawLine( rRight.left,  rRight.top, rRight.left + rRight.width, rRight.top);
 	painter.drawLine( rRight.left + rRight.width,  rRight.top, rRight.left + rRight.width, rRight.top + rRight.height);
 	painter.drawLine( rRight.left + rRight.width,  rRight.top + rRight.height, rRight.left, rRight.top + rRight.height);
 	painter.drawLine( rRight.left,  rRight.top + rRight.height, rRight.left, rRight.top);
-#if !defined(TOOLKIT_GTK)
-	m_pG->setColor3D(GR_Graphics::CLR3D_BevelUp);
-	painter.drawLine( rRight.left + m_pG->tlu(1), rRight.top + m_pG->tlu(1), rRight.left + rRight.width - m_pG->tlu(2), rRight.top + m_pG->tlu(1));
-	painter.drawLine( rRight.left + m_pG->tlu(1), rRight.top + m_pG->tlu(1), rRight.left + m_pG->tlu(1), rRight.top + rRight.height - m_pG->tlu(2));
-#endif
 }
 
 /*****************************************************************/
@@ -2030,37 +2019,13 @@ void AP_TopRuler::_drawCellMark(UT_Rect * prDrag, bool bUp)
 	UT_sint32 top = prDrag->top + m_pG->tlu(2);
 	UT_sint32 bot = top + prDrag->height - m_pG->tlu(4);
 	xxx_UT_DEBUGMSG(("Drawing Cell Mark left %d \n",left));
-#if defined(TOOLKIT_GTK)
-	painter.fillRect(GR_Graphics::CLR3D_Highlight,left,top,right-left,bot-top);
-#endif
+	if(bUp)
+		painter.fillRect(GR_Graphics::CLR3D_Highlight,left,top,right-left,bot-top);
 	m_pG->setColor3D(GR_Graphics::CLR3D_Foreground);
 	painter.drawLine(left,top,left,bot);
 	painter.drawLine(left,bot,right,bot);
 	painter.drawLine(right,bot,right,top);
 	painter.drawLine(right,top,left,top);
-	if(bUp)
-	{
-#if !defined(TOOLKIT_GTK)
-//
-// Draw a bevel up
-//
-		m_pG->setColor3D(GR_Graphics::CLR3D_BevelUp);
-		left += (m_pG->tlu(1)+1);
-		top += (m_pG->tlu(1)+1);
-		right -= (m_pG->tlu(1)+1);
-		bot -= (m_pG->tlu(1)+1);
-		painter.drawLine(left,top,left,bot);
-		painter.drawLine(right,top,left,top);
-//
-// Fill with Background?? color
-//
-		left += m_pG->tlu(1);
-		top += m_pG->tlu(1);
-		right -= m_pG->tlu(1);
-		bot -= m_pG->tlu(1);
-		painter.fillRect(GR_Graphics::CLR3D_Background,left,top,right-left,bot-top);
-#endif
-	}
 }
 
 void AP_TopRuler::_drawCellProperties(const UT_Rect * pClipRect,
@@ -4592,36 +4557,11 @@ void AP_TopRuler::_drawLeftIndentMarker(UT_Rect & rect, bool bFilled)
 		bRTL = (pBlock->getDominantDirection() == UT_BIDI_RTL);
 
 	GR_Painter painter(m_pG);
+	UT_RGBColor fillColour;
+	const bool bHaveFill = m_pG->getColor3D(GR_Graphics::CLR3D_Highlight, fillColour);
 
 	if(bRTL)
 	{
-#if !defined(TOOLKIT_GTK)
-		// fill in the body
-
-		m_pG->setColor3D(GR_Graphics::CLR3D_Background);
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(7),  l+m_pG->tlu(10), t+m_pG->tlu(7) );
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(6),  l+m_pG->tlu(10), t+m_pG->tlu(6) );
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(5),  l+m_pG->tlu(10), t+m_pG->tlu(5) );
-		painter.drawLine( l+m_pG->tlu(3),   t+m_pG->tlu(4),  l+m_pG->tlu(9),  t+m_pG->tlu(4) );
-		painter.drawLine( l+m_pG->tlu(4),   t+m_pG->tlu(3),  l+m_pG->tlu(8), t+m_pG->tlu(3) );
-		painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(2),  l+m_pG->tlu(7), t+m_pG->tlu(2) );
-
-		// draw 3d highlights
-
-		m_pG->setColor3D(clr3dBevel);
-		painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(1),  l,    t+m_pG->tlu(6) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(5),  l+m_pG->tlu(1),  t+m_pG->tlu(7) );
-
-		// draw border
-
-		m_pG->setColor3D(clr3dBorder);
-		painter.drawLine(	l+m_pG->tlu(5),   t,    l+m_pG->tlu(11), t+m_pG->tlu(6) );
-		painter.drawLine(	l+m_pG->tlu(5),   t,    l- m_pG->tlu(1), t+m_pG->tlu(6) );
-
-		painter.drawLine(	l,     t+m_pG->tlu(5),  l,    t+m_pG->tlu(8) );
-		painter.drawLine(	l+m_pG->tlu(10),  t+m_pG->tlu(5),  l+m_pG->tlu(10), t+m_pG->tlu(8) );
-		painter.drawLine(	l,     t+m_pG->tlu(8),  l+m_pG->tlu(10), t+m_pG->tlu(8) );
-#else
 		UT_Point points[] = {
 			{ l + m_pG->tlu(10), t + m_pG->tlu(8) },
 			{ l + m_pG->tlu(10), t + m_pG->tlu(5) },
@@ -4631,80 +4571,38 @@ void AP_TopRuler::_drawLeftIndentMarker(UT_Rect & rect, bool bFilled)
 			{ l + m_pG->tlu(10), t + m_pG->tlu(8) },
 		};
 
-		UT_RGBColor colour;
-		if (m_pG->getColor3D(GR_Graphics::CLR3D_BevelDown, colour)) {
-			painter.polygon(colour, points, 6);
-			m_pG->setColor3D(clr3dBorder);
-			painter.polyLine(points, 6);
-		} else {
-			// this shouldn't happen
-			UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
-		}
-#endif
+		if (bHaveFill)
+			painter.polygon(fillColour, points, 6);
+		m_pG->setColor3D(clr3dBorder);
+		painter.polyLine(points, 6);
 	}
 	else
 	{
-#if !defined(TOOLKIT_GTK)
-		// fill in the body
-
-		m_pG->setColor3D(GR_Graphics::CLR3D_Background);
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(13), l+m_pG->tlu(10), t+m_pG->tlu(13));
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(12), l+m_pG->tlu(10), t+m_pG->tlu(12));
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(11), l+m_pG->tlu(10), t+m_pG->tlu(11));
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(10), l+m_pG->tlu(10), t+m_pG->tlu(10));
-		painter.drawLine( l+m_pG->tlu(9),   t+m_pG->tlu(9),  l+m_pG->tlu(10), t+m_pG->tlu(9) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(7),  l+m_pG->tlu(10), t+m_pG->tlu(7) );
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(6),  l+m_pG->tlu(10), t+m_pG->tlu(6) );
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(5),  l+m_pG->tlu(10), t+m_pG->tlu(5) );
-		painter.drawLine( l+m_pG->tlu(3),   t+m_pG->tlu(4),  l+m_pG->tlu(9),  t+m_pG->tlu(4) );
-		painter.drawLine( l+m_pG->tlu(4),   t+m_pG->tlu(3),  l+m_pG->tlu(8), t+m_pG->tlu(3) );
-		painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(2),  l+m_pG->tlu(7), t+m_pG->tlu(2) );
-
-		// draw 3d highlights
-
-		m_pG->setColor3D(clr3dBevel);
-		painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(1),  l,    t+m_pG->tlu(6) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(5),  l+m_pG->tlu(1),  t+m_pG->tlu(7) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(9),  l+m_pG->tlu(9),  t+m_pG->tlu(9) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(9),  l+m_pG->tlu(1),  t+m_pG->tlu(13));
-
-		// draw border
-
-		m_pG->setColor3D(clr3dBorder);
-		painter.drawLine(	l+m_pG->tlu(5),   t,    l+m_pG->tlu(11), t+m_pG->tlu(6) );
-		painter.drawLine(	l+m_pG->tlu(5),   t,    l- m_pG->tlu(1), t+m_pG->tlu(6) );
-
-		painter.drawLine(	l,     t+m_pG->tlu(5),  l,    t+m_pG->tlu(14));
-		painter.drawLine(	l+m_pG->tlu(10),  t+m_pG->tlu(5),  l+m_pG->tlu(10), t+m_pG->tlu(14));
-		painter.drawLine(	l,     t+m_pG->tlu(14), l+m_pG->tlu(10), t+m_pG->tlu(14));
-		painter.drawLine(	l,     t+m_pG->tlu(8),  l+m_pG->tlu(10), t+m_pG->tlu(8) );
-#else
-		UT_Point points[] = {
+		UT_Point upper[] = {
 			{ l + m_pG->tlu(10), t + m_pG->tlu(8) },
 			{ l + m_pG->tlu(10), t + m_pG->tlu(5) },
 			{ l + m_pG->tlu(5), t },
 			{ l, t + m_pG->tlu(5) },
 			{ l, t + m_pG->tlu(8) },
 			{ l + m_pG->tlu(10), t + m_pG->tlu(8) },
-
-			{ l + m_pG->tlu(10), t + m_pG->tlu(9) },
+		};
+		UT_Point lower[] = {
 			{ l, t + m_pG->tlu(9) },
-			{ l, t + m_pG->tlu(14) },
-			{ l + m_pG->tlu(10), t + m_pG->tlu(14) },
 			{ l + m_pG->tlu(10), t + m_pG->tlu(9) },
+			{ l + m_pG->tlu(10), t + m_pG->tlu(14) },
+			{ l, t + m_pG->tlu(14) },
+			{ l, t + m_pG->tlu(9) },
 		};
 
-		UT_RGBColor colour;
-		if (m_pG->getColor3D(GR_Graphics::CLR3D_BevelDown, colour)) {
-			painter.polygon(colour, points, 11);
-			m_pG->setColor3D(clr3dBorder);
-			painter.polyLine(points, 11);
-		} else {
-			// this shouldn't happen
-			UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+		if (bHaveFill)
+		{
+			painter.polygon(fillColour, upper, 6);
+			painter.polygon(fillColour, lower, 5);
 		}
-#endif
-    }
+		m_pG->setColor3D(clr3dBorder);
+		painter.polyLine(upper, 6);
+		painter.polyLine(lower, 5);
+	}
 }
 
 void AP_TopRuler::_drawRightIndentMarker(UT_Rect & rect, bool bFilled)
@@ -4724,99 +4622,38 @@ void AP_TopRuler::_drawRightIndentMarker(UT_Rect & rect, bool bFilled)
 		bRTL = (pBlock->getDominantDirection() == UT_BIDI_RTL);
 
 	GR_Painter painter(m_pG);
+	UT_RGBColor fillColour;
+	const bool bHaveFill = m_pG->getColor3D(GR_Graphics::CLR3D_Highlight, fillColour);
 
 	if(bRTL)
 	{
-#if !defined(TOOLKIT_GTK)
-		// fill in the body
-
-		m_pG->setColor3D(GR_Graphics::CLR3D_Background);
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(13), l+m_pG->tlu(10), t+m_pG->tlu(13));
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(12), l+m_pG->tlu(10), t+m_pG->tlu(12));
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(11), l+m_pG->tlu(10), t+m_pG->tlu(11));
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(10), l+m_pG->tlu(10), t+m_pG->tlu(10));
-		painter.drawLine( l+m_pG->tlu(9),   t+m_pG->tlu(9),  l+m_pG->tlu(10), t+m_pG->tlu(9) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(7),  l+m_pG->tlu(10), t+m_pG->tlu(7) );
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(6),  l+m_pG->tlu(10), t+m_pG->tlu(6) );
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(5),  l+m_pG->tlu(10), t+m_pG->tlu(5) );
-		painter.drawLine( l+m_pG->tlu(3),   t+m_pG->tlu(4),  l+m_pG->tlu(9),  t+m_pG->tlu(4) );
-		painter.drawLine( l+m_pG->tlu(4),   t+m_pG->tlu(3),  l+m_pG->tlu(8), t+m_pG->tlu(3) );
-		painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(2),  l+m_pG->tlu(7), t+m_pG->tlu(2) );
-
-		// draw 3d highlights
-
-		m_pG->setColor3D(clr3dBevel);
-		painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(1),  l,    t+m_pG->tlu(6) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(5),  l+m_pG->tlu(1),  t+m_pG->tlu(7) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(9),  l+m_pG->tlu(9),  t+m_pG->tlu(9) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(9),  l+m_pG->tlu(1),  t+m_pG->tlu(13));
-
-		// draw border
-
-		m_pG->setColor3D(clr3dBorder);
-		painter.drawLine(	l+m_pG->tlu(5),   t,    l+m_pG->tlu(11), t+m_pG->tlu(6));
-		painter.drawLine(	l+m_pG->tlu(5),   t,    l- m_pG->tlu(1), t+m_pG->tlu(6));
-		
-		painter.drawLine(	l,     t+m_pG->tlu(5),  l,    t+m_pG->tlu(14));
-		painter.drawLine(	l+m_pG->tlu(10),  t+m_pG->tlu(5),  l+m_pG->tlu(10), t+m_pG->tlu(14));
-		painter.drawLine(	l,     t+m_pG->tlu(14), l+m_pG->tlu(10), t+m_pG->tlu(14));
-		painter.drawLine(	l,     t+m_pG->tlu(8),  l+m_pG->tlu(10), t+m_pG->tlu(8) );
-#else
-		UT_Point points[] = {
+		UT_Point upper[] = {
 			{ l + m_pG->tlu(10), t + m_pG->tlu(8) },
 			{ l + m_pG->tlu(10), t + m_pG->tlu(5) },
 			{ l + m_pG->tlu(5), t },
 			{ l, t + m_pG->tlu(5) },
 			{ l, t + m_pG->tlu(8) },
 			{ l + m_pG->tlu(10), t + m_pG->tlu(8) },
-
-			{ l + m_pG->tlu(10), t + m_pG->tlu(9) },
+		};
+		UT_Point lower[] = {
 			{ l, t + m_pG->tlu(9) },
-			{ l, t + m_pG->tlu(14) },
-			{ l + m_pG->tlu(10), t + m_pG->tlu(14) },
 			{ l + m_pG->tlu(10), t + m_pG->tlu(9) },
+			{ l + m_pG->tlu(10), t + m_pG->tlu(14) },
+			{ l, t + m_pG->tlu(14) },
+			{ l, t + m_pG->tlu(9) },
 		};
 
-		UT_RGBColor colour;
-		if (m_pG->getColor3D(GR_Graphics::CLR3D_BevelDown, colour)) {
-			painter.polygon(colour, points, 11);
-			m_pG->setColor3D(clr3dBorder);
-			painter.polyLine(points, 11);
-		} else {
-			// this shouldn't happen
-			UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
+		if (bHaveFill)
+		{
+			painter.polygon(fillColour, upper, 6);
+			painter.polygon(fillColour, lower, 5);
 		}
-#endif
+		m_pG->setColor3D(clr3dBorder);
+		painter.polyLine(upper, 6);
+		painter.polyLine(lower, 5);
 	}
 	else
 	{
-#if !defined(TOOLKIT_GTK)
-		// fill in the body
-
-		m_pG->setColor3D(GR_Graphics::CLR3D_Background);
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(7),  l+m_pG->tlu(10), t+m_pG->tlu(7) );
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(6),  l+m_pG->tlu(10), t+m_pG->tlu(6) );
-		painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(5),  l+m_pG->tlu(10), t+m_pG->tlu(5) );
-		painter.drawLine( l+m_pG->tlu(3),   t+m_pG->tlu(4),  l+m_pG->tlu(9),  t+m_pG->tlu(4) );
-		painter.drawLine( l+m_pG->tlu(4),   t+m_pG->tlu(3),  l+m_pG->tlu(8), t+m_pG->tlu(3) );
-		painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(2),  l+m_pG->tlu(7), t+m_pG->tlu(2) );
-
-		// draw 3d highlights
-
-		m_pG->setColor3D(clr3dBevel);
-		painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(1),  l,    t+m_pG->tlu(6) );
-		painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(5),  l+m_pG->tlu(1),  t+m_pG->tlu(7) );
-
-		// draw border
-
-		m_pG->setColor3D(clr3dBorder);
-		painter.drawLine(	l+m_pG->tlu(5),   t,    l+m_pG->tlu(11), t+m_pG->tlu(6) );
-		painter.drawLine(	l+m_pG->tlu(5),   t,    l- m_pG->tlu(1), t+m_pG->tlu(6) );
-		
-		painter.drawLine(	l,     t+m_pG->tlu(5),  l,    t+m_pG->tlu(8) );
-		painter.drawLine(	l+m_pG->tlu(10),  t+m_pG->tlu(5),  l+m_pG->tlu(10), t+m_pG->tlu(8) );
-		painter.drawLine(	l,     t+m_pG->tlu(8),  l+m_pG->tlu(10), t+m_pG->tlu(8) );
-#else
 		UT_Point points[] = {
 			{ l + m_pG->tlu(10), t + m_pG->tlu(8) },
 			{ l + m_pG->tlu(10), t + m_pG->tlu(5) },
@@ -4826,17 +4663,11 @@ void AP_TopRuler::_drawRightIndentMarker(UT_Rect & rect, bool bFilled)
 			{ l + m_pG->tlu(10), t + m_pG->tlu(8) },
 		};
 
-		UT_RGBColor colour;
-		if (m_pG->getColor3D(GR_Graphics::CLR3D_BevelDown, colour)) {
-			painter.polygon(colour, points, 6);
-			m_pG->setColor3D(clr3dBorder);
-			painter.polyLine(points, 6);
-		} else {
-			// this shouldn't happen
-			UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
-		}
-#endif
-    }
+		if (bHaveFill)
+			painter.polygon(fillColour, points, 6);
+		m_pG->setColor3D(clr3dBorder);
+		painter.polyLine(points, 6);
+	}
 }
 
 void AP_TopRuler::_drawFirstLineIndentMarker(UT_Rect & rect, bool bFilled)
@@ -4849,34 +4680,6 @@ void AP_TopRuler::_drawFirstLineIndentMarker(UT_Rect & rect, bool bFilled)
 
 	GR_Painter painter(m_pG);
 
-#if !defined(TOOLKIT_GTK)
-	// fill in the body
-
-	m_pG->setColor3D(GR_Graphics::CLR3D_Background);
-	painter.drawLine( l+m_pG->tlu(9),   t+m_pG->tlu(1),  l+m_pG->tlu(10), t+m_pG->tlu(1) );
-	painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(2),  l+m_pG->tlu(10), t+m_pG->tlu(2) );
-	painter.drawLine( l+m_pG->tlu(2),   t+m_pG->tlu(3),  l+m_pG->tlu(10), t+m_pG->tlu(3) );
-	painter.drawLine( l+m_pG->tlu(3),   t+m_pG->tlu(4),  l+m_pG->tlu(9),  t+m_pG->tlu(4) );
-	painter.drawLine( l+m_pG->tlu(4),   t+m_pG->tlu(5),  l+m_pG->tlu(8),  t+m_pG->tlu(5) );
-	painter.drawLine( l+m_pG->tlu(5),   t+m_pG->tlu(6),  l+m_pG->tlu(7),  t+m_pG->tlu(6) );
-
-	// draw 3d highlights
-
-	m_pG->setColor3D(clr3dBevel);
-	painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(1),  l+m_pG->tlu(9),  t+m_pG->tlu(1) );
-	painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(2),  l+m_pG->tlu(1),  t+m_pG->tlu(4) );
-	painter.drawLine( l+m_pG->tlu(1),   t+m_pG->tlu(3),  l+m_pG->tlu(6),  t+m_pG->tlu(8) );
-
-	// draw border
-
-	m_pG->setColor3D(clr3dBorder);
-	painter.drawLine(	l+m_pG->tlu(10),  t+m_pG->tlu(3),  l+m_pG->tlu(4),  t+m_pG->tlu(9));
-	painter.drawLine(	l,     t+m_pG->tlu(3),  l+m_pG->tlu(6),  t+m_pG->tlu(9));
-	
-	painter.drawLine(	l,     t,    l,    t+m_pG->tlu(3));
-	painter.drawLine(	l+m_pG->tlu(10),  t,    l+m_pG->tlu(10), t+m_pG->tlu(3));
-	painter.drawLine(	l,     t,    l+m_pG->tlu(10), t);
-#else
 	UT_Point points[] = {
 		{ l, t },
 		{ l, t + m_pG->tlu(3) },
@@ -4886,16 +4689,11 @@ void AP_TopRuler::_drawFirstLineIndentMarker(UT_Rect & rect, bool bFilled)
 		{ l, t },
 	};
 
-	UT_RGBColor colour;
-	if (m_pG->getColor3D(GR_Graphics::CLR3D_BevelDown, colour)) {
-		painter.polygon(colour, points, 6);
-		m_pG->setColor3D(clr3dBorder);
-		painter.polyLine(points, 6);
-	} else {
-		// this shouldn't happen
-		UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
-	}
-#endif
+	UT_RGBColor fillColour;
+	if (m_pG->getColor3D(GR_Graphics::CLR3D_Highlight, fillColour))
+		painter.polygon(fillColour, points, 6);
+	m_pG->setColor3D(clr3dBorder);
+	painter.polyLine(points, 6);
 }
 
 void AP_TopRuler::_drawTabToggle(const UT_Rect * pClipRect, bool bErase)
@@ -4913,44 +4711,21 @@ void AP_TopRuler::_drawTabToggle(const UT_Rect * pClipRect, bool bErase)
 	{
 		UT_sint32 left = rect.left;
 		UT_sint32 top = rect.top;
-
-#if !defined(TOOLKIT_GTK)
 		UT_sint32 bot = rect.top + rect.height - m_pG->tlu(1);
 		UT_sint32 right = rect.left + rect.width - m_pG->tlu(1);
-		// first draw the frame
+
+		// clean flat button with highlight fill and crisp 1px border
+		painter.fillRect(GR_Graphics::CLR3D_Highlight, rect);
 
 		m_pG->setColor3D(GR_Graphics::CLR3D_BevelDown);
-		painter.drawLine(left,top,right,top);
-		painter.drawLine(left,top,left,bot);
-		painter.drawLine(left,bot,right,bot);
-		painter.drawLine(right,top,right,bot);
-		
-		m_pG->setColor3D(GR_Graphics::CLR3D_BevelUp);
-		painter.drawLine( left + m_pG->tlu(1), top + m_pG->tlu(1), right - m_pG->tlu(1), top + m_pG->tlu(1));
-		painter.drawLine( left + m_pG->tlu(1), top + m_pG->tlu(1), left + m_pG->tlu(1), bot - m_pG->tlu(1));
-		painter.drawLine( left, bot + m_pG->tlu(1), right, bot + m_pG->tlu(1));
-#else
-		UT_Rect frameRect = rect;
-#endif
-		// now draw the default tab style
+		painter.drawLine(left, top, right, top);
+		painter.drawLine(left, top, left, bot);
+		painter.drawLine(left, bot, right, bot);
+		painter.drawLine(right, top, right, bot);
 
+		// now draw the default tab style
 		rect.set(left + m_pG->tlu(4), top + m_pG->tlu(6), m_pG->tlu(10), m_pG->tlu(9));
 
-		// fill first if needed
-
-		if (bErase)
-			painter.fillRect(GR_Graphics::CLR3D_Background, rect);
-#if defined(TOOLKIT_GTK)
-		m_pG->setColor3D(GR_Graphics::CLR3D_Foreground);
-		painter.drawLine(frameRect.left, frameRect.top,
-						 frameRect.left + frameRect.width, frameRect.top);
-		painter.drawLine(frameRect.left, frameRect.top, frameRect.left,
-						 frameRect.top + frameRect.height);
-		painter.drawLine(frameRect.left, frameRect.top + frameRect.height,
-						 frameRect.left + frameRect.width, frameRect.top + frameRect.height);
-		painter.drawLine(frameRect.left + frameRect.width, frameRect.top,
-						 frameRect.left + frameRect.width, frameRect.top + frameRect.height);
-#endif
 		if		(m_iDefaultTabType == FL_TAB_LEFT)	rect.left -= m_pG->tlu(2);
 		else if (m_iDefaultTabType == FL_TAB_RIGHT)	rect.left += m_pG->tlu(2);
 

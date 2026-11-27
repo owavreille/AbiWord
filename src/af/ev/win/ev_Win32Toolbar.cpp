@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "ut_assert.h"
+#include "ut_color.h"
 #include "ut_debugmsg.h"
 #include "ut_vector.h"
 #include "ut_unicode.h"
@@ -93,6 +94,56 @@
 #define CB_SETTOPINDEX 0x015c
 #endif
 
+#ifndef CS_DROPSHADOW
+#define CS_DROPSHADOW 0x00020000
+#endif
+
+#ifndef DWMWA_WINDOW_CORNER_PREFERENCE
+#define DWMWA_WINDOW_CORNER_PREFERENCE 33
+#endif
+
+#ifndef DWMWCP_ROUND
+#define DWMWCP_ROUND 2
+#endif
+
+static HBRUSH s_surfaceBrush(COLORREF color)
+{
+	static HBRUSH s_brush = nullptr;
+	static COLORREF s_color = CLR_INVALID;
+	if (!s_brush || s_color != color)
+	{
+		if (s_brush)
+			DeleteObject(s_brush);
+		s_brush = CreateSolidBrush(color);
+		s_color = color;
+	}
+	return s_brush;
+}
+
+static void s_applyPopupRoundedCorners(HWND hwnd)
+{
+	if (!hwnd)
+		return;
+	typedef HRESULT (WINAPI *SetAttrFn)(HWND, DWORD, LPCVOID, DWORD);
+	static bool s_resolved = false;
+	static SetAttrFn setAttr = nullptr;
+	if (!s_resolved)
+	{
+		s_resolved = true;
+		HMODULE dwm = GetModuleHandleW(L"dwmapi.dll");
+		if (!dwm)
+			dwm = LoadLibraryW(L"dwmapi.dll");
+		if (dwm)
+			setAttr = reinterpret_cast<SetAttrFn>(
+				reinterpret_cast<void *>(GetProcAddress(dwm, "DwmSetWindowAttribute")));
+	}
+	if (setAttr)
+	{
+		const DWORD pref = DWMWCP_ROUND;
+		setAttr(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &pref, sizeof(pref));
+	}
+}
+
 // Timer id. Windows scrolls the open list onto the current face after
 // CBN_DROPDOWN returns, which hides the document faces above that row.
 enum { ABI_FONT_SHOW_TOP = 0x51 };
@@ -127,6 +178,7 @@ EV_Win32Toolbar::EV_Win32Toolbar(XAP_Win32App * pWin32App, XAP_Frame * pFrame,
 	m_hwnd(nullptr),
 	m_imageList(nullptr),
 	m_iconPx(0),
+	m_iconsDark(false),
 	m_pFontCtrl(nullptr),
 	m_fontRefilling(false),
 	m_fontDropdownReady(false),
@@ -369,15 +421,20 @@ LRESULT CALLBACK EV_Win32Toolbar::_ToolBarWndProc (HWND hWnd, UINT uMessage, WPA
 	}
 
 	if (uMessage == WM_CTLCOLORSTATIC) {
-		if(SetBkColor((HDC) wParam, GetSysColor(COLOR_WINDOW)) == CLR_INVALID)
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+		SetBkColor((HDC) wParam, tc.surfaceBg);
+		SetTextColor((HDC) wParam, tc.text);
+		return (LRESULT) s_surfaceBrush(tc.surfaceBg);
+	}
+
+	if (uMessage == WM_CTLCOLOREDIT || uMessage == WM_CTLCOLORLISTBOX) {
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+		if (tc.dark && !tc.highContrast)
 		{
-			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
+			SetBkColor((HDC) wParam, tc.surfaceBg);
+			SetTextColor((HDC) wParam, tc.text);
+			return (LRESULT) s_surfaceBrush(tc.surfaceBg);
 		}
-		if(SetTextColor((HDC) wParam, GetSysColor(COLOR_WINDOWTEXT)) == CLR_INVALID)
-		{
-			UT_ASSERT_HARMLESS(UT_SHOULD_NOT_HAPPEN);
-		}
-		return (LRESULT) GetSysColorBrush (COLOR_WINDOW);
 	}
 
 	if (uMessage == 0x031A) // WM_THEMECHANGED
@@ -421,7 +478,7 @@ static HFONT s_fontSample(const wchar_t * face, int sampleDpi)
 	lf.lfCharSet = DEFAULT_CHARSET;
 	lf.lfOutPrecision = OUT_DEFAULT_PRECIS;
 	lf.lfClipPrecision = CLIP_DEFAULT_PRECIS;
-	lf.lfQuality = DEFAULT_QUALITY;
+	lf.lfQuality = CLEARTYPE_QUALITY;
 	lf.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
 	lstrcpynW(lf.lfFaceName, face, LF_FACESIZE);
 	HFONT font = CreateFontIndirectW(&lf);
@@ -443,6 +500,20 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 {
 	switch (uMessage)
 	{
+		case WM_CTLCOLORSTATIC:
+		case WM_CTLCOLOREDIT:
+		case WM_CTLCOLORLISTBOX:
+		{
+			const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+			if (tc.dark && !tc.highContrast)
+			{
+				SetBkColor((HDC)wParam, tc.surfaceBg);
+				SetTextColor((HDC)wParam, tc.text);
+				return (LRESULT)s_surfaceBrush(tc.surfaceBg);
+			}
+			break;
+		}
+
 		/* Draws the font preview in the font selection combobox*/
 		case WM_DRAWITEM:
 		{
@@ -478,20 +549,25 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				t->m_pFontCtrl->populate();
 			}
 
+			const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+			HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+
 			HFONT hFont, hUIFont;
 			SIZE size;
 			HFONT hfontSave;
-            UT_Win32LocaleString str;
+			UT_Win32LocaleString str;
 			const UT_GenericVector<const char*> * v = t->m_pFontCtrl->getContents();
 			const char * fontName = (v != nullptr) ? v->getNthItem(static_cast<UT_sint32>(dis->itemData)) : nullptr;
 			if (!fontName)
 				return TRUE;
 			if (AP_fontMenuIsSeparator(fontName))
 			{
-				FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_WINDOW));
+				COLORREF prevBrush = SetDCBrushColor(dis->hDC, tc.surfaceBg);
+				FillRect(dis->hDC, &dis->rcItem, dcBrush);
+				SetDCBrushColor(dis->hDC, prevBrush);
 				if (!(dis->itemState & ODS_COMBOBOXEDIT))
 				{
-					HPEN pen = CreatePen(PS_SOLID, 1, GetSysColor(COLOR_3DSHADOW));
+					HPEN pen = CreatePen(PS_SOLID, 1, tc.border);
 					HPEN old = pen ? (HPEN)SelectObject(dis->hDC, pen) : nullptr;
 					int y = (dis->rcItem.top + dis->rcItem.bottom) / 2;
 					MoveToEx(dis->hDC, dis->rcItem.left + 4, y, nullptr);
@@ -509,20 +585,21 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 			if (drawDpi < 96)
 				drawDpi = 96;
 			hUIFont = toolbarUIFont(drawDpi);
+			const bool selected = (dis->itemState & ODS_SELECTED) != 0;
+			const COLORREF rowBg = selected
+				? (tc.highContrast ? GetSysColor(COLOR_HIGHLIGHT) : tc.checkedFill)
+				: tc.surfaceBg;
+			const COLORREF rowText = selected
+				? (tc.highContrast ? GetSysColor(COLOR_HIGHLIGHTTEXT) : tc.text)
+				: tc.text;
+
 			if(dis->itemState & ODS_COMBOBOXEDIT)
 			{
-				if (dis->itemState & ODS_SELECTED)
-				{
-					SetTextColor(dis->hDC, GetSysColor(COLOR_HIGHLIGHTTEXT));
-					SetBkColor(dis->hDC, GetSysColor(COLOR_HIGHLIGHT));
-					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_HIGHLIGHT));
-				}
-				else
-				{
-					SetTextColor(dis->hDC, GetSysColor(COLOR_WINDOWTEXT));
-					SetBkColor(dis->hDC, GetSysColor(COLOR_WINDOW));
-					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_WINDOW));
-				}
+				SetTextColor(dis->hDC, rowText);
+				SetBkColor(dis->hDC, rowBg);
+				COLORREF prevBrush = SetDCBrushColor(dis->hDC, rowBg);
+				FillRect(dis->hDC, &dis->rcItem, dcBrush);
+				SetDCBrushColor(dis->hDC, prevBrush);
 				hfontSave = (HFONT) SelectObject (dis->hDC, hUIFont);
 				ExtTextOutW(dis->hDC, dis->rcItem.left + 2, centeredTextY(dis->hDC, dis->rcItem),
 							ETO_CLIPPED, &dis->rcItem, str.c_str(), (UINT)str.size(), nullptr);
@@ -537,24 +614,21 @@ LRESULT CALLBACK EV_Win32Toolbar::_ComboWndProc( HWND hWnd, UINT uMessage, WPARA
 				const bool documentFace = t->m_pFontCtrl &&
 					t->m_pFontCtrl->isDocumentFontRow(static_cast<UT_sint32>(dis->itemData));
 
-				if(dis->itemState & ODS_SELECTED) /* HighLight the selected text*/
-				{
-					SetTextColor(dis->hDC, GetSysColor(COLOR_HIGHLIGHTTEXT));
-					SetBkColor(dis->hDC, GetSysColor(COLOR_HIGHLIGHT));
-					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_HIGHLIGHT));
-				}
-				else
-				{
-					SetTextColor(dis->hDC, GetSysColor(COLOR_WINDOWTEXT));
-					SetBkColor(dis->hDC, GetSysColor(COLOR_WINDOW));
-					FillRect(dis->hDC, &dis->rcItem, GetSysColorBrush(COLOR_WINDOW) );
-				}
-				if (documentFace && !(dis->itemState & ODS_SELECTED))
+				const COLORREF itemBg = selected
+					? (tc.highContrast ? GetSysColor(COLOR_HIGHLIGHT) : tc.hoverFill)
+					: tc.surfaceBg;
+				SetTextColor(dis->hDC, rowText);
+				SetBkColor(dis->hDC, itemBg);
+				COLORREF prevBrush = SetDCBrushColor(dis->hDC, itemBg);
+				FillRect(dis->hDC, &dis->rcItem, dcBrush);
+				if (documentFace && !selected)
 				{
 					RECT bar = dis->rcItem;
 					bar.right = bar.left + 3;
-					FillRect(dis->hDC, &bar, GetSysColorBrush(COLOR_HIGHLIGHT));
+					SetDCBrushColor(dis->hDC, tc.highContrast ? GetSysColor(COLOR_HIGHLIGHT) : tc.checkedBorder);
+					FillRect(dis->hDC, &bar, dcBrush);
 				}
+				SetDCBrushColor(dis->hDC, prevBrush);
 
 				/* The name stays in the interface font. The sample follows it
 				   and must not repaint the whole row, or the name disappears. */
@@ -894,6 +968,7 @@ bool EV_Win32Toolbar::synthesize(void)
 	
 	const int iconPx = toolbarIconPx(hwndParent);
 	m_iconPx = bIcons ? iconPx : 0;
+	m_iconsDark = UT_Win32AppsUseDarkTheme();
 	for (UT_sint32 i = m_iconNames.getItemCount() - 1; i >= 0; --i)
 	{
 		free(m_iconNames.getNthItem(i));
@@ -919,11 +994,11 @@ bool EV_Win32Toolbar::synthesize(void)
 	else
 		SendMessageW(m_hwnd, TB_SETBITMAPSIZE, 0, (LPARAM) MAKELONG(0,0));
 
-	// Padding is in pixels. 6 and 4 are the 96 DPI sizes.
+	// Padding is in pixels. 10 and 6 are the 96 DPI Fluent sizes.
 	{
 		const int dpi = toolbarIconDpi(m_hwnd);
 		SendMessageW(m_hwnd, TB_SETPADDING, 0,
-			MAKELPARAM(UT_ui_px_at_dpi(6, dpi), UT_ui_px_at_dpi(4, dpi)));
+			MAKELPARAM(UT_ui_px_at_dpi(10, dpi), UT_ui_px_at_dpi(6, dpi)));
 	}
 	DWORD exStyle = (DWORD)SendMessageW(m_hwnd, TB_GETEXTENDEDSTYLE, 0, 0);
 	exStyle |= TBSTYLE_EX_DOUBLEBUFFER | TBSTYLE_EX_HIDECLIPPEDBUTTONS;
@@ -1006,7 +1081,7 @@ bool EV_Win32Toolbar::synthesize(void)
 						tbb.iBitmap = iWidth;
 
 						// create a matching child control
-						DWORD dwStyle = WS_CHILD | WS_BORDER | WS_VISIBLE | WS_VSCROLL |
+						DWORD dwStyle = WS_CHILD | WS_VISIBLE | WS_VSCROLL |
 								CBS_HASSTRINGS | CBS_DROPDOWN;
 
 						if ((pControl) && (pControl->shouldSort()))
@@ -1028,6 +1103,7 @@ bool EV_Win32Toolbar::synthesize(void)
 							nullptr );							// No class data.
 
 						UT_ASSERT(hwndCombo);
+						UT_Win32ApplyWindowTheme(hwndCombo);
 						
 						/*
 						 * Hack to create a combobox that is readonly, but which is capable of displaying text in 
@@ -1038,9 +1114,7 @@ bool EV_Win32Toolbar::synthesize(void)
 							UT_DEBUGMSG(("Toolbar: Failed to get handle of combos edit controls. Not setting read-only.\n"));
 						else
 							SendMessageW(hwndEdit, EM_SETREADONLY, (WPARAM)TRUE, (LPARAM)0);
-						HFONT hComboFont = (id == AP_TOOLBAR_ID_FMT_FONT)
-							? toolbarUIFont(dpi)
-							: (HFONT)GetStockObject(DEFAULT_GUI_FONT);
+						HFONT hComboFont = toolbarUIFont(dpi);
 						SendMessageW(hwndCombo, WM_SETFONT, (WPARAM)hComboFont, MAKELPARAM(TRUE, 0));
 						if (id == AP_TOOLBAR_ID_FMT_FONT)
 							SendMessageW(hwndCombo, CB_SETITEMHEIGHT, 0,
@@ -1242,12 +1316,12 @@ bool EV_Win32Toolbar::synthesize(void)
 	// Theme, TB_AUTOSIZE, and _placeControls() already ran above; only apply
 	// toolbar and rebar band colors now instead of repeating the full pass.
 	{
-		const bool dark = UT_Win32AppsUseDarkTheme();
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
 		COLORSCHEME scheme;
 		memset(&scheme, 0, sizeof(scheme));
 		scheme.dwSize = sizeof(scheme);
-		scheme.clrBtnHighlight = GetSysColor(COLOR_HIGHLIGHT);
-		scheme.clrBtnShadow = dark ? RGB(45, 45, 45) : GetSysColor(COLOR_BTNFACE);
+		scheme.clrBtnHighlight = tc.hoverFill;
+		scheme.clrBtnShadow = tc.border;
 		SendMessageW(m_hwnd, TB_SETCOLORSCHEME, 0, (LPARAM)&scheme);
 
 		const int band = _getBandForHwnd(m_hwnd);
@@ -1258,8 +1332,8 @@ bool EV_Win32Toolbar::synthesize(void)
 			memset(&rbbi, 0, sizeof(rbbi));
 			rbbi.cbSize = sizeof(rbbi);
 			rbbi.fMask = RBBIM_COLORS;
-			rbbi.clrFore = dark ? RGB(255, 255, 255) : GetSysColor(COLOR_BTNTEXT);
-			rbbi.clrBack = dark ? RGB(32, 32, 32) : GetSysColor(COLOR_BTNFACE);
+			rbbi.clrFore = tc.text;
+			rbbi.clrBack = tc.chromeBg;
 			SendMessageW(rebar, RB_SETBANDINFO, (WPARAM)band, (LPARAM)&rbbi);
 		}
 	}
@@ -1286,7 +1360,7 @@ void EV_Win32Toolbar::_placeControls(void)
 	{
 		const int dpi = toolbarIconDpi(m_hwnd);
 		SendMessageW(m_hwnd, TB_SETPADDING, 0,
-			MAKELPARAM(UT_ui_px_at_dpi(6, dpi), UT_ui_px_at_dpi(4, dpi)));
+			MAKELPARAM(UT_ui_px_at_dpi(10, dpi), UT_ui_px_at_dpi(6, dpi)));
 	}
 	const UT_uint32 count = m_pToolbarLayout->getLayoutItemCount();
 	for (UT_uint32 k = 0; k < count; ++k)
@@ -1302,6 +1376,7 @@ void EV_Win32Toolbar::_placeControls(void)
 		HWND hwndCtrl = _getControlWindow(id);
 		if (!hwndCtrl)
 			continue;
+		UT_Win32ApplyWindowTheme(hwndCtrl);
 		const int dpi = toolbarIconDpi(m_hwnd);
 		SendMessageW(hwndCtrl, WM_SETFONT, (WPARAM)toolbarUIFont(dpi), TRUE);
 		if (id == AP_TOOLBAR_ID_FMT_FONT)
@@ -1346,12 +1421,12 @@ void EV_Win32Toolbar::applyChrome(void)
 {
 	if (!m_hwnd)
 		return;
-	const bool dark = UT_Win32AppsUseDarkTheme();
+	const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
 	COLORSCHEME scheme;
 	memset(&scheme, 0, sizeof(scheme));
 	scheme.dwSize = sizeof(scheme);
-	scheme.clrBtnHighlight = GetSysColor(COLOR_HIGHLIGHT);
-	scheme.clrBtnShadow = dark ? RGB(45, 45, 45) : GetSysColor(COLOR_BTNFACE);
+	scheme.clrBtnHighlight = tc.hoverFill;
+	scheme.clrBtnShadow = tc.border;
 	SendMessageW(m_hwnd, TB_SETCOLORSCHEME, 0, (LPARAM)&scheme);
 	UT_Win32ApplyWindowTheme(m_hwnd);
 	SendMessageW(m_hwnd, TB_AUTOSIZE, 0, 0);
@@ -1365,8 +1440,8 @@ void EV_Win32Toolbar::applyChrome(void)
 	memset(&rbbi, 0, sizeof(rbbi));
 	rbbi.cbSize = sizeof(rbbi);
 	rbbi.fMask = RBBIM_COLORS;
-	rbbi.clrFore = dark ? RGB(255, 255, 255) : GetSysColor(COLOR_BTNTEXT);
-	rbbi.clrBack = dark ? RGB(32, 32, 32) : GetSysColor(COLOR_BTNFACE);
+	rbbi.clrFore = tc.text;
+	rbbi.clrBack = tc.chromeBg;
 	SendMessageW(rebar, RB_SETBANDINFO, (WPARAM)band, (LPARAM)&rbbi);
 }
 
@@ -1376,7 +1451,8 @@ void EV_Win32Toolbar::rebuildIcons(void)
 		return;
 	HWND parent = GetParent(m_hwnd);
 	const int iconPx = toolbarIconPx(parent ? parent : m_hwnd);
-	if (iconPx == m_iconPx && m_imageList)
+	const bool wantDark = UT_Win32AppsUseDarkTheme();
+	if (iconPx == m_iconPx && m_iconsDark == wantDark && m_imageList)
 		return;
 
 	HIMAGELIST neu = ImageList_Create(iconPx, iconPx, ILC_COLOR32,
@@ -1436,6 +1512,7 @@ void EV_Win32Toolbar::rebuildIcons(void)
 		ImageList_Destroy(static_cast<HIMAGELIST>(m_imageList));
 	m_imageList = neu;
 	m_iconPx = iconPx;
+	m_iconsDark = wantDark;
 
 	if (count > 0)
 		SendMessageW(m_hwnd, TB_ADDBUTTONS, (WPARAM)count, (LPARAM)saved.data());
@@ -1459,6 +1536,289 @@ void EV_Win32Toolbar::rebuildIcons(void)
 		info.cxMinChild = LOWORD(dwBtnSize);
 		info.cxIdeal = static_cast<UINT>(size.cx);
 		SendMessageW(rebar, RB_SETBANDINFO, (WPARAM)band, (LPARAM)&info);
+	}
+}
+
+static void s_drawDropArrow(HDC hdc, const RECT & area, COLORREF color, int dpi)
+{
+	const int halfW = UT_ui_px_at_dpi(3, dpi);
+	const int h = UT_ui_px_at_dpi(3, dpi);
+	const int cx = (area.left + area.right) / 2;
+	const int cy = (area.top + area.bottom) / 2;
+	const int top = cy - h / 2;
+
+	HPEN pen = CreatePen(PS_SOLID, UT_ui_px_at_dpi(1, dpi), color);
+	HPEN oldPen = pen ? static_cast<HPEN>(SelectObject(hdc, pen)) : nullptr;
+	MoveToEx(hdc, cx - halfW, top, nullptr);
+	LineTo(hdc, cx, top + h);
+	LineTo(hdc, cx + halfW + 1, top - 1);
+	if (oldPen)
+		SelectObject(hdc, oldPen);
+	if (pen)
+		DeleteObject(pen);
+}
+
+LRESULT EV_Win32Toolbar::onCustomDraw(LPNMTBCUSTOMDRAW lpcd)
+{
+	if (!lpcd || !m_hwnd)
+		return CDRF_DODEFAULT;
+
+	const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+	const int dpi = toolbarIconDpi(m_hwnd);
+	HDC hdc = lpcd->nmcd.hdc;
+
+	switch (lpcd->nmcd.dwDrawStage)
+	{
+	case CDDS_PREPAINT:
+	{
+		RECT rc = lpcd->nmcd.rc;
+		if (rc.right <= rc.left || rc.bottom <= rc.top)
+			GetClientRect(m_hwnd, &rc);
+		HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+		COLORREF prevBrush = SetDCBrushColor(hdc, tc.chromeBg);
+		FillRect(hdc, &rc, dcBrush);
+		SetDCBrushColor(hdc, prevBrush);
+		return CDRF_NOTIFYITEMDRAW | CDRF_NOTIFYPOSTPAINT;
+	}
+
+	case CDDS_ITEMPREPAINT:
+	{
+		if (tc.highContrast)
+			return CDRF_DODEFAULT;
+
+		const RECT rc = lpcd->nmcd.rc;
+		const UINT cmd = static_cast<UINT>(lpcd->nmcd.dwItemSpec);
+		HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+
+		TBBUTTON tbb;
+		memset(&tbb, 0, sizeof(tbb));
+		bool haveButton = false;
+		if (cmd != 0)
+		{
+			LRESULT idx = SendMessageW(m_hwnd, TB_COMMANDTOINDEX, static_cast<WPARAM>(cmd), 0);
+			if (idx >= 0 && SendMessageW(m_hwnd, TB_GETBUTTON, static_cast<WPARAM>(idx), reinterpret_cast<LPARAM>(&tbb)))
+				haveButton = true;
+		}
+
+		// Visual separator or combo-box placeholder.
+		if (cmd == 0 || (haveButton && (tbb.fsStyle & TBSTYLE_SEP)))
+		{
+			COLORREF prevBrush = SetDCBrushColor(hdc, tc.chromeBg);
+			FillRect(hdc, &rc, dcBrush);
+			if (cmd == 0 || tbb.dwData == 0)
+			{
+				const int inset = UT_ui_px_at_dpi(5, dpi);
+				const int x = (rc.left + rc.right) / 2;
+				RECT lineRc = { x, rc.top + inset, x + 1, rc.bottom - inset };
+				if (lineRc.bottom > lineRc.top)
+				{
+					SetDCBrushColor(hdc, tc.border);
+					FillRect(hdc, &lineRc, dcBrush);
+				}
+			}
+			SetDCBrushColor(hdc, prevBrush);
+			return CDRF_SKIPDEFAULT;
+		}
+
+		if (!haveButton)
+			return CDRF_DODEFAULT;
+
+		const UINT state = lpcd->nmcd.uItemState;
+		const bool disabled = ((state & CDIS_DISABLED) != 0) || ((tbb.fsState & TBSTATE_ENABLED) == 0);
+		const bool checked = ((state & CDIS_CHECKED) != 0) || ((tbb.fsState & TBSTATE_CHECKED) != 0);
+		const bool pressed = ((state & CDIS_SELECTED) != 0) || ((tbb.fsState & TBSTATE_PRESSED) != 0);
+		const bool hot = (state & CDIS_HOT) != 0;
+
+		COLORREF prevBrush = SetDCBrushColor(hdc, tc.chromeBg);
+		FillRect(hdc, &rc, dcBrush);
+
+		RECT pillRc = rc;
+		const int insetX = UT_ui_px_at_dpi(1, dpi);
+		const int insetY = UT_ui_px_at_dpi(2, dpi);
+		InflateRect(&pillRc, -insetX, -insetY);
+
+		if (!disabled && (pressed || checked || hot) && pillRc.right > pillRc.left && pillRc.bottom > pillRc.top)
+		{
+			const COLORREF fill = pressed ? tc.pressedFill : (checked ? tc.checkedFill : tc.hoverFill);
+			const int rad = UT_ui_px_at_dpi(4, dpi) * 2;
+			HBRUSH oldBrush = static_cast<HBRUSH>(SelectObject(hdc, dcBrush));
+			SetDCBrushColor(hdc, fill);
+			HPEN oldPen = nullptr;
+			COLORREF prevPen = CLR_INVALID;
+			if (checked)
+			{
+				oldPen = static_cast<HPEN>(SelectObject(hdc, GetStockObject(DC_PEN)));
+				prevPen = SetDCPenColor(hdc, tc.checkedBorder);
+			}
+			else
+			{
+				oldPen = static_cast<HPEN>(SelectObject(hdc, GetStockObject(NULL_PEN)));
+			}
+			RoundRect(hdc, pillRc.left, pillRc.top, pillRc.right, pillRc.bottom, rad, rad);
+			if (prevPen != CLR_INVALID)
+				SetDCPenColor(hdc, prevPen);
+			if (oldPen)
+				SelectObject(hdc, oldPen);
+			if (oldBrush)
+				SelectObject(hdc, oldBrush);
+		}
+		SetDCBrushColor(hdc, prevBrush);
+
+		const bool hasDropArrow = (tbb.fsStyle & TBSTYLE_DROPDOWN) != 0;
+		const int arrowW = hasDropArrow ? UT_ui_px_at_dpi(12, dpi) : 0;
+		RECT contentRc = rc;
+		if (hasDropArrow && contentRc.right - contentRc.left > arrowW + 4)
+		{
+			RECT arrowRc = rc;
+			arrowRc.left = rc.right - arrowW - UT_ui_px_at_dpi(2, dpi);
+			arrowRc.right = rc.right - UT_ui_px_at_dpi(2, dpi);
+			s_drawDropArrow(hdc, arrowRc, disabled ? tc.textDisabled : tc.textMuted, dpi);
+			contentRc.right = arrowRc.left;
+		}
+
+		const XAP_Toolbar_Id id = ItemIdFromWmCommand(cmd);
+		const bool isColorBtn = (id == AP_TOOLBAR_ID_COLOR_FORE || id == AP_TOOLBAR_ID_COLOR_BACK);
+		const int barH = isColorBtn ? UT_ui_px_at_dpi(3, dpi) : 0;
+
+		if (m_imageList && m_iconPx > 0 && tbb.iBitmap >= 0)
+		{
+			const int iconX = contentRc.left + ((contentRc.right - contentRc.left) - m_iconPx) / 2;
+			int iconY = contentRc.top + ((contentRc.bottom - contentRc.top) - m_iconPx) / 2;
+			if (isColorBtn)
+				iconY -= UT_ui_px_at_dpi(1, dpi);
+
+			HIMAGELIST himl = static_cast<HIMAGELIST>(m_imageList);
+			if (disabled)
+			{
+				ImageList_DrawEx(himl, tbb.iBitmap, hdc, iconX, iconY, m_iconPx, m_iconPx,
+					CLR_NONE, tc.chromeBg, ILD_TRANSPARENT | ILD_BLEND50);
+			}
+			else
+			{
+				ImageList_Draw(himl, tbb.iBitmap, hdc, iconX, iconY, ILD_TRANSPARENT);
+			}
+
+			if (isColorBtn && m_pWin32Frame)
+			{
+				XAP_Win32FrameImpl * fimpl = static_cast<XAP_Win32FrameImpl *>(m_pWin32Frame->getFrameImpl());
+				const char * colorStr = nullptr;
+				if (fimpl)
+				{
+					colorStr = (id == AP_TOOLBAR_ID_COLOR_BACK)
+						? fimpl->m_sColorBack.utf8_str()
+						: fimpl->m_sColorFore.utf8_str();
+				}
+
+				bool transparent = false;
+				COLORREF indicator = (id == AP_TOOLBAR_ID_COLOR_BACK) ? RGB(0xFF, 0xF2, 0x00) : RGB(0x00, 0x00, 0x00);
+				if (colorStr && colorStr[0])
+				{
+					if (g_ascii_strcasecmp(colorStr, "transparent") == 0)
+					{
+						transparent = true;
+					}
+					else
+					{
+						UT_RGBColor rgb;
+						UT_parseColor(colorStr, rgb);
+						if (rgb.isTransparent())
+							transparent = true;
+						else
+							indicator = RGB(rgb.m_red, rgb.m_grn, rgb.m_blu);
+					}
+				}
+				else if (id == AP_TOOLBAR_ID_COLOR_BACK)
+				{
+					transparent = true;
+				}
+
+				RECT barRc;
+				barRc.left = iconX;
+				barRc.right = iconX + m_iconPx;
+				barRc.bottom = pillRc.bottom - UT_ui_px_at_dpi(2, dpi);
+				barRc.top = barRc.bottom - barH;
+				if (barRc.right > barRc.left && barRc.bottom > barRc.top)
+				{
+					COLORREF prevBarBrush = SetDCBrushColor(hdc, transparent ? tc.surfaceBg : indicator);
+					FillRect(hdc, &barRc, dcBrush);
+					if (transparent)
+					{
+						SetDCBrushColor(hdc, tc.controlBorder);
+						FrameRect(hdc, &barRc, dcBrush);
+					}
+					SetDCBrushColor(hdc, prevBarBrush);
+				}
+			}
+		}
+		else if (m_pToolbarLabelSet)
+		{
+			EV_Toolbar_Label * pLabel = m_pToolbarLabelSet->getLabel(id);
+			const char * szLabel = pLabel ? pLabel->getToolbarLabel() : nullptr;
+			if (szLabel && szLabel[0])
+			{
+				UT_Win32LocaleString text;
+				text.fromUTF8(szLabel);
+				HFONT oldFont = static_cast<HFONT>(SelectObject(hdc, toolbarUIFont(dpi)));
+				SetBkMode(hdc, TRANSPARENT);
+				SetTextColor(hdc, disabled ? tc.textDisabled : tc.text);
+				RECT textRc = contentRc;
+				DrawTextW(hdc, text.c_str(), -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
+				if (oldFont)
+					SelectObject(hdc, oldFont);
+			}
+		}
+
+		return CDRF_SKIPDEFAULT;
+	}
+
+	case CDDS_POSTPAINT:
+	{
+		HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+		COLORREF prevBrush = SetDCBrushColor(hdc, tc.chromeBg);
+
+		RECT rc;
+		rc.top = lpcd->nmcd.rc.top;
+		rc.bottom = lpcd->nmcd.rc.bottom;
+
+		HWND hWndChild = FindWindowExW(m_hwnd, nullptr, nullptr, nullptr);
+		while (hWndChild != nullptr)
+		{
+			RECT rcChild = {};
+			POINT pt;
+			HWND nextChild = FindWindowExW(m_hwnd, hWndChild, nullptr, nullptr);
+			if (GetWindowRect(hWndChild, &rcChild))
+			{
+				pt.x = rcChild.left;
+				pt.y = rcChild.top;
+				if (ScreenToClient(m_hwnd, &pt))
+				{
+					rc.left = pt.x;
+					pt.x = rcChild.right;
+					pt.y = rcChild.bottom;
+					if (ScreenToClient(m_hwnd, &pt))
+					{
+						rc.right = pt.x;
+						FillRect(hdc, &rc, dcBrush);
+					}
+				}
+			}
+			hWndChild = nextChild;
+		}
+
+		RECT clientRc = {};
+		if (GetClientRect(m_hwnd, &clientRc) && clientRc.bottom > clientRc.top)
+		{
+			RECT dividerRc = { clientRc.left, clientRc.bottom - 1, clientRc.right, clientRc.bottom };
+			SetDCBrushColor(hdc, tc.border);
+			FillRect(hdc, &dividerRc, dcBrush);
+		}
+
+		SetDCBrushColor(hdc, prevBrush);
+		return CDRF_DODEFAULT;
+	}
+
+	default:
+		return CDRF_DODEFAULT;
 	}
 }
 
@@ -1891,9 +2251,9 @@ void EV_Win32Toolbar::_addToRebar()
 					RBBIM_SIZE		|	// cx is valid
 					RBBIM_IDEALSIZE	|	// cxIdeal is valid
 					RBBIM_STYLE;		// fStyle is valid
-	const bool dark = UT_Win32AppsUseDarkTheme();
-	rbbi.clrFore = dark ? RGB(255, 255, 255) : GetSysColor(COLOR_BTNTEXT);
-	rbbi.clrBack = dark ? RGB(32, 32, 32) : GetSysColor(COLOR_BTNFACE);
+	const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+	rbbi.clrFore = tc.text;
+	rbbi.clrBack = tc.chromeBg;
 	// One row per toolbar. No gripper and no child edge: those were the
 	// empty strip between the bar and the rulers.
 #ifndef RBBS_NOGRIPPER
@@ -2211,6 +2571,9 @@ static void s_applyToolbarColor(EV_Win32Toolbar * toolbar, XAP_Toolbar_Id id, co
 	else
 		fimpl->m_sColorFore = hex;
 
+	if (toolbar->getWindow())
+		InvalidateRect(toolbar->getWindow(), nullptr, FALSE);
+
 	toolbar->toolbarEvent(id, nullptr, 0);
 }
 
@@ -2271,44 +2634,63 @@ static int s_hitColor(HWND hwnd, int x, int y)
 	return -1;
 }
 
-static void s_fillSwatch(HDC hdc, const RECT & cell, COLORREF color, bool hot)
+static void s_fillSwatch(HDC hdc, const RECT & cell, COLORREF color, bool hot, int dpi)
 {
+	const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+	const int rad = UT_ui_px_at_dpi(3, dpi) * 2;
 	HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
-	COLORREF prevColor = SetDCBrushColor(hdc, color);
-	FillRect(hdc, &cell, dcBrush);
+	HPEN dcPen = static_cast<HPEN>(GetStockObject(DC_PEN));
+	HBRUSH oldBrush = static_cast<HBRUSH>(SelectObject(hdc, dcBrush));
+	HPEN oldPen = static_cast<HPEN>(SelectObject(hdc, dcPen));
+	COLORREF prevBrush = SetDCBrushColor(hdc, color);
+	COLORREF prevPen = SetDCPenColor(hdc, tc.border);
 
-	RECT edge = cell;
+	RoundRect(hdc, cell.left, cell.top, cell.right, cell.bottom, rad, rad);
+
 	if (hot)
-		InflateRect(&edge, 1, 1);
-	const COLORREF hotBorder = UT_Win32AppsUseDarkTheme() ? RGB(255, 255, 255) : RGB(0, 0, 0);
-	SetDCBrushColor(hdc, hot ? hotBorder : RGB(90, 90, 90));
-	FrameRect(hdc, &edge, dcBrush);
-	SetDCBrushColor(hdc, prevColor);
+	{
+		RECT ring = cell;
+		InflateRect(&ring, 2, 2);
+		SelectObject(hdc, GetStockObject(NULL_BRUSH));
+		const COLORREF ringColor = tc.highContrast ? GetSysColor(COLOR_HIGHLIGHT) : tc.checkedBorder;
+		HPEN hotPen = CreatePen(PS_SOLID, UT_ui_px_at_dpi(2, dpi), ringColor);
+		if (hotPen)
+		{
+			SelectObject(hdc, hotPen);
+			RoundRect(hdc, ring.left, ring.top, ring.right, ring.bottom, rad + 2, rad + 2);
+			SelectObject(hdc, dcPen);
+			DeleteObject(hotPen);
+		}
+	}
+
+	SetDCPenColor(hdc, prevPen);
+	SetDCBrushColor(hdc, prevBrush);
+	if (oldPen)
+		SelectObject(hdc, oldPen);
+	if (oldBrush)
+		SelectObject(hdc, oldBrush);
 }
 
-static void s_paintFooter(HDC hdc, const RECT & cell, const wchar_t * text, bool hot)
+static void s_paintFooter(HDC hdc, const RECT & cell, const wchar_t * text, bool hot, int dpi)
 {
-	const bool dark = UT_Win32AppsUseDarkTheme();
+	const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
 	if (hot)
 	{
-		FillRect(hdc, &cell, GetSysColorBrush(COLOR_HIGHLIGHT));
-	}
-	else if (dark)
-	{
+		const int rad = UT_ui_px_at_dpi(4, dpi) * 2;
 		HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
-		COLORREF prevColor = SetDCBrushColor(hdc, UT_Win32WorkspaceColor());
-		FillRect(hdc, &cell, dcBrush);
-		SetDCBrushColor(hdc, prevColor);
-	}
-	else
-	{
-		FillRect(hdc, &cell, GetSysColorBrush(COLOR_BTNFACE));
+		HBRUSH oldBrush = static_cast<HBRUSH>(SelectObject(hdc, dcBrush));
+		HPEN oldPen = static_cast<HPEN>(SelectObject(hdc, GetStockObject(NULL_PEN)));
+		COLORREF prevBrush = SetDCBrushColor(hdc, tc.highContrast ? GetSysColor(COLOR_HIGHLIGHT) : tc.hoverFill);
+		RoundRect(hdc, cell.left, cell.top, cell.right, cell.bottom, rad, rad);
+		SetDCBrushColor(hdc, prevBrush);
+		if (oldPen)
+			SelectObject(hdc, oldPen);
+		if (oldBrush)
+			SelectObject(hdc, oldBrush);
 	}
 
 	SetBkMode(hdc, TRANSPARENT);
-	SetTextColor(hdc, hot
-		? GetSysColor(COLOR_HIGHLIGHTTEXT)
-		: (dark ? RGB(240, 240, 240) : GetSysColor(COLOR_BTNTEXT)));
+	SetTextColor(hdc, (hot && tc.highContrast) ? GetSysColor(COLOR_HIGHLIGHTTEXT) : tc.text);
 	RECT textRc = cell;
 	DrawTextW(hdc, text, -1, &textRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS);
 }
@@ -2439,17 +2821,14 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 				EndPaint(hwnd, &ps);
 				return 0;
 			}
-			if (UT_Win32AppsUseDarkTheme())
-			{
-				HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
-				COLORREF prevColor = SetDCBrushColor(hdc, UT_Win32WorkspaceColor());
-				FillRect(hdc, &rc, dcBrush);
-				SetDCBrushColor(hdc, prevColor);
-			}
-			else
-			{
-				FillRect(hdc, &rc, reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1));
-			}
+			const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+			const int dpi = toolbarIconDpi(hwnd);
+			HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+			COLORREF prevColor = SetDCBrushColor(hdc, tc.surfaceBg);
+			FillRect(hdc, &rc, dcBrush);
+			SetDCBrushColor(hdc, tc.border);
+			FrameRect(hdc, &rc, dcBrush);
+			SetDCBrushColor(hdc, prevColor);
 
 			int gx = s_colorGridX(rc.right - rc.left, hwnd);
 			int gy = s_colorPad(hwnd);
@@ -2462,25 +2841,31 @@ static LRESULT CALLBACK s_colorPopupProc(HWND hwnd, UINT msg, WPARAM wParam, LPA
 				cell.top = gy + (i / COLOR_COLS) * cellPx + 2;
 				cell.right = cell.left + cellPx - 4;
 				cell.bottom = cell.top + cellPx - 4;
-				s_fillSwatch(hdc, cell, s_swatches[i], popup && popup->hot == i);
+				s_fillSwatch(hdc, cell, s_swatches[i], popup && popup->hot == i, dpi);
 			}
 
 			int footerTop = gy + COLOR_ROWS * cellPx + gy / 2;
+			{
+				RECT divRc = { rc.left + gy, footerTop - 2, rc.right - gy, footerTop - 1 };
+				COLORREF prevDiv = SetDCBrushColor(hdc, tc.border);
+				FillRect(hdc, &divRc, dcBrush);
+				SetDCBrushColor(hdc, prevDiv);
+			}
 			RECT clearRc;
-			clearRc.left = 4;
-			clearRc.right = rc.right - 4;
-			clearRc.top = footerTop;
-			clearRc.bottom = footerTop + footer - 2;
+			clearRc.left = gy;
+			clearRc.right = rc.right - gy;
+			clearRc.top = footerTop + 2;
+			clearRc.bottom = footerTop + footer;
 			RECT moreRc = clearRc;
-			moreRc.top = footerTop + footer;
-			moreRc.bottom = footerTop + footer * 2 - 2;
+			moreRc.top = footerTop + footer + 2;
+			moreRc.bottom = footerTop + footer * 2;
 
 			if (popup)
 			{
-				HFONT font = toolbarUIFont(toolbarIconDpi(hwnd));
+				HFONT font = toolbarUIFont(dpi);
 				HFONT old = static_cast<HFONT>(SelectObject(hdc, font));
-				s_paintFooter(hdc, clearRc, popup->clearText, popup->hot == HOT_CLEAR);
-				s_paintFooter(hdc, moreRc, popup->moreText, popup->hot == HOT_MORE);
+				s_paintFooter(hdc, clearRc, popup->clearText, popup->hot == HOT_CLEAR, dpi);
+				s_paintFooter(hdc, moreRc, popup->moreText, popup->hot == HOT_MORE, dpi);
 				SelectObject(hdc, old);
 			}
 
@@ -2517,10 +2902,11 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 	{
 		WNDCLASSW wc;
 		memset(&wc, 0, sizeof(wc));
+		wc.style = CS_DROPSHADOW;
 		wc.lpfnWndProc = s_colorPopupProc;
 		wc.hInstance = GetModuleHandleW(nullptr);
 		wc.hCursor = LoadCursorW(nullptr, IDC_ARROW);
-		wc.hbrBackground = reinterpret_cast<HBRUSH>(COLOR_BTNFACE + 1);
+		wc.hbrBackground = nullptr;
 		wc.lpszClassName = L"AbiWordColorPopup";
 		registered = (RegisterClassW(&wc) != 0) || (GetLastError() == ERROR_CLASS_ALREADY_EXISTS);
 	}
@@ -2564,7 +2950,7 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 	}
 
 	RECT windowRc = { 0, 0, s_colorClientWidth(toolbarHwnd), s_colorClientHeight(toolbarHwnd) };
-	AdjustWindowRectEx(&windowRc, WS_POPUP | WS_BORDER, FALSE, WS_EX_TOOLWINDOW | WS_EX_TOPMOST);
+	AdjustWindowRectEx(&windowRc, WS_POPUP, FALSE, WS_EX_TOOLWINDOW | WS_EX_TOPMOST);
 	int width = windowRc.right - windowRc.left;
 	int height = windowRc.bottom - windowRc.top;
 
@@ -2598,7 +2984,7 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 
 	HWND hwnd = CreateWindowExW(WS_EX_TOOLWINDOW | WS_EX_TOPMOST,
 		L"AbiWordColorPopup", L"",
-		WS_POPUP | WS_BORDER,
+		WS_POPUP,
 		x, y, width, height,
 		toolbarHwnd, nullptr, GetModuleHandleW(nullptr), popup);
 	if (!hwnd)
@@ -2608,6 +2994,7 @@ static void s_showColorPopup(EV_Win32Toolbar * toolbar, UINT cmd, XAP_Toolbar_Id
 		return;
 	}
 
+	s_applyPopupRoundedCorners(hwnd);
 	ShowWindow(hwnd, SW_SHOW);
 	SetFocus(hwnd);
 	SetCapture(hwnd);

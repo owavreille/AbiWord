@@ -2363,8 +2363,11 @@ void fp_ShadowContainer::_drawHdrFtrBoundaries(dg_DrawArgs * pDA)
 //
 //	if(m_bHdrFtrBoxDrawn)
 //		return;
-	UT_RGBColor clrDrawHdrFtr(127,127,127);
-	getGraphics()->setLineWidth(getGraphics()->tlu(1));
+	UT_RGBColor clrDrawHdrFtr(110, 148, 195);
+	getGraphics()->setLineProperties(getGraphics()->tluD(1.0),
+									 GR_Graphics::JOIN_MITER,
+									 GR_Graphics::CAP_BUTT,
+									 GR_Graphics::LINE_ON_OFF_DASH);
 	getGraphics()->setColor(clrDrawHdrFtr);
 //
 // These magic numbers stop clearscreens from blanking the lines
@@ -2380,8 +2383,11 @@ void fp_ShadowContainer::_drawHdrFtrBoundaries(dg_DrawArgs * pDA)
 	painter.drawLine(m_ixoffBegin, m_iyoffEnd, m_ixoffEnd, m_iyoffEnd);
 	painter.drawLine(m_ixoffBegin, m_iyoffBegin, m_ixoffBegin, m_iyoffEnd);
 	painter.drawLine(m_ixoffEnd, m_iyoffBegin, m_ixoffEnd, m_iyoffEnd);
-	getGraphics()->setLineWidth(getGraphics()->tlu(1));
-    m_bHdrFtrBoxDrawn = true;
+	getGraphics()->setLineProperties(getGraphics()->tluD(1.0),
+									 GR_Graphics::JOIN_MITER,
+									 GR_Graphics::CAP_BUTT,
+									 GR_Graphics::LINE_SOLID);
+	m_bHdrFtrBoxDrawn = true;
 }
 
 

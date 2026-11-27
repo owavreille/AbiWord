@@ -81,6 +81,123 @@
 #define TBDDRET_DEFAULT 0 
 #endif
 
+#ifndef WM_UAHDRAWMENU
+#define WM_UAHDRAWMENU 0x0091
+#endif
+
+#ifndef WM_UAHDRAWMENUITEM
+#define WM_UAHDRAWMENUITEM 0x0092
+#endif
+
+#ifndef ODS_HOTLIGHT
+#define ODS_HOTLIGHT 0x0040
+#endif
+
+#ifndef ODS_INACTIVE
+#define ODS_INACTIVE 0x0080
+#endif
+
+#ifndef ODS_NOACCEL
+#define ODS_NOACCEL 0x0100
+#endif
+
+#ifndef DT_HIDEPREFIX
+#define DT_HIDEPREFIX 0x00100000
+#endif
+
+#ifndef OBJID_MENU
+#define OBJID_MENU ((LONG)0xFFFFFFFD)
+#endif
+
+struct AbiUahMenu
+{
+	HMENU hmenu;
+	HDC hdc;
+	DWORD dwFlags;
+};
+
+union AbiUahMenuItemMetrics
+{
+	struct { DWORD cx; DWORD cy; } rgsizeBar[2];
+	struct { DWORD cx; DWORD cy; } rgsizePopup[4];
+};
+
+struct AbiUahMenuPopupMetrics
+{
+	DWORD rgcx[4];
+	DWORD fUpdateMaxWidths : 2;
+};
+
+struct AbiUahMenuItem
+{
+	int iPosition;
+	AbiUahMenuItemMetrics umim;
+	AbiUahMenuPopupMetrics umpm;
+};
+
+struct AbiUahDrawMenuItem
+{
+	DRAWITEMSTRUCT dis;
+	AbiUahMenu um;
+	AbiUahMenuItem umi;
+};
+
+static HFONT s_menuBarFont(int dpi)
+{
+	if (dpi < 96)
+		dpi = 96;
+	struct Entry { int dpi; HFONT font; };
+	static Entry s_cache[8] = {};
+	for (int i = 0; i < 8; ++i)
+	{
+		if (s_cache[i].dpi == dpi && s_cache[i].font)
+			return s_cache[i].font;
+	}
+	NONCLIENTMETRICSW ncm;
+	HFONT created = nullptr;
+	if (UT_Win32GetNonClientMetrics(&ncm, dpi))
+		created = CreateFontIndirectW(&ncm.lfMenuFont);
+	if (!created)
+		created = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+	for (int i = 0; i < 8; ++i)
+	{
+		if (!s_cache[i].font)
+		{
+			s_cache[i].dpi = dpi;
+			s_cache[i].font = created;
+			return created;
+		}
+	}
+	if (created != static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT)))
+		DeleteObject(created);
+	return s_cache[0].font ? s_cache[0].font : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+}
+
+static void s_paintDarkMenuBottomLine(HWND hwnd, COLORREF color)
+{
+	if (!hwnd || !GetMenu(hwnd))
+		return;
+	RECT rcClient = {};
+	RECT rcWindow = {};
+	if (!GetClientRect(hwnd, &rcClient) || !GetWindowRect(hwnd, &rcWindow))
+		return;
+	MapWindowPoints(hwnd, nullptr, reinterpret_cast<LPPOINT>(&rcClient), 2);
+	OffsetRect(&rcClient, -rcWindow.left, -rcWindow.top);
+	RECT rcLine = rcClient;
+	rcLine.bottom = rcLine.top;
+	rcLine.top = rcLine.bottom - 1;
+	if (rcLine.right <= rcLine.left || rcLine.top < 0)
+		return;
+	HDC hdc = GetWindowDC(hwnd);
+	if (!hdc)
+		return;
+	HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+	COLORREF prevBrush = SetDCBrushColor(hdc, color);
+	FillRect(hdc, &rcLine, dcBrush);
+	SetDCBrushColor(hdc, prevBrush);
+	ReleaseDC(hwnd, hdc);
+}
+
 WHICHPROC s_oldRedBar; 
 
 // Where the heck is this function????
@@ -112,7 +229,7 @@ LRESULT CALLBACK s_rebarWndProc( HWND hWnd, UINT uMessage, WPARAM wParam, LPARAM
 
 			if (mesure->CtlType==ODT_COMBOBOX)
 			{
-				mesure->itemHeight = static_cast<UINT>(UT_ui_px_at_dpi(16, UT_Win32WindowDpi(hWnd)));
+				mesure->itemHeight = static_cast<UINT>(UT_ui_px_at_dpi(22, UT_Win32WindowDpi(hWnd)));
 				return TRUE;
 			}
 			break;
@@ -596,6 +713,8 @@ void XAP_Win32FrameImpl::_refreshChrome(void)
 	{
 		UT_Win32ApplyWindowTheme(m_hwndStatusBar);
 		UT_Win32RefreshStatusFont(m_hwndStatusBar);
+		SendMessageW(m_hwndStatusBar, SB_SETMINHEIGHT,
+			static_cast<WPARAM>(UT_ui_px_at_dpi(26, UT_Win32WindowDpi(m_hwndStatusBar))), 0);
 		SendMessageW(m_hwndStatusBar, WM_SIZE, 0, 0);
 		RECT statusRect = {};
 		if (GetClientRect(m_hwndStatusBar, &statusRect) && statusRect.bottom > statusRect.top)
@@ -617,6 +736,8 @@ void XAP_Win32FrameImpl::_refreshChrome(void)
 		bar->rebuildIcons();
 		bar->applyChrome();
 	}
+	if (m_hwndContainer && IsWindow(m_hwndContainer))
+		SendMessageW(m_hwndContainer, WM_SYSCOLORCHANGE, 0, 0);
 	RECT rc;
 	memset(&rc, 0, sizeof(rc));
 	if (m_hwndFrame && GetClientRect(m_hwndFrame, &rc) && rc.right > 0 && rc.bottom > 0)
@@ -1028,57 +1149,7 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 					EV_Win32Toolbar * t = (EV_Win32Toolbar *)fimpl->m_vecToolbars.getNthItem(k);
 					if( t && (pNMcd->hdr.hwndFrom == t->getWindow()) )
 					{
-						if( pNMcd->dwDrawStage == CDDS_PREPAINT )
-						{
-							return CDRF_NOTIFYPOSTPAINT;
-						}
-						if( pNMcd->dwDrawStage == CDDS_POSTPAINT )
-						{
-							RECT  rc;
-							const bool dark = UT_Win32AppsUseDarkTheme();
-							HBRUSH hBr = dark
-								? static_cast<HBRUSH>(GetStockObject(DC_BRUSH))
-								: GetSysColorBrush( COLOR_3DFACE );
-							COLORREF prevBrushColor = CLR_INVALID;
-							if (dark)
-								prevBrushColor = SetDCBrushColor(pNMcd->hdc, UT_Win32WorkspaceColor());
-
-							rc.top    = pNMcd->rc.top;
-							rc.bottom = pNMcd->rc.bottom;
-
-							HWND  hWndChild = FindWindowExW( pNMcd->hdr.hwndFrom, nullptr, nullptr, nullptr );
-							while( hWndChild != nullptr )
-							{
-								RECT   rcChild = {};
-								POINT  pt;
-								HWND nextChild = FindWindowExW( pNMcd->hdr.hwndFrom, hWndChild, nullptr, nullptr );
-								// GetWindowRect and ScreenToClient leave their
-								// outputs untouched when they fail.
-								if (GetWindowRect(hWndChild, &rcChild))
-								{
-									pt.x = rcChild.left;
-									pt.y = rcChild.top;
-									if (ScreenToClient(pNMcd->hdr.hwndFrom, &pt))
-									{
-										rc.left = pt.x;
-										pt.x = rcChild.right;
-										pt.y = rcChild.bottom;
-										if (ScreenToClient(pNMcd->hdr.hwndFrom, &pt))
-										{
-											rc.right = pt.x;
-											FillRect(pNMcd->hdc, &rc, hBr);
-										}
-									}
-								}
-								hWndChild = nextChild;
-							}
-
-							if (dark && prevBrushColor != CLR_INVALID)
-								SetDCBrushColor(pNMcd->hdc, prevBrushColor);
-
-							/* Don't delete hBr since it is stock or system owned */
-						}
-						break;
+						return t->onCustomDraw(reinterpret_cast<LPNMTBCUSTOMDRAW>(lParam));
 					}
 				}
 			}
@@ -1255,8 +1326,6 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		if (fimpl->m_hwndRebar)
 			SendMessageW(fimpl->m_hwndRebar,WM_SYSCOLORCHANGE,0,0);
 		fimpl->_refreshChrome();
-		if (fimpl->m_hwndContainer)
-			SendMessageW(fimpl->m_hwndContainer,WM_SYSCOLORCHANGE,0,0);
 		if (fimpl->m_hwndStatusBar)
 			SendMessageW(fimpl->m_hwndStatusBar,WM_SYSCOLORCHANGE,0,0);
 		return 0;
@@ -1372,9 +1441,112 @@ LRESULT CALLBACK XAP_Win32FrameImpl::_FrameWndProc(HWND hwnd, UINT iMsg, WPARAM 
 		}
 		return 0;
 
+	case WM_UAHDRAWMENU:
+	{
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+		if (!tc.dark || tc.highContrast)
+			break;
+		AbiUahMenu * pUDM = reinterpret_cast<AbiUahMenu *>(lParam);
+		if (!pUDM || !pUDM->hdc)
+			break;
+		MENUBARINFO mbi;
+		memset(&mbi, 0, sizeof(mbi));
+		mbi.cbSize = sizeof(mbi);
+		RECT rcWindow = {};
+		if (GetMenuBarInfo(hwnd, OBJID_MENU, 0, &mbi) && GetWindowRect(hwnd, &rcWindow))
+		{
+			OffsetRect(&mbi.rcBar, -rcWindow.left, -rcWindow.top);
+			HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+			COLORREF prevBrush = SetDCBrushColor(pUDM->hdc, tc.chromeBg);
+			FillRect(pUDM->hdc, &mbi.rcBar, dcBrush);
+			SetDCBrushColor(pUDM->hdc, prevBrush);
+		}
+		return 0;
+	}
+
+	case WM_UAHDRAWMENUITEM:
+	{
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+		if (!tc.dark || tc.highContrast)
+			break;
+		AbiUahDrawMenuItem * pUDMI = reinterpret_cast<AbiUahDrawMenuItem *>(lParam);
+		if (!pUDMI || !pUDMI->um.hdc)
+			break;
+
+		HDC hdc = pUDMI->um.hdc;
+		RECT rc = pUDMI->dis.rcItem;
+		const UINT state = pUDMI->dis.itemState;
+		const bool disabled = (state & (ODS_DISABLED | ODS_INACTIVE)) != 0;
+		const bool selected = (state & ODS_SELECTED) != 0;
+		const bool hot = (state & ODS_HOTLIGHT) != 0;
+		const int dpi = UT_Win32WindowDpi(hwnd);
+
+		HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+		COLORREF prevBrush = SetDCBrushColor(hdc, tc.chromeBg);
+		FillRect(hdc, &rc, dcBrush);
+
+		if (!disabled && (hot || selected))
+		{
+			RECT pill = rc;
+			InflateRect(&pill, -UT_ui_px_at_dpi(1, dpi), -UT_ui_px_at_dpi(2, dpi));
+			const int rad = UT_ui_px_at_dpi(4, dpi) * 2;
+			HBRUSH oldBrush = static_cast<HBRUSH>(SelectObject(hdc, dcBrush));
+			HPEN oldPen = static_cast<HPEN>(SelectObject(hdc, GetStockObject(NULL_PEN)));
+			SetDCBrushColor(hdc, selected ? tc.pressedFill : tc.hoverFill);
+			RoundRect(hdc, pill.left, pill.top, pill.right, pill.bottom, rad, rad);
+			if (oldPen)
+				SelectObject(hdc, oldPen);
+			if (oldBrush)
+				SelectObject(hdc, oldBrush);
+		}
+		SetDCBrushColor(hdc, prevBrush);
+
+		wchar_t buf[256];
+		buf[0] = 0;
+		MENUITEMINFOW mii;
+		memset(&mii, 0, sizeof(mii));
+		mii.cbSize = sizeof(mii);
+		mii.fMask = MIIM_STRING;
+		mii.dwTypeData = buf;
+		mii.cch = 256;
+		GetMenuItemInfoW(pUDMI->um.hmenu, static_cast<UINT>(pUDMI->umi.iPosition), TRUE, &mii);
+
+		HFONT oldFont = static_cast<HFONT>(SelectObject(hdc, s_menuBarFont(dpi)));
+		SetBkMode(hdc, TRANSPARENT);
+		SetTextColor(hdc, disabled ? tc.textDisabled : tc.text);
+		DWORD dtFlags = DT_CENTER | DT_SINGLELINE | DT_VCENTER;
+		if (state & ODS_NOACCEL)
+			dtFlags |= DT_HIDEPREFIX;
+		DrawTextW(hdc, buf, -1, &rc, dtFlags);
+		if (oldFont)
+			SelectObject(hdc, oldFont);
+		return 0;
+	}
+
+	case WM_NCPAINT:
+	case WM_NCACTIVATE:
+	{
+		LRESULT res = UT_DefWindowProc(hwnd, iMsg, wParam, lParam);
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+		if (tc.dark && !tc.highContrast)
+			s_paintDarkMenuBottomLine(hwnd, tc.chromeBg);
+		return res;
+	}
+
 	case WM_ERASEBKGND:
 	{
 		UT_Win32Trace("frame-erase");
+		HDC hdc = reinterpret_cast<HDC>(wParam);
+		RECT rc = {};
+		if (hdc && GetClientRect(hwnd, &rc))
+		{
+			const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+			HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+			COLORREF prevBrush = SetDCBrushColor(hdc, tc.chromeBg);
+			FillRect(hdc, &rc, dcBrush);
+			SetDCBrushColor(hdc, prevBrush);
+			return 1;
+		}
 		break;
 	}
 

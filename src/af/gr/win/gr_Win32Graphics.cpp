@@ -415,14 +415,40 @@ GR_Font* GR_Win32Graphics::getGUIFont(void)
 {
 	if (!m_pFontGUI)
 	{
-		// DEFAULT_GUI_FONT is a stock object. GetObjectW copies its
-		// LOGFONT; DeleteObject must not be called on the stock handle.
-		// A short or failed GetObjectW leaves the structure unwritten.
-		HFONT stock = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
-		LOGFONTW lf;
-		memset(&lf, 0, sizeof(lf));
-		if (stock && GetObjectW(stock, sizeof(lf), &lf) == sizeof(lf))
-			m_pFontGUI = _newFont(lf, 0, m_hdc, m_hdc);
+		// Prefer the modern system status font (Segoe UI) scaled to 8pt
+		// at the current window DPI with ClearType antialiasing, falling
+		// back to DEFAULT_GUI_FONT if unavailable.
+		int dpi = m_hwnd ? UT_Win32WindowDpi(m_hwnd) : m_nLogPixelsY;
+		if (dpi <= 0)
+			dpi = 96;
+
+		NONCLIENTMETRICSW ncm = {};
+		if (UT_Win32GetNonClientMetrics(&ncm, dpi))
+		{
+			LOGFONTW lf = ncm.lfStatusFont;
+			lf.lfHeight = -MulDiv(8, dpi, 72);
+#ifdef CLEARTYPE_QUALITY
+			lf.lfQuality = CLEARTYPE_QUALITY;
+#endif
+			HFONT hProbe = CreateFontIndirectW(&lf);
+			if (hProbe)
+			{
+				DeleteObject(hProbe);
+				m_pFontGUI = _newFont(lf, 0, m_hdc, m_hdc);
+			}
+		}
+
+		if (!m_pFontGUI)
+		{
+			// DEFAULT_GUI_FONT is a stock object. GetObjectW copies its
+			// LOGFONT; DeleteObject must not be called on the stock handle.
+			// A short or failed GetObjectW leaves the structure unwritten.
+			HFONT stock = static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+			LOGFONTW lf;
+			memset(&lf, 0, sizeof(lf));
+			if (stock && GetObjectW(stock, sizeof(lf), &lf) == sizeof(lf))
+				m_pFontGUI = _newFont(lf, 0, m_hdc, m_hdc);
+		}
 		UT_ASSERT(m_pFontGUI);
 	}
 	if(m_pFontGUI)
@@ -2327,13 +2353,46 @@ void GR_Win32Graphics::setColor3D(GR_Color3D c)
 	_setColor(m_3dColors[c]);
 }
 
+bool GR_Win32Graphics::getColor3D(GR_Color3D c, UT_RGBColor & color)
+{
+	UT_return_val_if_fail(c < COUNT_3D_COLORS, false);
+	color.m_red = GetRValue(m_3dColors[c]);
+	color.m_grn = GetGValue(m_3dColors[c]);
+	color.m_blu = GetBValue(m_3dColors[c]);
+	return true;
+}
+
 void GR_Win32Graphics::init3dColors(void)
 {
-	m_3dColors[CLR3D_Foreground] = GetSysColor(COLOR_BTNTEXT);
-	m_3dColors[CLR3D_Background] = GetSysColor(COLOR_3DFACE);
-	m_3dColors[CLR3D_BevelUp]    = GetSysColor(COLOR_3DHIGHLIGHT);
-	m_3dColors[CLR3D_BevelDown]  = GetSysColor(COLOR_3DSHADOW);
-	m_3dColors[CLR3D_Highlight]  = GetSysColor(COLOR_WINDOW);
+	HIGHCONTRASTW hc = {};
+	hc.cbSize = sizeof(hc);
+	const bool bHC = SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(hc), &hc, 0) &&
+					 (hc.dwFlags & HCF_HIGHCONTRASTON);
+
+	if (bHC)
+	{
+		m_3dColors[CLR3D_Foreground] = GetSysColor(COLOR_BTNTEXT);
+		m_3dColors[CLR3D_Background] = GetSysColor(COLOR_3DFACE);
+		m_3dColors[CLR3D_BevelUp]    = GetSysColor(COLOR_3DHIGHLIGHT);
+		m_3dColors[CLR3D_BevelDown]  = GetSysColor(COLOR_3DSHADOW);
+		m_3dColors[CLR3D_Highlight]  = GetSysColor(COLOR_WINDOW);
+	}
+	else if (UT_Win32AppsUseDarkTheme())
+	{
+		m_3dColors[CLR3D_Background] = RGB(32, 32, 32);
+		m_3dColors[CLR3D_Highlight]  = RGB(54, 54, 54);
+		m_3dColors[CLR3D_BevelDown]  = RGB(42, 42, 42);
+		m_3dColors[CLR3D_BevelUp]    = RGB(68, 68, 68);
+		m_3dColors[CLR3D_Foreground] = RGB(190, 190, 190);
+	}
+	else
+	{
+		m_3dColors[CLR3D_Background] = RGB(243, 243, 243);
+		m_3dColors[CLR3D_Highlight]  = RGB(255, 255, 255);
+		m_3dColors[CLR3D_BevelDown]  = RGB(224, 224, 224);
+		m_3dColors[CLR3D_BevelUp]    = RGB(250, 250, 250);
+		m_3dColors[CLR3D_Foreground] = RGB(96, 96, 96);
+	}
 }
 
 void GR_Win32Graphics::fillRect(GR_Color3D c, UT_sint32 x, UT_sint32 y, UT_sint32 w, UT_sint32 h)

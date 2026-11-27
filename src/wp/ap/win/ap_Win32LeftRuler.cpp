@@ -94,7 +94,7 @@ bool AP_Win32LeftRuler::registerClass(XAP_Win32App * app)
 	swprintf(s_LeftRulerWndClassName, L"%sLeftRuler",  str.c_str());
 
 	a = UT_RegisterClassEx(CS_DBLCLKS | CS_OWNDC, AP_Win32LeftRuler::_LeftRulerWndProc, app->getInstance(),
-						   nullptr, LoadCursor(nullptr, IDC_ARROW), GetSysColorBrush(COLOR_BTNFACE), nullptr,
+						   nullptr, LoadCursor(nullptr, IDC_ARROW), nullptr, nullptr,
 						   nullptr, s_LeftRulerWndClassName);
 	if (!a)
 	{

@@ -293,14 +293,14 @@ FV_View::FV_View(XAP_App * pApp, void* pParentData, FL_DocLayout* pLayout)
 		m_dragImageRect(-1,-1,-1,-1),
 		m_ixDragOrigin(0),
 		m_iyDragOrigin(0),
-		m_colorShowPara(127,127,127),
-		m_colorSpellSquiggle(255, 0, 0),
-		m_colorGrammarSquiggle(0, 192, 0),
+		m_colorShowPara(143, 168, 200),
+		m_colorSpellSquiggle(217, 48, 37),
+		m_colorGrammarSquiggle(24, 128, 56),
 		m_colorMargin(127, 127, 127),
 		m_colorFieldOffset(10, 10, 10),
 		m_colorImage(0, 0, 255),
 		m_colorImageResize(0, 0, 0),
-		m_colorHyperLink(0, 0, 255),
+		m_colorHyperLink(0, 102, 204),
 		m_colorHdrFtr(0, 0, 0),
 		m_colorColumnLine(0, 0, 0),
 		m_countDisable(0),
@@ -1798,7 +1798,7 @@ bool FV_View::isInDocSection(PT_DocPosition pos) const
 
 UT_RGBColor FV_View::getColorSelBackground ()
 {
-  static UT_RGBColor bgcolor (192, 192, 192);
+  static UT_RGBColor bgcolor (180, 213, 254);
 
   XAP_Frame * pFrame = nullptr;
 
@@ -8559,7 +8559,7 @@ void FV_View::forgetDeletedPage(const fp_Page * pPage)
 	UT_sint32 xoff = 0;
 	UT_sint32 yoff = 0;
 	getPageScreenOffsets(pPage, xoff, yoff);
-	const UT_sint32 pad = m_pG->tlu(4);
+	const UT_sint32 pad = m_pG->tlu(6);
 	UT_sint32 left = xoff - pad;
 	UT_sint32 top = yoff - pad;
 	UT_sint32 right = xoff + pPage->getWidth() + pad;
@@ -8654,32 +8654,16 @@ inline void FV_View::_drawResizeHandle(UT_Rect & box)
 								 GR_Graphics::JOIN_MITER,
 								 GR_Graphics::CAP_PROJECTING,
 								 GR_Graphics::LINE_SOLID);	
-	
-	UT_RGBColor color = getColorSelBackground();
-	pG->setColor(color);
 
-	UT_RGBColor downColor1 = UT_RGBColor(SELDOWNCOLOR(color.m_red, 40), SELDOWNCOLOR(color.m_grn, 40), SELDOWNCOLOR(color.m_blu, 40));
-	UT_RGBColor downColor2 = UT_RGBColor(SELDOWNCOLOR(color.m_red, 20), SELDOWNCOLOR(color.m_grn, 20), SELDOWNCOLOR(color.m_blu, 20));
-	UT_RGBColor upColor1 = UT_RGBColor(SELUPCOLOR(color.m_red, 40), SELUPCOLOR(color.m_grn, 40), SELUPCOLOR(color.m_blu, 40));
-	UT_RGBColor upColor2 = UT_RGBColor(SELUPCOLOR(color.m_red, 20), SELUPCOLOR(color.m_grn, 20), SELUPCOLOR(color.m_blu, 20));
+	UT_RGBColor fill(255, 255, 255);
+	painter.fillRect(fill, box.left, box.top, box.width, box.height);
 
-	painter.fillRect(color,box.left + pG->tlu(1), box.top + pG->tlu(1), box.width - pG->tlu(3), box.height - pG->tlu(3));
-
-	// east & south
-	pG->setColor(downColor1);
+	UT_RGBColor border = getColorSelBackground();
+	pG->setColor(border);
+	painter.drawLine(left, top, right, top);
 	painter.drawLine(right, top, right, bottom);
 	painter.drawLine(left, bottom, right, bottom);
-	pG->setColor(downColor2);
-	painter.drawLine(right - pG->tlu(1), top + pG->tlu(1), right - pG->tlu(1), bottom - pG->tlu(1));
-	painter.drawLine(left + pG->tlu(1), bottom - pG->tlu(1), right - pG->tlu(1), bottom - pG->tlu(1));
-
-	// north & west
-	pG->setColor(upColor1);
-	painter.drawLine(left, top, right, top);
 	painter.drawLine(left, top, left, bottom);
-	pG->setColor(upColor2);
-	painter.drawLine(left + pG->tlu(1), top + pG->tlu(1), right - pG->tlu(1), top + pG->tlu(1));
-	painter.drawLine(left + pG->tlu(1), top + pG->tlu(1), left + pG->tlu(1), bottom - pG->tlu(1));
 
 /* This is the original code, but rearranged above so we don't have to set the colour so often
 	// west

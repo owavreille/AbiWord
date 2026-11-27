@@ -4920,16 +4920,19 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 		// draw page decorations
 		UT_RGBColor clr(0,0,0);
 		UT_RGBColor canvas;
-		if (m_pG->getScreenCanvas(canvas))
+		const bool bHaveCanvas = m_pG->getScreenCanvas(canvas);
+		const bool bDarkCanvas = bHaveCanvas &&
+			((int)canvas.m_red + (int)canvas.m_grn + (int)canvas.m_blu < 200);
+		if (bHaveCanvas)
 		{
-			if ((int)canvas.m_red + (int)canvas.m_grn + (int)canvas.m_blu < 200)
-				clr = UT_RGBColor(96, 96, 96);
+			if (bDarkCanvas)
+				clr = UT_RGBColor(64, 64, 64);
 			else
-				clr = UT_RGBColor(180, 180, 180);
+				clr = UT_RGBColor(210, 210, 210);
 		}
 		m_pG->setColor(clr);
 
-		// one pixel border a
+		// subtle one pixel hairline border
 		if(!isPreview() && (getViewMode() == VIEW_PRINT))
 		{
 			m_pG->setLineProperties(m_pG->tluD(1.0),
@@ -4962,7 +4965,7 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 			m_pG->setColor(clr);
 		}
 
-		// two pixel drop shadow for pages in print view
+		// soft multi-layered elevation shadow for pages in print view
 		if(!isPreview() && (getViewMode() == VIEW_PRINT) && !pFrame->isMenuScrollHidden() )
 		{
 			m_pG->setLineProperties(m_pG->tluD(1.0),
@@ -4970,19 +4973,61 @@ void FV_View::_draw(UT_sint32 x, UT_sint32 y,
 					GR_Graphics::CAP_PROJECTING,
 					GR_Graphics::LINE_SOLID);
 
-			adjustedLeft += m_pG->tlu(3);
-			adjustedBottom += m_pG->tlu(1);
-			painter.drawLine(adjustedLeft, adjustedBottom, adjustedRight + m_pG->tlu(1), adjustedBottom);
+			if (bHaveCanvas)
+			{
+				auto blendColor = [](const UT_RGBColor & base, const UT_RGBColor & bg, double alpha) -> UT_RGBColor {
+					auto mix = [alpha](unsigned char a, unsigned char b) -> unsigned char {
+						int v = static_cast<int>(a * alpha + b * (1.0 - alpha) + 0.5);
+						if (v < 0) v = 0;
+						if (v > 255) v = 255;
+						return static_cast<unsigned char>(v);
+					};
+					return UT_RGBColor(mix(base.m_red, bg.m_red),
+									   mix(base.m_grn, bg.m_grn),
+									   mix(base.m_blu, bg.m_blu));
+				};
 
-			adjustedBottom += m_pG->tlu(1);
-			painter.drawLine(adjustedLeft, adjustedBottom, adjustedRight + m_pG->tlu(1), adjustedBottom);
+				const UT_RGBColor shadowBase(0, 0, 0);
+				const double lightAlphas[4] = { 0.22, 0.13, 0.07, 0.03 };
+				const double darkAlphas[4]  = { 0.45, 0.28, 0.15, 0.07 };
+				const double * alphas = bDarkCanvas ? darkAlphas : lightAlphas;
+				const double ambientAlpha = bDarkCanvas ? 0.18 : 0.06;
 
-			adjustedTop += m_pG->tlu(3);
-			adjustedRight += m_pG->tlu(1);
-			painter.drawLine(adjustedRight, adjustedTop, adjustedRight, adjustedBottom);
+				// 1px subtle ambient shadow on left and top edges
+				const UT_sint32 onePx = m_pG->tlu(1);
+				m_pG->setColor(blendColor(shadowBase, canvas, ambientAlpha));
+				painter.drawLine(adjustedLeft - onePx, adjustedTop - onePx,
+								 adjustedRight + onePx, adjustedTop - onePx);
+				painter.drawLine(adjustedLeft - onePx, adjustedTop - onePx,
+								 adjustedLeft - onePx, adjustedBottom + onePx);
 
-			adjustedRight += m_pG->tlu(1);
-			painter.drawLine(adjustedRight, adjustedTop, adjustedRight, adjustedBottom);
+				// 4-layer stepped elevation shadow on bottom and right edges
+				for (int i = 1; i <= 4; ++i)
+				{
+					const UT_sint32 d = m_pG->tlu(i);
+					m_pG->setColor(blendColor(shadowBase, canvas, alphas[i - 1]));
+					painter.drawLine(adjustedLeft + d, adjustedBottom + d,
+									 adjustedRight + d, adjustedBottom + d);
+					painter.drawLine(adjustedRight + d, adjustedTop + d,
+									 adjustedRight + d, adjustedBottom + d);
+				}
+			}
+			else
+			{
+				adjustedLeft += m_pG->tlu(3);
+				adjustedBottom += m_pG->tlu(1);
+				painter.drawLine(adjustedLeft, adjustedBottom, adjustedRight + m_pG->tlu(1), adjustedBottom);
+
+				adjustedBottom += m_pG->tlu(1);
+				painter.drawLine(adjustedLeft, adjustedBottom, adjustedRight + m_pG->tlu(1), adjustedBottom);
+
+				adjustedTop += m_pG->tlu(3);
+				adjustedRight += m_pG->tlu(1);
+				painter.drawLine(adjustedRight, adjustedTop, adjustedRight, adjustedBottom);
+
+				adjustedRight += m_pG->tlu(1);
+				painter.drawLine(adjustedRight, adjustedTop, adjustedRight, adjustedBottom);
+			}
 		}
 
 		// advance to the next page

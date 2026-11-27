@@ -267,8 +267,7 @@ public:
 	virtual void			handleSetCursorMessage(void);
 
 	virtual void			setColor3D(GR_Color3D c) override;
-	virtual bool			getColor3D(GR_Color3D, UT_RGBColor &) override
-	{ return false; }
+	virtual bool			getColor3D(GR_Color3D c, UT_RGBColor & color) override;
 	virtual bool			getScreenCanvas(UT_RGBColor & color) override;
 	void					init3dColors(void);
 	virtual void			fillRect(GR_Color3D c,

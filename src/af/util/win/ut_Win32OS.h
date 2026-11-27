@@ -61,13 +61,35 @@ void UT_Win32Trace(const char * step);
 void UT_Win32TraceF(const char * fmt, ...);
 void UT_Win32TraceHeap(const char * step);
 
+struct UT_Win32ThemeColors {
+	COLORREF chromeBg;
+	COLORREF surfaceBg;
+	COLORREF text;
+	COLORREF textMuted;
+	COLORREF textDisabled;
+	COLORREF border;
+	COLORREF controlBorder;
+	COLORREF hoverFill;
+	COLORREF pressedFill;
+	COLORREF checkedFill;
+	COLORREF checkedBorder;
+	bool dark;
+	bool highContrast;
+};
+
 // AppsUseLightTheme, read through advapi32 so the link line stays unchanged.
 bool UT_Win32AppsUseDarkTheme(void);
+// Fluent Light / Dark / High-Contrast palette for Win32 chrome.
+ABI_EXPORT UT_Win32ThemeColors UT_Win32GetThemeColors();
+// Opt the process into dark-mode popup menus and controls on Windows 10 1903+.
+ABI_EXPORT void UT_Win32InitDarkMode();
+// Flush cached uxtheme menu themes after a system theme change.
+ABI_EXPORT void UT_Win32FlushMenuThemes();
 // Drop the cached theme after WM_SETTINGCHANGE.
 void UT_Win32NoteThemeChanged(void);
 // Caption theme, rounded corners, and the window material. Menus stay system menus.
 void UT_Win32ApplyCaptionTheme(HWND hwnd);
-// DarkMode_Explorer, or an empty theme in light mode so the rebar drops its edge.
+// DarkMode_Explorer in dark mode, default Visual Styles in light / high-contrast mode.
 void UT_Win32ApplyWindowTheme(HWND hwnd);
 // NONCLIENTMETRICS for one window DPI. SystemParametersInfo itself is not
 // per-monitor; the fonts are scaled when ForDpi is absent.

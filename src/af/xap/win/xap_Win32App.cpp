@@ -31,6 +31,7 @@
 #include "ut_assert.h"
 #include "ut_debugmsg.h"
 #include "ut_path.h"
+#include "ut_Win32OS.h"
 #include "ut_Win32Uuid.h"
 #include "ut_Win32LocaleString.h"
 #include "xap_Win32App.h"
@@ -167,6 +168,8 @@ HINSTANCE XAP_Win32App::getInstance() const
 
 bool XAP_Win32App::initialize(const char * szKeyBindingsKey, const char * szKeyBindingsDefaultValue)
 {
+	UT_Win32InitDarkMode();
+
 	// let our base class do it's thing.
 
 	XAP_App::initialize(szKeyBindingsKey, szKeyBindingsDefaultValue);

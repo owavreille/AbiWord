@@ -24,6 +24,7 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <commctrl.h>
 
 #include "ut_types.h"
 #include "ut_vector.h"
@@ -70,6 +71,7 @@ public:
 
 	void applyChrome(void);
 	void rebuildIcons(void);
+	LRESULT onCustomDraw(LPNMTBCUSTOMDRAW lpcd);
 
 	XAP_Frame * getFrame(void);
 
@@ -115,6 +117,7 @@ private:
 	HWND							m_hwnd;
 	void *							m_imageList;
 	int								m_iconPx;
+	bool							m_iconsDark;
 	UT_GenericVector<char *>		m_iconNames;
 	UT_Vector						m_vecToolbarWidgets;
 	AP_Win32Toolbar_FontCombo*		m_pFontCtrl;

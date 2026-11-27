@@ -68,10 +68,112 @@ LRESULT APIENTRY StatusbarWndProc (HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM l
 	AP_Win32StatusBar *pBar = reinterpret_cast<AP_Win32StatusBar *>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
 	UT_return_val_if_fail (pBar, 0);
 
+    if (uMsg == WM_ERASEBKGND)
+	{
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+		if (!tc.highContrast)
+			return 1;
+	}
+
     if (uMsg == WM_PAINT)
 	{
 		UT_Win32Trace("status-paint");
 		UT_Win32TraceHeap("status-paint");
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+		if (!tc.highContrast)
+		{
+			PAINTSTRUCT ps;
+			HDC hdc = BeginPaint(hwnd, &ps);
+			if (!hdc)
+			{
+				EndPaint(hwnd, &ps);
+				return 0;
+			}
+			RECT rc = {};
+			if (GetClientRect(hwnd, &rc) && rc.right > rc.left && rc.bottom > rc.top)
+			{
+				const int w = rc.right - rc.left;
+				const int h = rc.bottom - rc.top;
+				HDC paintDc = hdc;
+				HDC memDc = CreateCompatibleDC(hdc);
+				HBITMAP memBmp = memDc ? CreateCompatibleBitmap(hdc, w, h) : nullptr;
+				HBITMAP oldBmp = (memDc && memBmp) ? static_cast<HBITMAP>(SelectObject(memDc, memBmp)) : nullptr;
+				if (memDc && memBmp)
+					paintDc = memDc;
+
+				HBRUSH dcBrush = static_cast<HBRUSH>(GetStockObject(DC_BRUSH));
+				COLORREF prevBrush = SetDCBrushColor(paintDc, tc.chromeBg);
+				FillRect(paintDc, &rc, dcBrush);
+
+				RECT topLine = { rc.left, rc.top, rc.right, rc.top + 1 };
+				SetDCBrushColor(paintDc, tc.border);
+				FillRect(paintDc, &topLine, dcBrush);
+
+				HFONT font = reinterpret_cast<HFONT>(SendMessageW(hwnd, WM_GETFONT, 0, 0));
+				HFONT oldFont = font ? static_cast<HFONT>(SelectObject(paintDc, font)) : nullptr;
+				SetBkMode(paintDc, TRANSPARENT);
+				SetTextColor(paintDc, tc.textMuted);
+
+				const int dpi = UT_Win32WindowDpi(hwnd);
+				const int padX = UT_ui_px_at_dpi(8, dpi);
+				const int divInset = UT_ui_px_at_dpi(6, dpi);
+				const int nParts = static_cast<int>(SendMessageW(hwnd, SB_GETPARTS, 0, 0));
+				const UINT rtlFlag = (pBar->getDir() & SBT_RTLREADING) ? DT_RTLREADING : 0;
+				bool prevNonEmpty = false;
+
+				for (int i = 0; i < nParts; ++i)
+				{
+					RECT partRc = {};
+					if (!SendMessageW(hwnd, SB_GETRECT, static_cast<WPARAM>(i), reinterpret_cast<LPARAM>(&partRc)))
+						continue;
+					const int len = static_cast<int>(LOWORD(SendMessageW(hwnd, SB_GETTEXTLENGTHW, static_cast<WPARAM>(i), 0)));
+					if (len <= 0)
+						continue;
+					wchar_t buf[512];
+					buf[0] = 0;
+					if (len < 512)
+						SendMessageW(hwnd, SB_GETTEXTW, static_cast<WPARAM>(i), reinterpret_cast<LPARAM>(buf));
+					if (!buf[0])
+						continue;
+
+					if (prevNonEmpty && partRc.left > rc.left)
+					{
+						RECT divRc = { partRc.left, rc.top + divInset, partRc.left + 1, rc.bottom - divInset };
+						if (divRc.bottom > divRc.top)
+						{
+							SetDCBrushColor(paintDc, tc.border);
+							FillRect(paintDc, &divRc, dcBrush);
+						}
+					}
+
+					RECT textRc = partRc;
+					textRc.left += padX;
+					textRc.right -= padX;
+					textRc.top += 1;
+					if (textRc.right > textRc.left)
+					{
+						DrawTextW(paintDc, buf, -1, &textRc,
+							DT_LEFT | DT_VCENTER | DT_SINGLELINE | DT_END_ELLIPSIS | DT_NOPREFIX | rtlFlag);
+					}
+					prevNonEmpty = true;
+				}
+
+				if (oldFont)
+					SelectObject(paintDc, oldFont);
+				SetDCBrushColor(paintDc, prevBrush);
+
+				if (paintDc == memDc)
+					BitBlt(hdc, 0, 0, w, h, memDc, 0, 0, SRCCOPY);
+				if (oldBmp)
+					SelectObject(memDc, oldBmp);
+				if (memBmp)
+					DeleteObject(memBmp);
+				if (memDc)
+					DeleteDC(memDc);
+			}
+			EndPaint(hwnd, &ps);
+			return 0;
+		}
 	}
 
     if ((uMsg == WM_SIZE || uMsg == SB_SETPARTS) && hwnd) {
@@ -332,13 +434,16 @@ HWND AP_Win32StatusBar::createWindow(HWND hwndFrame,
 	
 	*/
 	m_hwndStatusBar = UT_CreateWindowEx(0, STATUSCLASSNAMEW, nullptr,
-										WS_CHILD | WS_VISIBLE,
+										WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN,
 										0, 0, 0, 0,
 										hwndFrame, nullptr, app->getInstance(),nullptr);
 	if (!m_hwndStatusBar)
 		UT_return_val_if_fail (m_hwndStatusBar, nullptr);
 	UT_Win32ApplyWindowTheme(m_hwndStatusBar);
 	UT_Win32RefreshStatusFont(m_hwndStatusBar);
+	SendMessageW(m_hwndStatusBar, SB_SETMINHEIGHT,
+		static_cast<WPARAM>(UT_ui_px_at_dpi(26, UT_Win32WindowDpi(m_hwndStatusBar))), 0);
+	SendMessageW(m_hwndStatusBar, WM_SIZE, 0, 0);
 	// add progress bar and hide it 
 	//  set the color and range 
 	m_hwndProgressBar= UT_CreateWindowEx(0, PROGRESS_CLASSW, nullptr,

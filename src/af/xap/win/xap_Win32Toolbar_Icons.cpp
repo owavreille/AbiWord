@@ -23,6 +23,7 @@
 #include "ut_types.h"
 #include "ut_assert.h"
 #include "ut_color.h"
+#include "ut_Win32OS.h"
 #include "ut_Xpm2Bmp.h"
 #include "xap_Win32Toolbar_Icons.h"
 #include "xap_Win32App.h"
@@ -129,6 +130,7 @@ static bool xap_FitIcon32(BYTE *& pixels, XAP_Win32BitmapInfo & info, LONG dstW,
 	const int originX = (dstW - drawW) / 2;
 	const int originY = (dstH - drawH) / 2;
 	const bool shrink = drawW < srcW || drawH < srcH;
+	const bool upscale = drawW > srcW || drawH > srcH;
 
 	for (int y = 0; y < drawH; ++y)
 	{
@@ -136,6 +138,83 @@ static bool xap_FitIcon32(BYTE *& pixels, XAP_Win32BitmapInfo & info, LONG dstW,
 		{
 			BYTE * out = dst + static_cast<DWORD>(originY + y) * dstStride
 				+ static_cast<DWORD>(originX + x) * 4;
+
+			if (upscale)
+			{
+				double fx = (static_cast<double>(x) + 0.5) * static_cast<double>(srcW) / static_cast<double>(drawW) - 0.5;
+				double fy = (static_cast<double>(y) + 0.5) * static_cast<double>(srcH) / static_cast<double>(drawH) - 0.5;
+				if (fx < 0.0)
+					fx = 0.0;
+				if (fy < 0.0)
+					fy = 0.0;
+				if (fx > static_cast<double>(srcW - 1))
+					fx = static_cast<double>(srcW - 1);
+				if (fy > static_cast<double>(srcH - 1))
+					fy = static_cast<double>(srcH - 1);
+
+				const int ix0 = static_cast<int>(fx);
+				const int iy0 = static_cast<int>(fy);
+				const int ix1 = (ix0 + 1 < srcW) ? ix0 + 1 : ix0;
+				const int iy1 = (iy0 + 1 < srcH) ? iy0 + 1 : iy0;
+				const double wx = fx - static_cast<double>(ix0);
+				const double wy = fy - static_cast<double>(iy0);
+
+				const int xs[2] = { ix0, ix1 };
+				const int ys[2] = { iy0, iy1 };
+				const double ws[4] = {
+					(1.0 - wx) * (1.0 - wy),
+					wx * (1.0 - wy),
+					(1.0 - wx) * wy,
+					wx * wy
+				};
+
+				double sumB = 0.0;
+				double sumG = 0.0;
+				double sumR = 0.0;
+				double sumA = 0.0;
+				for (int j = 0; j < 2; ++j)
+				{
+					const int sourceY = topDown ? srcH - 1 - ys[j] : ys[j];
+					for (int i = 0; i < 2; ++i)
+					{
+						const double w = ws[j * 2 + i];
+						if (w <= 0.0)
+							continue;
+						const BYTE * in = pixels + static_cast<DWORD>(sourceY) * srcStride + static_cast<DWORD>(xs[i]) * 4;
+						if (xap_IsKeyPixel(in))
+							continue;
+						const double a = (in[3] == 0) ? 255.0 : static_cast<double>(in[3]);
+						const double wa = w * (a / 255.0);
+						sumB += static_cast<double>(in[0]) * wa;
+						sumG += static_cast<double>(in[1]) * wa;
+						sumR += static_cast<double>(in[2]) * wa;
+						sumA += w * a;
+					}
+				}
+
+				int outA = static_cast<int>(sumA + 0.5);
+				if (outA <= 0 || sumA <= 0.0)
+					continue;
+				if (outA > 255)
+					outA = 255;
+
+				const double invA = 255.0 / sumA;
+				int outB = static_cast<int>(sumB * invA + 0.5);
+				int outG = static_cast<int>(sumG * invA + 0.5);
+				int outR = static_cast<int>(sumR * invA + 0.5);
+				if (outB < 0) outB = 0; else if (outB > 255) outB = 255;
+				if (outG < 0) outG = 0; else if (outG > 255) outG = 255;
+				if (outR < 0) outR = 0; else if (outR > 255) outR = 255;
+
+				out[0] = static_cast<BYTE>(outB);
+				out[1] = static_cast<BYTE>(outG);
+				out[2] = static_cast<BYTE>(outR);
+				out[3] = static_cast<BYTE>(outA);
+				if (xap_IsKeyPixel(out))
+					out[2] = 0xEF;
+				continue;
+			}
+
 			const int x0 = x * srcW / drawW;
 			int x1 = (x + 1) * srcW / drawW;
 			const int y0 = y * srcH / drawH;
@@ -862,6 +941,9 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 
 	if (bmpInfo.header.biBitCount == 32)
 	{
+		const UT_Win32ThemeColors tc = UT_Win32GetThemeColors();
+		const bool adaptDark = tc.dark && !tc.highContrast;
+
 		for (DWORD pixel = 0; pixel + 4 <= bmpInfo.header.biSizeImage; pixel += 4)
 		{
 			if (buff[pixel] == TRANSPARENT_B && buff[pixel + 1] == TRANSPARENT_G && buff[pixel + 2] == TRANSPARENT_R)
@@ -879,6 +961,25 @@ bool XAP_Win32Toolbar_Icons::getAlphaBitmapForIcon(HWND /*hwnd*/,
 			BYTE a = buff[pixel + 3];
 			if (a == 0)
 				a = 255;
+
+			if (adaptDark)
+			{
+				const int maxC = (r > g) ? ((r > b) ? r : b) : ((g > b) ? g : b);
+				const int minC = (r < g) ? ((r < b) ? r : b) : ((g < b) ? g : b);
+				const int lum = (static_cast<int>(r) * 77 + static_cast<int>(g) * 150 + static_cast<int>(b) * 29) >> 8;
+				if ((maxC - minC) < 28 && lum < 120)
+				{
+					int mapped = 242 - (lum * 14) / 119;
+					if (mapped < 228)
+						mapped = 228;
+					else if (mapped > 242)
+						mapped = 242;
+					r = static_cast<BYTE>(mapped);
+					g = static_cast<BYTE>(mapped);
+					b = static_cast<BYTE>(mapped);
+				}
+			}
+
 			buff[pixel] = static_cast<BYTE>((b * a) / 255);
 			buff[pixel + 1] = static_cast<BYTE>((g * a) / 255);
 			buff[pixel + 2] = static_cast<BYTE>((r * a) / 255);

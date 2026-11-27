@@ -462,9 +462,49 @@ bool UT_Win32AppsUseDarkTheme(void)
 	return dark;
 }
 
+void UT_Win32FlushMenuThemes()
+{
+	typedef void (WINAPI *FlushMenuThemesFn)(void);
+	static bool s_resolved = false;
+	static FlushMenuThemesFn flushMenuThemes = nullptr;
+	if (!s_resolved)
+	{
+		s_resolved = true;
+		HMODULE ux = GetModuleHandleW(L"uxtheme.dll");
+		if (!ux)
+			ux = LoadLibraryW(L"uxtheme.dll");
+		if (ux)
+			flushMenuThemes = reinterpret_cast<FlushMenuThemesFn>(
+				reinterpret_cast<void *>(GetProcAddress(ux, MAKEINTRESOURCEA(136))));
+	}
+	if (flushMenuThemes)
+		flushMenuThemes();
+}
+
+void UT_Win32InitDarkMode()
+{
+	typedef int (WINAPI *SetPreferredAppModeFn)(int);
+	static bool s_resolved = false;
+	static SetPreferredAppModeFn setPreferredAppMode = nullptr;
+	if (!s_resolved)
+	{
+		s_resolved = true;
+		HMODULE ux = GetModuleHandleW(L"uxtheme.dll");
+		if (!ux)
+			ux = LoadLibraryW(L"uxtheme.dll");
+		if (ux)
+			setPreferredAppMode = reinterpret_cast<SetPreferredAppModeFn>(
+				reinterpret_cast<void *>(GetProcAddress(ux, MAKEINTRESOURCEA(135))));
+	}
+	if (setPreferredAppMode)
+		setPreferredAppMode(1); // AllowDark
+	UT_Win32FlushMenuThemes();
+}
+
 void UT_Win32NoteThemeChanged(void)
 {
 	++s_themeGeneration;
+	UT_Win32FlushMenuThemes();
 }
 
 static bool s_highContrast(void)
@@ -474,6 +514,59 @@ static bool s_highContrast(void)
 	contrast.cbSize = sizeof(contrast);
 	return SystemParametersInfoW(SPI_GETHIGHCONTRAST, sizeof(contrast), &contrast, 0)
 		&& (contrast.dwFlags & HCF_HIGHCONTRASTON);
+}
+
+UT_Win32ThemeColors UT_Win32GetThemeColors()
+{
+	UT_Win32ThemeColors tc;
+	if (s_highContrast())
+	{
+		tc.chromeBg = GetSysColor(COLOR_BTNFACE);
+		tc.surfaceBg = GetSysColor(COLOR_WINDOW);
+		tc.text = GetSysColor(COLOR_WINDOWTEXT);
+		tc.textMuted = GetSysColor(COLOR_BTNTEXT);
+		tc.textDisabled = GetSysColor(COLOR_GRAYTEXT);
+		tc.border = GetSysColor(COLOR_WINDOWFRAME);
+		tc.controlBorder = GetSysColor(COLOR_3DSHADOW);
+		tc.hoverFill = GetSysColor(COLOR_HIGHLIGHT);
+		tc.pressedFill = GetSysColor(COLOR_HIGHLIGHT);
+		tc.checkedFill = GetSysColor(COLOR_HIGHLIGHT);
+		tc.checkedBorder = GetSysColor(COLOR_HIGHLIGHTTEXT);
+		tc.dark = false;
+		tc.highContrast = true;
+		return tc;
+	}
+	if (UT_Win32AppsUseDarkTheme())
+	{
+		tc.chromeBg = RGB(0x20, 0x20, 0x20);
+		tc.surfaceBg = RGB(0x2D, 0x2D, 0x2D);
+		tc.text = RGB(0xF3, 0xF3, 0xF3);
+		tc.textMuted = RGB(0xAA, 0xAA, 0xAA);
+		tc.textDisabled = RGB(0x6E, 0x6E, 0x6E);
+		tc.border = RGB(0x38, 0x38, 0x38);
+		tc.controlBorder = RGB(0x48, 0x48, 0x48);
+		tc.hoverFill = RGB(0x38, 0x38, 0x38);
+		tc.pressedFill = RGB(0x42, 0x42, 0x42);
+		tc.checkedFill = RGB(0x2D, 0x44, 0x5C);
+		tc.checkedBorder = RGB(0x60, 0xCD, 0xFF);
+		tc.dark = true;
+		tc.highContrast = false;
+		return tc;
+	}
+	tc.chromeBg = RGB(0xF3, 0xF3, 0xF3);
+	tc.surfaceBg = RGB(0xFB, 0xFB, 0xFB);
+	tc.text = RGB(0x1B, 0x1B, 0x1B);
+	tc.textMuted = RGB(0x60, 0x60, 0x60);
+	tc.textDisabled = RGB(0xA0, 0xA0, 0xA0);
+	tc.border = RGB(0xE5, 0xE5, 0xE5);
+	tc.controlBorder = RGB(0xD1, 0xD1, 0xD1);
+	tc.hoverFill = RGB(0xE8, 0xE8, 0xE8);
+	tc.pressedFill = RGB(0xDC, 0xDC, 0xDC);
+	tc.checkedFill = RGB(0xDE, 0xEB, 0xF7);
+	tc.checkedBorder = RGB(0x00, 0x67, 0xC0);
+	tc.dark = false;
+	tc.highContrast = false;
+	return tc;
 }
 
 void UT_Win32ApplyCaptionTheme(HWND hwnd)
@@ -539,7 +632,7 @@ void UT_Win32ApplyWindowTheme(HWND hwnd)
 		if (!s_highContrast() && UT_Win32AppsUseDarkTheme())
 			setTheme(hwnd, L"DarkMode_Explorer", nullptr);
 		else
-			setTheme(hwnd, L"", nullptr);
+			setTheme(hwnd, nullptr, nullptr);
 	}
 }
 
@@ -627,9 +720,7 @@ COLORREF UT_Win32WorkspaceColor(void)
 {
 	if (s_highContrast())
 		return GetSysColor(COLOR_APPWORKSPACE);
-	if (UT_Win32AppsUseDarkTheme())
-		return RGB(32, 32, 32);
-	return GetSysColor(COLOR_BTNFACE);
+	return UT_Win32GetThemeColors().chromeBg;
 }
 
 void UT_Win32GetWindowTextUtf8(HWND hwnd, char * dest, int destChars)

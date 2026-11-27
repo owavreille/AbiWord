@@ -98,7 +98,7 @@ bool AP_Win32TopRuler::registerClass(XAP_Win32App * app)
 	swprintf(s_TopRulerWndClassName, L"%sTopRuler",str.c_str());
 
 	a = UT_RegisterClassEx(CS_OWNDC, AP_Win32TopRuler::_TopRulerWndProc, app->getInstance(),
-						   nullptr, LoadCursor(nullptr, IDC_ARROW), GetSysColorBrush(COLOR_BTNFACE), nullptr,
+						   nullptr, LoadCursor(nullptr, IDC_ARROW), nullptr, nullptr,
 						   nullptr, s_TopRulerWndClassName);
 	UT_ASSERT_HARMLESS(a);
 
