@@ -20,6 +20,7 @@
  */
 
 #include <string.h>
+#include <ctype.h>
 
 #include <algorithm>
 #include <iostream>
@@ -384,6 +385,14 @@ void UT_std_string_addPropertyString(std::string & sPropertyString,
 	const char * szLoc = nullptr;
 	while(iBase < iSize)
 	{
+		while (iBase < iSize && sNewProp[static_cast<size_t>(iBase)] == ' ')
+		{
+			iBase++;
+		}
+		if (iBase >= iSize)
+		{
+			break;
+		}
 		bool bBreakAtEnd = false;
 		sSubStr = sNewProp.substr(iBase, iSize - iBase);
 		szWork = sSubStr.c_str();
@@ -456,55 +465,42 @@ void UT_std_string_removeProperty(std::string & sPropertyString, const std::stri
 	sWork += ":";
 	const char * szWork = sWork.c_str();
 	const char * szProps = sPropertyString.c_str();
-	const char * szLoc = strstr(szProps,szWork);
+	const char * szLoc = szProps;
+	const char * szLeftEnd = nullptr;
+	while ((szLoc = strstr(szLoc, szWork)) != nullptr)
+	{
+		const char * p = szLoc;
+		while (p > szProps && isspace(static_cast<unsigned char>(p[-1])))
+		{
+			p--;
+		}
+		if (p == szProps || p[-1] == ';')
+		{
+			szLeftEnd = (p > szProps && p[-1] == ';') ? (p - 1) : p;
+			break;
+		}
+		szLoc += sWork.size();
+	}
 	if(szLoc == nullptr)
 	{
-	    //Not here, do nothing
-	    return ;
+		//Not here, do nothing
+		return ;
 	}
-	// Check if this is a real match
-	if (szLoc != szProps)
-	{
-		// This is not the first property. It could be a false match
-		// for example, 'frame-col-xpos' and 'xpos'
-		std::string sWorkCheck("; ");
-		sWorkCheck += sWork;
-		const char * szLocCheck = strstr(szProps,sWorkCheck.c_str());
-		if (!szLocCheck)
-		{
-			// False match
-			return;
-		}
-		szLoc = szLocCheck;
-	}	    
 
-	UT_sint32 locLeft = static_cast<UT_sint32>(reinterpret_cast<size_t>(szLoc) - reinterpret_cast<size_t>(szProps));
-	std::string sLeft;
-	if(locLeft == 0)
-	{
-		sLeft.clear();
-	}
-	else
-	{
-		sLeft = sPropertyString.substr(0,locLeft);
-	}
-	locLeft = static_cast<UT_sint32>(sLeft.size());
-
+	UT_sint32 locLeft = static_cast<UT_sint32>(reinterpret_cast<size_t>(szLeftEnd) - reinterpret_cast<size_t>(szProps));
 	std::string sNew;
 	if(locLeft > 0)
 	{
-		sNew = sLeft.substr(0,locLeft+1);
+		sNew = sPropertyString.substr(0, locLeft);
 	}
 	else
 	{
 		sNew.clear();
 	}
 
-	// When the match is not the first property, szLoc points at the
-	// semicolon of "; prop:". Skip it so the following value is removed,
-	// the same way UT_String_removeProperty and UT_UTF8String_removeProperty do.
-	const size_t delimOffset = (szLoc != szProps) ? 1 : 0;
-	const char * szDelim = strchr(szLoc + delimOffset, ';');
+	// Look for ";" to get right part. Same boundary rule as
+	// UT_String_removeProperty and UT_UTF8String_removeProperty.
+	const char * szDelim = strchr(szLoc, ';');
 	if(szDelim == nullptr)
 	{
 		// No properties after this, just assign and return
@@ -517,15 +513,18 @@ void UT_std_string_removeProperty(std::string & sPropertyString, const std::stri
 		{
 			szDelim++;
 		}
-		UT_sint32 offset = static_cast<UT_sint32>(reinterpret_cast<size_t>(szDelim) - reinterpret_cast<size_t>(szProps));
-		UT_sint32 iLen = sPropertyString.size() - offset;
-		if(sNew.size() > 0)
+		if(*szDelim != '\0')
 		{
-			sNew += "; ";
+			UT_sint32 offset = static_cast<UT_sint32>(reinterpret_cast<size_t>(szDelim) - reinterpret_cast<size_t>(szProps));
+			UT_sint32 iLen = sPropertyString.size() - offset;
+			if(sNew.size() > 0)
+			{
+				sNew += "; ";
+			}
+			sNew += sPropertyString.substr(offset,iLen);
 		}
-		sNew += sPropertyString.substr(offset,iLen);
 		sPropertyString = sNew;
-	}  
+	}
 }
 
 

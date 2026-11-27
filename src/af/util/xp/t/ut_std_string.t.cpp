@@ -129,18 +129,14 @@ TFTEST_MAIN("PropVal")
   propVal = UT_std_string_getPropVal(propString, "foo");
   TFPASS(propVal.empty());
 
-  // This test code here is an exception to the rule on not using
-  // UT_String. The purpose is to ensure the replacements behave the same.
-  //
-  // Also note that it seems that the feature is misunderstood, so I did
-  // comment out test that are broken -- Hub. Must fix.
+  // Both string types must remove, replace and append the same way.
+  // A replaced property is removed, then written at the end.
   std::string mutablePropString = propString;
   UT_String mutableUTString = propString;
 
   // remove property
   UT_std_string_removeProperty(mutablePropString, "fred");
   UT_String_removeProperty(mutableUTString, "fred");
-//  printf("std = %s / UT = %s\n", mutablePropString.c_str(), mutableUTString.c_str());
   TFPASS(mutablePropString == "table-width:1.0in; table-height:10.in");
   TFPASS(mutablePropString == mutableUTString);
 
@@ -165,7 +161,6 @@ TFTEST_MAIN("PropVal")
   mutableUTString = mutablePropString;
   UT_std_string_addPropertyString(mutablePropString, "fred:foo; table-width:2.0in");
   UT_String_addPropertyString(mutableUTString, "fred:foo; table-width:2.0in");
-  printf("std = %s / UT = %s\n", mutablePropString.c_str(), mutableUTString.c_str());
-//  TFPASS(mutablePropString == "fred:foo; table-width:2.0in; table-height:10.in");
+  TFPASS(mutablePropString == "table-height:10.in; fred:foo; table-width:2.0in");
   TFPASS(mutablePropString == mutableUTString);
 }
