@@ -138,8 +138,8 @@ BOOL AP_Win32Dialog_InsertHyperlink::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
 			str.fromLocale(wbuf);
 			delete [] wbuf;
 
-			const char * utf8 = str.utf8_str().utf8_str();
-			setHyperlink(utf8 ? utf8 : "");
+			const UT_UTF8String utf8 = str.utf8_str();
+			setHyperlink(utf8.utf8_str());
 		}
 		setAnswer( a_OK );
 		EndDialog(hWnd, 0);

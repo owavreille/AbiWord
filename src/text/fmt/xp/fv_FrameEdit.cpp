@@ -512,12 +512,6 @@ void FV_FrameEdit::setDragType(UT_sint32 x, UT_sint32 y, bool bDrawFrame)
 	}
 	if(!isActive() && (pFCon == nullptr))
 	{
-		m_iFrameEditMode = 	FV_FrameEdit_EXISTING_SELECTED;
-		if(getGraphics())
-		{
-		      getGraphics()->allCarets()->disable();
-		      m_pView->m_countDisable++;
-		}
 		fl_ContainerLayout * pCL = pBL->myContainingLayout();
 		while(pCL && (pCL->getContainerType() != FL_CONTAINER_FRAME) && (pCL->getContainerType() != FL_CONTAINER_DOCSECTION))
 		{
@@ -527,6 +521,12 @@ void FV_FrameEdit::setDragType(UT_sint32 x, UT_sint32 y, bool bDrawFrame)
 		if(pCL->getContainerType() != FL_CONTAINER_FRAME)
 		{
 			return;
+		}
+		m_iFrameEditMode = FV_FrameEdit_EXISTING_SELECTED;
+		if(getGraphics())
+		{
+		      getGraphics()->allCarets()->disable();
+		      m_pView->m_countDisable++;
 		}
 		m_pFrameLayout = static_cast<fl_FrameLayout *>(pCL);
 		UT_ASSERT(m_pFrameLayout->getContainerType() == FL_CONTAINER_FRAME);
@@ -833,6 +833,10 @@ void FV_FrameEdit::mouseLeftPress(UT_sint32 x, UT_sint32 y)
 		_beginGlob();
 //		mouseRelease(x,y);
 		mouseRelease(origX,origY);
+		if(!isActive() || !m_pFrameLayout || !m_pFrameContainer)
+		{
+			return;
+		}
 		m_iFrameEditMode = FV_FrameEdit_RESIZE_EXISTING;
 		m_iLastX = x;
 		m_iLastY = y;
@@ -1243,9 +1247,6 @@ void FV_FrameEdit::mouseRelease(UT_sint32 x, UT_sint32 y)
 	else if((m_iFrameEditMode == FV_FrameEdit_RESIZE_EXISTING) ||
 			(m_iFrameEditMode == FV_FrameEdit_DRAG_EXISTING))
 	{
-		const PP_AttrProp* pSectionAP = nullptr;
-		m_pFrameLayout->getAP(pSectionAP);
-
 //
 // If there was no drag, the user just clicked and released the left mouse
 // no need to change anything.

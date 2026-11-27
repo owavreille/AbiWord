@@ -114,6 +114,14 @@ BOOL AP_Win32Dialog_SplitCells::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPAR
 	// The six items are the same size
 	GetClientRect(GetDlgItem(hWnd, AP_RID_DIALOG_SPLITCELLS_BMP_LEFT), &rect);			
 
+	// Release any previously loaded bitmaps before reassigning
+	if (m_hBitmapAbove) { DeleteObject(m_hBitmapAbove); m_hBitmapAbove = nullptr; }
+	if (m_hBitmapHoriMid) { DeleteObject(m_hBitmapHoriMid); m_hBitmapHoriMid = nullptr; }
+	if (m_hBitmapBelow) { DeleteObject(m_hBitmapBelow); m_hBitmapBelow = nullptr; }
+	if (m_hBitmapLeft) { DeleteObject(m_hBitmapLeft); m_hBitmapLeft = nullptr; }
+	if (m_hBitmapVertMid) { DeleteObject(m_hBitmapVertMid); m_hBitmapVertMid = nullptr; }
+	if (m_hBitmapRight) { DeleteObject(m_hBitmapRight); m_hBitmapRight = nullptr; }
+
 	// Load the bitmaps into the dialog box								
 	m_hBitmapLeft = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_LEFT, "SPLITLEFT",  BITMAP_WITDH, BITMAP_HEIGHT, Color);
 	m_hBitmapVertMid = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_SPLITCELLS_BMP_VERTMID, "SPLITVERTMID", BITMAP_WITDH, BITMAP_HEIGHT, Color);
@@ -249,6 +257,13 @@ void AP_Win32Dialog_SplitCells::destroy(void)
 
 	UT_DebugOnly<int> iResult = DestroyWindow( m_hDlg );
 	UT_ASSERT_HARMLESS((iResult != 0));
+
+	if (m_hBitmapAbove) { DeleteObject(m_hBitmapAbove); m_hBitmapAbove = nullptr; }
+	if (m_hBitmapHoriMid) { DeleteObject(m_hBitmapHoriMid); m_hBitmapHoriMid = nullptr; }
+	if (m_hBitmapBelow) { DeleteObject(m_hBitmapBelow); m_hBitmapBelow = nullptr; }
+	if (m_hBitmapLeft) { DeleteObject(m_hBitmapLeft); m_hBitmapLeft = nullptr; }
+	if (m_hBitmapVertMid) { DeleteObject(m_hBitmapVertMid); m_hBitmapVertMid = nullptr; }
+	if (m_hBitmapRight) { DeleteObject(m_hBitmapRight); m_hBitmapRight = nullptr; }
 }
 void AP_Win32Dialog_SplitCells::activate(void)
 {

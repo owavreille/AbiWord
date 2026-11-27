@@ -51,9 +51,15 @@ void IE_Exp_XML::closeHandle()
 		m_xml = nullptr;
 	}
 	if (m_zip) {
+		if (!gsf_output_is_closed(m_zip) && !gsf_output_close(m_zip))
+			m_error = true;
+		if (gsf_output_error(m_zip) != nullptr)
+			m_error = true;
 		g_object_unref(m_zip);
 		m_zip = nullptr;
 	}
+	if (getFp() && gsf_output_error(getFp()) != nullptr)
+		m_error = true;
 }
 
 void IE_Exp_XML::setDocType(char const *doctype)

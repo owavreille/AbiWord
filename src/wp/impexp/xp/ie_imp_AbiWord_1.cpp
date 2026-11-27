@@ -782,12 +782,14 @@ void IE_Imp_AbiWord_1::startElement(const gchar *name,
 	{
 		X_VerifyParseState(_PS_RevisionSec);
 		m_parseState = _PS_Revision;
+		m_currentRevisionId = 0;
+		m_currentRevisionTime = 0;
+		m_currentRevisionVersion = 0;
 
 		const std::string & s1 = PP_getAttribute(PT_ID_ATTRIBUTE_NAME, atts);
 		if(!s1.empty())
 		{
 			m_currentRevisionId = atoi(s1.c_str());
-			m_currentRevisionTime = 0;
 
 			const std::string & s2 = PP_getAttribute("time-started",atts);
 			if(!s2.empty()) {

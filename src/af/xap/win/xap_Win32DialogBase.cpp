@@ -489,8 +489,8 @@ void XAP_Win32DialogBase::getControlText(UT_sint32 controlId,
 	str.fromLocale(wbuf);
 	FREEP(wbuf);
 
-	const char * utf8 = str.utf8_str().utf8_str();
-	s_copyUtf8Bounded(p_buffer, Buffer_length, utf8);
+	const UT_UTF8String utf8 = str.utf8_str();
+	s_copyUtf8Bounded(p_buffer, Buffer_length, utf8.utf8_str());
 }
 
 bool XAP_Win32DialogBase::isControlVisible(UT_sint32 controlId) const

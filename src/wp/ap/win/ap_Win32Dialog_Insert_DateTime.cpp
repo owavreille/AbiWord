@@ -150,6 +150,7 @@ BOOL AP_Win32Dialog_Insert_DateTime::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
                 return 1;
 
             case LBN_DBLCLK:
+                _FormatListBoxChange();
                 EndDialog(hWnd,0);
                 return 1;
 
@@ -166,6 +167,8 @@ BOOL AP_Win32Dialog_Insert_DateTime::_onCommand(HWND hWnd, WPARAM wParam, LPARAM
 
 void AP_Win32Dialog_Insert_DateTime::_FormatListBoxChange(void)
 {
-    m_iFormatIndex = SendMessageW(m_hwndFormats, LB_GETCURSEL, 0, 0);
+    LRESULT sel = SendMessageW(m_hwndFormats, LB_GETCURSEL, 0, 0);
+    if (sel >= 0)
+        m_iFormatIndex = static_cast<int>(sel);
 }
 

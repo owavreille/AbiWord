@@ -61,6 +61,7 @@ void AP_Win32Dialog_MarkRevisions::runModal(XAP_Frame * pFrame)
 	XAP_Win32LabelledSeparator_RegisterClass(pWin32App);
 	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_MARK_REVISIONS));
 
+	setDialog(this);
     createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_MARK_REVISIONS));
 }
 
@@ -86,8 +87,8 @@ BOOL AP_Win32Dialog_MarkRevisions::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, L
 		HWND h = GetDlgItem(hWnd,AP_RID_DIALOG_MARK_REVISIONS_RADIO1);
 		SetFocus(h);
 
-		pStr = getComment1();
-		setDlgItemText(AP_RID_DIALOG_MARK_REVISIONS_LABEL1,pStr);
+		pStr = getComment1(true);
+		setDlgItemText(AP_RID_DIALOG_MARK_REVISIONS_LABEL1, pStr ? pStr : "");
 		FREEP(pStr);
 
 		setDlgItemText(AP_RID_DIALOG_MARK_REVISIONS_RADIO2,getRadio2Label());

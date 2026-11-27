@@ -1202,6 +1202,11 @@ bool pt_PieceTable::_getStruxOfTypeFromPosition(PT_DocPosition dpos,
 			if(!wantFootNoteType && isEndFootnote(pf))
 			{
 				_getStruxFromFragSkip(pf,&pfsTemp);
+				if(!pfsTemp)
+				{
+					break;
+				}
+				pf = pfsTemp;
 			}
 			else
 			{

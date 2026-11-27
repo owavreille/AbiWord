@@ -60,7 +60,8 @@ void AP_Win32Dialog_Annotation::runModal(XAP_Frame * pFrame)
 {
 	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_ANNOTATION));
 
-	 createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_ANNOTATION));
+	setDialog(this);
+	createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_ANNOTATION));
 }
 
 #define _DS(c,s)	setDlgItemText(AP_RID_DIALOG_ANNOTATION_##c,pSS->getValue(AP_STRING_ID_##s))

@@ -212,6 +212,7 @@ protected:
 	bool                m_bOpenChar;
 	std::vector<std::string> m_vecSnapNames;
 	bool				m_bInAnnotation;
+	UT_sint32			m_iInRDFAnchor;
 
 
 private:
@@ -317,9 +318,12 @@ void s_AbiWord_1_Listener::_closeAnnotation(void)
 
 void s_AbiWord_1_Listener::_closeRDFAnchor(void)
 {
+	if (m_iInRDFAnchor <= 0)
+		return;
 	UT_DEBUGMSG(("Doing close rdf anchor object method \n"));
     _closeSpan();
 	m_pie->endElement();
+	m_iInRDFAnchor--;
 	return;
 }
 
@@ -507,6 +511,7 @@ s_AbiWord_1_Listener::s_AbiWord_1_Listener(PD_Document * pDocument,
 	m_iInCell = 0;
 	m_iBlockLevel = 0;
 	m_bInAnnotation = false;
+	m_iInRDFAnchor = 0;
 
 	/***********************************************************************************
 
@@ -558,6 +563,10 @@ s_AbiWord_1_Listener::~s_AbiWord_1_Listener()
 	_closeHyperlink();
 	_closeAnnotation();
 	_closeBlock();
+	while (m_iInCell > 0)
+		_closeCell();
+	while (m_iInTable > 0)
+		_closeTable();
 	_closeSection();
 	_handleDataItems();
 
@@ -689,17 +698,19 @@ bool s_AbiWord_1_Listener::populate(fl_ContainerLayout* /*sfh*/,
    					_closeField();
 					_closeHyperlink();
 					const PP_AttrProp * pAP = nullptr;
-					m_pDocument->getAttrProp(api,&pAP);
 					const gchar * pName;
 					const gchar * pValue;
 					bool bFound = false;
 					UT_uint32 k = 0;
 
-					while(pAP->getNthAttribute(k++, pName, pValue))
+					if (m_pDocument->getAttrProp(api, &pAP) && pAP)
 					{
-						bFound = (0 == g_ascii_strncasecmp(pName,"xlink:href",10));
-						if(bFound)
-							break;
+						while (pAP->getNthAttribute(k++, pName, pValue))
+						{
+							bFound = (0 == g_ascii_strncasecmp(pName,"xlink:href",10));
+							if(bFound)
+								break;
+						}
 					}
 					
 					if(bFound)
@@ -718,15 +729,17 @@ bool s_AbiWord_1_Listener::populate(fl_ContainerLayout* /*sfh*/,
    					_closeField();
 					_closeAnnotation();
 					const PP_AttrProp * pAP = nullptr;
-					m_pDocument->getAttrProp(api,&pAP);
 					const gchar * pName;
 					const gchar * pValue;
 					bool bFound = false;
 					UT_uint32 k = 0;
 
-					while(!bFound && pAP->getNthAttribute(k++, pName, pValue))
+					if (m_pDocument->getAttrProp(api, &pAP) && pAP)
 					{
-						bFound = (0 == g_ascii_strncasecmp(pName,"Annotation",10));
+						while (!bFound && pAP->getNthAttribute(k++, pName, pValue))
+						{
+							bFound = (0 == g_ascii_strncasecmp(pName,"Annotation",10));
+						}
 					}
 
 					if(bFound)
@@ -750,6 +763,7 @@ bool s_AbiWord_1_Listener::populate(fl_ContainerLayout* /*sfh*/,
                     if( !a.isEnd() )
                     {
    						_openTag("textmeta", true, api,pcr->getXID(),true);
+						m_iInRDFAnchor++;
                     }
                     else
                     {
@@ -984,6 +998,7 @@ bool s_AbiWord_1_Listener::populateStrux(pf_Frag_Strux* /*sdh*/,
 			_closeSpan();
             _closeField();
 			_closeHyperlink();
+			_closeAnnotation();
 			_closeBlock();
 			_openTag("p",true,pcr->getIndexAP(),pcr->getXID());
 			m_pie->setPrettyPrint(false);
@@ -1428,7 +1443,8 @@ void s_AbiWord_1_Listener::_handleRevisions(void)
 
 		if (rev.getDescription())
 		{
-			m_pie->addString(nullptr, rev.getDescription(), UT_UCS4_strlen(rev.getDescription()));
+			UT_UTF8String descUtf8(rev.getDescription());
+			m_pie->addString(nullptr, descUtf8.utf8_str());
 		}
 		
 

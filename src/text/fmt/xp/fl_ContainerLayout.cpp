@@ -309,6 +309,11 @@ UT_sint32 fl_ContainerLayout::getLevelInList(void) const
 	  }
 	  PD_Document * pDoc = getDocLayout()->getDocument();
 	  fl_AutoNumPtr pAuto = pDoc->getListByID( id);
+	  if(!pAuto)
+	  {
+	        bLoop = false;
+	        break;
+	  }
 	  if(pAuto->getLastItem() == pBList->getStruxDocHandle())
 	  {
 	        if(pAuto->getLastItem() == getStruxDocHandle())
@@ -846,6 +851,10 @@ fl_ContainerLayout * fl_ContainerLayout::insert(pf_Frag_Strux* sdh, fl_Container
 		{
 			pPrev->_insertIntoList(pL);
 		}
+		else
+		{
+			_insertFirst(pL);
+		}
 //
 // Now put the Physical Container into the vertical container that contains it.
 //
@@ -883,14 +892,18 @@ fl_ContainerLayout * fl_ContainerLayout::insert(pf_Frag_Strux* sdh, fl_Container
 			{
 				pPrev = pPrev->getPrev();
 			}
+		}
 //
 // Add the frame to the list in te previous block.
 //
-			if(pPrev)
-			{
-				pPrev->_insertIntoList(pL);
-				pPrev->addFrame(static_cast<fl_FrameLayout *>(pL));
-			}
+		if(pPrev)
+		{
+			pPrev->_insertIntoList(pL);
+			pPrev->addFrame(static_cast<fl_FrameLayout *>(pL));
+		}
+		else
+		{
+			_insertFirst(pL);
 		}
 		break;
 	}
@@ -902,6 +915,8 @@ fl_ContainerLayout * fl_ContainerLayout::insert(pf_Frag_Strux* sdh, fl_Container
 					  sdh, indexAP, this));
 		if (pPrev)
 			pPrev->_insertIntoList(pL);
+		else
+			_insertFirst(pL);
 		break;
 	}
 	case FL_CONTAINER_ANNOTATION:
@@ -912,6 +927,8 @@ fl_ContainerLayout * fl_ContainerLayout::insert(pf_Frag_Strux* sdh, fl_Container
 					  sdh, indexAP, this));
 		if (pPrev)
 			pPrev->_insertIntoList(pL);
+		else
+			_insertFirst(pL);
 		break;
 	}
 	case FL_CONTAINER_TOC:
@@ -922,6 +939,8 @@ fl_ContainerLayout * fl_ContainerLayout::insert(pf_Frag_Strux* sdh, fl_Container
 					  sdh, indexAP, this));
 		if (pPrev)
 			pPrev->_insertIntoList(pL);
+		else
+			_insertFirst(pL);
 		static_cast<fl_TOCLayout *>(pL)->getNewContainer(nullptr);
 		break;
 	}
@@ -933,6 +952,8 @@ fl_ContainerLayout * fl_ContainerLayout::insert(pf_Frag_Strux* sdh, fl_Container
 					  sdh, indexAP, this));
 		if (pPrev)
 			pPrev->_insertIntoList(pL);
+		else
+			_insertFirst(pL);
 		break;
 	}
 	default:
@@ -1202,6 +1223,9 @@ bool fl_ContainerLayout::isOnScreen() const
 
 
 	if(bHidden)
+		return false;
+
+	if(!pView)
 		return false;
 
 	std::vector<UT_Rect> vRect;

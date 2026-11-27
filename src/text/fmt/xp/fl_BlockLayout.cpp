@@ -406,15 +406,9 @@ void buildTabStops(const char* pszTabStops, UT_GenericVector<fl_TabStop*> &vecTa
 					iLeader = static_cast<eTabLeader>(p1[2]-'0');
 			}
 
-			char pszPosition[32];
-			UT_uint32 iPosLen = p1 - pStart;
+			std::string sPosition(pStart, static_cast<size_t>(p1 - pStart));
 
-			UT_ASSERT(iPosLen < sizeof pszPosition);
-
-			memcpy(pszPosition, pStart, iPosLen);
-			pszPosition[iPosLen] = 0;
-
-			iPosition = UT_convertToLogicalUnits(pszPosition);
+			iPosition = UT_convertToLogicalUnits(sPosition.c_str());
 
 			UT_ASSERT(iType > 0);
 			/*
@@ -1293,6 +1287,7 @@ void fl_BlockLayout::setLineHeightBlockWithBorders(int whichLine)
 					pLine->setAlongBotBorder(false);
 					pLine->calcBorderThickness();
 					pLine->recalcHeight();
+					pLine = static_cast<fp_Line *>(pLine->getNext());
 				}
 			}
 		}
@@ -6825,10 +6820,13 @@ bool fl_BlockLayout::_delete(PT_BlockOffset blockOffset, UT_uint32 len)
 			   pRun->getType() == FPRUN_FORCEDPAGEBREAK)
 			{
 				fp_Container * pCon = static_cast<fp_Container *>(pRun->getLine());
-				fp_Page * pPage = pCon->getPage();
-				if(pPage)
+				if(pCon)
 				{
-					pPage->markAllDirty();
+					fp_Page * pPage = pCon->getPage();
+					if(pPage)
+					{
+						pPage->markAllDirty();
+					}
 				}
 			}
 			if (blockOffset >= iRunBlockOffset)
@@ -7937,8 +7935,8 @@ bool fl_BlockLayout::doclistener_insertBlock(const PX_ChangeRecord_Strux * pcrx,
 	if(getNumFrames() > 0)
 	{
 		FL_DocLayout *pDL = getDocLayout();
-		fp_Line * pLine = pLastRun->getLine();
-		fp_Container * pCon = pLine->getColumn();
+		fp_Line * pLine = pLastRun ? pLastRun->getLine() : static_cast<fp_Line *>(getLastContainer());
+		fp_Container * pCon = pLine ? pLine->getColumn() : nullptr;
 		UT_sint32 pLineX = 0;
 		UT_sint32 pLineY = 0;
 		UT_sint32 pLinePage = 0;
@@ -8868,44 +8866,44 @@ bool fl_BlockLayout::doclistener_populateObject(PT_BlockOffset blockOffset,
 
 		xxx_UT_DEBUGMSG(("Populate:InsertObject:Image:\n"));
 		_doInsertImageRun(blockOffset, std::move(pFG), pcro->getObjectHandle());
-		return true;
+		break;
 	}
 
 	case PTO_Field:
 		xxx_UT_DEBUGMSG(("!!!Populate:InsertObject:Field: BlockOffset %d \n",blockOffset));
 		_doInsertFieldRun(blockOffset, pcro);
-		return true;
+		break;
 
 	case PTO_Bookmark:
 		xxx_UT_DEBUGMSG(("Populate:InsertBookmark:\n"));
 		_doInsertBookmarkRun(blockOffset);
-		return true;
+		break;
 
 	case PTO_Hyperlink:
 		xxx_UT_DEBUGMSG(("Populate:InsertHyperlink:\n"));
 		_doInsertHyperlinkRun(blockOffset);
-		return true;
+		break;
 
 	case PTO_Annotation:
 		xxx_UT_DEBUGMSG(("Populate:InsertHyperlink:\n"));
 		_doInsertAnnotationRun(blockOffset);
-		return true;
+		break;
 
 	case PTO_RDFAnchor:
 		xxx_UT_DEBUGMSG(("Populate:InsertHyperlink, RDFAnchor:\n"));
 		_doInsertRDFAnchorRun(blockOffset);
-		return true;
+		break;
 		
 	case PTO_Math:
 		xxx_UT_DEBUGMSG(("Populate:InsertMathML:\n"));
 		_doInsertMathRun(blockOffset,pcro->getIndexAP(),pcro->getObjectHandle());
-		return true;
+		break;
 
 
 	case PTO_Embed:
 		UT_DEBUGMSG(("Populate Embed:\n"));
 		_doInsertEmbedRun(blockOffset,pcro->getIndexAP(),pcro->getObjectHandle());
-		return true;
+		break;
 
 	default:
 		UT_ASSERT(UT_SHOULD_NOT_HAPPEN);
@@ -8918,6 +8916,7 @@ bool fl_BlockLayout::doclistener_populateObject(PT_BlockOffset blockOffset,
 	{
 		collapse();
 	}
+	return true;
 }
 
 bool fl_BlockLayout::doclistener_insertObject(const PX_ChangeRecord_Object * pcro)
@@ -10174,6 +10173,7 @@ void	fl_BlockLayout::StartList( const gchar * style, const pf_Frag_Strux* prevSD
 		szDec = ".";
 		fAlign = static_cast<float>(LIST_DEFAULT_INDENT);
 		fIndent = static_cast<float>(-LIST_DEFAULT_INDENT_LABEL);
+		szFont = "Times New Roman";
 		szListStyle = "Numbered List";
 	}
 
@@ -10382,7 +10382,7 @@ void	fl_BlockLayout::StartList( FL_ListType lType, UT_uint32 start,const gchar *
 		"start-value", pszStart,
 		(m_iDomDirection == UT_BIDI_RTL) ? "margin-right" : "margin-left", pszAlign,
 		"text-indent", pszIndent,
-		"field-font", fFont,
+		"field-font", fFont ? fFont : "NULL",
 		"list-style", style,
 		"list-delim", lDelim,
 		"list-decimal", lDecimal
@@ -10444,7 +10444,7 @@ void	fl_BlockLayout::StopListInBlock(void)
 	//
 	// Set formatting to match the next paragraph if it exists
 	//
-	const gchar * szAlign, * szIndent;
+	const gchar * szAlign = nullptr, * szIndent = nullptr;
 	pPrev = getPrevBlockInDocument();
 	pNext = getNextBlockInDocument();
 
@@ -10478,28 +10478,42 @@ void	fl_BlockLayout::StopListInBlock(void)
 		{
 			// We have a problem
 			FL_ListType newType;
-			PD_Style * pStyle;
+			PD_Style * pStyle = nullptr;
 			float fAlign, fIndent;
 			gchar align[31], indent[31];
 
 			newType = getAutoNum()->getParent()->getType();
-			m_pDoc->getStyle(static_cast<char *>(getListStyleString(newType)), &pStyle);
-			if (pStyle)
+			if (m_pDoc->getStyle(static_cast<char *>(getListStyleString(newType)), &pStyle) && pStyle)
 			{
+				bool bHaveAlign = false;
 				if(m_iDomDirection == UT_BIDI_RTL)
-					pStyle->getProperty(static_cast<const gchar *>("margin-right"), szAlign);
+					bHaveAlign = pStyle->getProperty(static_cast<const gchar *>("margin-right"), szAlign);
 				else
-					pStyle->getProperty(static_cast<const gchar *>("margin-left"), szAlign);
+					bHaveAlign = pStyle->getProperty(static_cast<const gchar *>("margin-left"), szAlign);
 
-				pStyle->getProperty(static_cast<const gchar *>("text-indent"), szIndent);
-				fAlign = static_cast<float>(UT_convertToInches(szAlign));
+				bool bHaveIndent = pStyle->getProperty(static_cast<const gchar *>("text-indent"), szIndent);
+				if (bHaveAlign && szAlign)
+					fAlign = static_cast<float>(UT_convertToInches(szAlign));
+				else
+					fAlign = static_cast<float>(LIST_DEFAULT_INDENT);
 				fAlign *= level;
 				strncpy(align,
 								UT_convertInchesToDimensionString(DIM_IN, fAlign, nullptr),
 								sizeof(align) - 1);
 				align[sizeof(align) - 1] = 0;
-				snprintf(indent, sizeof(indent) - 1, "%s", szIndent);
-				indent[sizeof(indent) - 1] = 0;
+				if (bHaveIndent && szIndent)
+				{
+					snprintf(indent, sizeof(indent) - 1, "%s", szIndent);
+					indent[sizeof(indent) - 1] = 0;
+				}
+				else
+				{
+					fIndent = static_cast<float>(-LIST_DEFAULT_INDENT_LABEL);
+					strncpy(indent,
+									UT_convertInchesToDimensionString(DIM_IN, fIndent, nullptr),
+									sizeof(indent) - 1);
+					indent[sizeof(indent) - 1] = 0;
+				}
 			}
 			else
 			{
@@ -10888,6 +10902,10 @@ void fl_BlockLayout::transferListFlags(void)
 	}
 	if (getNextBlockInDocument()->isListItem()) // this is wrong. It should be next in the list.
 	{
+		if (!getNext()->getAutoNum())
+		{
+			return;
+		}
 		UT_uint32 nId = getNext()->getAutoNum()->getID();
 		UT_uint32 cId=0, pId=0;
 		fl_BlockLayout * pPrev = getPreviousList();
@@ -10897,7 +10915,7 @@ void fl_BlockLayout::transferListFlags(void)
 		}
 		if(pPrev != nullptr)
 			pId = pPrev->getAutoNum()->getID();
-		if(isListItem())
+		if(isListItem() && getAutoNum())
 			cId = getAutoNum()->getID();
 		if(cId == nId)
 		{
@@ -10906,7 +10924,7 @@ void fl_BlockLayout::transferListFlags(void)
 			if (!getNextBlockInDocument()->m_bStopList)
 				getNextBlockInDocument()->m_bStopList = m_bStopList;
 		}
-		else if ( pId == nId)
+		else if (pPrev && pId == nId)
 		{
 			if (!getNextBlockInDocument()->m_bStartList)
 				getNextBlockInDocument()->m_bStartList = pPrev->m_bStartList;
@@ -10972,7 +10990,7 @@ void fl_BlockLayout::_createListLabel(void)
 	}
 #if 1
 	PP_PropertyVector blockatt;
-	bool bHaveBlockAtt = pView->getCharFormat(blockatt, true, getPosition());
+	bool bHaveBlockAtt = pView ? pView->getCharFormat(blockatt, true, getPosition()) : false;
 #endif
 #if 1
 
@@ -11222,7 +11240,7 @@ bool fl_BlockLayout::getNextTableElement(UT_GrowBuf * buf,
 		xxx_UT_DEBUGMSG(("CurChar %c pos %d \n",curChar,offset+i+begPos));
 		if(curChar == 0)
 		{
-			PT_DocPosition pos = offset+i+begPos;
+			PT_DocPosition pos = getPosition(false) + offset + i;
 			if(m_pDoc->isFootnoteAtPos(pos))
 			{
 				bFoundFootnote = true;

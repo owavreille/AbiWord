@@ -69,6 +69,7 @@ void AP_Win32Dialog_ListRevisions::runModal(XAP_Frame * pFrame)
 
 	UT_return_if_fail (m_id == static_cast<XAP_Dialog_Id>(AP_DIALOG_ID_LIST_REVISIONS));
 
+	setDialog(this);
     createModal(pFrame, MAKEINTRESOURCEW(AP_RID_DIALOG_LIST_REVISIONS));
 }
 
@@ -139,7 +140,9 @@ BOOL AP_Win32Dialog_ListRevisions::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, L
 		SendMessageW(h, LVM_SETITEMW, 0, (LPARAM)&item);
 		
 		item.iSubItem = 2;
-		str.fromUTF8(getNthItemText(i));
+		char * pszText = getNthItemText(i, true);
+		str.fromUTF8(pszText ? pszText : "");
+		FREEP(pszText);
 		item.pszText = (LPWSTR) str.c_str();
 		item.mask = LVIF_TEXT;
 		SendMessageW(h, LVM_SETITEMW, 0, (LPARAM)&item);
@@ -173,7 +176,7 @@ BOOL AP_Win32Dialog_ListRevisions::_onCommand(HWND hWnd, WPARAM wParam, LPARAM /
 					memset(&item, 0, sizeof(item));
 
 					item.iSubItem = 0;
-					item.iItem = ListView_GetSelectionMark(h);
+					item.iItem = ListView_GetNextItem(h, -1, LVNI_SELECTED);
 					item.mask = LVIF_PARAM;
 					item.pszText = nullptr;
 					item.cchTextMax = 0;

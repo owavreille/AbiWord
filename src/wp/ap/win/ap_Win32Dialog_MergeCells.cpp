@@ -106,6 +106,12 @@ BOOL AP_Win32Dialog_MergeCells::_onInitDialog(HWND hWnd, WPARAM /*wParam*/, LPAR
 //	x = rect.right - rect.left,
 //	y = rect.bottom - rect.top,
 	
+	// Release any previously loaded bitmaps before reassigning
+	if (m_hBitmapLeft) { DeleteObject(m_hBitmapLeft); m_hBitmapLeft = nullptr; }
+	if (m_hBitmapRight) { DeleteObject(m_hBitmapRight); m_hBitmapRight = nullptr; }
+	if (m_hBitmapAbove) { DeleteObject(m_hBitmapAbove); m_hBitmapAbove = nullptr; }
+	if (m_hBitmapBelow) { DeleteObject(m_hBitmapBelow); m_hBitmapBelow = nullptr; }
+
 	// Load the bitmaps into the dialog box
 	m_hBitmapLeft = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_MERGECELLS_BMP_LEFT, "MERGELEFT",  BITMAP_WITDH, BITMAP_HEIGHT, Color);
 	m_hBitmapRight = XAP_Win32DialogHelper::s_loadBitmap(hWnd,AP_RID_DIALOG_MERGECELLS_BMP_RIGHT, "MERGERIGHT", BITMAP_WITDH, BITMAP_HEIGHT, Color);
@@ -222,6 +228,11 @@ void AP_Win32Dialog_MergeCells::destroy(void)
 
 	UT_DebugOnly<int> iResult = DestroyWindow( m_hDlg );
 	UT_ASSERT_HARMLESS((iResult != 0));
+
+	if (m_hBitmapLeft) { DeleteObject(m_hBitmapLeft); m_hBitmapLeft = nullptr; }
+	if (m_hBitmapRight) { DeleteObject(m_hBitmapRight); m_hBitmapRight = nullptr; }
+	if (m_hBitmapAbove) { DeleteObject(m_hBitmapAbove); m_hBitmapAbove = nullptr; }
+	if (m_hBitmapBelow) { DeleteObject(m_hBitmapBelow); m_hBitmapBelow = nullptr; }
 }
 void AP_Win32Dialog_MergeCells::activate(void)
 {
